@@ -991,6 +991,70 @@ static int RecreateDefaultResources(void)
     return 1;
 }
 
+/* Contrapartida de la version de Xbox 360, donde el intervalo de presentacion
+ * es un render state (D3DRS_PRESENTINTERVAL) y se cambia sin Reset.
+ *
+ * En D3D9 de escritorio ese render state NO existe: el intervalo vive en los
+ * present parameters y cambiarlo exige un Reset del device, que es justo lo que
+ * hay que evitar (invalida los recursos D3DPOOL_DEFAULT que el core tiene en el
+ * device compartido).  Asi que aqui es un no-op deliberado: la build de Windows
+ * es de desarrollo y se queda con el vsync que pidio el usuario.  El vsync
+ * adaptativo de Sync solo actua en la consola, que es donde el core no llega.
+ *
+ * Si algun dia hace falta en Windows, la via seria una cadena de swap propia
+ * (IDirect3DSwapChain9) o D3DPRESENT_DONOTWAIT en el Present, no un Reset. */
+void SDL_XBOX_SetPresentInterval(int enable)
+{
+    (void)enable;
+}
+
+/* Tasa de refresco real del panel, en Hz.  0 = desconocida.
+ *
+ * `D3DDISPLAYMODE::RefreshRate` es un UINT, asi que aqui 59,94 se reporta como
+ * 60 y la resolucion del dato es peor que en la consola (donde
+ * `XVIDEO_MODE.RefreshRate` es un float).  Se devuelve igualmente porque un
+ * entero correcto sigue siendo mejor que suponer 60 cuando el escritorio va a
+ * 75 o a 144, y esta build es de desarrollo.
+ *
+ * Se consulta al vuelo, no se cachea: el usuario puede cambiar el modo de
+ * pantalla con el juego en marcha. */
+/* En D3D9 de escritorio no hay callback de vblank (el equivalente seria
+ * D3DKMTWaitForVerticalBlankEvent, de otra API), asi que devuelve ceros y el
+ * llamante debe tratar `count == 0` como "sin reloj de hardware". */
+void SDL_XBOX_GetVBlankStats(unsigned int *count, unsigned int *missed)
+{
+    if (count)  *count  = 0;
+    if (missed) *missed = 0;
+}
+
+/* Devuelve 0 = "no se esperar".  El llamante (pc_wait_vblank) cae entonces al
+ * camino de reloj de CPU, que es el pacer que Salvia ya tenia.  El equivalente
+ * de escritorio seria D3DKMTWaitForVerticalBlankEvent, de otra API. */
+int SDL_XBOX_WaitVBlank(unsigned int msMax)
+{
+    (void)msMax;
+    return 0;
+}
+
+/* D3D9 de escritorio tiene GetRasterStatus, pero su fiabilidad depende del
+ * driver y en ventana no significa gran cosa.  -1 = "no se". */
+int SDL_XBOX_GetScanlinePercent(void)
+{
+    return -1;
+}
+
+float SDL_XBOX_GetRefreshRate(void)
+{
+    D3DDISPLAYMODE dm;
+
+    if (!g_d3d)
+        return 0.0f;
+    if (FAILED(g_d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dm)))
+        return 0.0f;
+
+    return (float)dm.RefreshRate;
+}
+
 void SDL_XBOX_SetVSync(int enable)
 {
     if (!g_dev) return;

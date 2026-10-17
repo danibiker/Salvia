@@ -16,6 +16,13 @@
 // Maximo de frames de ENTRADA por pasada del resampler (ver processAndWrite).
 #define RATE_MAX_CHUNK_IN 8192
 
+/* Autoridad del control dinamico de ritmo: el ratio se mueve como maximo
+ * +-DRC_DELTA respecto al nominal.  0,005 es el `DEFAULT_RATE_CONTROL_DELTA` de
+ * RetroArch, y basta porque el grueso de la correccion NO es realimentacion: la
+ * pone la alimentacion directa de `setRates` con las tasas MEDIDAS.  El valor
+ * anterior, 0,02, era cuatro veces esto y en los extremos se oye el desafine. */
+#define DRC_DELTA 0.005
+
 /* ==========================================================================
  * Control de tasa + remuestreo de la tasa del CORE a la del DISPOSITIVO.
  *
@@ -42,6 +49,7 @@ private:
     double baseRatio;       // tasaCore / tasaDispositivo
     double ratio;           // baseRatio * (1 + adj) = el ratio efectivo
     int    warmup;          // lotes restantes de warmup (sin DRC)
+    bool   drcPending;      // el frame ha empezado: toca recomputar el ratio
 
     // Estado del resampler
     uint32_t stepFx;        // `ratio` en 16.16: frames de entrada por frame de salida
@@ -52,9 +60,24 @@ private:
 
     // Configuracion
     size_t bufCapacity;
+    double srcRateDeclared;   // la que declara el core
+    double dstRateDeclared;   // la que declaro SDL al abrir el dispositivo
+    double dstRateMeasured;   // la CONTADA; 0 = sin medida todavia
 
     // Constantes de tuning
     static const int WARMUP_FRAMES = 30;
+
+    /* El ratio nominal: tasa del core entre la tasa REAL del dispositivo, con la
+     * declarada como respaldo mientras no haya medida.  Ver
+     * `setDeviceRateMeasured` para el razonamiento. */
+    void recalcBase() {
+        const double dst = (dstRateMeasured > 0.0) ? dstRateMeasured : dstRateDeclared;
+
+        if (srcRateDeclared <= 0.0 || dst <= 0.0)
+            baseRatio = 1.0;
+        else
+            baseRatio = srcRateDeclared / dst;
+    }
 
     void recalcStep() {
         double r = ratio;
@@ -64,19 +87,46 @@ private:
         if (stepFx == 0) stepFx = 1;
     }
 
-    // --- Controlador proporcional con EMA ---
+    /* --- Controlador proporcional, sin filtro y con autoridad acotada -------
+     *
+     * Tres cambios respecto a la version anterior, los tres con el mismo origen:
+     * asi es como lo hace RetroArch, y las razones estan documentadas en su
+     * codigo.
+     *
+     * 1) SIN EMA EN EL ERROR.  Antes habia `smoothedFill` con alpha 0,1.  Un
+     *    controlador proporcional que actua sobre un INTEGRADOR -y el anillo lo
+     *    es- ya forma un lazo de primer orden estable; filtrar el error solo
+     *    anade retardo de fase.  RetroArch usa la muestra CRUDA de `write_avail`
+     *    y su anillo de 8192 muestras es telemetria, no lazo
+     *    (audio_driver.c:1243-1245, dice "for diagnostics" literalmente).
+     *
+     * 2) AUTORIDAD DE +-0,005 en vez de +-0,02.  El tope viejo era 4x el de
+     *    RetroArch (`DEFAULT_RATE_CONTROL_DELTA 0.005f`) y en los extremos
+     *    desafina de forma audible.  Con el error normalizado a [-1,+1] el
+     *    ratio queda acotado exactamente a [1-delta, 1+delta].
+     *
+     * 3) EL ERROR SE NORMALIZA.  `(fill - 0.5) / 0.5` en vez de `fill - 0.5`,
+     *    para que el delta signifique de verdad "autoridad maxima" y no la
+     *    mitad.  Es la forma de `direction = delta_mid / half_size` de
+     *    RetroArch.
+     *
+     * Signo, que conviene tener escrito porque es facil equivocarse: `ratio` son
+     * frames de ENTRADA por frame de SALIDA, asi que un ratio MENOR produce MAS
+     * salida.  Anillo vaciandose -> fill < 0,5 -> error < 0 -> adj < 0 -> ratio
+     * baja -> mas salida -> el anillo se rellena.  Correcto. */
     void updateRatio(size_t currentUsed) {
         double fill = (double)currentUsed / (double)bufCapacity;
 
-        const double alpha = 0.1;
-        smoothedFill = smoothedFill * (1.0 - alpha) + fill * alpha;
+        /* Se conserva `smoothedFill` SOLO para el overlay y las trazas: ya no
+         * entra en el lazo. */
+        smoothedFill = fill;
 
-        double error = smoothedFill - 0.5;
+        double error = (fill - 0.5) / 0.5;      /* normalizado a [-1, +1] */
 
-        double adj = error * 0.04;
+        double adj = error * DRC_DELTA;
 
-        if (adj >  0.02) adj =  0.02;
-        if (adj < -0.02) adj = -0.02;
+        if (adj >  DRC_DELTA) adj =  DRC_DELTA;
+        if (adj < -DRC_DELTA) adj = -DRC_DELTA;
 
         /* El DRC ya no fija el ratio, lo MODULA: el grueso lo pone la relacion
          * entre la tasa del core y la del dispositivo. */
@@ -188,6 +238,10 @@ public:
         prevR = 0;
         hasPrev = false;
         bufCapacity = 8192;
+        drcPending = false;
+        srcRateDeclared = 0.0;
+        dstRateDeclared = 0.0;
+        dstRateMeasured = 0.0;
     }
 
     void init(size_t capacity) {
@@ -195,6 +249,7 @@ public:
         smoothedFill = 0.5;
         ratio = baseRatio;          /* sin ajuste de DRC todavia */
         warmup = WARMUP_FRAMES;
+        drcPending = false;
         posFx = 0;
         prevL = 0;
         prevR = 0;
@@ -217,11 +272,11 @@ public:
      * cargar un juego y en RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO; NO implica
      * reabrir nada, que es justo el objetivo. */
     void setRates(double srcRate, double dstRate) {
-        if (srcRate <= 0.0 || dstRate <= 0.0) {
-            baseRatio = 1.0;
-        } else {
-            baseRatio = srcRate / dstRate;
-        }
+        srcRateDeclared = srcRate;
+        dstRateDeclared = dstRate;
+        /* La medida del dispositivo sobrevive a un cambio de core: es una
+         * propiedad del cristal del hardware, no del juego. */
+        recalcBase();
         ratio = baseRatio;
         posFx = 0;
         prevL = 0;
@@ -232,6 +287,42 @@ public:
 
     double getBaseRatio() const { return baseRatio; }
 
+    /* Lo llama el frontend justo DESPUES de `retro_run`, una vez por frame.  Es
+     * lo que ancla la fase del muestreo del DRC: ver el bloque de
+     * `processAndWrite`. */
+    void frameEnd() { drcPending = true; }
+
+    /* --- ALIMENTACION DIRECTA con la tasa MEDIDA del dispositivo ------------
+     *
+     * El grueso de la correccion tiene que ser feed-forward, no realimentacion:
+     * por eso a RetroArch le basta con +-0,5% de autoridad en el DRC.  Si el
+     * ratio nominal esta mal, el controlador vive saturado o sostiene un error
+     * de regimen permanente -un P puro no puede anular un offset constante-.
+     *
+     * OJO CON LA FORMULA DE RETROARCH: la suya lleva un factor
+     * `refresco / fpsCore` porque RetroArch esclaviza la emulacion al PANEL
+     * (vsync como reloj maestro).  Salvia la esclaviza al limitador A LA TASA
+     * DEL CORE, que es lo correcto -un juego PAL debe correr a sus 50 Hz aunque
+     * la pantalla vaya a 60-, asi que aqui ese factor NO va: con 60/50 = 1,2
+     * aceleraria el audio un 20% en todos los cores PAL.
+     *
+     * Lo que si corresponde es usar la tasa REAL del dispositivo en vez de la
+     * declarada.  Medida: 47992-48006 Hz frente a los 48000 del `obtained` de
+     * SDL, o sea +-0,017%; pequeno, pero es correccion gratis y es la unica que
+     * no puede hacer el DRC sin gastar autoridad. */
+    void setDeviceRateMeasured(double medida) {
+        if (medida <= 0.0 || dstRateDeclared <= 0.0)
+            return;
+        /* Guarda de cordura: una medida que se aparte mas de un 2% de lo
+         * declarado es una ventana contaminada (una carga, un savestate), no
+         * una propiedad del cristal.  Se ignora. */
+        if (medida < dstRateDeclared * 0.98 || medida > dstRateDeclared * 1.02)
+            return;
+
+        dstRateMeasured = medida;
+        recalcBase();
+    }
+
     // Punto de entrada principal.
     // Calcula el ratio, remuestrea y escribe al buffer.
     size_t processAndWrite(AudioBuffer& buffer, const int16_t* data, size_t frames, bool blocking) {
@@ -241,7 +332,23 @@ public:
          * tasa de dispositivo fija, escribir crudo sonaria a destiempo. */
         if (warmup > 0) {
             warmup--;
-        } else {
+        } else if (drcPending) {
+            /* UNA SOLA VEZ POR FRAME, Y CON LA FASE ANCLADA.
+             *
+             * Esto estaba mal y no era obvio: `updateRatio` se llamaba en CADA
+             * `processAndWrite`, o sea una vez por LOTE de audio.  Un core que
+             * entrega N lotes por frame muestreaba la ocupacion N veces con
+             * fase sub-frame distinta, metiendo ruido en un lazo cuya constante
+             * de tiempo es de UN FRAME.  RetroArch lo documenta explicitamente
+             * (audio_driver.h:757-777) y lo resuelve con este mismo mecanismo:
+             * un flag que se arma despues de `retro_run` (`drc_pending`,
+             * audio_driver.c:6665-6667) y que hace que el recompute caiga
+             * siempre en el primer lote del frame siguiente, o sea siempre en el
+             * mismo punto del frame.
+             *
+             * Entre recomputes se reutiliza el ratio ya calculado, que es lo que
+             * hace `cached_rate_adjust` alli. */
+            drcPending = false;
             updateRatio(buffer.getUsed());
         }
 

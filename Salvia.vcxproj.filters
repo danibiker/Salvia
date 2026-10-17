@@ -197,6 +197,9 @@
     <ClCompile Include="src\audio\midisynth.cpp">
       <Filter>Source Files\audio</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\presentclock.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
@@ -395,6 +398,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="libs\tinysoundfont\tsf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\mt32map.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

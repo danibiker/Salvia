@@ -12,6 +12,7 @@
 #include "unziptool_common.h"
 
 const int WRITE_BUFFER_SIZE = 65536;
+const std::size_t MAX_MEM_SIZE = 64 * 1024 * 1024; // 64 MB
 
 #if defined(_XBOX) || defined(_XBOX360)
     #include <xtl.h>
@@ -149,7 +150,6 @@ inline unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::strin
     ret.romsize = 0;
 
     std::vector<std::string> allowedExts = splitExtensions(extensions);
-    const std::size_t MAX_MEM_SIZE = 52428800; // 50 MB
 
     // 1. Detección de ZIP por Magic Number (Endian-Safe)
     FILE* fTest = fopen(rompath.c_str(), "rb");

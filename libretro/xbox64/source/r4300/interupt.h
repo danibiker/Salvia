@@ -1,0 +1,89 @@
+/**
+ * Mupen64 - interupt.h
+ * Copyright (C) 2002 Hacktarux
+ *
+ * Mupen64 homepage: http://mupen64.emulation64.com
+ * email address: hacktarux@yahoo.fr
+ * 
+ * If you want to contribute to the project please contact
+ * me first (maybe someone is already making what you are
+ * planning to do).
+ *
+ *
+ * This program is free software; you can redistribute it and/
+ * or modify it under the terms of the GNU General Public Li-
+ * cence as published by the Free Software Foundation; either
+ * version 2 of the Licence, or any later version.
+ *
+ * This program is distributed in the hope that it will be use-
+ * ful, but WITHOUT ANY WARRANTY; without even the implied war-
+ * ranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public Licence for more details.
+ *
+ * You should have received a copy of the GNU General Public
+ * Licence along with this program; if not, write to the Free
+ * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+ * USA.
+ *
+**/
+
+#include "r4300.h"
+
+/* [Xbox360] Interfaz de C consumido desde los .c del dynarec, que se
+ * compilan como C++: `gen_interupt`, `check_interupt`,
+ * `interrupt_unsafe_state`.  Ver la nota larga en gc_memory/memory.h.
+ * ★ Detras del `#include`, nunca envolviendolo.
+ * ★ Esta cabecera NO tiene guarda de inclusion; el cierre esta al final. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define Count r4300.reg_cop0[9]
+
+/* mupen64plus keeps cp0_cycle_count, but it maintains
+   cycle_count == Count - next_interrupt as an invariant everywhere it touches
+   either one, so we calc it instead of storing a second copy.  Negative
+   while cycles remain before the next event, >= 0 once it is due. */
+#define cp0_cycle_count ((int)((unsigned int)Count - r4300.next_interrupt))
+
+void compare_interupt();
+void gen_dp();
+void init_interupt();
+
+void gen_interupt();
+void check_interupt();
+
+unsigned long add_random_interupt_time(void);
+void translate_event_queue(unsigned long base);
+void remove_event(int type);
+void add_interupt_event_count(int type, unsigned long count);
+void add_interupt_event(int type, unsigned long delay);
+unsigned long *get_event(int type);
+
+int save_eventqueue_infos(char *buf);
+void load_eventqueue_infos(char *buf);
+
+#define INTR_UNSAFE_R4300 0x01
+#define INTR_UNSAFE_RSP   0x02
+extern unsigned int interrupt_unsafe_state;
+
+#define VI_INT      0x001
+#define COMPARE_INT 0x002
+#define CHECK_INT   0x004
+#define SI_INT      0x008
+#define PI_INT      0x010
+#define SPECIAL_INT 0x020
+#define AI_INT      0x040
+#define SP_INT      0x080
+#define DP_INT      0x100
+
+typedef struct _interupt_queue
+{
+   int type;
+   unsigned long count;
+   struct _interupt_queue *next;
+} interupt_queue;
+
+#ifdef __cplusplus
+}   /* extern "C" abierto al principio del fichero */
+#endif

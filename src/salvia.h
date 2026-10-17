@@ -100,6 +100,13 @@ volatile bool audio_closing = false;
  * cuadrando en vez de salir desafinado. */
 static int g_audio_device_rate = AUDIO_DEVICE_RATE;
 
+/* Tasa REAL de consumo del dispositivo, en miliherzios, 0 hasta la primera
+ * ventana.  La publica `sdl_audio_callback` (hilo de audio, contando los frames
+ * que el dispositivo se lleva de verdad) y la saca al log `updateGame` (hilo
+ * principal).  La declarada de arriba viene del `obtained` de SDL y nunca se ha
+ * comprobado; esto es lo que la comprueba.  Ver el bloque largo del callback. */
+static volatile unsigned int g_audio_dev_rate_mhz = 0;
+
 /* Ultimos fps/sample_rate que el frontend aplico del core.  Son la guarda de
  * delta del recheck de av_info: tras un cambio de core-options se reconsulta
  * retro_get_system_av_info y solo se reaplica (reset del limitador y del

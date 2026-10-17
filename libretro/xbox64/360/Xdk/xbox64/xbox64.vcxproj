@@ -1,0 +1,664 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ===========================================================================
+  xbox64 (Wii64) como LIBRERIA ESTATICA libretro para el frontend Salvia
+  ===========================================================================
+
+  FASE 1.  Solo el interprete puro: sin r4300/ppc/, sin glN64_GX, sin audio
+  y sin mandos.  La lista de abajo es EXACTAMENTE la del Makefile.base de
+  Wii64 menos lo que esas tres exclusiones quitan, mas la capa de
+  plataforma de xbox/.
+
+  LO QUE NO ENTRA Y POR QUE (para no volver a preguntarselo):
+
+   - r4300/ppc/*            fase 3.  Sus cuatro simbolos referenciados los
+                            repone xbox/dynarec_ausente.c.
+   - r4300/Recomp-Cache-Heap.c  es del camino del dynarec (USE_RECOMP_CACHE).
+   - r4300/profile.c        esta entero bajo `#ifdef PROFILE`, pero incluye
+                            <sys/time.h> en la linea 31, FUERA de la guarda,
+                            y el XDK no lo tiene.  Con PROFILE apagado no
+                            aporta nada, asi que se queda fuera del proyecto
+                            en vez de parchearlo.  Vuelve en la fase de
+                            medidas.
+   - r4300/compare_core.c   entero bajo `#ifdef COMPARE_CORE`.
+   - gc_memory/TLB-Cache.c  solo esta en el build de GameCube (USE_TLB_CACHE).
+   - main/savestates_gc.c   fase 5.  Nadie del resto del build llama a
+                            savestates_save/load (censado), y el fichero
+                            arrastra <unistd.h> y <gccore.h>.
+   - main/md5.c             nadie llama a calculateMD5 en la fase 1.
+   - main/adler32.c         ★ ademas de no usarse, DEFINE `adler32`, que ya
+                            viene en la zlib.lib que enlaza el frontend:
+                            meterlo seria LNK2005.  Cuando vuelva con los
+                            savestates hay que resolver esa duplicidad, no
+                            descubrirla.
+   - gui/DEBUG.c            lo sustituye xbox/debug_libretro.c.
+   - main/plugin.c          es la version Linux con dlsym: CODIGO MUERTO, no
+                            esta en el build de Wii64 tampoco.
+   - rsp_hle/main.c         entra rsp_hle/plugin.c, no main.c.
+   - glN64_GX/Config_linux.cpp  ★ lo SUSTITUYE xenon/gln64_config.cpp, que
+                            es la version del shim.  Esta en el Makefile de
+                            Wii64 y por eso se metio, pero el enlazador lo
+                            dijo claro: cinco `LNK4006 ... second
+                            definition ignored` (Config_LoadConfig,
+                            Config_DoConfig, config y los dos glN64_*) y un
+                            `LNK4221: this object file does not define any
+                            previously undefined public symbols`, o sea que
+                            no aportaba NADA.  El arbol de origen tampoco lo
+                            incluye.
+   - Rice_GX: 15 de sus 43 .cpp
+                            ★ NO ES UNA EXCLUSION NUESTRA.  Lo que se compila
+                            es la lista de `Makefile.Rice` de Wii64, sus 29
+                            objetos, y estan todos abajo.  Los otros 15 SI
+                            aparecen en `Rice_GX/Makefile`, que es el de
+                            Linux, y de ahi viene la confusion si se mira el
+                            directorio en vez del Makefile:
+                              CNvTNTCombiner, CombinerTable, GeneralCombiner,
+                              OGLCombiner, OGLCombinerNV, OGLCombinerTNT2,
+                              OGLExtCombiner, OGLFragmentShaders
+                                  son los combinadores de OpenGL de
+                                  escritorio (register combiners de NVIDIA,
+                                  fragment shaders de ATI).  En la rama GX el
+                                  combinador es el TEV, y ese si entra:
+                                  TEVCombiner.cpp y TEVBlender.cpp.
+                              ConvertImage, ConvertImage16, DirectXDecodedMux
+                                  los sustituye ConvertImageGX.cpp.
+                              TextureFilters_2xsai, _hq2x, _hq4x
+                                  filtros de escalado por software.
+                              messagebox_nogui
+                                  no esta en NINGUN Makefile de Wii64.
+   - Rice_GX/gui_gtk2/, Rice_GX/liblinux/*.c
+                            gui_gtk2 es la ventana de configuracion de GTK.
+                            De liblinux/ NO se compila nada: solo se usan sus
+                            CABECERAS (BMGLibPNG.h, BMGDLL.h), que si las
+                            incluyen tres de los 29.  Y no hace falta libpng
+                            al enlazar, porque `Makefile.wii` de Wii64 enlaza
+                            `-lz` pero NO `-lpng`: en la rama GX no se llama
+                            a ninguna funcion de PNG.  zlib si hace falta, y
+                            ya esta en AdditionalIncludeDirectories: la usa
+                            main/savestates_gc.c.
+
+  DIFERENCIAS DELIBERADAS RESPECTO A xenon64.vcxproj, que es la referencia:
+
+   - ★ ObjectFileName aparece UNA SOLA VEZ por configuracion.  En
+     xenon64.vcxproj esta dos veces en tres de las cuatro configuraciones
+     ($(IntDir)%(Directory) y despues $(IntDir)), y en MSBuild gana la
+     ultima: el arreglo de colisiones queda ANULADO en Debug|Win32,
+     Debug|Xbox 360 y Release|Win32.  Alli no se noto porque la unica
+     configuracion que se usa es Release|Xbox 360, que si lo tiene bien.
+     Aqui hace falta de verdad: gc_memory/memory.c y rsp_hle/memory.c
+     generarian los dos `memory.obj` y el segundo pisaria al primero SIN
+     ERROR NI AVISO.
+
+   - ExceptionHandling = false.  En la fase 1 no hay hilo grafico ni
+     try/catch; cuando entre glN64_GX habra que revisarlo.
+
+   - No se define PROFILE.
+
+  DEFINES, y de donde sale cada uno (CXXFLAGS de Makefile.base/glN64/wii):
+
+     _XBOX        del XDK, pero se pone explicito: todas las ramas
+                  [Xbox360] del arbol cuelgan de el.
+     __PPC__      ★ OBLIGATORIO.  Wii64 lo da por hecho (se lo define GCC).
+                  Tres sitios dependen de el, y uno cambia el NOMBRE de una
+                  variable: main/rom.h:42 declara `taille_rom` sin el y
+                  `rom_length` con el, que es el que usa rom_gc.c.  Sin
+                  __PPC__ el fallo es un LNK2001 confuso.
+     _BIG_ENDIAN=1  lo usa rsp_hle (memory.h:32 con #ifdef y alist.c:239
+                  con #if, asi que tiene que tener VALOR, no estar a secas).
+                  En devkitPPC lo trae newlib; aqui hay que ponerlo.
+     __BIG_ENDIAN__  ★ NO ES EL MISMO QUE EL DE ARRIBA, y hacen falta los
+                  dos.  Este lo predefine GCC (como __PPC__), newlib no lo
+                  toca, y en TODO el arbol (y en todo Wii64) lo mira UN SOLO
+                  sitio: `TextureArchive/Endian.h:4`.
+                  ★ Y NO ES COSMETICO.  Ese fichero da las funciones de
+                  volteo de bytes del .pak de texturas de alta resolucion:
+                  con el define toma la rama de big-endian, que es una
+                  PLANTILLA generica vacia (no hay nada que voltear, el
+                  formato ya viene en big-endian); sin el, cuatro sobrecargas
+                  concretas para unsigned char/short/int/long long.
+                  Los llamantes le pasan ARRAYS (`char[68]`, `char[20]`,
+                  `unsigned char[13824]`), que no casan con ninguna de las
+                  cuatro pero si con la plantilla, asi que sin este define el
+                  build muere con cuatro C2665 en ArchiveReader.cpp:20 que
+                  hablan de 'swap' y no mencionan el endianness por ningun
+                  lado.
+                  Es ademas lo CORRECTO: Xbox 360 es big-endian igual que la
+                  Wii.  Definirlo no cambia nada mas en el proyecto.
+     GLN64_GX     de Makefile.glN64.  Aunque el plugin no entre en la fase
+                  1, gobierna el arreglo por CRC de rom_gc.c:183.
+     USE_EXPANSION  de Makefile.wii: 8 MB de RDRAM.  Cambia el tamanyo de
+                  `rdram` (memory.h:87) y, en la fase 2, la MASCARA de
+                  RSP_SegmentToPhysical de glN64.
+     NO_ASM       de Makefile.base.
+     LIBRETRO     nuestro.
+
+  ★★ `__GX__` Y `__LINUX__` NO ESTAN AQUI: VAN POR FICHERO.
+
+  Es un error que ya costo un build.  Los dos salen del Makefile de Wii64
+  (Makefile.base:20 y Makefile.glN64), donde son globales porque alli el
+  unico plugin es glN64 y no hay mas arbol.  Aqui van SOLO en los 38
+  ficheros de glN64_GX, en los 29 de Rice y en xenon/gln64_config.cpp,
+  para que ni un fichero del nucleo los vea.  El porque de cada uno:
+
+     __GX__     escoge la rama de GameCube/Wii, que es la que necesita este
+                backend: dibuja sobre framebuffer empotrado y copia a
+                textura con GX_CopyTex, TOP-DOWN igual que el Resolve() de
+                la EDRAM de Xenos y al reves que glCopyTexImage2D.  Y
+                activa `glN64_GX/GFXPlugin.h`, que renombra los puntos de
+                entrada para poder enlazar estaticamente.
+                ★ SIN EL, `Types.h` deja de estar apagado y redefine
+                u32/s32/vu32/vs32 con OTRO tipo base -> C2371 contra
+                gxshim/gctypes.h, y ademas se piden <SDL.h>, <GL/gl.h> y
+                <features.h>, que son la rama de OpenGL de escritorio.
+
+     __LINUX__  evita que arrastre <windows.h>, <GL/gl.h> y los HWND de la
+                rama de Win32.
+
+  ★★ Y UN TERCERO, SOLO EN LOS 29 DE Rice: `XBOX64_PLUGIN_RICE`.
+
+  No sale de ningun Makefile de Wii64: es nuestro, y existe porque aqui los
+  DOS plugins van en el mismo binario.  Los dos definen los mismos ~31
+  simbolos (18 puntos de entrada, 9 funciones de la interfaz con el
+  anfitrion y 4 globales), asi que uno de los dos lados hay que prefijarlo.
+  Lo hace el preprocesador, sin tocar ni una linea de los arboles copiados:
+  `xbox/xbox64_pre.h` (la cabecera forzada de todas las unidades) mira
+  `__GX__` y, segun este define, incluye `xenon/rice_rename.h` o
+  `xenon/gln64_rename.h`.
+
+  ★ POR ESO LAS 38 LINEAS DE glN64 NO SE TOCARON.  Ya llevan `__GX__` desde
+  la fase 2, y eso basta para que les entre su renombrado.  La alternativa
+  era un `<ForcedIncludeFiles>` por fichero, y habria que repetir en cada
+  una la ruta de xbox64_pre.h, porque la metadata por fichero SUSTITUYE a la
+  del ItemDefinitionGroup en vez de sumarse: 66 ediciones mecanicas en las
+  que una ruta mal escrita cuesta un build.
+
+  ★ Las unidades SIN `__GX__` (el nucleo, el shim D3D y sobre todo
+  xbox/gfx_dispatch.c) no ven ningun renombrado, que es justo lo que hace
+  falta: el despachador se queda con los nombres sin prefijo, que son los
+  que el nucleo enlaza.
+
+  ★ `GEKKO` del Makefile NO se define, y esa omision SI es deliberada:
+  `3DMath.h:254` lo usa para elegir la version con PAIRED-SINGLE del
+  Gekko, que en Xenon no existe.  Sin el se toma la rama en C portable.
+  ===========================================================================
+-->
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{2C7F5B90-1D4E-4A63-9E08-7F31C6AB4D12}</ProjectGuid>
+    <RootNamespace>xbox64</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;_DEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <!-- OBLIGATORIO.  Sin esto el XDK compila TODOS los .c como C++ y el
+           nucleo no pasa: C++ no tiene declaracion implicita de funcion
+           (_isnan, strcasecmp, memalign...), no convierte void* a T* sin
+           cast, y no admite las definiciones tentativas de pure_interp.c.
+           La firma tipica es C3861. -->
+      <CompileAs>Default</CompileAs>
+      <!-- ★ OBLIGATORIA, no comodidad.  r4300/macros.h define los registros
+           COP0 como macros con nombres genericos (Count, Index, Context,
+           Status, Compare, Config) y esos seis aparecen 98 veces COMO
+           IDENTIFICADOR en las cabeceras del XDK que usamos: d3d9.h 46,
+           d3d9gpu.h 13, xcompress.h 8, winnt.h 6, xbox.h 4,
+           ppcintrinsics.h 1.  Si macros.h se expande antes, el XDK se
+           rompe con errores que no apuntan a nada (C2143 dentro de
+           d3d9gpu.h).  El porque largo esta en xbox/xbox64_pre.h. -->
+      <ForcedIncludeFiles>..\..\..\xbox\xbox64_pre.h</ForcedIncludeFiles>
+      <!-- Ver la nota del encabezado: UNA sola vez, y con %(Directory).
+           gc_memory/memory.c y rsp_hle/memory.c colisionarian. -->
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;_DEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <CompileAs>Default</CompileAs>
+      <!-- ★ OBLIGATORIA, no comodidad.  r4300/macros.h define los registros
+           COP0 como macros con nombres genericos (Count, Index, Context,
+           Status, Compare, Config) y esos seis aparecen 98 veces COMO
+           IDENTIFICADOR en las cabeceras del XDK que usamos: d3d9.h 46,
+           d3d9gpu.h 13, xcompress.h 8, winnt.h 6, xbox.h 4,
+           ppcintrinsics.h 1.  Si macros.h se expande antes, el XDK se
+           rompe con errores que no apuntan a nada (C2143 dentro de
+           d3d9gpu.h).  El porque largo esta en xbox/xbox64_pre.h. -->
+      <ForcedIncludeFiles>..\..\..\xbox\xbox64_pre.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;NDEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>Default</CompileAs>
+      <!-- ★ OBLIGATORIA, no comodidad.  r4300/macros.h define los registros
+           COP0 como macros con nombres genericos (Count, Index, Context,
+           Status, Compare, Config) y esos seis aparecen 98 veces COMO
+           IDENTIFICADOR en las cabeceras del XDK que usamos: d3d9.h 46,
+           d3d9gpu.h 13, xcompress.h 8, winnt.h 6, xbox.h 4,
+           ppcintrinsics.h 1.  Si macros.h se expande antes, el XDK se
+           rompe con errores que no apuntan a nada (C2143 dentro de
+           d3d9gpu.h).  El porque largo esta en xbox/xbox64_pre.h. -->
+      <ForcedIncludeFiles>..\..\..\xbox\xbox64_pre.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;NDEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>Default</CompileAs>
+      <!-- ★ OBLIGATORIA, no comodidad.  r4300/macros.h define los registros
+           COP0 como macros con nombres genericos (Count, Index, Context,
+           Status, Compare, Config) y esos seis aparecen 98 veces COMO
+           IDENTIFICADOR en las cabeceras del XDK que usamos: d3d9.h 46,
+           d3d9gpu.h 13, xcompress.h 8, winnt.h 6, xbox.h 4,
+           ppcintrinsics.h 1.  Si macros.h se expande antes, el XDK se
+           rompe con errores que no apuntan a nada (C2143 dentro de
+           d3d9gpu.h).  El porque largo esta en xbox/xbox64_pre.h. -->
+      <ForcedIncludeFiles>..\..\..\xbox\xbox64_pre.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <!-- r4300 -->
+    <ClCompile Include="..\..\..\source\r4300\r4300.c" />
+    <ClCompile Include="..\..\..\source\r4300\exception.c" />
+    <ClCompile Include="..\..\..\source\r4300\Invalid_Code.c" />
+    <ClCompile Include="..\..\..\source\r4300\interupt.c" />
+    <ClCompile Include="..\..\..\source\r4300\recomp.c" />
+    <ClCompile Include="..\..\..\source\r4300\pure_interp.c" />
+    <!-- FASE 3: el dynarec MIPS -> PowerPC de Wii64.
+         ★ LOS CINCO COMO C++, por el mismo motivo que rsp_hle: son C99.
+         MIPS-to-PPC.c:281 declara la variable de un `for` en la cabecera
+         (`for(int i = 0; ...`), que el XDK rechaza compilando como C89.
+         El coste es el ya conocido: `extern "C"` en la frontera y casts de
+         malloc.  La alternativa (hoistear a mano en un fichero de 140 KB
+         que es LA pieza que la puerta de salida vigila) es exactamente lo
+         que no se debe hacer.
+         ★ Recomp-Cache-Heap.c va con ellos, NO Recomp-Cache.c: la variante
+         -Heap es la que compila Wii64 (FASE0.txt:113). -->
+    <ClCompile Include="..\..\..\source\r4300\ppc\MIPS-to-PPC.c">     <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Recompile.c">       <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Wrappers.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\FuncTree.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Register-Cache.c">  <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\Recomp-Cache-Heap.c">   <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <!-- gc_memory -->
+    <ClCompile Include="..\..\..\source\gc_memory\tlb.c" />
+    <ClCompile Include="..\..\..\source\gc_memory\memory.c" />
+    <ClCompile Include="..\..\..\source\gc_memory\dma.c" />
+    <ClCompile Include="..\..\..\source\gc_memory\n64_cic_nus_6105.c" />
+    <ClCompile Include="..\..\..\source\gc_memory\pif.c" />
+    <ClCompile Include="..\..\..\source\gc_memory\flashram.c" />
+    <!-- main -->
+    <ClCompile Include="..\..\..\source\main\gamehacks.c" />
+    <ClCompile Include="..\..\..\source\main\rom_gc.c" />
+    <ClCompile Include="..\..\..\source\main\ROM-Cache.c" />
+    <ClCompile Include="..\..\..\source\main\timers.c" />
+    <!-- rsp_hle.
+         ★ LOS 14 COMO C++.  Es la version MODERNA del plugin RSP de
+         mupen64plus, que es C99: 52 declaraciones a mitad de bloque y 14
+         `for (int i...)`, y el compilador de C del XDK es C89 sin
+         interruptor para C99.  Se midio antes de decidirlo: cero
+         malloc/calloc sin cast, cero identificadores reservados de C++,
+         cero definiciones tentativas.  La alternativa era reescribir 66
+         sitios de codigo upstream.
+         Es el mismo recurso que usa xenon64.vcxproj para los 6 ficheros de
+         su dynarec, por el mismo motivo.
+         ★ Y decora los nombres: los 4 simbolos que salen de aqui hacia C
+         llevan `extern "C"` en plugin.c, donde esta el porque. -->
+    <ClCompile Include="..\..\..\source\rsp_hle\alist.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\alist_audio.c">  <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\alist_naudio.c"> <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\alist_nead.c">   <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\audio.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\cicx105.c">      <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\hle.c">          <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\hvqm.c">         <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\jpeg.c">         <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\memory.c">       <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\mp3.c">          <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\musyx.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\re2.c">          <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <ClCompile Include="..\..\..\source\rsp_hle\plugin.c">       <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <!-- fileBrowser: se conserva la interfaz; el backend es nuestro -->
+    <ClCompile Include="..\..\..\source\fileBrowser\fileBrowser.c" />
+    <!-- ==================================================================
+         FASE 2: glN64_GX.  Los 39 objetos del Makefile.glN64 de Wii64, en
+         su mismo orden.  De los 93 ficheros del directorio, 80 siguen
+         siendo Wii64 VERBATIM; los 13 restantes llevan el cableado al shim
+         GX->D3D9 y cada cambio esta marcado `★ DIVERGENCIA vs Wii64` con
+         referencia a xenon/gxshim/DIVERGENCIAS.txt.
+         ★ Son .cpp, asi que CompileAs=Default los toma como C++.
+         ★★ `__GX__;__LINUX__` VAN POR FICHERO, no en el
+         ItemDefinitionGroup: el porque esta en la cabecera de este
+         fichero, y ponerlos globales seria que los viera el nucleo. -->
+    <ClCompile Include="..\..\..\source\glN64_GX\glN64.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\OpenGL.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\N64.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\RSP.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\VI.cpp">           <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\Textures.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\FrameBuffer.cpp">  <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\Combiner.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\gDP.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\gSP.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\GBI.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\DepthBuffer.cpp">  <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\DepthCopy.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\CRC.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\2xSAI.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\TEV_combiner.cpp"> <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\RDP.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3D.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DEX.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DEX2.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\L3D.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\L3DEX.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\L3DEX2.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\S2DEX.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\S2DEX2.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DPD.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DDKR.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DCBFD.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DFLX2.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DGOLDEN.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DZEX2.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\ZSortBOSS.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F5Rogue.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DBETA.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DSETA.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DEX095.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\Turbo3D.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DAM.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\glN64_GX\F3DEX2ACCLAIM.cpp"><PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <!-- ==================================================================
+         FASE 6: Rice_GX.  Los 29 objetos de `Makefile.Rice` de Wii64, en su
+         mismo orden.  Los 140 ficheros de source/Rice_GX/ son VERBATIM, byte
+         a byte (verificado con SHA-1 al copiarlos): ni uno lleva cambios
+         nuestros, y esa es la condicion para poder traer codigo nuevo de
+         Wii64 sin resolver conflictos a mano.  Todo lo que hace falta
+         adaptar vive fuera: xenon/rice_rename.h y el shim GX.
+         ★ `XBOX64_PLUGIN_RICE` es el unico define que no sale de Wii64; el
+         porque, arriba. -->
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLGraphicsContext.cpp"><PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Debugger.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Video.cpp">             <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Config.cpp">            <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\GraphicsContext.cpp">   <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TextureFilters.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\DeviceBuilder.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Render.cpp">            <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RSP_Parser.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <!-- ★★★ /callcap RETIRADO EL 2026-09-29, Y NO SE VUELVE A PONER SIN
+         RESOLVER LO DE ABAJO.  Costo una violacion de acceso en el dynarec:
+         el compilador inserta la llamada al gancho en la ENTRADA de cada
+         funcion, con sus argumentos todavia en r3:r12, y un gancho escrito
+         en C los destruye.  La cadena de evidencia esta en
+         xenon\perfil_cap.h.  Para volver a intentarlo harian falta ganchos
+         en ensamblador que salven r3:r12, LR, CR y f1:f13, y eso costaria
+         mas que lo que se quiere medir.
+         La lista se deja escrita a proposito, para que se vea cuales eran:
+         TextureManager.cpp, RenderBase.cpp y OGLRender.cpp.
+    ★★ /callcap EN ESTOS TRES FICHEROS Y EN NINGUN OTRO.
+         El compilador del XDK emite una llamada a _CAP_Start_Profiling al
+         entrar en cada funcion y a _CAP_End_Profiling al salir; los ganchos
+         los define xenon\perfil_cap.cpp.  Asi se mide por funcion sin tocar
+         el arbol copiado de Rice y sin elegir a mano que cronometrar.
+         El porque completo (y por que no vale un muestreador de PC en una
+         consola sin devkit) esta en xenon\perfil_cap.h.
+         Se empieza por estos tres porque son el camino caliente medido:
+         RenderFlushTris y el prologo por draw viven en OGLRender.cpp, la
+         transformacion de vertices en RenderBase.cpp y el CRC de texturas
+         en TextureManager.cpp.  Ampliar la lista DESPUES de ver el coste
+         de la propia instrumentacion en el informe [CAP]. -->
+    <ClCompile Include="..\..\..\source\Rice_GX\TextureManager.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderBase.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\FrameBuffer.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Texture.cpp">           <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLRender.cpp">         <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLTexture.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TEVBlender.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TEVCombiner.cpp">       <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLExtRender.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\blender.cpp">           <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\math.cpp">              <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Combiner.cpp">          <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RSP_S2DEX.cpp">         <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderExt.cpp">         <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\ConvertImageGX.cpp">    <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\DecodedMux.cpp">        <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderTexture.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLDecodedMux.cpp">     <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLRenderExt.cpp">      <PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <!-- El objeto 29 de Makefile.Rice, y el unico que NO esta en Rice_GX/.
+         Casi se queda fuera del port por eso.  Lo pide TextureFilters.cpp:36
+         para las texturas de alta resolucion, y no es codigo muerto: la rama
+         que lo llama es `#ifdef __GX__` + `#ifndef HW_DOL`, o sea la de Wii,
+         que es exactamente la nuestra.  Solo abre el .pak si
+         `options.bLoadHiResTextures`, asi que en Xbox 360 no encontrara
+         nada, pero tiene que ENLAZAR.  Usa zlib, que ya esta en el proyecto.
+
+         ★★ LLEVA LOS MISMOS DEFINES QUE LOS 28 DE ARRIBA, Y NO ES POR
+         UNIFORMIDAD: ES OBLIGATORIO.  La primera version lo puso sin
+         ninguno, razonando que no define simbolos que choquen.  Cierto, e
+         irrelevante: `TextureArchive/Archive.h` declara `TextureCRC64` con
+         `__attribute__((packed))` (linea 15), y esa cabecera la incluyen
+         DOS unidades (esta y Rice_GX/TextureFilters.cpp:36).  Si solo
+         una de las dos ve el `__attribute__` neutralizado de
+         xbox64_pre.h, las dos compilan la MISMA struct con DISTINTO tamanyo
+         (8 bytes contra 12) y el programa queda mal por debajo sin que
+         nadie avise.  El build lo canto antes de llegar a eso, con un
+         C2059 en Archive.h:15, pero el fallo silencioso era el de verdad.
+
+         La regla, entonces: los 29 objetos de Makefile.Rice comparten
+         entorno de macros.  Cualquier cabecera compartida depende de ello. -->
+    <ClCompile Include="..\..\..\source\TextureArchive\ArchiveReader.cpp"><PreprocessorDefinitions>__GX__;__LINUX__;XBOX64_PLUGIN_RICE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <!-- El shim GX->D3D9 y la entrega de frame.
+         ★ Solo gln64_config.cpp lleva __GX__: es el unico del shim que
+         incluye cabeceras del plugin (OpenGL.h, Textures.h, Config.h,
+         N64.h, RSP.h, VI.h).  Los otros tres hablan con D3D y con gxshim,
+         no con glN64. -->
+    <ClCompile Include="..\..\..\xenon\gx_d3d9.cpp" />
+    <ClCompile Include="..\..\..\xenon\gx_d3d9_tev.cpp" />
+    <ClCompile Include="..\..\..\xenon\gln64_glue.cpp" />
+    <ClCompile Include="..\..\..\xenon\gln64_config.cpp">           <PreprocessorDefinitions>__GX__;__LINUX__;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="..\..\..\xenon\video_handoff.cpp" />
+    <!-- La cola de ordenes D3D (el grabador), portada del shim DirectX de
+         Xenon64. Etapa 2 del renderizado con hilo al estilo de mupen64plus:
+         con D3D_GRABADOR 1 es pasarela, cada orden se ejecuta en el acto. -->
+    <ClCompile Include="..\..\..\xenon\d3dq.cpp" />
+    <!-- Aqui estaba xenon\gfx_hilo.cpp, el hilo grafico antiguo. Quitado el
+         2026-09-30: se sustituye por el renderizado con hilo al estilo de
+         mupen64plus, en cuatro etapas. Los ficheros siguen en disco, fuera
+         del proyecto. -->
+    <!-- Perfilador por funcion: implementa los dos ganchos que inserta
+         /callcap. NUNCA se compila con /callcap (se llamaria a si mismo). -->
+    <ClCompile Include="..\..\..\xenon\perfil_cap.cpp" />
+    <!-- Los cubos del perfilador de Rice y su informe. Las declaraciones no
+         pueden vivir en el arbol copiado; lo mismo que pasa con gln64_prof. -->
+    <ClCompile Include="..\..\..\xenon\rice_prof.cpp" />
+    <!-- El heap de libogc: lo usan Textures.cpp, FrameBuffer.cpp y VI.cpp
+         via __lwp_heap_*.  gxshim solo traia la cabecera. -->
+    <ClCompile Include="..\..\..\source\libogc_lwp_heap.c" />
+    <!-- La capa de plataforma -->
+    <ClCompile Include="..\..\..\xbox\plataforma.c" />
+    <!-- Fase 6: elige plugin.  ★ SIN `__GX__`, y eso es lo que le da
+         sentido: es la unica unidad que se queda con los nombres sin
+         prefijar (processDList, updateScreen...), que son los que el nucleo
+         enlaza.  Si alguna vez alguien le pone __GX__ "por simetria", se
+         renombrara a si mismo y el enlazador pedira `processDList` sin que
+         nadie lo defina. -->
+    <ClCompile Include="..\..\..\xbox\gfx_dispatch.c" />
+    <ClCompile Include="..\..\..\xbox\filebrowser_xbox.c" />
+    <ClCompile Include="..\..\..\xbox\debug_libretro.c" />
+    <ClCompile Include="..\..\..\xbox\plugins_fase1.c" />
+    <ClCompile Include="..\..\..\xbox\input_n64.c" />
+    <ClCompile Include="..\..\..\xbox\audio_n64.c" />
+    <ClCompile Include="..\..\..\xbox\savestate_n64.c" />
+    <ClCompile Include="..\..\..\xbox\xbox_mem.c" />
+    <ClCompile Include="..\..\..\xbox\dynarec_ausente.c" />
+    <ClCompile Include="..\..\..\xbox\compat_posix.c" />
+    <!-- Fase 3: los tres simbolos de libgcc que el dynarec llama desde el
+         codigo que emite. Va como C (sin CompileAs) para que los nombres
+         salgan sin decorar, que es como los pide MIPS-to-PPC.c. -->
+    <ClCompile Include="..\..\..\xbox\libgcc_ppc.c" />
+    <!-- Fase 2: la adopcion del device.  Es C++ porque d3d9_grabador.h
+         declara una clase. -->
+    <ClCompile Include="..\..\..\xbox\gfx_host.cpp" />
+    <!-- Etapa 4 del renderizado con hilo: el emulador en su propio hilo
+         (HW2) y retro_run ejecutando las ordenes D3D, como mupen64plus.
+         C++ por d3d9_grabador.h. -->
+    <ClCompile Include="..\..\..\xbox\hilo_emu.cpp" />
+    <!-- Etapa 5: la display list en paralelo con la CPU, en HW3. Es el unico
+         hilo que llama al plugin y graba ordenes D3D. C++ por d3d9_grabador.h. -->
+    <ClCompile Include="..\..\..\xbox\hilo_lista.cpp" />
+    <!-- El wrapper libretro -->
+    <ClCompile Include="libretro_core.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libretro.h" />
+    <ClInclude Include="..\..\..\xbox\xbox64_pre.h" />
+    <ClInclude Include="..\..\..\xbox\plataforma.h" />
+    <ClInclude Include="..\..\..\xbox\hilo_emu.h" />
+    <ClInclude Include="..\..\..\xbox\hilo_lista.h" />
+    <ClInclude Include="..\..\..\xbox\filebrowser_xbox.h" />
+    <ClInclude Include="..\..\..\xbox\xbox_mem.h" />
+    <ClInclude Include="..\..\..\xbox\xbox64_fase.h" />
+    <ClInclude Include="..\..\..\xbox\compat\stdbool.h" />
+    <ClInclude Include="..\..\..\xenon\gxshim\gctypes.h" />
+    <!-- Fase 6.  Las dos primeras no las incluye nadie a mano: las mete
+         xbox64_pre.h segun el plugin.  Estan aqui solo para que se puedan
+         abrir desde el IDE, que es donde alguien las buscara cuando el
+         enlazador se queje de un simbolo duplicado. -->
+    <ClInclude Include="..\..\..\xenon\gln64_rename.h" />
+    <ClInclude Include="..\..\..\xenon\rice_rename.h" />
+    <ClInclude Include="..\..\..\xenon\gxshim\sys\syslimits.h" />
+    <ClInclude Include="..\..\..\xenon\gxshim\sys\time.h" />
+    <ClInclude Include="..\..\..\xenon\gxshim\dirent.h" />
+    <ClInclude Include="..\..\..\xenon\gxshim\ogc\mutex.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

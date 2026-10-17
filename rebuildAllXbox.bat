@@ -10,7 +10,7 @@ set PLATFORM="Xbox 360"
 :: Cambiado a /v:q (Quiet) y añadido /noconlog para evitar banners
 set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary /p:DeployOnBuild=false
 
-set CORES=Release Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
+set CORES=Release Release_xbox64 Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
 Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake Release_pcsxr_360 ^
 Release_3DOX Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_mame ^

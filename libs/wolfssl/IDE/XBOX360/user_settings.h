@@ -29,6 +29,22 @@
 #define WOLFSSL_USER_SETTINGS
 #endif
 
+#ifndef strcasecmp
+#define strcasecmp  _stricmp
+#endif
+
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+
+#ifndef strtok_r
+#define strtok_r strtok_s
+#endif
+
+#ifndef snprintf
+#define snprintf _snprintf
+#endif
+
 /* ============================================================================
  * TLS versions
  * ============================================================================ */

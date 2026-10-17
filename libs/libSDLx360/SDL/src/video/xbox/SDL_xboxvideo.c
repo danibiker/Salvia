@@ -99,6 +99,23 @@ static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de panta
 static int g_display_scale_type = 0; /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
 static int g_texture_width = 0;
 static int g_texture_height = 0;
+
+/* >>> TEXTURA EXTERNA: cores que renderizan ellos mismos con Direct3D.
+ *
+ * Con esto puesto, la imagen del juego NO esta en this->hidden->SDL_primary
+ * (nuestra textura LIN_ con LockRect permanente) sino en una textura que es
+ * del CORE y que vive en la GPU.  Ver el comentario largo de SDL_video.h.
+ *
+ * Consecuencias en el camino de presentacion, y son las dos que importan:
+ *   - NO se hace el par UnlockRect/LockRect: la externa no se bloquea nunca.
+ *   - lo que se liga en s0 y lo que se le pasa a XBOX_DrawOverlay para que
+ *     lo restaure es la externa.
+ *
+ * A NULL se vuelve al camino normal sin dejar rastro, que es lo que tiene que
+ * pasar al volver al menu o al cargar otro core. */
+static LPDIRECT3DTEXTURE9 g_extGameTex = NULL;
+static int g_extGameW = 0;
+static int g_extGameH = 0;
 static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
 
 typedef struct { float x, y, z, rhw; float u, v; } HLSL_BG_VTX;
@@ -276,6 +293,92 @@ LPDIRECT3DPIXELSHADER9 HLSLBackground_getAlphaFixShader(void)
  * Solo aplica al wrap del Present; el rendering normal sigue intacto. */
 static CRITICAL_SECTION g_xboxFlipCS;
 static int              g_xboxFlipCSInit = 0;
+
+/* --- Reloj de presentacion por HARDWARE ------------------------------------
+ *
+ * POR QUE EXISTE.  Todo el pacing del frontend inferia el reloj de la pantalla
+ * a partir del reloj de la CPU: medias moviles del periodo entre presents,
+ * enganche a la rejilla del timer del scheduler, umbrales para decidir si
+ * "llegamos o no".  Y el hardware lo sabe de primera mano: este callback lo
+ * llama el driver en CADA vblank, y `D3DVBLANK_SWAPMISSED` dice sin ambiguedad
+ * que un swap no llego a su vblank.  Esa bandera es literalmente la senal que
+ * las EMAs y los umbrales intentaban estimar.
+ *
+ * Dos usos inmediatos, los dos de MEDIDA y no de control:
+ *   1. Contar vblanks contra el reloj de CPU da la tasa de refresco REAL, y con
+ *      ella se sabe si `XVIDEO_MODE.RefreshRate` reporta el valor real o el
+ *      nominal: un panel a 59,94 que se declara 60,000 es indistinguible sin
+ *      contar.
+ *   2. Vblanks por frame PRESENTADO. Con un core PAL a 50 Hz en un panel a 60
+ *      tiene que salir alternando 1 y 2 en patron 5:6, porque 50 no divide a
+ *      60. Si sale constante, el modelo del Present esta mal entendido.
+ *
+ * CORRE EN CONTEXTO DE DRIVER, asi que aqui NO se hace nada mas que incrementar
+ * dos contadores.  Ni logs, ni locks, ni D3D: cualquier bloqueo aqui se paga en
+ * la salida de video.  Son `volatile unsigned int` alineados, una escritura de
+ * 32 bits es atomica en PPC, y hay un solo escritor. El lector (hilo principal)
+ * solo compara y divide, asi que un valor rancio de un vblank no le afecta. */
+static volatile unsigned int g_vblankCount  = 0;
+static volatile unsigned int g_vblankMissed = 0;
+static HANDLE                g_vblankEvent  = NULL;
+
+static void WINAPI XBOX_VBlankCallback(D3DVBLANKDATA *pData)
+{
+    ++g_vblankCount;
+    if (pData && (pData->Flags & D3DVBLANK_SWAPMISSED))
+        ++g_vblankMissed;
+
+    /* Pulso para el que espere.  `SetEvent` sobre un evento de auto-reset es lo
+     * unico que se hace aqui ademas de los dos contadores: no hay lock que
+     * pueda estar tomado por el hilo principal, asi que no hay inversion de
+     * prioridad posible.
+     *
+     * Y el que espera NO se fia del pulso: vuelve a leer el contador en cada
+     * vuelta (ver pc_wait_vblank).  Asi un pulso que quede senalado sin nadie
+     * escuchando solo cuesta una vuelta de bucle de mas, en vez de devolver un
+     * vblank antes de tiempo. */
+    if (g_vblankEvent)
+        SetEvent(g_vblankEvent);
+}
+
+void SDL_XBOX_GetVBlankStats(unsigned int *count, unsigned int *missed)
+{
+    if (count)  *count  = g_vblankCount;
+    if (missed) *missed = g_vblankMissed;
+}
+
+/* Espera bloqueante al siguiente vblank.  Devuelve 0 si no se puede esperar
+ * (sin evento), para que el llamante caiga a su propio camino. */
+int SDL_XBOX_WaitVBlank(unsigned int msMax)
+{
+    if (!g_vblankEvent)
+        return 0;
+
+    WaitForSingleObject(g_vblankEvent, msMax);
+    return 1;
+}
+
+/* Avance del barrido en el frame actual, 0-100.  -1 si no se sabe.
+ * `GetRasterStatus` no bloquea: es una lectura de registro del GPU. */
+int SDL_XBOX_GetScanlinePercent(void)
+{
+    D3DRASTER_STATUS rs;
+    int alto;
+
+    if (!D3D_Device)
+        return -1;
+
+    IDirect3DDevice9_GetRasterStatus(D3D_Device, 0, &rs);
+
+    if (rs.InVBlank)
+        return 100;
+
+    alto = (int)D3D_PP.BackBufferHeight;
+    if (alto <= 0)
+        return -1;
+
+    return (int)((rs.ScanLine * 100) / (UINT)alto);
+}
 
 /* Initialization/Query functions */
 static int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat);
@@ -577,15 +680,80 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
     D3D_PP.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 #endif
 
+    /* -- Banderas de CreateDevice, y por que estas ---------------------------
+     *
+     * ★ CORRECCION: aqui ponia "Usamos D3DCREATE_HARDWARE_VERTEXPROCESSING
+     * para asegurar soporte de VS_3_0".  Es FALSO.  En el d3d9.h del XDK esa
+     * bandera vale 0x00000000L y esta marcada "Ignored on Xbox 360", igual
+     * que D3DCREATE_PUREDEVICE y D3DCREATE_FPU_PRESERVE.  O sea que hasta hoy
+     * el device se creaba SIN NINGUNA BANDERA.
+     *
+     * [XBOX360] NO existe D3DCREATE_MULTITHREADED en el D3D9 de Xenon.  La
+     * sincronizacion del Present entre hilos se hace a mano con g_xboxFlipCS,
+     * abajo en XBOX_RenderSurface.  Eso NO cambia: es el motivo de que el
+     * device sea uno solo por proceso y de que los cores que dibujan por GPU
+     * (Xenon64) tengan que dejarlo sin trabajo en vuelo antes de devolverlo.
+     *
+     * ★★ PROBADAS Y REVERTIDAS (2026-09-20).  Se midio
+     * BUFFER_2_FRAMES | CREATE_THREAD_ON_3 en Majora's Mask con glN64_GX y
+     * NO movieron nada: `[GFXTH] trabajo` 518 -> 507-538 ms/s y
+     * `[FRAME] bloq` 9,04 -> 8,5-9,0, todo dentro del ruido entre escenas.
+     * El device se creo con ellas (no salto el reintento de abajo).
+     *
+     * Lo que eso DESCARTA, que es lo util: si `BUFFER_2_FRAMES` no baja
+     * `trabajo`, ese tiempo no era la CPU esperando con el command buffer
+     * lleno -- es trabajo real de CPU emitiendo comandos.  No hay que volver
+     * por aqui.
+     *
+     * Se quedan documentadas y a 0.  Para reactivarlas basta con poner el
+     * OR de vuelta en XBOX_D3D_FLAGS.
+     *
+     *   BUFFER_2_FRAMES     deja a D3D encolar dos frames de comandos.  Si
+     *                       parte del coste del hilo grafico de un core es
+     *                       la CPU parada con el command buffer lleno, esto
+     *                       lo recupera.  Se mira en `[GFXTH] trabajo` de
+     *                       Xenon64: tiene que BAJAR.  Si no se mueve, ese
+     *                       tiempo era trabajo real y la bandera sobra.
+     *
+     *   CREATE_THREAD_ON_3  pinea el hilo interno de D3D a HW3.  Pineamos a
+     *                       mano todos los hilos nuestros (emulacion HW0,
+     *                       grafico HW2, audio HW4, partidas HW5) y este se
+     *                       dejaba al azar: si el XDK lo pone en HW0 o HW2
+     *                       le esta robando unidades de ejecucion a la
+     *                       emulacion o al grafico.  HW3 es el unico libre
+     *                       (hermano SMT del grafico, que es peor que un
+     *                       nucleo entero pero mejor que pisar a otro).
+     *                       Se mira en `[FRAME] emul` y `[PACE] flip`.
+     *
+     * NO se activa D3DCREATE_ASYNCHRONOUS_SWAPS todavia: cambia el momento en
+     * que vuelve el Present, y este frontend tiene su propio framepacing
+     * (Sync::limit_fps) calibrado contra el Present actual.  Una cosa cada
+     * vez, o el log no dira cual fue.
+     *
+     * NO se activa D3DCREATE_NO_SHADER_PATCHING: Xenos parchea el vertex
+     * shader para casar con el pixel shader ligado, y quitarlo obliga a casar
+     * las firmas a mano en TODOS los caminos de dibujo (frontend y cores).
+     * No es una bandera suelta, es un contrato. */
+#define XBOX_D3D_FLAGS  0
+/* Medido sin ganancia:  (D3DCREATE_BUFFER_2_FRAMES | D3DCREATE_CREATE_THREAD_ON_3) */
+
     if (!D3D_Device) {
-        // Usamos D3DCREATE_HARDWARE_VERTEXPROCESSING para asegurar soporte de VS_3_0.
-        //
-        // [XBOX360] NO usamos D3DCREATE_MULTITHREADED — no existe en el D3D9
-        // de Xenon.  La sincronizacion multi-thread del Present se hace via
-        // g_xboxFlipCS abajo en XBOX_RenderSurface.
         hr = IDirect3D9_CreateDevice(D3D, 0, D3DDEVTYPE_HAL, NULL,
-                                     D3DCREATE_HARDWARE_VERTEXPROCESSING,
+                                     XBOX_D3D_FLAGS,
                                      &D3D_PP, &D3D_Device);
+
+        /* ★ Red de seguridad del experimento.  Si esa combinacion de
+         * banderas no le gusta al driver, sin esto el frontend se queda sin
+         * video ENTERO y sin pista de por que -- el unico sintoma seria un
+         * arranque en negro.  Reintentar con 0 deja el comportamiento de
+         * siempre y una linea en el log que lo dice. */
+        if (FAILED(hr) && XBOX_D3D_FLAGS != 0) {
+            OutputDebugStringA("[XBOXVIDEO] CreateDevice fallo con las banderas"
+                               " nuevas; reintento sin ellas\n");
+            hr = IDirect3D9_CreateDevice(D3D, 0, D3DDEVTYPE_HAL, NULL,
+                                         0,
+                                         &D3D_PP, &D3D_Device);
+        }
         if (FAILED(hr)) return 0;
 
         /* Init del lock una sola vez. */
@@ -593,6 +761,36 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
             InitializeCriticalSection(&g_xboxFlipCS);
             g_xboxFlipCSInit = 1;
         }
+
+        /* Reloj de presentacion por HARDWARE.  Ver el bloque de
+         * XBOX_VBlankCallback para el por que; aqui solo se engancha.
+         *
+         * El evento se crea ANTES de enganchar el callback: si se hiciera al
+         * reves, los primeros vblanks llamarian al callback con `g_vblankEvent`
+         * a NULL.  No pasaria nada -el callback lo comprueba- pero el orden
+         * correcto no cuesta nada. */
+        if (!g_vblankEvent)
+            g_vblankEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+        IDirect3DDevice9_SetVerticalBlankCallback(D3D_Device, XBOX_VBlankCallback);
+
+        /* FASE 2: el Present deja de ser un regulador, y lo decide el HARDWARE.
+         *
+         * `D3DRS_PRESENTIMMEDIATETHRESHOLD` es el porcentaje de avance del DAC a
+         * partir del cual un Present con vsync se convierte en INMEDIATO
+         * (d3d9types.h:625).  O sea: si al presentar el barrido ya va por encima
+         * de ese punto, no se espera al vblank siguiente, se presenta ya.
+         *
+         * Eso es tearing SOLO en los frames que ya iban tarde, que es cuando es
+         * el mal menor, y sustituye a una maquina de estados entera en software
+         * -la del vsync adaptativo, con sus dos calibraciones de umbrales, su
+         * integrador, su guarda anti-aleteo y sus 2071 conmutaciones por log-.
+         *
+         * 80 y no otro numero: por debajo se empieza a rasgar en frames que aun
+         * llegaban, y por encima de ~90 el margen que queda es menor que la
+         * propia latencia de la llamada y deja de actuar. */
+        IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTINTERVAL,
+            D3DPRESENT_INTERVAL_ONE);
+        IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTIMMEDIATETHRESHOLD, 80);
 
         HLSLBackground_init(D3D_Device);
     }
@@ -849,6 +1047,188 @@ void SDL_XBOX_SetRotation(int rotation)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }
 
+/* Definida mas abajo (linea ~2240).  El fichero venia llamandola sin prototipo
+ * y apoyandose en la declaracion implicita de C89 -compila porque la firma
+ * casa y porque este build tiene los avisos apagados-, pero aqui se declara
+ * explicitamente: si algun dia cambia la firma, el error sale en la
+ * compilacion y no en forma de pila corrupta. */
+void XBOX_SelectEffect(int effectID);
+
+/* >>> Re-liga en s0 la textura del juego que toque.
+ *
+ * La llaman los sitios que RECONSTRUYEN el estado de D3D y que, antes de
+ * existir la textura externa, solo tenian que pensar en SDL_primary: el Reset
+ * del device al cambiar el VSync, y XBOX_SetVideoMode al cambiar la
+ * resolucion de pantalla.  Las dos cosas las puede hacer el usuario desde el
+ * menu CON EL JUEGO CORRIENDO, asi que sin esto la imagen del core se
+ * quedaria sustituida por la textura vacia del frontend.
+ *
+ * Con textura externa manda ella Y SUS DIMENSIONES: g_texture_width/height se
+ * restauran desde g_extGameW/H porque esos dos sitios acaban de ponerlas al
+ * tamano de SDL_primary, que aqui no es el del juego.  Y hay que pasar por
+ * XBOX_SelectEffect, que es quien escribe el uniforme c1 que el shader usa
+ * como tamano de textura. */
+static void XBOX_RebindGameTexture(SDL_VideoDevice *dev)
+{
+	if (!D3D_Device) return;
+
+	if (g_extGameTex)
+	{
+		g_texture_width  = g_extGameW;
+		g_texture_height = g_extGameH;
+		XBOX_UpdateVertexBuffer(g_extGameW, g_extGameH, g_display_aspect_ratio);
+		IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_extGameTex);
+		XBOX_SelectEffect(g_current_effect);
+		return;
+	}
+
+	if (dev && dev->hidden && dev->hidden->SDL_primary)
+		IDirect3DDevice9_SetTexture(D3D_Device, 0,
+			(D3DBaseTexture *)dev->hidden->SDL_primary);
+}
+
+void* SDL_XBOX_GetD3DDevice(void)
+{
+	return (void *)D3D_Device;
+}
+
+int SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height)
+{
+	SDL_VideoDevice *this = current_video;
+
+	if (!D3D_Device) return 0;
+
+	if (!texture || width <= 0 || height <= 0)
+	{
+		/* Vuelta al camino normal.  Se religa la textura propia para que el
+		 * quad no se quede muestreando una superficie que el core va a
+		 * liberar. */
+		g_extGameTex = NULL;
+		g_extGameW   = 0;
+		g_extGameH   = 0;
+		if (this && this->hidden && this->hidden->SDL_primary)
+		{
+			IDirect3DDevice9_SetTexture(D3D_Device, 0,
+				(D3DBaseTexture *)this->hidden->SDL_primary);
+		}
+		return 1;
+	}
+
+	g_extGameTex     = (LPDIRECT3DTEXTURE9)texture;
+	g_extGameW       = width;
+	g_extGameH       = height;
+	g_texture_width  = width;
+	g_texture_height = height;
+
+	/* Lo mismo que hace XBOX_ResizeGameTexture despues de crear la suya, y
+	 * por los mismos motivos: el quad hay que recalcularlo (letterbox,
+	 * escalado entero) y XBOX_SelectEffect es quien escribe el uniforme c1
+	 * con las dimensiones que el shader necesita. */
+	XBOX_UpdateVertexBuffer(width, height, g_display_aspect_ratio);
+	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_extGameTex);
+	XBOX_SelectEffect(g_current_effect);
+
+	return 1;
+}
+
+/* -- Capturar la imagen del juego cuando la pinta el CORE ------------------
+ *
+ * POR QUE HACE FALTA.  Un core que renderiza con D3D (Xenon64) no entrega
+ * pixeles: entrega su textura, que el quad liga en s0.  Asi que el frontend
+ * NO tiene una copia en CPU de la imagen, y `take_screenshot()` -- que es
+ * quien hace la miniatura del savestate-- se queda sin fuente.
+ *
+ * ★ Y NO SE PUEDE LEER LA TEXTURA DIRECTAMENTE.  En Xbox 360 `Resolve()`
+ * escribe SIEMPRE tileado, aunque el destino se declare `D3DFMT_LIN_`, asi
+ * que un `LockRect` sobre la textura del core devuelve los texels en orden
+ * de bloques: rayas horizontales en vez de imagen.
+ *
+ * La pieza que lo resuelve es `D3DXLoadSurfaceFromSurface`, que destila (y de
+ * paso escala) y que en este arbol ya esta probada -- `fbg_destila()` de
+ * Xenon64 la usa para exactamente esto.  El destino es una textura LINEAL
+ * propia, que ya se puede bloquear y leer.
+ *
+ * COSTE.  Leer memoria de GPU por CPU va a unos 20 MB/s, o sea ~60 ms para un
+ * frame de 640x480x4.  Eso es inasumible POR FRAME -que es la razon de que el
+ * video vaya por textura- pero una miniatura es UNA VEZ, y el savestate que
+ * la acompaña son 8,7 MB comprimidos con zlib.  Aqui 60 ms no se notan.
+ *
+ * Devuelve 1 y rellena `dst` con ARGB de 32 bits, `w`*`h` pixeles densos.
+ * Devuelve 0 si no hay textura externa (core normal) o si algo falla, y
+ * entonces el llamante simplemente se queda sin miniatura. */
+int SDL_XBOX_CaptureGameTexture(void *dst, int w, int h)
+{
+	static LPDIRECT3DTEXTURE9 s_capTex = NULL;
+	static int                s_capW   = 0;
+	static int                s_capH   = 0;
+
+	LPDIRECT3DSURFACE9 srcSurf = NULL;
+	LPDIRECT3DSURFACE9 dstSurf = NULL;
+	D3DLOCKED_RECT     lr;
+	int                y;
+	HRESULT            hr;
+
+	if (!dst || w <= 0 || h <= 0 || !D3D_Device || !g_extGameTex)
+		return 0;
+
+	/* La de destilado, cacheada: una captura no deberia crear una textura
+	 * cada vez, y ademas el tamaño casi nunca cambia. */
+	if (s_capTex && (s_capW != w || s_capH != h))
+	{
+		IDirect3DTexture9_Release(s_capTex);
+		s_capTex = NULL;
+	}
+	if (!s_capTex)
+	{
+		/* LINEAL a proposito: es lo que hace que el LockRect de abajo
+		 * devuelva filas y no bloques. */
+		hr = IDirect3DDevice9_CreateTexture(D3D_Device, w, h, 1, 0,
+		                                    D3DFMT_LIN_A8R8G8B8,
+		                                    D3DPOOL_DEFAULT, &s_capTex, NULL);
+		if (FAILED(hr) || !s_capTex) { s_capTex = NULL; return 0; }
+		s_capW = w;
+		s_capH = h;
+	}
+
+	if (FAILED(IDirect3DTexture9_GetSurfaceLevel(g_extGameTex, 0, &srcSurf)) || !srcSurf)
+		return 0;
+	if (FAILED(IDirect3DTexture9_GetSurfaceLevel(s_capTex, 0, &dstSurf)) || !dstSurf)
+	{
+		IDirect3DSurface9_Release(srcSurf);
+		return 0;
+	}
+
+	/* Destila y escala en una sola llamada.  Con filtro, que esto es una
+	 * miniatura y puede venir de una resolucion mayor. */
+	hr = D3DXLoadSurfaceFromSurface(dstSurf, NULL, NULL, srcSurf, NULL, NULL,
+	                                D3DX_FILTER_LINEAR, 0);
+	IDirect3DSurface9_Release(srcSurf);
+
+	if (FAILED(hr))
+	{
+		IDirect3DSurface9_Release(dstSurf);
+		return 0;
+	}
+
+	if (FAILED(IDirect3DSurface9_LockRect(dstSurf, &lr, NULL, D3DLOCK_READONLY)))
+	{
+		IDirect3DSurface9_Release(dstSurf);
+		return 0;
+	}
+
+	/* Fila a fila: el pitch de la superficie no tiene por que ser w*4. */
+	for (y = 0; y < h; ++y)
+	{
+		memcpy((unsigned char *)dst + (size_t)y * (size_t)w * 4,
+		       (unsigned char *)lr.pBits + (size_t)y * (size_t)lr.Pitch,
+		       (size_t)w * 4);
+	}
+
+	IDirect3DSurface9_UnlockRect(dstSurf);
+	IDirect3DSurface9_Release(dstSurf);
+	return 1;
+}
+
 void SDL_XBOX_SetScreenResolution(int w, int h) {
 	int i;
 	if (w <= 0 || h <= 0) {
@@ -877,8 +1257,65 @@ void SDL_XBOX_GetScreenResolution(int *w, int *h) {
 	if (h) *h = m->h;
 }
 
-/* Forward decl for XBOX_UpdateOverlayVertices, defined below */ 
+/* Tasa de refresco REAL del panel, en Hz.  0 = desconocida.
+ *
+ * POR QUE HACE FALTA.  El frontend derivaba su periodo objetivo del fps que
+ * DECLARA el core (`av_info.timing.fps`), que para el N64 son ~60,13 Hz, y
+ * presentaba contra un panel que puede ir a 59,94 (NTSC) o 50,00 (PAL).  Dos
+ * rejillas con periodos distintos derivan una contra otra -a 60,00 frente a
+ * 59,94 son ~1 ms cada 60 frames, con un batido de ~17 s-, y esa deriva es lo
+ * que se estaba midiendo como "la mitad de los frames llegan tarde" con el
+ * emulador funcionando a pleno rendimiento.
+ *
+ * El dato ya estaba a mano y se tiraba: `XGetVideoMode` se llama en
+ * `SDL_XBOX_SetScreenResolution` y solo se usaban `dwDisplayWidth/Height`.
+ *
+ * Se consulta al vuelo en vez de cachearlo porque el usuario puede cambiar la
+ * salida de video desde el panel del sistema, y la llamada es barata (no toca
+ * D3D). */
+float SDL_XBOX_GetRefreshRate(void) {
+	XVIDEO_MODE vm;
+	ZeroMemory(&vm, sizeof(vm));
+	XGetVideoMode(&vm);
+	return vm.RefreshRate;
+}
+
+/* Forward decl for XBOX_UpdateOverlayVertices, defined below */
 static void XBOX_UpdateOverlayVertices(void);
+
+/* Vsync EN CALIENTE, sin Reset del device.
+ *
+ * POR QUE NO VALE SDL_XBOX_SetVSync PARA ESTO.  Esa funcion cambia
+ * D3D_PP.PresentationInterval y llama a IDirect3DDevice9_Reset, y un Reset
+ * invalida TODOS los recursos D3DPOOL_DEFAULT del device.  El device es uno
+ * solo y compartido: los cores libretro que renderizan por hardware (Xenon64
+ * dibuja a una textura D3D propia) tienen sus recursos ahi y NO se enteran del
+ * Reset, asi que se quedan con punteros muertos.  Sintoma medido: pantalla
+ * completamente negra en cuanto el vsync conmuta.
+ *
+ * En Xbox 360 el intervalo de presentacion es ademas un RENDER STATE
+ * (D3DRS_PRESENTINTERVAL, d3d9types.h:624), asi que se cambia con
+ * SetRenderState y no hace falta Reset ninguno.  Es barato, o sea que se puede
+ * llamar cada frame -y conviene: si algun core o plugin pisa el estado, la
+ * llamada del frame siguiente lo corrige sola-.
+ *
+ * Nota: NO se toca D3D_PP.PresentationInterval a proposito.  Ese es el valor
+ * base del usuario y es lo que debe quedar si alguien hace un Reset de verdad
+ * (cambio de resolucion); el render state se reaplica solo al frame siguiente. */
+void SDL_XBOX_SetPresentInterval(int enabled)
+{
+	if (!D3D_Device) return;
+
+	/* Misma seccion critica que usa SDL_XBOX_SetVSync y el propio flip: D3D9 de
+	 * Xbox 360 no es seguro entre hilos, y el hilo grafico del core libretro
+	 * emite comandos sobre este mismo device. */
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTINTERVAL,
+		enabled ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE);
+
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
+}
 
 void SDL_XBOX_SetVSync(int enabled)
 {
@@ -968,8 +1405,7 @@ void SDL_XBOX_SetVSync(int enabled)
 	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 
-	if (this && this->hidden && this->hidden->SDL_primary)
-		IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
+	XBOX_RebindGameTexture(this);
 	if (vertexBuffer)
 		IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
 
@@ -1360,7 +1796,7 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	g_texture_width = width;
 	g_texture_height = height;
 
-	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
+	XBOX_RebindGameTexture(this);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
 
 	/* Aplicar el efecto activo: deja shader + sampler + constants en el
@@ -1499,7 +1935,7 @@ SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp)
 	XBOX_UpdateVertexBuffer(width, height, g_display_aspect_ratio);
 
 	/* D3D state minimo (equivalente a WinD3D9_SetGameMode) */
-	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
+	XBOX_RebindGameTexture(this);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
 	XBOX_SelectEffect(g_current_effect);
 
@@ -1526,6 +1962,109 @@ static void XBOX_FreeHWSurface(_THIS, SDL_Surface *surface)
 	return;
 }
 
+/* >>> ESTABLECER NUESTRO PROPIO PIPELINE ANTES DE DIBUJAR.
+ *
+ * Hasta ahora este estado se fijaba UNA SOLA VEZ en XBOX_SetVideoMode
+ * (:1445-1453) y se daba por sentado que nadie mas tocaba el device.  Eso
+ * valia mientras TODOS los cores entregaban un buffer de CPU.
+ *
+ * Deja de valer con un core que renderiza el mismo con Direct3D (Xenon64):
+ * comparte nuestro device y deja puestos SU vertex shader, SU declaracion de
+ * vertices, su Z y su viewport.  Con la declaracion de otro ligada, nuestro
+ * triangulo a pantalla completa se interpreta con el layout equivocado y se
+ * transforma con la matriz del core: **no se ve NI el juego NI el menu**.
+ * Sintoma exacto: pantalla negra con el core corriendo y sonando.
+ *
+ * Son ~8 llamadas por frame, irrelevantes, y para los cores que no tocan D3D
+ * fijan los mismos valores que ya tenian: no cambian nada.  Lo que se gana es
+ * que el frontend deje de depender de la buena voluntad del core. */
+static void XBOX_SetupQuadState(void)
+{
+	if (!D3D_Device) return;
+
+	/* Pipeline de vertices: nuestro shader, nuestra declaracion y nuestro
+	 * vertex buffer (XBOX_DrawMainQuad hace DrawPrimitive a secas y no pone
+	 * el stream source). */
+	IDirect3DDevice9_SetVertexShader(D3D_Device, g_pGradientVertexShader);
+	IDirect3DDevice9_SetVertexDeclaration(D3D_Device, g_pGradientVertexDecl);
+	if (vertexBuffer)
+		IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
+
+	/* Nuestro quad va en coordenadas YA transformadas: el viewport no debe
+	 * aplicarse.  Un core 3D lo deja a TRUE con su propio viewport. */
+	D3DDevice_SetRenderState(D3D_Device, D3DRS_VIEWPORTENABLE, FALSE);
+
+	/* >>> Y EL VIEWPORT AL TAMANO DEL BACK BUFFER, aunque este desactivado.
+	 *
+	 * No es redundante: HLSLBackground_draw NO usa el viewport para
+	 * transformar -sus vertices van en pixeles con rhw=1- sino que lo LEE con
+	 * GetViewport() para saber de que tamano hacer su quad
+	 * (`w = vp.Width; h = vp.Height`).  Un core 3D deja aqui SU resolucion
+	 * interna -640x480 en el caso del N64-, y entonces el fondo animado del
+	 * menu se dibuja de ese tamano en una pantalla de 1280x720, o sea en un
+	 * cuadrante.  Ese era el sintoma de "el fondo del overlay deja de
+	 * funcionar". */
+	{
+		D3DVIEWPORT9 vp;
+		vp.X = 0;
+		vp.Y = 0;
+		vp.Width  = D3D_PP.BackBufferWidth;
+		vp.Height = D3D_PP.BackBufferHeight;
+		vp.MinZ = 0.0f;
+		vp.MaxZ = 1.0f;
+		IDirect3DDevice9_SetViewport(D3D_Device, &vp);
+	}
+
+	/* Sin profundidad.  Y no es cosmetico: aqui no hay depth-stencil ligado,
+	 * y dibujar con ZENABLE puesto y sin superficie de Z hace que el Xenos
+	 * descarte el draw entero. */
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ZENABLE, FALSE);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ZWRITEENABLE, FALSE);
+
+	/* El scissor lo pone XBOX_DrawMainQuad para su rect visible; aqui se
+	 * apaga para que el Clear de abajo borre el back buffer ENTERO y no el
+	 * recorte que dejara el core (320x240 del N64). */
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_SCISSORTESTENABLE, FALSE);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ALPHABLENDENABLE, FALSE);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ALPHATESTENABLE, FALSE);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_CULLMODE, D3DCULL_NONE);
+
+	/* Shader de pixeles y filtros del s0: los mismos que restaura
+	 * XBOX_DrawOverlay al terminar. */
+	IDirect3DDevice9_SetPixelShader(D3D_Device, g_activePS ? g_activePS : g_fallbackPS);
+	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, g_current_sampler_filter);
+	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, g_current_sampler_filter);
+
+	/* >>> Y CON UN CORE QUE COMPARTE EL DEVICE, LA ETAPA DE SHADER ENTERA.
+	 *
+	 * Lo de arriba no basta porque el core no solo cambia shaders: cambia los
+	 * REGISTROS y los SAMPLERS que nuestros presets dan por suyos.
+	 *
+	 *  - ★ Rice hace `SetPixelShaderConstantF(0, consts, 8)`
+	 *    (d3d9_backend.cpp:6157), o sea que escribe c0..c7 con las constantes
+	 *    de su combinador, MILES DE VECES POR SEGUNDO.  Y nuestros shaders
+	 *    declaran `float2 textureDims : register(c1)`.  Con c1 pisado por el
+	 *    1,0 del combinador, HQ2X/xBR calculan sus desplazamientos como
+	 *    1/(1,1) = 1,0 en UV y muestrean la esquina opuesta de la textura: el
+	 *    efecto "no se aplica".  Es el mismo fallo que ya tuvo HLSLBackground
+	 *    pisando c1, y por eso ese modulo lo restaura al terminar.
+	 *  - Rice usa hasta 8 unidades de textura, asi que s1..s3 -donde van
+	 *    nuestras LUT- quedan con texturas suyas.
+	 *
+	 * XBOX_SelectEffect es justo la re-establecida completa: shader, c1 desde
+	 * g_texture_width/height, filtro y wrap de s0, y desligar s1..sN para
+	 * religar las LUT del preset.  Se escribio pensando en correr por CAMBIO
+	 * de efecto -su propio comentario lo dice- y esa premisa deja de valer en
+	 * cuanto otro cliente toca el device.  Cuesta un switch y unas pocas
+	 * llamadas por frame: nada.
+	 *
+	 * Condicionado a que HAYA textura externa a proposito: para los cores que
+	 * entregan un buffer de CPU nadie pisa nada, asi que se deja su camino
+	 * exactamente como estaba y este cambio no puede causarles regresion. */
+	if (g_extGameTex)
+		XBOX_SelectEffect(g_current_effect);
+}
+
 static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 {
 	D3DLOCKED_RECT d3dlr;
@@ -1536,12 +2075,23 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 	 * buffer del GPU si coinciden.  Coste: ~us por frame, despreciable. */
 	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
 
-	/* Unlock so the GPU can read the texture for rendering */
-	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	/* Unlock so the GPU can read the texture for rendering.
+	 *
+	 * Con textura EXTERNA no hay nada que desbloquear: la imagen la ha dejado
+	 * el core en una textura de la GPU y nuestra SDL_primary no participa.
+	 * Bloquearla y desbloquearla aqui seria trabajo tirado, y ademas dejaria
+	 * `surface->pixels` cambiando de sitio sin que nadie escriba ahi. */
+	if (!g_extGameTex)
+		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
 
+	/* Nuestro pipeline, no el que haya dejado el core.  ANTES del Clear, para
+	 * que el scissor apagado le deje borrar el back buffer entero. */
+	XBOX_SetupQuadState();
 
 	/* Clear for letterbox/pillarbox bars, then render game quad */
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+	if (g_extGameTex)
+		IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_extGameTex);
 	XBOX_DrawMainQuad();
 
 	/* Draw HLSL background after game quad (as menu background) */
@@ -1554,15 +2104,21 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 	 * transiciones de estado / arranque / callback del menu); ya no se
 	 * resetea por-frame aqui. */
 	hlslWasActive = g_hlslBkg_active;
-	XBOX_DrawOverlay(this->hidden->SDL_primary, hlslWasActive);
+	/* La textura que el overlay tiene que RESTAURAR en s0 al terminar es la
+	 * que esta alimentando el quad del juego, o sea la externa si la hay. */
+	XBOX_DrawOverlay(g_extGameTex ? g_extGameTex : this->hidden->SDL_primary,
+	                 hlslWasActive);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
 
 	/* Re-lock so the app can keep drawing directly to texture memory */
-	IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	if (!g_extGameTex)
+	{
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
 
-	surface->pixels = d3dlr.pBits;
-	surface->pitch = d3dlr.Pitch;
+		surface->pixels = d3dlr.pBits;
+		surface->pitch = d3dlr.Pitch;
+	}
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 
@@ -1630,23 +2186,31 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 	 * llamar SDL_UpdateRect indirectamente, race con main thread. */
 	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
 
-	/* Unlock so the GPU can read the texture for rendering */
-	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	/* Unlock so the GPU can read the texture for rendering.
+	 * Con textura externa no participa la nuestra; ver XBOX_RenderSurface. */
+	if (!g_extGameTex)
+		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
 
+	XBOX_SetupQuadState();   /* ver XBOX_RenderSurface */
 
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+	if (g_extGameTex)
+		IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_extGameTex);
 	XBOX_DrawMainQuad();
 	if (g_hlslBkg_active) HLSLBackground_draw(D3D_Device);
 	/* g_hlslBkg_active es estado retenido; ya no se resetea por-frame. */
-	XBOX_DrawOverlay(this->hidden->SDL_primary, 0);
+	XBOX_DrawOverlay(g_extGameTex ? g_extGameTex : this->hidden->SDL_primary, 0);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
 
 	/* Re-lock so the app can keep drawing directly to texture memory */
-	IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	if (!g_extGameTex)
+	{
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
 
-	this->screen->pixels = d3dlr.pBits;
-	this->screen->pitch = d3dlr.Pitch;
+		this->screen->pixels = d3dlr.pBits;
+		this->screen->pitch = d3dlr.Pitch;
+	}
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }

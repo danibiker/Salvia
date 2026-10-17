@@ -1,0 +1,998 @@
+DIVERGENCIAS DE source/glN64_GX/ RESPECTO A Wii64/glN64_GX
+===========================================================
+
+Origen: C:\develop\proyectos\personal\Wii64\glN64_GX
+Copia:  libretro/Xenon64/source/glN64_GX/    (93 ficheros)
+
+REBASADO A upstream 1b5041a (2026-09-22).  El anterior era ed63b98; entre los
+dos hay 13 commits y, solo en glN64_GX, 2.641 insercion / 237 borrado en 26
+ficheros.  Los 26 se copiaron ENTEROS y las divergencias de abajo se volvieron
+a aplicar una a una.  Lo que la puesta al dia cambio de este documento esta al
+final, en "PUESTA AL DIA A 1b5041a".
+
+REGLA DEL PORT (la del port de device/rcp/, ver project_xenon64_port_rcp):
+los ficheros copiados se quedan byte a byte identicos y TODA la adaptacion
+vive en ficheros NUESTROS (xenon/gxshim/, xenon/gx_d3d9.cpp, xenon/gln64_*).
+
+Este fichero lista las UNICAS excepciones, para que el diff contra Wii64 siga
+siendo una comprobacion util: cualquier diferencia que NO este aqui es un error.
+
+★ COMO SE COMPRUEBA (y por que NO vale un `diff -r` pelado)
+------------------------------------------------------------
+Los ficheros de Wii64 vienen con finales de linea MIXTOS dentro del mismo
+fichero (OpenGL.cpp: 2280 CRLF + 5 LF; FrameBuffer.cpp: 50 CRLF + 702 LF;
+GBI.cpp: 31 CRLF + 601 LF; VI.cpp: 605 CRLF + 3 LF).  Al editarlos, la
+herramienta de edicion normaliza cada fichero a su final de linea
+MAYORITARIO, asi que un `diff -r` pelado saca 98 lineas en vez de 10 y no
+sirve para nada.
+
+La comprobacion buena ignora el retorno de carro -- es la receta que este
+arbol ya usaba para comparar contra Wii64 (ver project_xenon64_texturas_d3d9).
+El barrido COMPLETO, que es el que de verdad vale como comprobacion:
+
+    cd .../libretro/Xenon64/source/glN64_GX
+    SRC=/c/develop/proyectos/personal/Wii64/glN64_GX
+    for f in *.cpp *.h; do
+        [ -f "$SRC/$f" ] || { echo "SOLO-NUESTRO: $f"; continue; }
+        diff -q <(tr -d '\r' < "$SRC/$f") <(tr -d '\r' < "$f") >/dev/null \
+            || echo "DIFIERE: $f"
+    done
+
+Resultado esperado hoy: EXACTAMENTE estos 12 ficheros, ningun SOLO-NUESTRO, y
+los 81 restantes byte a byte identicos.  Entre parentesis, las lineas que saca
+el `diff` (sumando `<` y `>`), para que cualquier desviacion salte a la vista:
+
+                        total  codigo            total  codigo
+    Combiner.cpp            1       1    RSP.cpp      10       4
+    FrameBuffer.cpp        85      40    Textures.cpp 34      34
+    GBI.cpp                14       6    VI.cpp       83      61
+    GBI.h                  66      22    OpenGL.cpp   55      31
+    gDP.cpp                60       9    OpenGL.h     33       3
+    gSP.cpp                26       4    GFXPlugin.h  20       1
+                                         Zilmar ...   35       3
+    ---------------------------------------------------------------
+    TOTAL                                           522     219
+
+★ "codigo" = sin comentarios ni lineas en blanco.  Mas de la mitad de la
+divergencia son NOTAS, no cambios: 219 lineas de codigo sobre las ~34.500
+del arbol copiado.
+
+(El barrido tarda varios minutos en Git Bash por la sustitucion de procesos;
+es normal, no esta colgado.)
+
+13 ficheros tocados de 93.  Los motivos 1-11 son los de siempre; el 12 son
+los ARREGLOS DE COMPORTAMIENTO y el 13 la banda de guarda de OpenGL.h.
+
+De los once primeros, ★ NINGUNO cambia el comportamiento: 1-2, 6-10 son
+neutros y los 3-5 lo CONSERVAN reescribiendo codigo que depende de hardware
+que Xenon no tiene (paired-single del Gekko, write gather pipe) o que seria
+PELIGROSO traducir literalmente (dcbz).  El 11 arregla un CUELGUE.
+
+Cuatro de los doce (8, 9, 10, 11) son DESAJUSTES CON ESTE ARBOL que Wii64
+nunca vio porque alli glN64 era el unico plugin grafico y se compilaba por
+otra rama de `#ifdef`: una variable declarada pero comentada, un include de
+zlib que no hacia falta, un punto de entrada olvidado en su propia tabla de
+renombrado, y -- el gordo -- un `GFX_INFO` que no casa con el del core.
+
+
+1. LITERALES COMPUESTOS DE C99  --  9 sitios, 3 ficheros
+--------------------------------------------------------
+Upstream construye colores con `(GXColor){0,0,0,255}`, que es un literal
+compuesto de C99.  GCC lo acepta en C++ como extension; **MSVC no**, y no hay
+forma de arreglarlo desde una cabecera: `(T){...}` es un cast aplicado a una
+lista de inicializacion, y eso no existe en C++03.
+
+Los NUEVE tienen el mismo valor (negro opaco), asi que la sustitucion es
+uniforme por la constante `GXCOL_BLACK`, declarada en `xenon/gxshim/gccore.h`
+y definida en `xenon/gx_d3d9.cpp`.
+
+    OpenGL.cpp:1645   (GXColor){0, 0, 0, 255}   ->  GXCOL_BLACK
+    OpenGL.cpp:2191   (GXColor){0,0,0,255}      ->  GXCOL_BLACK
+    OpenGL.cpp:2236   (GXColor){0,0,0,255}      ->  GXCOL_BLACK
+    OpenGL.cpp:2286   (GXColor){0,0,0,255}      ->  GXCOL_BLACK
+    FrameBuffer.cpp:803  (GXColor) {0,0,0,255}  ->  GXCOL_BLACK
+    FrameBuffer.cpp:938  (GXColor) {0,0,0,255}  ->  GXCOL_BLACK
+    VI.cpp:284        (GXColor){0,0,0,255}      ->  GXCOL_BLACK
+    VI.cpp:421        (GXColor){0,0,0,255}      ->  GXCOL_BLACK
+    VI.cpp:563        (GXColor) {0,0,0,255}     ->  GXCOL_BLACK
+
+
+2. ARRAY DE LONGITUD VARIABLE  --  1 sitio
+-------------------------------------------
+    GBI.cpp:452       char uc_data[uc_dsize];
+                 ->   static char uc_data[0x10000];
+
+VLA de C99, tampoco valido en C++03.  `uc_dsize` es un `u16`
+(`GBI_DetectMicrocode(u32, u32, u16)`), o sea como mucho 0xFFFF,
+asi que 0x10000 lo cubre entero y los `UnswapCopy`/`memcpy`/bucle de debajo
+quedan acotados igual que antes.
+
+`static` y no pila porque 64 KB no caben comodos en la pila del hilo grafico.
+`GBI_DetectMicrocode` solo corre al detectar un microcodigo nuevo, y solo
+desde el hilo que parsea la display list (uno cada vez), asi que no hay
+carrera.
+
+
+3. PAIRED-SINGLE DEL GEKKO  --  4 funciones, GBI.h:98-166
+----------------------------------------------------------
+`GXcastu8f32` / `GXcastu16f32` / `GXcastf32u8` / `GXcastf32u16` hacian la
+conversion entero<->float con `psq_l` / `psq_st`: las instrucciones de
+PAIRED-SINGLE del Gekko/Broadway, que cargan un entero cuantizado
+convirtiendolo en una sola instruccion, con el tipo (U8/U16) sacado de un
+registro GQR.
+
+**Xenon no tiene paired-single.** Es una extension propia de GameCube/Wii.
+No es traducible: hay que escribir la semantica.
+
+Y la semantica no es solo un cast:
+
+  a) el almacenamiento cuantizado de Gekko **SATURA**.  Por eso los dos
+     `GXcastf32u*` llevan clamp explicito; sin el, un valor fuera de rango
+     daria basura en vez del extremo.
+
+  b) ★★ y sobre todo **CUANTIZA**: el GQR lleva tipo Y ESCALA, y la
+     instruccion DIVIDE (carga) o MULTIPLICA (almacen) por 2^escala.  La
+     primera version de estas cuatro funciones se fijo solo en (a) y
+     devolvio un cast plano.
+
+     Las escalas no se deducen recordando el reparto de los GQR: se deducen
+     de lo que el VALOR tiene que valer, comprobado contra GLideN64:
+       u8  <-> f32  escala 8   (colores del RDP, [0,1]; GLideN64 usa
+                                `_FIXED2FLOAT(r, 8)`)
+       u16 <-> f32  escala 16  (escala de textura de G_TEXTURE, 0.16 sin
+                                signo; GLideN64 usa `_FIXED2FLOAT(v, 16)`)
+
+     Sin la escala, `gSPTexture` recibia 65535 en vez de ~1.0 y las UV
+     salian 65536 veces grandes: las superficies se veian como estatica de
+     television.  Costo cinco hipotesis falsas antes de medir la
+     distribucion de |UV0|, que salio BIMODAL (24% correctas, 76%
+     desbocadas) -- y la bimodalidad era la firma, porque `gSPTexture`
+     tiene un guarda `if (scales == 0) scales = 1.0f` que salvaba justo los
+     casos en que el juego mandaba 0.
+
+     El par u8 se compensaba a si mismo (255 -> 255.0 -> clamp 255), y por
+     eso los colores parecian casi bien y no delataron nada.
+
+
+4. dcbz / dcbf POR BLOQUE DE 32 BYTES  --  14 sitios, Textures.cpp
+-------------------------------------------------------------------
+Sustituidos por las macros `GX_DCBZ32` / `GX_DCBF32` (gccore.h), que son
+no-ops.  La explicacion larga esta ahi; en corto:
+
+  - ★ `dcbz` SERIA PELIGROSO: pone a cero una LINEA DE CACHE entera, que en
+    Gekko son 32 bytes y en Xenon son 128.  "Poner a cero 32 bytes" borraria
+    96 bytes de memoria ajena.  Y es solo una optimizacion.
+  - `dcbf` es coherencia CPU->GPU, y aqui no hace falta: los texels en
+    formato GX no los lee nunca la GPU, los lee la CPU en `GX_LoadTexObj`
+    para destilarlos a una textura de D3D.
+
+
+5. WRITE GATHER PIPE  --  1 bloque de asm, VI.cpp:501-541
+-----------------------------------------------------------
+Conversion+retileado del framebuffer del N64 (RGB5A1 -> RGB5A3) escrito en
+inline asm de GCC contra el WGP de la Wii, que en Xenon no existe.
+Traducido a C instruccion a instruccion (lwzu/lwz, rotrwi, or, stw); el
+comentario del sitio lleva la equivalencia.
+
+Los ocho `stw` finales se escriben `wgPipe->U32 = wN`, IGUAL que en libogc:
+el shim emula la union del WGP con miembros que avanzan un cursor (ver el
+punto G de "PUESTA AL DIA A 1b5041a").  O sea que esta divergencia ya solo
+sustituye el asm, no la forma de escribir.
+
+
+6. <unistd.h>  --  GBI.cpp:57
+-------------------------------
+POSIX, no existe en el XDK.  GBI.cpp no usa nada de el.  Envuelto en
+`#ifndef _XBOX`.
+
+
+7. LISTA DE INICIALIZACION EN UNA ASIGNACION  --  OpenGL.cpp:1873
+-------------------------------------------------------------------
+`rect[0].color = { 0.0f, 0.0f, 0.0f, 0.0f };` es C++11.  Campo a campo.
+(Codigo inerte hoy: esta dentro del hack de Duke Nukem y
+`GetGameSpecificHack()` devuelve siempre NULL.)
+
+
+8. `recip` DECLARADA PERO COMENTADA  --  RSP.cpp:52
+-----------------------------------------------------
+Descomentada.  La rama de `RSP_LoadMatrix` que compilamos (ni `X86_ASM` ni
+`GEKKO`, lineas 170-184) USA `recip`, pero su declaracion estaba comentada.
+Es un fallo latente de upstream que Wii64 nunca vio porque alli se define
+`GEKKO` y entra por la rama de asm.  1.5258789e-05 = 1/65536.
+
+
+9. <zlib.h>  --  GBI.cpp:67
+-----------------------------
+No hay zlib en este arbol ni en el XDK.  GBI.cpp usa UNA funcion suya,
+`crc32()`, que ahora declara `gccore.h` e implementa `gln64_glue.cpp`.
+
+★ NO vale sustituirla por otro hash: su valor se COMPARA contra la tabla de
+microcodigos conocidos (`uc_crc == specialMicrocodes[i].crc`, GBI.cpp:433).
+Con otro polinomio no casaria ninguno y el plugin caeria al reconocimiento
+por texto, sin error visible y con juegos concretos dibujando mal.  De ahi
+que se implemente el crc32 estandar (polinomio reflejado 0xEDB88320) y no se
+reutilice el `CRC_Calculate` del propio plugin, que usa otra tabla.
+
+
+10. `ReadScreen` FALTABA EN LA TABLA DE RENOMBRADO  --  GFXPlugin.h
+--------------------------------------------------------------------
+`GFXPlugin.h` existe en upstream justo para esto: renombra los puntos de
+entrada del plugin "para que se pueda enlazar estaticamente".  Renombra 18
+de los 19 que exporta glN64.cpp y se dejo `ReadScreen` fuera.
+
+En Wii64 daba igual (glN64 es el unico plugin); aqui convive con Rice, que
+tambien define `ReadScreen` (Video.cpp:1465):
+
+    Video.obj : warning LNK4006: ReadScreen already defined in glN64.obj;
+                second definition ignored
+
+Es solo un WARNING, y por eso es peligroso: el enlazador se queda con una de
+las dos EN SILENCIO.  Hoy no revienta porque `gfx.readScreen` nunca se
+asigna (queda a NULL por el `= {NULL}` de plugin.c:50), pero el dia que se
+cableara llamaria al plugin equivocado.
+
+Anadida `#define ReadScreen readScreen_gfx`, o sea completar la tabla que
+upstream dejo a medias.  Comprobado que es la unica que falta.
+
+
+11. ★★ `GFX_INFO` NO CASABA  --  "Zilmar GFX 1.3.h"
+------------------------------------------------------
+La divergencia mas importante de la lista: era un CUELGUE.
+
+`plugin.c` rellena el `GFX_INFO` de `api/m64p_plugin.h` y lo pasa **POR
+VALOR** a `initiateGFX()`.  glN64 compila contra el de
+`"Zilmar GFX 1.3.h"`, que tenia TRES campos de mas al principio
+(`HWND hWnd`, `HWND hStatusBar`, `BOOL MemoryBswaped`) y uno al final
+(`SP_STATUS_REG`) que al de mupen le faltaba.
+
+Resultado: glN64 leia todos los punteros DESPLAZADOS 12 bytes.  Tomaba
+HEADER por hWnd, RDRAM por hStatusBar, DMEM por MemoryBswaped, IMEM por
+HEADER...  y `SP_STATUS_REG` caia mas alla del final de la struct.
+
+★ Y el sintoma era enganoso: como los punteros desplazados siguen apuntando
+a registros VI de VERDAD, el plugin ARRANCA Y DIBUJA un rato
+(`[GFX] draws=4102 tris=21250` en un log) antes de reventar:
+
+    Access violation reading location 0xFFFFFFFF
+      VI_UpdateSize()      line 72
+      RSP_ProcessDList()   line 298
+
+Rice nunca lo tuvo porque usa la MISMA cabecera que plugin.c
+(`Rice_GX_Xenos/stdafx.h:82` incluye `api/m64p_plugin.h`).
+
+ARREGLO, en tres sitios:
+  - `Zilmar GFX 1.3.h`: quitados los tres campos de cabecera.  Eran ademas
+    inutiles aqui: `hWnd`/`hStatusBar` solo se leen en glN64.cpp:254-255,
+    bajo `#ifndef __LINUX__`, que no se compila; `MemoryBswaped` no lo lee
+    nadie del plugin.
+  - `api/m64p_plugin.h`: anadido `SP_STATUS_REG` antes de `CheckInterrupts`.
+  - `plugin.c`: rellenado con `&g_dev.sp.regs[SP_STATUS_REG]`.  Estaba SIN
+    rellenar y Rice no se entero porque no lo usa; glN64 si lo escribe en el
+    camino del ucode ZSortBOSS (ZSortBOSS.cpp:142-180, que lo desreferencia
+    SIN comprobar NULL).
+
+★ REGLA: las dos structs tienen que quedar IDENTICAS en layout.  La
+comprobacion es mecanica -- extraer los campos de las dos y `diff`; hoy da
+29 campos iguales en el mismo orden.
+
+
+12. SONDAS Y ARREGLOS DE COMPORTAMIENTO
+-----------------------------------------
+Sondas que quedan.  No cambian el comportamiento:
+
+    GLN64_PROF_SCOPE(...)    13 sitios (RSP.cpp, OpenGL.cpp, Textures.cpp,
+                             gSP.cpp, gDP.cpp, Combiner.cpp, VI.cpp)
+    GLN64_WD_RESET/TICK      RSP.cpp (vigilante del bucle de display list)
+    gxd3d_fb_activa(...)     FrameBuffer.cpp, en ActivateBufferTexture: es
+                             el que alimenta `fbmiss`, y un `fbmiss` alto es
+                             la unica senal de un framebuffer-como-textura
+                             que va a salir NEGRO.  Se queda de alarma.
+
+Se declaran en xenon/gln64_prof.h, que `gccore.h` arrastra, asi que el arbol
+copiado no gana ni un `#include`.  Con `GLN64_PROF` y `GLN64_WATCHDOG` a 0
+las macros quedan en nada.
+
+★ RETIRADAS el 2026-09-22, al cerrar el framebuffer de Pokemon Stadium:
+[CIMG-GX], [FBTEX-GX], [FBLOAD-GX], [FBRECH-GX], [FBACT-GX], [FBRECT-GX] y
+los toggles GLN64_FBTEX_MARCADOR / GLN64_FBTEX_BISECT.  Y con ellas los
+contadores `zclear`/`efbclear`, que el rebase habia dejado muertos.
+
+★★ LA LECCION DE ESA TANDA, que costo cuatro builds: los topes de "primeras
+N distintas" me recortaron la evidencia TRES veces (8, 48, 96) y siempre en
+la escena que habia que diagnosticar.  Si vuelven sondas de este tipo, que
+la clave de deduplicacion sea EL DEFECTO que se busca, no un tope.
+
+★ Y las que SI cambian el comportamiento, a proposito.  Todas salen del
+mismo sitio: glN64 da por hecho que el color image mide lo mismo que el VI, y
+Pokemon Stadium dibuja paneles en color image mas anchos Y cambia la
+resolucion del VI entre 320x240 y 640x480 a mitad de escena.
+
+    buffer->scaleX/scaleY    FrameBuffer.cpp, en ActivateBufferTexture
+
+★★ LA CAUSA RAIZ de los cuadros de texto sobredimensionados.  Upstream
+calcula ahi `scaleS = OGL.GXscaleX / realWidth`, o sea con la escala VIGENTE.
+Con el VI cambiando de resolucion, un panel capturado a escala 2 se activaba
+a escala 1 -> UV a la mitad -> contenido al doble.  Ahora usa la escala con la
+que se CAPTURO ese buffer, que FrameBuffer_SaveBuffer ya guardaba.
+
+    gln64_rect_ancho/alto()  OpenGL.cpp, en las dos guOrtho de rects
+                             (OGL_DrawRect y OGL_DrawTexturedRect)
+
+La ortho de los rects iba sobre VI.width x VI.height.  Para un color image de
+538 px con el VI a 320, un rect en x=538 salia a NDC 1,68 y se iba por la
+derecha en esa proporcion -- la barra de aviso inferior.  Ahora va sobre el
+mayor de los dos, que es la misma regla que usa gln64_cimg_escala.
+
+    gln64_cimg_escala(...)   gDP.cpp, en gDPSetColorImage
+
+Baja OGL.GXscaleX/Y cuando el color image que entra es MAS ANCHO que el VI,
+para que quepa en el EFB.  `OGL_UpdateScale()` la saca solo del VI
+(OpenGL.cpp:328), asi que un buffer de 640 px con VI=320 pedia 1280 px de EFB
+de los 640 que hay: se dibujaba la mitad y luego se muestreaba estirada sobre
+el quad entero -- los cuadros de texto de Pokemon Stadium, al doble y
+recortados.  Solo puede BAJAR la escala, asi que para todo color image tan
+ancho como el VI o menos el valor no cambia.  Toggle GLN64_ESCALA_POR_CI; el
+porque y los numeros medidos, en xenon/gln64_config.cpp.
+
+    gxd3d_clear_efb(...)     OpenGL.cpp, al principio de OGL_GXclearEFB
+
+El borrado de pantalla, con el `Clear()` nativo de D3D en vez de con el quad
+a pantalla completa de glN64 -- que en este backend no llega a pintar y
+dejaba la intro de GoldenEye sin borrar.  El resto de la funcion se deja
+correr tal cual, asi que la contabilidad de banderas de upstream no cambia.
+Toggle `GLN64_CLEAR_D3D`; el razonamiento y lo que se descarto con numeros
+estan en `gxd3d_clear_efb` (xenon/gx_d3d9.cpp).
+
+    el guarda estrechado     gDP.cpp, en _gDPCheckForFrameBufferTexture
+    offsetS/offsetT en 2 ejes  FrameBuffer.cpp, en ActivateBufferTexture
+
+Los dos del punto I: el guarda de alineacion a fila deja de aplicarse cuando
+la imagen de textura ES el framebuffer (mismo ancho, mismo tamano, carga por
+tile), y el desplazamiento se calcula en los dos ejes como en GLideN64.  Ya
+sin toggle: comprobados en Pokemon Stadium, GoldenEye y Zelda OoT.
+
+    GLN64_ZGUARD 1.0         glN64_GX/OpenGL.h
+
+La banda de guarda de profundidad de 1b5041a, apagada.  Punto J.
+
+    _gSPDetailBaseTile       gSP.cpp: devuelve el tile SIN desplazar
+
+El desplazamiento de tile por LOD+DETAIL de 1b5041a, quitado.  Punto K.
+
+★ PROBADO Y RETIRADO: el lector del marcador de validez del framebuffer
+(`*(u32*)&RDRAM[startAddress] == startAddress`), que glN64 de PC tiene en
+`FrameBuffer_FindBuffer` y Wii64 dejo sin lector.  No era la causa de la
+estela -- nunca disparaba en GoldenEye-- y en `FindBuffer` HACIA DANO: en
+Zelda OoT rompia el fondo del menu de pausa y el muñeco de Link, y los menus
+de Pokemon Stadium.  Ver la nota en xenon/gln64_config.cpp.
+
+★ Aparte, `_gDPTextureRectangleBGCopy` (gDP.cpp:1198) es codigo PORTADO DESDE
+GLideN64 (`texturedRectBGCopy`), no de Wii64: el fondo de 8 bits de Yoshi's
+Story.  Lo trae UPSTREAM -- no es nuestro y no cuenta como divergencia.
+
+★ INVESTIGADO Y RETIRADO (siluetas negras de Paper Mario): hubo aqui dos
+cambios de comportamiento mas -- exigir que la anchura de la imagen casara
+con la del framebuffer antes de desviar la carga, y aplicar
+`needReplaceTex1ByTex0()` tambien al activar la textura, como hace GLideN64
+en `Textures.cpp:2079`.  Ninguno era, los dos se han quitado, y lo que si
+quedo medido esta en [[project_xenon64_papermario_siluetas]].
+
+
+LO QUE **NO** ES DIVERGENCIA
+-----------------------------
+Estos se resuelven sin tocar el arbol copiado:
+
+- `<gccore.h>`               -> xenon/gxshim/gccore.h   (nuestra API GX)
+- `<ogc/lwp_heap.h>`         -> xenon/gxshim/ogc/...    (reenvia a
+                                source/libogc_lwp_heap.h, que YA esta en el
+                                arbol y da las tres funciones que usa:
+                                __lwp_heap_init/allocate/free)
+- `<ogc/machine/processor.h>`-> xenon/gxshim/ogc/machine/processor.h
+- `"../gui/DEBUG.h"`         -> source/gui/DEBUG.h
+- `"../main/timers.h"`       -> source/main/timers.h
+- `"../main/wii64config.h"`  -> source/main/wii64config.h
+- `"../main/xxhash.h"`       -> source/main/xxhash.h
+- `"../main/gamehacks.h"`    -> source/main/gamehacks.h
+- `"../main/winlnxdefs.h"`   -> source/main/winlnxdefs.h (reenvia a
+                                source/winlnxdefs.h, que ya existia)
+- `"../menu/MenuResources.h"`-> source/menu/MenuResources.h
+- `"../libgui/IPLFont.h"`    -> source/libgui/IPLFont.h
+- `"../gc_memory/MEM2.h"`    -> NO hace falta: va bajo `#ifdef HW_RVL`
+                                (Textures.h:22) y no definimos HW_RVL.
+
+Ficheros copiados pero NO compilados (quedan en el arbol para que el diff
+salga limpio):
+    NV_register_combiners.cpp/.h   backend de combinador de NVIDIA (rama !__GX__)
+    texture_env.cpp/.h             idem, funcion fija de OpenGL
+    texture_env_combine.cpp/.h     idem
+    Config_linux.cpp               configuracion por GTK
+    2xSAI.cpp/.h                   filtro de textura, opcional
+    gl.h / glext.h / glATI.h       cabeceras de OpenGL; se incluyen pero solo
+                                   aportan typedefs y constantes, no codigo
+
+
+PUESTA AL DIA A 1b5041a  (2026-09-22)
+======================================
+Lo que la puesta al dia obligo a anadir EN FICHEROS NUESTROS.  Nada de esto es
+una divergencia del arbol copiado -- son huecos nuevos que upstream deja y que
+resolvemos fuera, como manda la regla del port.
+
+A. `Config config;`  -> xenon/gln64_config.cpp
+-----------------------------------------------
+1b5041a introduce el `struct Config` de GLideN64 (Config.h) con la mascara
+`generalEmulation.hacks`, que `_RSP_SetGameHacks` (RSP.cpp:459) rellena por
+nombre de ROM.  Upstream la DEFINE en `Config_linux.cpp:33`, que es justo el
+fichero GTK que este proyecto no compila.
+
+★ Es EXACTAMENTE el tropiezo de `Config_LoadConfig`, y por segunda vez: al
+excluir un fichero hay que portar su lista ENTERA, no solo la funcion que se
+echa en falta.
+
+B. `getXfbHeight` -> `getEfbHeight`, y `getVmodeAA`  -> xenon/gln64_glue.cpp
+-----------------------------------------------------------------------------
+VI.cpp renombro `getXfbHeight()` a `getEfbHeight()` (misma semantica; el
+nombre viejo era el equivocado).  Y gDP.cpp pide `getVmodeAA()`, que dice si
+el modo de video de la Wii usa antialiasing -- en cuyo caso su z-buffer se
+guarda en formato Z16-mid.  Aqui no hay AA de EFB: devuelve 0 siempre.
+
+C. `hack_ogrebattle`  -> xenon/gln64_glue.cpp + source/main/gamehacks.h
+------------------------------------------------------------------------
+Sexto hack por juego de glN64 (gSP.cpp:2885, fondos YUV de Ogre Battle 64).
+Entra APAGADO como los otros cinco: `GetGameSpecificHack()` devuelve NULL.
+
+D. ★ `GX_PeekZ`  -> STUB en xenon/gx_d3d9.cpp
+----------------------------------------------
+Es la UNICA funcion GX nueva que el plugin pide y el shim no tenia (censo
+hecho: 64 funciones GX usadas, 63 ya estaban).  gDP.cpp la usa desde
+`_gDPPeekDepth`, dentro de `hack_rectDepthBufferCopyPD`, que RSP.cpp enciende
+SOLO para Perfect Dark y Turok: leen el z-buffer desde la CPU para decidir si
+las coronas de luz estan tapadas.
+
+En GameCube/Wii el EFB es memoria direccionable y esto lee UN pixel.  En Xenos
+la profundidad vive en la EDRAM y la unica salida es un `Resolve()` COMPLETO
+mas una lectura por CPU de memoria escrita por la GPU (~20 MB/s), con espera
+contra la GPU.  Hasta 128 muestras por frame por dos juegos no lo justifica.
+
+Devuelve el PLANO LEJANO (0x00FFFFFF), no el cercano, porque es lo que mas se
+parece a lo que habia antes: ese camino no existia, el juego leia de RDRAM lo
+que hubiera y las coronas se veian.  Avisa una vez por log con XENON64_DIAG.
+
+E. El monton de texturas NO lo reinicia el plugin, y esta bien asi
+-------------------------------------------------------------------
+`TextureCache_Init` gano una rama `else if (GXtexCacheBase != NULL)` que
+reinicia el monton con `GX_TEXTURE_CACHE_SIZE` (2,4 MB).  Aqui NUNCA se toma:
+`GXtexCacheBase` es `static` en Textures.cpp y solo se asigna en la rama
+`if (!GXtexCache)`, que no entra porque el monton lo monta antes
+`gln64_tex_heap_setup()` (gln64_config.cpp).  Suerte, pero conviene saberlo:
+si se tomara, nuestros 32 MB se quedarian en 2,4.
+
+F. Texturas RETIRADAS en vez de liberadas
+-------------------------------------------
+`_texHeapFree` ya no libera las texturas de framebuffer: las mete en
+`texRetire[]` y las suelta `TextureCache_ReleaseRetired()`, que cuelga de
+`VI_GX_DrawSyncCallback`.  Ese camino SI esta vivo aqui: VI.cpp llama a
+`GX_SetDrawSync(...)` y nuestro shim invoca la callback (gx_d3d9.cpp:2943).
+Ademas `_texHeapRetire` drena solo al llegar a 64, asi que aunque la callback
+faltara no habria fuga.  Y para nuestro registro LRU es MAS seguro: la
+direccion no se recicla hasta que el `__lwp_heap_free` real dispara el gancho.
+
+G. ★ `wgPipe` deja de ser un `u32 *` y pasa a emular la union del WGP
+----------------------------------------------------------------------
+Salto en el primer build: `gDP.cpp(1168): error C2227: left of '->F64' must
+point to class/struct/union; type is 'u32 *'`.
+
+En la Wii el write gather pipe es una UNION en direccion FIJA y cada
+escritura a un miembro EMPUJA al FIFO.  El shim lo habia simplificado a
+`extern u32 *wgPipe` porque su UNICO consumidor era el bucle del XFB de
+VI.cpp, que ya era divergencia nuestra y podia avanzar el puntero a mano.
+
+1b5041a trae un SEGUNDO consumidor, `_gDPWriteRDRAM` (gDP.cpp:1147), que usa
+la sintaxis de libogc de verdad (`wgPipe->F64`, `wgPipe->U32`) y no avanza
+nada.  Arreglarlo tocando gDP.cpp habria sido una divergencia mas en codigo
+copiado, asi que se arregla donde toca: `GXWGPipe` (gccore.h) es un objeto
+cuyos miembros son proxies con `operator=`, y cada escritura vuelca al cursor
+y lo avanza por el tamano del miembro.  Los `operator=` van EN LINEA en la
+cabecera y el cursor esta expuesto (`gxd3d_wg_cursor`) justo por eso:
+`_gDPWriteRDRAM` mete decenas de miles de palabras por frame en Majora, y ya
+hemos pagado una vez el precio de convertir una llamada GX gratis en una cara.
+
+★ `S8` y `S16` NO se declaran aunque la union de libogc los tenga: en este
+arbol los dos son MACROS (memory.h, hle.h, Rice typedefs.h) y declararlos
+seria una mina con el orden de includes.
+
+★ Efecto colateral BUENO: la divergencia 5 de VI.cpp ahora escribe
+`wgPipe->U32 = wN` ocho veces, exactamente como el `stw r,0(wgPipe)` x8 del
+asm original.  La traduccion quedo mas cerca de upstream, no mas lejos.
+
+`PF64::operator=` copia con `memcpy` y no con una asignacion de coma
+flotante: `_gDPWriteRDRAM` mete por ahi OCHO BYTES CRUDOS de RDRAM
+disfrazados de `double`, y no conviene depender de que el compilador elija
+`stfd` (bit-exacto) en vez de algo que normalice un NaN.
+
+H. `GX_COPY_PROGRESSIVE`
+-------------------------
+Tambien del primer build: tres C2065 en FrameBuffer.cpp.  1b5041a cambio el
+ultimo argumento de `GX_SetTexCopyDst` de `GX_FALSE` a `GX_COPY_PROGRESSIVE`.
+Ese argumento se llama `mipmap` en la firma de libogc, y las dos constantes
+valen 0, asi que el cambio es cosmetico -- y aqui da doblemente igual porque
+nuestro `GX_SetTexCopyDst` lo ignora.  Anadidas las tres constantes de modo
+de copia a gccore.h.
+
+I. ★★ LA PUERTA DEL DESVIO DE CARGAS AL FRAMEBUFFER CAMBIO (regresion ABIERTA)
+--------------------------------------------------------------------------------
+Lo mas importante que trae 1b5041a para este arbol, y no estaba en el diff de
+ficheros nuestros: `gDPLoadTile`/`gDPLoadBlock` deciden si una carga de
+textura se sirve desde el framebuffer en vez de desde la TMEM.
+
+    ANTES (ed63b98):  el MARCADOR de RDRAM
+                      (*(u32*)&RDRAM[buf->startAddress] & 0xFFFEFFFE)
+                          == (buf->startAddress & 0xFFFEFFFE)
+    AHORA (1b5041a):  FrameBuffer_IsValid(), la huella al estilo GLideN64,
+                      dentro de _gDPCheckForFrameBufferTexture()
+
+En este arbol el marcador casi nunca se cumplia, asi que el desvio casi nunca
+ocurria y ese camino estaba PRACTICAMENTE SIN EJERCITAR.  Ahora ocurre mucho.
+Efecto medido en Pokemon Stadium (log 34):
+
+    ARREGLADO   los recuadros negros del HUD
+    ROTO        los paneles del menu y la rejilla de pokemon: la mitad
+                izquierda sale bien y la derecha con basura o repetida
+
+★ La puerta en si es FIEL a GLideN64 (gDP.cpp:375-447 de GLideN64, comparada
+linea a linea), asi que el defecto no esta en la puerta sino AGUAS ABAJO, en
+un camino que aqui no se habia probado nunca.
+
+LO QUE HACE EL JUEGO, medido con [FBLOAD-GX] (log 35):
+
+    addr=002C6DC0 buf=002C6DC0 bufW=128 | tileW=2048 tipo=BLOCK | ti=1x
+
+Pokemon Stadium pinta el panel en un color image auxiliar de 128x204 y luego
+se lo copia de vuelta en TIRAS de 16 filas -- 2048 texels = 16 x 128 --, una
+por `gDPLoadBlock`, avanzando la direccion de 0x1000 en 0x1000.  Cada tira se
+dibuja despues como su propio texrect.  Trece tiras por panel.
+
+DESCARTADO CON NUMEROS, y esto es lo que mas vale de la tanda:
+
+  1. ✗ El `offsetS` que Wii64 no calcula.  [FBACT-GX] da `off=0.0,16k`, que
+     es EXACTAMENTE lo que sale de la formula de GLideN64
+     (`FrameBuffer::getTexture`, FrameBuffer.cpp:485):
+         shift = (addr - start) >> (size-1) = 2048k
+         offsetS = shift % 128 = 0        offsetT = shift / 128 = 16k
+     O sea que aqui `offsetS` vale 0 de las dos maneras.  Era mi principal
+     sospechoso y es FALSO.
+  2. ✗ Envolvente REPEAT.  `env=CLAMP,CLAMP mask=0,0`: lo repetido que se ve
+     no puede venir de una UV que se pase de 1.0.
+  3. ✗ Desalojo del registro RTT.  `fbmiss=0` en todo el log: todas las
+     activaciones encuentran su textura resuelta.
+  4. ✗ La escala.  `s*real=2.000,2.000` = la escala con la que se capturo
+     ese buffer ([FBTEX-GX] `esc=2.000,2.000`).  Coinciden.
+
+  5. ✗ Que la puerta sea el disparador.  MI ERROR, corregido comparando con
+     el arbol pre-rebase: el `SaveBuffer` VIEJO escribia el marcador el mismo
+     (`*(u32*)&RDRAM[start] = start`, FrameBuffer.cpp:267 y :417), asi que la
+     puerta vieja pasaba siempre justo despues de guardar y EL DESVIO YA
+     OCURRIA ANTES.  Ademas `FrameBuffer_ActivateBufferTexture` y toda la
+     geometria de textura de `SaveBuffer` son IDENTICAS viejo vs nuevo.
+     (Efecto secundario: `GLN64_FBTEX_MARCADOR` a 1 no devuelve el
+     comportamiento viejo, DESACTIVA el desvio -- la huella nueva no casa
+     con el test del marcador.  Sigue valiendo como A/B, pero no es eso.)
+
+EL BISECT QUE LO PARTIO (`GLN64_FBTEX_BISECT`, xenon/gln64_prof.h):
+
+  modo 1 (muestrear la textura entera) -> "sin cambios, sale con basura".
+         NO DECIDE: puede ser que la textura este mal o que el modo 1 no
+         llegue a esos dibujos.  Fallo de diseno del bisect: un bisect tiene
+         que dar un cambio que no se confunda con "sigue mal".
+  modo 2 (no dibujar NADA con textura de framebuffer) -> ★ DECIDE: los
+         paneles DESAPARECEN y LA BASURA SE QUEDA.  O sea que no es un
+         dibujo medio mal: son DOS DIBUJOS.  El bueno va por la textura de
+         framebuffer; la basura va por TMEM, y es basura porque glN64 nunca
+         escribe el panel en RDRAM -- lo pinta en el EFB.
+
+★★★ CAUSA RAIZ (log 38, sonda [FBRECH-GX], motivo 5 "no alineado a fila"):
+
+    #19 addr=002C6E48 motivo=5 | buf=002C6D80 bufW=172 | tileW=72
+        bytes=2880 tipo=TILE          (y seis mas identicas, #20-#25)
+
+Son los SIETE paneles del menu.  Cada uno mide 172 de ancho (fila = 344
+bytes) y el juego carga su parte DERECHA con un tile de 72 texels que
+empieza 200 bytes dentro del buffer: 200 % 344 != 0, o sea el TEXEL 100 de
+la fila 0.  Upstream lo rechaza, la carga cae a TMEM y sale ruido.
+100/172 = 58%, que es justo la proporcion que se ve en pantalla.
+
+Y el guarda que lo rechaza NO ES DE LA REFERENCIA: `CheckForFrameBufferTexture`
+de GLideN64 (src/gDP.cpp:418-433) solo tiene dos filtros y ninguno mira la
+alineacion.  Wii64 lo anadio porque su `FrameBuffer_ActivateBufferTexture`
+deja `offsetS` en `uls` y no sabria donde muestrear.  Las dos piezas van
+juntas, y la referencia tiene las dos bien
+(`FrameBuffer::getTexture`, GLideN64/src/FrameBuffer.cpp:485-493):
+
+    shift   = (imageAddress - startAddress) >> (size - 1);   // en texels
+    offsetS = uls + (shift % width);
+    offsetT = ult + (shift / width);
+
+ARREGLO (ya sin toggle, comprobado en Pokemon Stadium, GoldenEye y OoT):
+
+★ PRIMERA VERSION: portar la formula Y QUITAR EL GUARDA ENTERO.  Arreglo los
+menus y la rejilla (confirmado) y ROMPIO el texto del HUD de combate --
+nombres de los pokemon y color de equipo, que pasaron a salir con trozos de
+tiles.  Atribucion limpia: el usuario confirma que ese texto iba bien justo
+despues del rebase.  Quitar el guarda entero deja pasar texturas NORMALES
+que solo por casualidad viven dentro del rango de un framebuffer.
+
+★★ Y LA FORMULA NO ARREGLA NADA, MEDIDO.  Con el campo `ti=` en
+[FBACT-GX], en el log 40 hay 231 activaciones y en NINGUNA sale
+`shift % width != 0`: `offsetS` vale `uls` (o 0) en todas, igual que
+upstream.  Las 108 con `★ti!=buf` tampoco cambian nada -- su desfase es
+multiplo entero de la fila y cae todo en el termino de T, que upstream ya
+calculaba.  El merito era del guarda; la formula se queda por fidelidad a
+la referencia, pero hasta hoy no ha cambiado ni un pixel.
+
+★★★ VERSION BUENA: el guarda SE QUEDA, estrechado.  No se aplica cuando la
+imagen de textura ES el framebuffer (mismo ancho Y mismo tamano), que es la
+marca que separa los dos casos en el log:
+
+    paneles del menu   ti=172x(size 2)  bufW=172 bufSize=2   -> pasa
+    banda inferior     ti=538x(size 2)  bufW=538 bufSize=2   -> pasa
+    texto del HUD      la imagen es la fuente, no el buffer  -> se corta
+
+Es el mismo criterio que ya usa el filtro de LOADTYPE_TILE de al lado
+(`gDP.textureImage.width != buffer->width`), asi que no se inventa nada.
+
+★ Y SOLO PARA LOADTYPE_TILE.  Medido sobre el log 40: de las 93 cargas que
+dependen de la excepcion, las 93 son TILE y ninguna es BLOCK.  Restringirla
+a TILE no le quita nada a lo que funciona y devuelve el rechazo de upstream
+a las cargas en BLOQUE, que es por donde un juego se lee el framebuffer
+ENTERO.  Motivo: GoldenEye aparecio con una capa azulada a pantalla
+completa, que es la firma clasica de un quad de framebuffer encima de la
+escena (ver project_xenon64_framebuffer_gln64, "capa blanquecina").
+
+★ Otra vez la misma leccion: la pregunta no era "que excepcion falta" sino
+"que REGLA de la referencia no esta portada".
+
+J. ★★ LA BANDA DE GUARDA DE PROFUNDIDAD, APAGADA  (glN64_GX/OpenGL.h)
+-----------------------------------------------------------------------
+1b5041a metio una "depth guard band": comprime la z proyectada a 1/4
+(`GXprojZScale` de 0.5 a 0.125) y lo compensa ESTIRANDO el viewport --
+`GXviewportNearZ(n,f) = f - 4*(f-n)`, que para el 0..1 de siempre pide un
+near de **-3**.
+
+Eso solo vale si el viewport admite un near negativo.  EN D3D NO:
+`D3DVIEWPORT9::MinZ` esta definido en [0,1].  Nos quedamos con la
+compresion y sin la compensacion, y se paga dos veces:
+
+  1. ★ LA NIEBLA.  El shader hace `ff = saturate((z/w - start)/(end-start))`
+     con start=-1 y end=+1 (OGL_GXinitDlist), una rampa pensada para z_ndc
+     en [-1,0].  Con la banda, z_ndc queda en [-0.25,0] y `ff` ARRANCA EN
+     0.375: todos los pixeles con un 37% de niebla de suelo.
+  2. Toda la profundidad se mete en [0.75,1] del z-buffer: ~2 bits menos.
+
+SINTOMA MEDIDO, y lo que lo delata es que son DOS JUEGOS A LA VEZ con
+colores distintos -- GoldenEye con una capa azulada, Zelda OoT oscuro
+dentro del Arbol Deku y con la niebla espesisima fuera --, o sea una causa
+global y no un juego.
+
+DESCARTADO ANTES, con numeros del log 42:
+    fbact=0 en los dos juegos      -> no es el camino de framebuffer-textura
+    clrrgb=000000                  -> el borrado es NEGRO, no es una capa
+    GXCOL_BLACK == {0,0,0,255}     -> comprobado
+    el codigo de niebla es identico viejo vs nuevo
+    rsSet() SI vacia el lote antes de cambiar la mascara de color
+
+ARREGLO: `GLN64_ZGUARD` a 1.0 (glN64_GX/OpenGL.h).  Con eso los tres
+valores vuelven EXACTAMENTE a los de antes del rebase (0.5 / -0.5, y
+`GXviewportNearZ(n,f)` = n).  A 4.0 vuelve upstream, para el A/B.
+
+Y en el shim, `GX_SetViewport` ahora ACOTA MinZ/MaxZ a [0,1] y cuenta los
+casos en `vpz`: antes se pasaba un -3 tal cual y un viewport invalido no da
+error, simplemente deja de hacer lo que crees.
+
+
+K. ★★ EL DESPLAZAMIENTO DE TILE POR "DETAIL", QUITADO  (gSP.cpp)
+------------------------------------------------------------------
+1b5041a anadio `_gSPDetailBaseTile`, que corre el tile base UNO cuando
+othermode lleva LOD+DETAIL:
+
+    if (textureLOD == G_TL_LOD && textureDetail == G_TD_DETAIL)
+        return (tile + 1) & 7;
+
+LA REFERENCIA NO LO HACE.  `gSPTexture` de GLideN64 (src/gSP.cpp:2180-2181):
+
+    gSP.textureTile[0] = &gDP.tiles[tile];
+    gSP.textureTile[1] = &gDP.tiles[(tile + 1) & 7];
+
+Y el desplazamiento depende de DOS BITS PEGAJOSOS de othermode, sin mirar
+`gSP.texture.level` ni si el combinador usa LOD de verdad: un dibujo que
+herede esos bits del anterior se lleva el tile equivocado, con la textura
+sin cargar, y sale oscuro.
+
+MEDIDO: los quesitos del medidor POWER de Mario 64.  El aro y el texto
+salian y el interior no; desplazamiento fuera, quesitos dentro.
+
+★ DOS DE DOS.  Este y el guarda de alineacion del punto I son la MISMA
+forma: una condicion que Wii64 anade sobre el codigo de GLideN64 y que la
+referencia no tiene.  Si aparece otro defecto en esta zona, la primera
+pregunta ya no es "que falta" sino "QUE LE SOBRA A WII64 RESPECTO A
+GLideN64" -- y se contesta con un grep en
+C:\develop\proyectos\personal\GLideN64\src.
+
+★ Y el hermano que queda por mirar, por si acaso: la condicion del mip
+chain.  Wii64 (Textures.cpp, TextureCache_Update) la saca de los bits de
+othermode; GLideN64 (src/Textures.cpp:1616) exige ademas
+`currentCombiner()->usesLOD()` y `_tile > 0`.  Hoy no molesta, pero es la
+misma clase.
+
+
+L. ★★ EL RELLENO DE COLOR SE LO COMIA EL BORRADO DE Z  (gDP.cpp)
+------------------------------------------------------------------
+`gDPFillRectangle` de upstream fusiona con `||` dos casos que la referencia
+tiene SEPARADOS (GLideN64, src/gDP.cpp:914-948):
+
+    if (depthImageAddress == colorImage.address) {
+        // El juego puede usar la textura de profundidad como color
+        // auxiliar (ejemplo suyo: Mario Tennis).  Si el color NO es el de
+        // borrado de profundidad, es casi seguro ese caso.
+        if (fillColor == DepthClearColor) { ...borrar Z...; dbCleared; }
+    } else if (fillColor == DepthClearColor && cycleType == FILL) {
+        ...borrar Z...; dbCleared;
+    }
+    if (depthBuffer != dbCleared) { ...pintar el rect de COLOR... }
+
+Wii64 se dejo el `if` de dentro: cuando el color image coincide con el de
+profundidad, borra Z y VUELVE pinte lo que pinte el juego, asi que un
+relleno de COLOR sobre ese buffer no se pinta nunca.
+
+MEDIDO en Killer Instinct Gold: `clrz=8669` contra `clrcol=8` en todo el
+log, y en pantalla todo deja estela -- justo lo que pasa si el fondo no se
+repinta.  El sintoma se parece al de la intro de GoldenEye (punto J2) pero
+la causa es otra: alli el quad de borrado no llegaba a pintar, aqui es que
+no se pide el borrado.
+
+★ OJO: el termino `fillColor == DepthClearColor` SI es de la referencia
+(`isCurrentColorImageDepthImage`, GLideN64 src/gDP.cpp:33-37).  Lo que
+faltaba era la ESTRUCTURA, no la condicion.  Comprobado antes de tocar, que
+la tentacion era cargarse el termino nuevo.
+
+★★ Y QUE CASO ES EL DE KILLER INSTINCT NO ESTA CONFIRMADO.  Comparado con
+el arbol pre-rebase:
+
+  caso A  `depthImageAddress == colorImage.address` sin mirar el color.
+          PRE-EXISTENTE: ya estaba antes del rebase.  Es el que arregla
+          este cambio.
+  caso B  el termino nuevo `fillColor == DepthClearColor && FILL`.  Es
+          FIEL a la referencia y este cambio lo deja igual.
+
+El discriminador ya esta puesto y no hace falta sonda nueva: si en el
+proximo log `clrcol` sube, era el caso A y esta arreglado.  Si sigue cerca
+de 0, es el caso B, y entonces la pregunta es por que el color de relleno
+de KI vale `DepthClearColor` -- y eso apunta a `gDPSetFillColor` o a la
+endianness, no a esta estructura.
+
+★★ Tercera de la misma familia (I, K, L): Wii64 porta codigo de GLideN64 y
+al portarlo lo simplifica.  Ver reference_wii64_sobra_vs_gliden64.
+
+
+M. LA CADENA DE MIPS, COHERENTE CON EL PUNTO K  (Textures.cpp)
+----------------------------------------------------------------
+`TextureCache_LoadMipChain` usa `baseTile + i` para el nivel i (>=1), asi
+que `baseTile` tiene que ser el tile del NIVEL 0.  Upstream pasa `tile + 1`
+porque su `_gSPDetailBaseTile` ya habia corrido el nivel 0 a `tile + 1`.
+
+Quitado ese desplazamiento (punto K), el nivel 0 vuelve a ser `tile` y pasar
+`tile + 1` se saltaria el tile+1: nivel 0 en `tile` y nivel 1 en `tile+2`.
+Ahora pasa `gSP.texture.tile`.  Los dos cambios van JUNTOS.
+
+★ Y QUEDA UNA DIFERENCIA CON LA REFERENCIA, ANOTADA Y NO TOCADA porque hoy
+no hay ningun defecto medido que la pida.  La PUERTA de la cadena:
+
+    Wii64      otherMode.textureLOD == G_TL_LOD &&
+               otherMode.textureDetail == G_TD_DETAIL &&
+               gSP.texture.level > 1
+    GLideN64   currentCombiner()->usesLOD() && gSP.texture.level > 1 &&
+               _tile > 0                      (src/Textures.cpp:1616)
+
+Tres diferencias: la referencia mira si el COMBINADOR usa LOD (no dos bits
+pegajosos de othermode), exige `_tile > 0`, y construye cadena tambien sin
+DETAIL (con `level - 1` en vez de `level`).  La de Wii64 es mas restrictiva
+en cuando construye -- asi que el riesgo no es que falten mips, sino que
+construya una para un dibujo cuyo combinador no usa LOD, que es la misma
+clase que el punto K.  Si aparece un defecto de texturas con cadenas de
+mips, empezar por aqui.
+
+
+N. gSPModifyVertex: G_MWO_POINT_XYSCREEN escrito pero APAGADO  (gSP.cpp)
+--------------------------------------------------------------------------
+Toggle `GLN64_MODIFYVTX_SCREEN` (xenon/gln64_prof.h), **a 0**.  Los
+contadores siguen contando con el toggle apagado.
+
+★★ NO ERA LA SOMBRA DE PILOTWINGS.  Medido en el log 15: la linea [GLN64MV]
+no sale, o sea `xyscreen=0 zscreen=0`, y el juego no toca este camino.  La
+hipotesis murio en un solo build porque el contador venia en el mismo.  El
+codigo se queda escrito -- el hueco respecto a la referencia es real-- pero
+a 0, porque la conversion no se ha ejercitado NUNCA en hardware y dejarla
+viva seria soltarla a ciegas sobre el primer juego que la use.  Se enciende
+el dia que [GLN64MV] aparezca, con el dato delante.
+
+Lo que SI dejo en pie es el punto O.
+
+`gSPModifyVertex` tiene cuatro subcomandos y glN64 implementa DOS (RGBA y
+ST).  `G_MWO_POINT_XYSCREEN` y `G_MWO_POINT_ZSCREEN` son `case` VACIOS,
+marcados `DEBUG_UNHANDLED` por el propio upstream.  Sirven para que el juego
+ponga un vertice DIRECTAMENTE en pantalla saltandose las matrices; ignorarlos
+deja el vertice donde lo dejo la transformacion 3D, o sea pegado al objeto.
+
+Motivo: la sombra de Pilotwings 64 sale pegada al ala delta en vez de
+proyectada en el suelo, y con el jetpack se estira en una tira desde el suelo
+hasta el personaje.  ★ NO ESTA MEDIDO que el juego use este camino -- por eso
+el cambio trae los contadores [GLN64MV], que contestan esa pregunta en el
+mismo build.
+
+★ ESTO NO SALE EN AUDITORIA_GLIDEN64.txt, y no es un fallo del mapa: aquel
+cubre las 28 piezas que Wii64 PORTO de GLideN64, y esto es codigo que glN64
+nunca termino.  Es otra clase -- "lo que falta", no "lo que sobra"-- y no
+tiene indice. Ver la nota al final de aquel fichero.
+
+Referencia: GLideN64 src/gSP.cpp:2039-2042 pone x/y en pixel de pantalla y
+marca `MODIFY_XY`; su rasterizador se salta entonces la transformacion
+(src/SoftwareRender.cpp:19-25).  Aqui no hay campo `modify`, asi que se hace
+lo equivalente: convertir a espacio de recorte con w=1, que es donde ya viven
+los vertices, y asi no se toca ni el renderer ni la estructura.
+
+El algebra sale de este arbol y no de un supuesto: el viewport lo monta
+`OGL_UpdateViewport` con `gSP.viewport.x/width`, que `gSPViewport` define como
+`vtrans-vscale` y `2*vscale`, y eso da la MISMA formula que GLideN64.  El
+signo de Y se saca de `OGL_DrawRect` (OpenGL.cpp:1563), el camino de pantalla
+que hoy funciona: su `guOrtho(m, 0, alto, 0, ancho, 1, -1)` deja NDC +1
+ARRIBA.
+
+ZSCREEN se queda SIN implementar a proposito: traducirlo exige saber si el
+NDC de profundidad de este backend es [-1,0] o [-1,1], y esa convencion ya se
+equivoco dos veces (la fila z de guOrtho, el GXprojZGuard).  Se hace si el
+contador `zscreen=` dice que llega.
+
+
+O. GEOMETRIA AL BUFFER DE PROFUNDIDAD  (OpenGL.cpp) -- MIDIENDO
+------------------------------------------------------------------
+Toggle `GLN64_CI_ES_ZI` (xenon/gln64_prof.h), **a 0**: de momento solo
+cuenta y el binario se comporta como antes.  Contador: linea [GLN64ZI].
+
+★ PRIMER INTENTO FALLIDO, Y EL FALLO FUE DE LA SONDA, NO DEL MECANISMO.  La
+primera version pregunto `colorImage.address == depthImageAddress` y dio
+CERO en el log 16.  Eso NO descarta nada, porque el test de Rice no es una
+igualdad simultanea: `IsUsedAsDI` (RSP_Parser.cpp:2180) es HISTORICO, mira
+las DOS ultimas direcciones de depth image con una ventana de 10 display
+lists.  La diferencia cae justo en el patron buscado -- el juego apunta el
+color image a algo que FUE el depth image, dibuja, y lo devuelve.  Portado
+en `gln64_ci_es_zi()` (xenon/gln64_config.cpp) y vuelto a medir.
+
+Sintoma: la sombra de Pilotwings 64 pegada al ala delta en vez de proyectada
+en el suelo, y con el jetpack estirada en una tira desde el suelo hasta el
+personaje.
+
+★ LA PISTA VIENE DE RICE, EN NUESTRO PROPIO ARBOL, no de un razonamiento.
+`Rice_GX_Xenos/Render.cpp:1409` trae un hack por juego para Pilotwings que
+descarta el dibujo cuando `IsUsedAsDI(g_CI.dwAddr)` -- el color image esta
+puesto en el depth image-- con su propio comentario: *"using Flushtris to
+write Zbuffer"*.  O sea que el juego manda GEOMETRIA AL BUFFER DE
+PROFUNDIDAD dibujando triangulos.  Y el usuario CONFIRMA que con Rice la
+sombra no se ve, que es lo que ese descarte produce.
+
+glN64 no hace ninguna de las dos cosas, asi que esa geometria se pinta en el
+EFB visible.  Eso explica los dos sintomas de golpe: lo que se ve no es una
+sombra mal colocada, es la geometria destinada al z-buffer pintada como
+color, y por eso aparece en la posicion del objeto.
+
+Aqui el descarte es GENERICO (`colorImage.address == depthImageAddress`), no
+por juego, porque asi es como lo trata la referencia buena:
+`isCurrentColorImageDepthImage()` (GLideN64 src/gDP.cpp:33).  Rice ademas
+exige `z_cmp + z_upd > 0`; si el descarte se pasa de frenada en algun juego,
+ESTRECHAR con esa condicion antes que volver a 0.
+
+★ ESTO NO ES EL ARREGLO COMPLETO, es la mitad.  Descartar deja el juego como
+Rice: SIN sombra.  El arreglo de verdad es lo que hace GLideN64 --
+`src/GraphicsDrawer.cpp:794-800`: cuando el destino es el depth image, el
+shader escribe gl_FragDepth en vez de color-- y eso es un port aparte.
+Primero hay que confirmar el mecanismo con [GLN64ZI].
+
+
+P. ★★ ESTADO DEL RDP QUE SOBREVIVE AL CAMBIO DE ROM  (RSP.cpp)
+------------------------------------------------------------------
+Toggle `GLN64_RESET_RDP_AL_CARGAR` (xenon/gln64_prof.h), a 1.  A 0 vuelve el
+comportamiento de antes exacto.
+
+Sintoma MEDIDO por el usuario: el marcador POWER de Super Mario 64 sale bien
+en un arranque limpio, pero si ANTES se ha cargado otro juego, sale mal.
+Reproducible a voluntad, o sea que el control existe.
+
+`RSP_Init()` corre en cada `RomOpen` y reinicia `gSP` entero, otherMode,
+loadTile, textureTile[], los hacks por juego, DepthBuffer, GBI y -- via
+`OGL_Start()`-- la cache de texturas.  NO toca `gDP.tiles[]`,
+`gDP.loadInfo[]` ni la TMEM, que son los tres que deciden el tamano de la
+textura de un TEXRECT.  El marcador POWER son texrects, y
+`TextureCache_Update` se bifurca por `loadedInfo.loadType == LOADTYPE_TILE`
+SOLO para texrects: con datos de la ROM anterior, se dimensiona con lo que
+dejo aquella.
+
+★ HONESTIDAD SOBRE LA REFERENCIA: esto no es portar algo que GLideN64 tenga.
+GLideN64 tampoco reinicia gDP; el hueco es de upstream y Wii64 lo hereda.  Es
+la clase "recarga de juego" que ya aparecio en atari800, px68k, Frodo, prboom
+y nestopia.
+
+Lo que SI es de la referencia es la ultima linea: `RSP.cpp:222` hace
+`gSP.changed = gDP.changed = 0xFFFFFFFF` tras reinicializar FrameBuffer,
+TextureCache y Combiner -- pero dentro del bloque `RSPTHREAD`, y `RomOpen`
+coge la rama `#else`, asi que en este build no se ejecuta NUNCA.
+
+★★ MEDIDO: **NO ARREGLA EL MARCADOR**.  El usuario hizo el A/B y sigue igual,
+asi que la hipotesis "estado del RDP rancio entre ROMs" NO explica el defecto.
+
+Y comprobado ademas que el ciclo de teardown esta COMPLETO por los dos lados,
+o sea que la via del estado rancio se debilita mas todavia:
+
+  - `retro_unload_game` -> `xenon64_rom_close` (main.cpp:830) -> `gfx.romClosed`
+    -> glN64 `RomClosed` -> `OGL_Stop()` -> `Combiner_Destroy`,
+    `FrameBuffer_Destroy`, `TextureCache_Destroy` (OpenGL.cpp:552-556).
+  - `TextureCache_Destroy` vacia la cache entrada a entrada con
+    `TextureCache_RemoveBottom`, que libera por `__lwp_heap_free`, que dispara
+    nuestro `lwp_heap_free_hook` -> las entradas del shim (textura D3D por
+    puntero de texels) se sueltan tambien.  O sea que la caché de nuestro lado
+    tampoco queda rancia.
+
+★ EL TOGGLE SE QUEDA A **0**.  No arregla nada medible, asi que encenderlo
+seria dejar un cambio de comportamiento sin motivo.  El codigo se queda
+escrito -- la linea `gSP.changed = gDP.changed = 0xFFFFFFFF` SI es de
+upstream y aqui no se ejecuta nunca-- pero apagado hasta que algo lo pida.
+
+
+Q. LOS QUESITOS DEL MARCADOR DE MARIO 64 -- ABIERTO, y con la atribucion
+   ANTERIOR DESMENTIDA
+--------------------------------------------------------------------------
+Sintoma: en Super Mario 64 los quesitos del medidor POWER se ven si el juego
+se carga EL PRIMERO y NO se ven si antes se cargo otro.  El aro se ve en los
+dos casos.  Reproducible a voluntad.
+
+★★ LO PRIMERO, PORQUE INVALIDA LO QUE HABIA ESCRITO: los puntos K y M **no
+pueden** haber arreglado esto.  La sonda [GLN64UTT], puesta en el propio
+`gSPUpdateTextureTiles`, dice que en Mario 64 `textureLOD` y `textureDetail`
+valen **0 SIEMPRE**; el desplazamiento de tile del punto K no dispara ni una
+vez y la cadena de mips del punto M no se construye nunca.  Los dos son
+codigo inerte en ese juego.  Lo que arreglo el marcador aquel dia fue otra
+cosa, y la atribucion hay que rehacerla.
+
+DESCARTADO CON DATOS (no repetir):
+    gSPModifyVertex en pantalla     [GLN64MV] no sale nunca
+    dibujar al z-buffer             [GLN64ZI] a cero, con el test de Rice
+    comandos sin implementar        [GLN64GBI] vacio
+    recorte por w<=0                10 en toda una sesion, +0 despues
+    desplazamiento de tile (pto K)  =DESPL nunca
+    cadena de mips (pto M)          =MIP nunca
+    needReplaceTex1ByTex0           rep0 siempre
+    scissor degenerado              degen=18 tambien cuando VA BIEN
+    fuga del monton de texturas     mismo `usado` (1800KB) tras cada cierre
+    reserva de textura fallida      FALLOS=0 en 124 muestras
+    numero de texturas              246 en las DOS cargas, identico
+    reset de tiles/loadInfo/TMEM    punto P, probado: no cambia nada
+    cache de shaders rancia         vaciada: genera los mismos 20, no era
+
+★ Y UN ERROR DE RAZONAMIENTO MIO, anotado para que nadie lo herede: dije que
+"el censo de modos de render es IDENTICO entre las dos cargas" y de ahi
+concluí que se dibuja lo mismo.  NO SE SIGUE.  El censo AGREGA por modo, y
+los quesitos son del orden de 8-16 triangulos sobre 900.000; esa diferencia
+no es visible ahi.  **La pregunta "se emite ese dibujo?" sigue sin
+contestar**, y es por donde hay que empezar.
+
+Toda la instrumentacion esta detras de `GLN64_CAZA_MARIO64`
+(xenon/gln64_prof.h), a 0.  Siguiente paso cuando se retome: censar la
+IDENTIDAD de las texturas creadas (crc, formato, tamano) -- son 246 por
+sesion-- y diferenciar las dos cargas.  Si los conjuntos salen iguales, el
+problema esta en la EMISION del dibujo y no en la textura.
+
+
+J2. Upstream arreglo la causa raiz del borrado de pantalla
+-----------------------------------------------------------
+`OGL_GXclearEFB` ponia `GX_SetZMode(..., GX_GEQUAL, ...)` en LAS DOS ramas del
+`if`, y por eso el quad de borrado lo rechazaba la propia prueba de
+profundidad en los juegos que usan GEQUAL como funcion normal (GoldenEye).
+1b5041a lo cambia a `GX_ALWAYS`.  El bloque `GLN64_CLEAR_D3D` se queda porque
+es la solucion COMPROBADA en hardware, pero el toggle a 0 ya deberia bastar:
+es la proxima medida que toca hacer.

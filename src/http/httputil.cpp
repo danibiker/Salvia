@@ -569,14 +569,6 @@ extern "C" {
     // cookies con nombres UTF-8) no son criticas para el scraping via curl_easy.
     // ========================================================================
 
-    // wolfSSL: POSIX de string que MSVC nombra con guion bajo
-    int strcasecmp(const char *a, const char *b) { return _stricmp(a, b); }
-    int strncasecmp(const char *a, const char *b, size_t n) { return _strnicmp(a, b, n); }
-    char *strtok_r(char *str, const char *delim, char **ctx) { return strtok_s(str, delim, ctx); }
-    int snprintf(char *buf, size_t n, const char *fmt, ...) {
-        int r; va_list ap; va_start(ap, fmt); r = _vsnprintf(buf, n, fmt, ap); va_end(ap); return r;
-    }
-
     // curl: CRT no disponible en el XDK
     char *getenv(const char *name) { (void)name; return NULL; } // Xbox no tiene variables de entorno
     char *_fullpath(char *absPath, const char *relPath, size_t maxLength) {

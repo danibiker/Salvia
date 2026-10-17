@@ -1,0 +1,399 @@
+DIVERGENCIAS DE source/Rice_GX/ RESPECTO A Wii64/Rice_GX
+=========================================================
+
+Origen: C:\develop\proyectos\personal\Wii64\Rice_GX      (+ Wii64\TextureArchive)
+Copia:  libretro/xbox64/source/Rice_GX/   (140 ficheros)
+        libretro/xbox64/source/TextureArchive/   (4 ficheros)
+
+Copiados 2026-09-28 y verificados byte a byte con SHA-1.
+
+REGLA DEL PORT (la misma que para glN64_GX, ver DIVERGENCIAS.txt): los
+ficheros copiados se quedan identicos y TODA la adaptacion vive en ficheros
+NUESTROS -- xenon/gxshim/, xenon/rice_rename.h, xbox/xbox64_pre.h --.
+
+Este fichero lista las UNICAS excepciones.  Cualquier diferencia contra Wii64
+que NO este aqui es un error.
+
+COMO SE COMPRUEBA.  ★ IGNORANDO EL RETORNO DE CARRO, y no es una comodidad:
+Wii64 trae finales de linea MIXTOS dentro del mismo fichero
+(OGLGraphicsContext.cpp: 13 CRLF + 664 LF) y la herramienta de edicion
+normaliza el fichero entero a su final de linea MAYORITARIO en cuanto se
+toca una linea.  Asi que OGLGraphicsContext.cpp esta hoy a LF puro: son 13
+retornos de carro perdidos, ninguna diferencia de contenido.  Un `diff -r`
+pelado sacaria 13 lineas falsas y no serviria de nada.  (OGLRender.cpp era
+CRLF puro, 1828/1828, y sigue igual.)
+
+    cd .../libretro/xbox64/source/Rice_GX
+    SRC=/c/develop/proyectos/personal/Wii64/Rice_GX
+    for f in *.cpp *.h; do
+        [ -f "$SRC/$f" ] || { echo "SOLO-NUESTRO: $f"; continue; }
+        diff -q <(tr -d '\r' < "$SRC/$f") <(tr -d '\r' < "$f") >/dev/null \
+            || echo "DIFIERE: $f"
+    done
+
+Debe salir exactamente: DIFIERE: blender.cpp
+                        DIFIERE: Config.cpp
+                        DIFIERE: OGLGraphicsContext.cpp
+                        DIFIERE: OGLRender.cpp
+                        DIFIERE: RDP_Texture.h
+                        DIFIERE: TextureFilters.cpp
+                        DIFIERE: Video.cpp
+
+★ Y HAY UN QUINTO FICHERO TOCADO QUE ESE BUCLE NO VE, porque vive fuera de
+Rice_GX/: `source/TextureArchive/ArchiveReader.cpp`.  Se comprueba aparte:
+
+    diff <(tr -d '\r' < /c/develop/proyectos/personal/Wii64/TextureArchive/ArchiveReader.cpp) \
+         <(tr -d '\r' < .../source/TextureArchive/ArchiveReader.cpp)
+
+
+1. LITERALES COMPUESTOS DE C99  (6 sitios, 2 ficheros)
+-------------------------------------------------------
+`(GXColor){0,0,0,255}` es un literal compuesto de C99.  GCC lo acepta en C++
+como extension; MSVC 10 no, y NO HAY FORMA de arreglarlo desde una cabecera:
+`(T){...}` es un cast aplicado a una lista de inicializacion, y eso no existe
+en C++03.  No se puede resolver con una macro porque el token problematico es
+la propia sintaxis, no el nombre del tipo.
+
+Es la misma divergencia que ya tenia glN64_GX en nueve sitios.
+
+El sintoma, por si vuelve a aparecer en otro fichero:
+
+    OGLRender.cpp(344): error C2059: syntax error : '{'
+    OGLRender.cpp(344): error C2143: syntax error : missing ';' before '{'
+    OGLRender.cpp(344): error C2143: syntax error : missing ';' before '}'
+
+tres errores seguidos en la misma linea, ninguno de los cuales menciona
+GXColor.
+
+  OGLGraphicsContext.cpp:574   (GXColor){0,0,0,255}  ->  GXCOL_BLACK
+  OGLGraphicsContext.cpp:589   (GXColor){0,0,0,255}  ->  GXCOL_BLACK
+  OGLRender.cpp:1280           (GXColor){0,0,0,255}  ->  GXCOL_BLACK
+  OGLRender.cpp:1763           (GXColor){0,0,0,255}  ->  GXCOL_BLACK
+
+  ★ OGLRender.cpp:344          (GXColor){0,0,0,0}    ->  GXCOL_TRANSP
+      NO es el mismo valor que los cuatro de arriba: es el color de BORRADO
+      y lleva ALFA CERO.  Se parecen mucho al leerlos.  Sustituirlo por
+      GXCOL_BLACK habria puesto alfa 255 en el borrado, que no da ningun
+      error y se nota -- si se nota -- como una pantalla que no limpia el
+      alfa.  Leer el valor antes de reemplazar.
+
+  ★ OGLRender.cpp:960          (GXColor){0,0,255,255} ->  {0,0,255,255}
+      Este NO necesita constante: es una INICIALIZACION
+      (`GXColor GXcol = ...`), no una asignacion, asi que en C++ basta con
+      quitar el cast y dejar las llaves.  Azul opaco, y ademas solo se usa
+      en un camino de depuracion.
+
+Las dos constantes estan declaradas en xenon/gxshim/gccore.h y definidas en
+xenon/gx_d3d9.cpp:655.
+
+
+2. DONDE BUSCA Rice SUS FICHEROS DE CONFIGURACION  (Video.cpp, 2 sitios)
+-------------------------------------------------------------------------
+`GetPluginDir` tiene CABLEADO `sd:/wii64/` en la rama __GX__ (Video.cpp:180
+del original).  De ahi salen las rutas de `RiceVideoLinux.ini` -- su base de
+datos de arreglos por juego, indexada por CRC -- y de `RiceVideo.cfg`.  En
+Xbox 360 esa ruta no existe: no hay ningun dispositivo `sd:`.
+
+Ahora devuelve el directorio `system` de libretro, que es donde el usuario ya
+deja las BIOS.  El wrapper lo pide una vez en `retro_init` con
+RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY y lo guarda `xbox/plataforma.c`
+(`xbox64_set_system_dir` / `xbox64_rice_config_dir`), que ademas normaliza a
+BARRA INVERTIDA y anyade el separador final -- Salvia lo entrega sin el
+(src/io/cfgloader.cpp:102) y Rice hace `strcat` a pelo.
+
+  Video.cpp:116 (nuevo)  extern "C" void xbox64_rice_config_dir(char *out);
+      A nivel de fichero y no dentro de GetPluginDir: en C++ una
+      linkage-specification solo puede ir en ambito de namespace.
+
+  Video.cpp:185          strcpy(Directory, "sd:/wii64/")
+                     ->  xbox64_rice_config_dir(Directory)
+
+★ La rama `#ifdef WII` de encima NO se toca: `WII` no se define en este
+proyecto, asi que esta muerta.  Se deja para que el diff sea legible.
+
+
+3. `fopen` SIN COMPROBAR  (Config.cpp, 2 sitios)
+--------------------------------------------------
+Estos SI son fallos de Rice, y paraban la consola.
+
+★ SE CENSARON LAS ONCE `fopen` de Config.cpp y TextureFilters.cpp: estas dos
+son las UNICAS sin comprobar que estan en el camino de GX.  Las cuatro de
+TextureFilters.cpp viven dentro de `#ifndef __GX__` y no se compilan.  No
+hace falta volver a buscar.
+
+3a) Config.cpp:1792  --  crear el .ini que no existe:
+
+    fhOut = fopen((char*)filename,"w");
+    fclose(fhOut);              <- sin comprobar NULL
+
+El camino es `Rice_initiateGFX -> InitConfiguration -> ReadIniFile falla ->
+WriteIniFile -> crear el .ini`.  En Wii el directorio siempre existe y
+`fopen` nunca falla ahi.  En Xbox 360, con el directorio `system` sin
+configurar o de solo lectura, devuelve NULL y se acaba en
+`_invalid_parameter_noinfo`.
+
+Puesto `if (fhOut) fclose(fhOut);`.
+
+★ `Video.cpp:880` llama a `InitConfiguration()` e IGNORA el valor de retorno,
+asi que un .ini ausente no aborta el plugin: Rice arranca con sus opciones
+por defecto.  Lo unico que mataba era el fclose.
+
+3b) Config.cpp:350  --  crear el .cfg que no existe:
+
+    f = fopen(name, "wb");
+    fprintf(f, "WinModeWidth ");    <- ~130 fprintf, la primera revienta
+
+El camino es `InitConfiguration -> ReadConfiguration -> WriteConfiguration`
+cuando no hay `RiceVideo.cfg`, o sea LA PRIMERA VEZ SIEMPRE.  Con el
+directorio `system` de solo lectura, `f` es NULL.
+
+Puesto `if (!f) return;`.
+
+★ Las otras tres `fopen` de Config.cpp (328, 339, 496) YA estaban
+comprobadas en el original, y las de `WriteIniFile` (1787, 1802) tambien.
+No es que Rice sea descuidado en general: son dos huecos concretos en los
+dos caminos de "crear el fichero que falta", que en Wii nunca fallan.
+
+
+4. EL PAQUETE DE TEXTURAS DE ALTA RESOLUCION  (ArchiveReader.cpp, TextureFilters.cpp)
+---------------------------------------------------------------------------------------
+Exactamente la misma pareja de problemas que el .ini -- ruta cableada a un
+dispositivo que no existe, y `fclose` sin comprobar -- pero por otro camino:
+
+    Rice_romOpen_gfx -> StartVideo -> InitExternalTextures
+                     -> CloseExternalTextures -> ArchiveReader::reset()
+
+  ArchiveReader.cpp:40   `fclose(file)` con `file` NUNCA ABIERTO.
+      ★ `InitExternalTextures` (TextureFilters.cpp:1998) llama primero a
+      `CloseExternalTextures` y DESPUES mira si hay que cargar algo, asi que
+      en el primer romOpen se cierra un fichero que no se abrio.  El
+      singleton nace con `file` a NULL (su constructor solo toca `stream`).
+      En newlib `fclose(NULL)` devuelve EOF; la CRT de MSVC para la consola.
+      -> `if (file) fclose(file);` y los dos punteros a NULL al salir, para
+         que reset sea reentrante.
+
+  ArchiveReader.cpp:34   `setArchiveFile` no comprobaba el `fopen`.
+      Con el .pak ausente se llegaba a `fread` sobre un FILE* nulo dentro de
+      readMetadata.  -> se devuelve `new ArchiveTable(0)`, que es el MISMO
+      camino de "archivo vacio" que ya usa readMetadata cuando el numero
+      magico no cuadra: no se inventa un estado nuevo.
+
+  TextureFilters.cpp:2001  "sd:/wii64/hires/texture.pak"
+                       ->  <directorio system de libretro>\hires\texture.pak
+      Mismo mecanismo que GetPluginDir: `xbox64_rice_config_dir`, declarada
+      `extern "C"` a nivel de fichero.
+
+★ ESTE CAMINO SOLO SE RECORRE CON `options.bLoadHiResTextures`, que por
+defecto es FALSE (Config.cpp:617) y que en la rama __GX__ Wii64 deja
+comentado (Config.cpp:755).  Pero `CloseExternalTextures` corre SIEMPRE, y
+esa era la que colgaba.
+
+
+5. DOS DEFECTOS DE Rice YA DIAGNOSTICADOS EN Xenon64  (blender.cpp, RDP_Texture.h)
+------------------------------------------------------------------------------------
+No son problemas del port: son defectos del propio Rice, los dos ficheros son
+BYTE-IDENTICOS a Wii64 en los dos arboles, y los dos se diagnosticaron y se
+confirmaron en hardware en `libretro/Xenon64/source/Rice_GX_Xenos/`.  Aqui se
+traen tal cual, con el mismo nombre de toggle para poder cruzarlos.
+
+  blender.cpp   TEXEDGE_2CICLOS        la valla de Conker sin transparencia
+      La rama de 2 ciclos de BLEND_PASS+(BLEND_PASS>>2) hacia
+      `SetAlphaTestEnable(alpha_compare==1)`, que con `alpha_compare=0` APAGA
+      el recorte que `CRender::InitOtherModes` habia encendido bien al ver
+      `cvg_x_alpha`.  La rama de UN ciclo del MISMO blender no hace ese
+      override y sale bien: las dos ramas se contradicen.
+      Afecta a cualquier juego que use G_RM_AA_ZB_TEX_EDGE en dos ciclos.
+
+  RDP_Texture.h PITCH_TILE_SECUNDARIO  las hortalizas de Conker corruptas
+      `CalculateTileSizes_method_1` sacaba el paso de fila de `ReverseDXT`
+      tambien para un tile que NO es el del LoadBlock.  Un bloque de 16 bits
+      que alimenta un segundo tile de 4 bits en otro TMEM salia con el paso
+      cuadruplicado y ConvertI4 leia una fila de cada cuatro.
+      El arreglo es el termino que `CalculateTileSizes_method_2` YA TIENE
+      (`|| info->dwTmem != tile.dwTMem`) y que method_1 habia perdido; con el,
+      `conkerSwapHack` -- que existe exactamente para este caso -- deja de ser
+      codigo muerto.
+
+★ Los dos son `#if` con la linea de upstream intacta en el `#else`, asi que
+poner el toggle a 0 devuelve el fichero a Wii64 sin borrar nada.
+
+★ QUEDA UN TERCERO de la misma serie SIN portar: en Xenon64 las setas salian
+con un borron porque el modulo de framebuffer servia las cargas de textura
+desde la GPU (`FBG_ANCHO_COMO_REFERENCIA`, TextureManager.cpp).  Aqui NO se ha
+tocado porque el modulo FBG de xbox64 no es el mismo y porque no se ha visto el
+sintoma; si aparecen setas o hierbas con un borron suave que ALTERNA entre
+buena y mala, es ese.  Ver project_xenon64_conker_sprites_suelo.
+
+
+6. SONDAS DE PERFILADO  (10 lineas, 4 ficheros)
+-----------------------------------------------
+Una linea `RICE_PROF_SCOPE(cubo);` al principio de diez funciones, mas una
+llave de bloque en OGLRender.cpp para el ambito que no abraza una funcion
+entera.  Ninguna declara nada: la macro y la clase las arrastra
+`xenon/gxshim/gccore.h`, que ya incluyen todas las unidades de Rice_GX.
+
+  OGLRender.cpp:879    RenderFlushTris   -> flush   (el PADRE de todos)
+  OGLRender.cpp:414    ApplyZBias        -> zbias
+  OGLRender.cpp:1624   glViewportWrapper -> vport
+  OGLRender.cpp:1746   GXloadTextures    -> ldtex
+  OGLRender.cpp:970    GX_Begin..GX_End  -> verts   (+ la llave de :1020)
+  RenderBase.cpp:1325  ProcessVertexDataSSE    -> pvtx
+  RenderBase.cpp:1435  ProcessVertexDataNoSSE  -> pvtx
+  RenderBase.cpp:2464  UpdateCombinedMatrix    -> mtx
+  RenderBase.cpp:818   ComputeLOD              -> lod
+  TextureManager.cpp:456  GetTxtrCacheEntry    -> tcache
+  FrameBuffer.cpp:555     CalculateRDRAMCRC    -> crc
+
+Segunda tanda (2026-09-29), para cerrar el 45 % que no aparecia en ningun
+cubo.  `dlist` es el PADRE de todos los demas, asi que su tiempo PROPIO es
+exactamente ese resto y a partir de aqui nada puede esconderse:
+
+  RSP_Parser.cpp:937   DLParser_Process          -> dlist   (PADRE)
+  RDP_Texture.h:1325   PrepareTextures           -> pretex
+  OGLTexture.cpp:111   COGLTexture::EndUpdate    -> endupd
+  Render.cpp:309       CRender::SetCombinerAndBlender -> combl
+  Render.cpp:1896      CRender::InitOtherModes   -> omodes
+
+La macro llega a los cinco por `stdafx.h:31`, que incluye `<gccore.h>`.
+
+Es EXACTAMENTE la misma divergencia que glN64_GX ya tiene con
+`GLN64_PROF_SCOPE` (ver DIVERGENCIAS.txt).  Con `RICE_PROF` a 0
+(xenon/rice_prof.h) las diez son macro vacia y los ficheros vuelven a
+compilar identicos.
+
+★ POR QUE HAY QUE INSTRUMENTAR A MANO, teniendo el XDK delante: los cuatro
+caminos automaticos estan cerrados en una consola retail sin enlace xbdm
+(PIX, XTrace, muestreo de PC por `GetThreadContext`, y `/callcap`).  El
+censo y la cadena de evidencia -- incluida la violacion de acceso que costo
+`/callcap` -- estan en xenon/perfil_cap.h.
+
+★ Y los ambitos DESCUENTAN a sus hijos, asi que los cubos son disjuntos y
+`flush` recoge todo lo que no cae en ningun hijo.  O sea que el prologo por
+draw que vive en Render.cpp, que NO esta instrumentado, aparece como tiempo
+propio de `flush`: nada puede esconderse y el propio informe dice cual es el
+siguiente sitio donde mirar.
+
+
+6b. EL CUADRO NEGRO DE MAJORA'S MASK: NO ES DEL PORT  (solo comentario)
+------------------------------------------------------------------------
+**Rice_GX no soporta emulacion de framebuffer**, lo dice su autor.  El
+cuadrado negro que ocupa el cuadrante superior izquierdo en la intro de
+Majora's Mask es esa limitacion, no un defecto de este port.  No hay
+divergencia de codigo por esto: solo un comentario en
+`Config.cpp:GenerateFrameBufferOptions` para que no se vuelva a intentar.
+
+LO QUE SI QUEDO MEDIDO, y vale:
+  - lo dibuja el pase de render-to-texture, que Rice degrada a `IGNORE`
+    cuando el dispositivo es OpenGL (`Config.cpp:239-241`).  `IGNORE` no es
+    "no lo hagas": es SOLTAR ESOS DIBUJOS EN LA PANTALLA.
+  - el pase lleva su propio recorte de 320x240 -- de ahi el cuadrante
+    exacto sobre un render target de 640x480.  `scismin=320x240` en 15
+    muestras de 18.
+  - saltandose los draws con ese recorte, el cuadro desaparece.
+  - con glN64 NO sale.  Misma familia que el cuadro negro de Conker en el
+    arbol hermano.
+
+LO QUE SE PROBO Y NO PROCEDE, para no repetirlo:
+  - `TXT_BUF_NONE`   -> PEOR: la intro entera en negro, porque se dibuja
+                        toda por ese camino.
+  - `TXT_BUF_NORMAL` -> sin efecto: el cuadro sigue igual.
+  - tocar tambien `N64FrameBufferEmuType` -> pasarse; ningun dato apuntaba
+                        al buffer de frame.
+  - cablear `xbox64_framebuffer` hasta Rice (hoy solo la recibe glN64, por
+                        `gln64_set_options`).  Es un hueco real del port,
+                        el quinto de esa familia, pero sin soporte de
+                        framebuffer no hay nada que conectarle.
+
+
+7. DOS CAMBIOS DE RENDIMIENTO, LOS DOS MEDIDOS ANTES Y DESPUES
+---------------------------------------------------------------
+No son arreglos de port: son dos costes que solo existen en esta consola y
+que el perfilador por cubos (seccion 6) localizo.  Cada uno lo mide un cubo
+DISTINTO, asi que se pueden valorar por separado en el mismo log.
+
+  a) OGLRender.cpp:1009-1051  ->  cubo `verts`
+     El bucle de vertices pasa del MODO INMEDIATO de GX al camino de LOTE
+     del shim (`gxd3d_lote_abrir` / `gxd3d_lote_cerrar`, xenon/gxd3d_lote.h),
+     que es el que glN64_GX ya usa (OpenGL.cpp:1515-1590).
+     Motivo: en Wii el modo inmediato son escrituras al write-gather pipe;
+     aqui son 3-4 llamadas cross-modulo por vertice.  MEDIDO: `verts` era el
+     18,3 % del tiempo grafico en Mario 64 y el 24,8 % en San Francisco Rush,
+     con 183.000 vertices/s.
+     ★ El modo inmediato se conserva bajo `#if 0` para poder hacer el A/B y
+     como referencia de que el lote emite lo mismo campo por campo.
+     ★ Lo unico que se pierde: la sonda `maxxy` de `[GXD3D2]` deja de ver la
+     geometria de triangulos (la alimentaba `GX_Position3f32`).  Sigue
+     viendo los rects, y a glN64 ya le pasaba lo mismo.
+     ★ Se anyade un `#include` de xenon/gxd3d_lote.h, igual que glN64_GX.
+
+  b) math.h:172 y math.cpp:304  ->  cubo `pvtx`
+     `Vec3Transform` devolvia `XVECTOR4` POR VALOR y ninguna de sus seis
+     llamadas usa el retorno (censadas: RenderBase.cpp:1065, 1465, 1834,
+     1938, 2051, 2219).  El `return *pOut;` obliga a releer los cuatro
+     floats recien escritos por puntero -- Load-Hit-Store en el PPE -- y a
+     copiarlos a un temporal que se descarta.  Por vertice.  Ahora es
+     `void`; los llamantes no cambian.
+     MEDIDO: `pvtx` era el 56,6 % del tiempo grafico de Mario 64 y el
+     39,0 % del de San Francisco Rush.
+
+Con los dos, `RICE_PROF` a 1 sigue dando la particion y se ve exactamente
+cuanto movio cada uno.
+
+
+LO QUE NO HIZO FALTA TOCAR, Y DONDE SE RESOLVIO
+------------------------------------------------
+Para que nadie vuelva a plantearse editar el arbol por estas causas:
+
+  29 simbolos que chocan con glN64       xenon/rice_rename.h
+      (18 puntos de entrada, 9 de la interfaz del anfitrion, 2 globales),
+      prefijados con el preprocesador.
+      ★ `showFPSonScreen` y `printToScreen` NO estan ahi, y el porque esta
+      escrito en esa cabecera: las declara `main/wii64config.h` dentro de
+      `extern "C"`, o sea que son un ajuste del FRONTEND, no del plugin.
+      Renombrarlas dio un LNK2001 por una asimetria de enlace entre
+      OGLGraphicsContext.cpp (las ve con enlace C) y Video.cpp (las define
+      con enlace C++).
+
+  Rice_GX/winlnxdefs.h redeclara BOOL,   xbox/xbox64_pre.h precarga
+      DWORD, CHAR, TCHAR, ULONG, LONG,   source/winlnxdefs.h, que usa el
+      VOID, HWND, HBITMAP, RECT          MISMO include guard (WINLNXDEFS_H)
+      -> 14 x C2371 contra el XDK        y es un superconjunto ya adaptado.
+
+  PATH_MAX                               xenon/gxshim/sys/syslimits.h
+  gettimeofday                           xenon/gxshim/sys/time.h
+  <dirent.h>                             xenon/gxshim/dirent.h (vacio)
+  <windows.h> desde liblinux/            xenon/gxshim/windows.h -> <xtl.h>
+  __attribute__((packed))                xbox/xbox64_pre.h, a vacio
+  CHAR tiene que ser unsigned char       xbox/xbox64_pre.h
+  strcasecmp / strncasecmp               xbox/xbox64_pre.h
+  GX_BL_DSTCLR, GX_BL_INVDSTCLR,         xenon/gxshim/gccore.h
+      GX_COLORZERO, guMtxCopy            + xenon/gx_d3d9.cpp
+
+  swap() no acepta arrays                xbox64.vcxproj: define __BIG_ENDIAN__
+      TextureArchive/Endian.h:4 se parte en dos ramas segun __BIG_ENDIAN__,
+      que lo predefine GCC y no tiene nada que ver con el _BIG_ENDIAN=1 que
+      ya estaba (ese lo usa rsp_hle).  Con el, `swap` es UNA PLANTILLA vacia
+      -- en big-endian no hay nada que voltear -- y traga cualquier tipo.
+      Sin el, son cuatro sobrecargas concretas y los arrays del lector
+      (char[68], char[20], unsigned char[13824]) no casan con ninguna:
+      cuatro C2665 en ArchiveReader.cpp:20 que no mencionan el endianness.
+
+
+FALLOS DE Wii64 QUE SE REPRODUCEN A PROPOSITO
+----------------------------------------------
+No son divergencias porque NO se ha cambiado nada, pero conviene tenerlos
+anotados antes de perseguir un defecto visual:
+
+  OGLRender.cpp:1661,1674   guMtxCopy() con matrices Mtx44.
+      libogc la declara `guMtxCopy(Mtx src, Mtx dst)`, o sea 3x4, y Rice le
+      pasa Mtx44.  Compila sin un aviso porque f32[3][4] y f32[4][4] decaen
+      al mismo puntero, y copia 12 de los 16 floats: la ultima fila del
+      destino se queda con lo que tuviera.  Se usa para el offset de
+      poligono, asi que un z-fighting raro en Rice empieza aqui.  El shim
+      copia 3x4, igual que libogc.
+
+  RSP_Parser.h:518   `__attribute__((packed))` perdido.
+      La union de campos de bits pasa de 2 bytes a 4.  Inofensivo mientras
+      solo se lean campos por nombre, que es lo unico que hace Rice.  El
+      ORDEN de los campos si es correcto: Rice ya tiene su `#ifdef
+      _BIG_ENDIAN` y el vcxproj define _BIG_ENDIAN=1.

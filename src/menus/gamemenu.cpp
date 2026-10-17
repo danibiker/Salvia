@@ -1796,7 +1796,12 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				}
 				const float originalFps = (float)getAvInfo().timing.fps;
 				current_fast_forward = !current_fast_forward;
-				SDL_XBOX_SetVSync(current_fast_forward ? 0 : 1);
+				/* Por Sync y no con SDL_XBOX_SetVSync directo: el vsync tiene
+				 * ahora un segundo dueno (el adaptativo de limit_fps) y dos
+				 * duenos del mismo bit se pelean -el adaptativo lo volveria a
+				 * encender a mitad de un avance rapido-.  Mientras el avance
+				 * rapido lo tenga tomado, el adaptativo queda inerte. */
+				sync->set_vsync_permitido(!current_fast_forward);
 				if (current_fast_forward){
 					sync->init_fps_counter(originalFps * speed);
 					lastSync = *current_sync;

@@ -739,9 +739,15 @@ int Joystick::getCkeckedJoyTypeIndex(int jPos){
 		// Mapper); en pcsxr-360 es "standard". Si no hay JOYPAD, el primer tipo
 		// que no sea Disabled.
 		int curIdx = inputs.joyTypeIdx[jPos];
+		// [XBOX360] Un "Disabled" solo se corrige si esta en el INDICE 0, que
+		// es el que se queda cuando nadie ha elegido nada (joyTypeIdx empieza
+		// a 0): el caso de dosbox-pure. En otra posicion es una eleccion del
+		// usuario y se respeta: xbox64 anuncia [0]="Mando de Nintendo 64" y
+		// [1]="Desconectado", y antes este forzado lo devolvia a mando al
+		// recargar el perfil.
 		bool needDefault = (curIdx < 0
 			|| curIdx >= (int)port->available_types.size()
-			|| port->available_types[curIdx].first == RETRO_DEVICE_NONE);
+			|| (curIdx == 0 && port->available_types[curIdx].first == RETRO_DEVICE_NONE));
 
 		LOG_DEBUG("needDefault %u...", needDefault ? 1 : 0);
 
@@ -760,7 +766,7 @@ int Joystick::getCkeckedJoyTypeIndex(int jPos){
 		port->current_device_id = port->available_types[inputs.joyTypeIdx[jPos]].first;
 		LOG_DEBUG("port->current_device_id %d...", port->current_device_id);
 	}
-	return inputs.joyTypeIdx[jPos];
+	return 1; 
 }
 
 /**

@@ -59,6 +59,19 @@ void         SDL_XBOX_SetDisplayFullscreen(int fullscreen);
 void         SDL_XBOX_SetDisplayOverflow(int overflow);
 void         SDL_XBOX_SetRotation(int rotation);
 void         SDL_XBOX_SetVSync(int enable);
+/* Sin Reset del device.  No-op en Windows: D3D9 de escritorio no tiene
+ * D3DRS_PRESENTINTERVAL.  Ver el comentario en win_d3d9.cpp. */
+void         SDL_XBOX_SetPresentInterval(int enable);
+/* Refresco real del panel en Hz, 0 si no se conoce.  En Windows viene de
+ * D3DDISPLAYMODE y es un entero, asi que 59,94 sale como 60. */
+float        SDL_XBOX_GetRefreshRate(void);
+/* Contadores de vblank del hardware.  En Windows devuelve ceros: no hay
+ * callback de vblank en D3D9 de escritorio. */
+void         SDL_XBOX_GetVBlankStats(unsigned int *count, unsigned int *missed);
+/* Devuelven "no se" en Windows (0 y -1): sin callback de vblank en D3D9 de
+ * escritorio, el pacing cae al camino de reloj de CPU. */
+int          SDL_XBOX_WaitVBlank(unsigned int msMax);
+int          SDL_XBOX_GetScanlinePercent(void);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
 /* Rect de la imagen del juego en pixeles del overlay. */
 void         SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h);

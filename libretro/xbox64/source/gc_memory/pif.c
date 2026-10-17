@@ -1,0 +1,626 @@
+/**
+ * Mupen64 - pif.c
+ * Copyright (C) 2002 Hacktarux
+ * Copyright (C) 2007, 2013 emu_kidid
+ *
+ * Mupen64 homepage: http://mupen64.emulation64.com
+ * email address: hacktarux@yahoo.fr
+ *                emukidid@gmail.com
+ *
+ * If you want to contribute to the project please contact
+ * me first (maybe someone is already making what you are
+ * planning to do).
+ *
+ *
+ * This program is free software; you can redistribute it and/
+ * or modify it under the terms of the GNU General Public Li-
+ * cence as published by the Free Software Foundation; either
+ * version 2 of the Licence, or any later version.
+ *
+ * This program is distributed in the hope that it will be use-
+ * ful, but WITHOUT ANY WARRANTY; without even the implied war-
+ * ranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public Licence for more details.
+ *
+ * You should have received a copy of the GNU General Public
+ * Licence along with this program; if not, write to the Free
+ * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+ * USA.
+ *
+**/
+#include <stdio.h>
+#include <stdlib.h>
+#ifndef __WIN32__
+#include "../main/winlnxdefs.h"
+#else
+#include <windows.h>
+#endif
+#include <time.h>
+
+
+#include "memory.h"
+#include "pif.h"
+#include "n64_cic_nus_6105.h"
+#include "../r4300/r4300.h"
+#include "../r4300/interupt.h"
+#include "../main/plugin.h"
+#include "../main/guifuncs.h"
+#include "../main/rom.h"
+#include "../fileBrowser/fileBrowser.h"
+#include "Saves.h"
+
+#ifdef HW_RVL
+#include "MEM2.h"
+#else
+#include "ARAM.h"
+#endif
+/* [Xbox360] aligned(32) de GCC -> __declspec(align(32)) de MSVC; ver la
+ * misma traduccion en memory.h:61 y memory.c:82.
+ *
+ * ★★ FASE 4: EN XBOX 360 EL EEPROM YA NO VIVE AQUI.  Se ha ido al bloque
+ * contiguo de guardados (`xbox_mem.h`, EEPROM_LO) junto con sram,
+ * flashram y mempack, porque libretro entrega los cuatro al frontend
+ * como UN puntero y UN tamanyo y tienen que estar pegados.
+ *
+ * Es el mismo apanyo que ya tenian los otros tres en este arbol -- un
+ * puntero constante a una direccion del mapa -- y por eso la linea de
+ * `mempack`, justo debajo, lleva anyos escrita asi. */
+#if defined(_XBOX)
+static unsigned char *const eeprom = (unsigned char*)(EEPROM_LO);
+#else
+static unsigned char eeprom[0x800] __attribute__((aligned(32)));
+#endif
+static unsigned char (*const mempack)[0x8000] = (unsigned char(*)[])(MEMPACK_LO);
+
+static unsigned long cic_challenge;
+
+bool eepromWritten = false;
+bool mempakWritten = false;
+
+static unsigned char mempak_init[] = {
+	0x81,0x01,0x02,0x03, 0x04,0x05,0x06,0x07, 0x08,0x09,0x0a,0x0b, 0x0c,0x0d,0x0e,0x0f,
+	0x10,0x11,0x12,0x13, 0x14,0x15,0x16,0x17, 0x18,0x19,0x1a,0x1b, 0x1c,0x1d,0x1e,0x1f,
+	0xff,0xff,0xff,0xff, 0x05,0x1a,0x5f,0x13, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0x01,0xff, 0x66,0x25,0x99,0xcd,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0x05,0x1a,0x5f,0x13, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0x01,0xff, 0x66,0x25,0x99,0xcd,
+	0xff,0xff,0xff,0xff, 0x05,0x1a,0x5f,0x13, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0x01,0xff, 0x66,0x25,0x99,0xcd,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0x05,0x1a,0x5f,0x13, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0x01,0xff, 0x66,0x25,0x99,0xcd,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+	0x00,0x71,0x00,0x03, 0x00,0x03,0x00,0x03, 0x00,0x03,0x00,0x03, 0x00,0x03,0x00,0x03
+};
+
+static inline unsigned char byte2bcd(int n)
+{
+	n %= 100;
+	return ((n / 10) << 4) | (n % 10);
+}
+
+int loadEeprom(fileBrowser_file* savepath){
+	int i, result = 0;
+	fileBrowser_file saveFile;
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.eep",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	if(saveFile_readFile(&saveFile, &i, 4) == 4) {  //file exists
+		saveFile.offset = 0;
+		if(saveFile_readFile(&saveFile, eeprom, 0x800)!=0x800) { //error reading file
+			init_eeprom();
+			eepromWritten = false;
+			return -1;
+		}
+		result = 1;
+		eepromWritten = 1;
+		return result;  //file read ok
+	} else init_eeprom(); //file doesn't exist
+
+	eepromWritten = false;
+
+	return result;  //no file
+}
+
+int saveEeprom(fileBrowser_file* savepath){
+	fileBrowser_file saveFile;   /* [Xbox360] hoisteada: C89 */
+
+	if(!eepromWritten) return 0;
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.eep",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	if(saveFile_writeFile(&saveFile, eeprom, 0x800)!=0x800)
+		return -1;
+
+	return 1;
+}
+
+int deleteEeprom(fileBrowser_file* savepath) {
+	fileBrowser_file saveFile;
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.eep",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	return saveFile_deleteFile(&saveFile);
+}
+
+void init_eeprom() {
+	/* [Xbox360] ★★ `sizeof(eeprom)` YA NO VALE AQUI, Y ES SILENCIOSO.
+	 *
+	 * En Xbox 360 `eeprom` es un PUNTERO al bloque contiguo de guardados
+	 * (arriba, :60), no un array.  `sizeof` de un puntero son 4: esto
+	 * borraria CUATRO bytes en vez de 2048 y el resto del eeprom se
+	 * quedaria con la partida del juego anterior.  Ni el compilador
+	 * avisa ni el sintoma apunta aqui -- saldria como una partida
+	 * guardada que reaparece en otro cartucho.
+	 *
+	 * Se usa el tamanyo por nombre, que es el mismo en las dos ramas. */
+#if defined(_XBOX)
+	memset(&eeprom[0], 0, EEPROM_SIZE);
+#else
+	memset(&eeprom[0], 0, sizeof(eeprom));
+#endif
+}
+
+//#define DEBUG_PIF
+#ifdef DEBUG_PIF
+void print_pif()
+{
+	int i;
+	for (i=0; i<(64/8); i++)
+		printf("%x %x %x %x | %x %x %x %x\n",
+			PIF_RAMb[i*8+0], PIF_RAMb[i*8+1],PIF_RAMb[i*8+2], PIF_RAMb[i*8+3],
+			PIF_RAMb[i*8+4], PIF_RAMb[i*8+5],PIF_RAMb[i*8+6], PIF_RAMb[i*8+7]);
+}
+#endif
+
+void EepromCommand(BYTE *Command)
+{
+	switch (Command[2])
+	{
+		case 0: // check
+			if (Command[1] != 3)
+			{
+				Command[1] |= 0x40;
+				if ((Command[1] & 3) > 0)
+					Command[3] = 0;
+				if ((Command[1] & 3) > 1)
+					Command[4] = ROM_SETTINGS.eeprom_16kb == 0 ? 0x80 : 0xc0;
+				if ((Command[1] & 3) > 2)
+					Command[5] = 0;
+			}
+			else
+			{
+				Command[3] = 0;
+				Command[4] = ROM_SETTINGS.eeprom_16kb == 0 ? 0x80 : 0xc0;
+				Command[5] = 0;
+			}
+		break;
+		case 4: // read
+			memcpy(&Command[4], eeprom + Command[3]*8, 8);
+		break;
+		case 5: // write
+			eepromWritten = true;
+			memcpy(eeprom + Command[3]*8, &Command[4], 8);
+		break;
+		case 6:
+			// RTCstatus query
+			Command[3] = 0x00;
+			Command[4] = 0x10;
+			Command[5] = 0x00;
+		break;
+		case 7:
+			// read RTC block
+			switch (Command[3]) {     // block number
+				case 0:
+					Command[4] = 0x00;
+					Command[5] = 0x02;
+					Command[12] = 0x00;
+				break;
+				case 1:
+					//RTC command in EepromCommand(): read block %d", Command[2]
+				break;
+				case 2:
+				{
+					time_t curtime_time;
+					struct tm curtime;
+					time(&curtime_time);
+					localtime_r(&curtime_time, &curtime);
+					Command[4] = byte2bcd(curtime.tm_sec);
+					Command[5] = byte2bcd(curtime.tm_min);
+					Command[6] = 0x80 + byte2bcd(curtime.tm_hour);
+					Command[7] = byte2bcd(curtime.tm_mday);
+					Command[8] = byte2bcd(curtime.tm_wday);
+					Command[9] = byte2bcd(curtime.tm_mon + 1);
+					Command[10] = byte2bcd(curtime.tm_year);
+					Command[11] = byte2bcd(curtime.tm_year / 100);
+					Command[12] = 0x00;       // status
+				}
+				break;
+			}
+		break;
+		//case 8:
+			// write RTC block
+			//RTC write in EepromCommand(): %d not yet implemented", Command[2]
+			//break;
+	//default:
+	//printf("unknown command in EepromCommand : %x\n", Command[2]);
+	//break;
+    }
+}
+
+void format_mempacks()
+{
+	int i,j;
+	for (i=0; i<4; i++)
+	{
+		for (j=0; j<0x8000; j+=2)
+		{
+			mempack[i][j] = 0;
+			mempack[i][j+1] = 0x03;
+		}
+		memcpy(mempack[i], mempak_init, sizeof(mempak_init));
+	}
+}
+
+unsigned char mempack_crc(unsigned char *data)
+{
+	int i;
+	unsigned char CRC = 0;
+	for (i=0; i<=0x20; i++)
+	{
+		int mask;
+		for (mask = 0x80; mask >= 1; mask >>= 1)
+		{
+			int xor_tap = (CRC & 0x80) ? 0x85 : 0x00;
+			CRC <<= 1;
+			if (i != 0x20 && (data[i] & mask)) CRC |= 1;
+			CRC ^= xor_tap;
+		}
+	}
+	return CRC;
+}
+
+int loadMempak(fileBrowser_file* savepath){
+	int i, result = 0;
+	fileBrowser_file saveFile;
+
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.mpk",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	if(saveFile_readFile(&saveFile, &i, 4) == 4) {  //file exists
+		saveFile.offset = 0;
+		if(saveFile_readFile(&saveFile, mempack, 0x8000 * 4)!=(0x8000*4)) { //error reading file
+			format_mempacks();
+			mempakWritten = false;
+			return -1;
+		}
+		result = 1;
+		mempakWritten = 1;
+		return result;  //file read ok
+	} else format_mempacks(); //file doesn't exist
+
+	mempakWritten = false;
+
+	return result;    //no file
+}
+
+int saveMempak(fileBrowser_file* savepath){
+	fileBrowser_file saveFile;   /* [Xbox360] hoisteada: C89 */
+
+	if(!mempakWritten) return 0;
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.mpk",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	if(saveFile_writeFile(&saveFile, mempack, 0x8000 * 4)!=(0x8000*4))
+		return -1;
+
+	return 1;
+}
+
+int deleteMempak(fileBrowser_file* savepath){
+	fileBrowser_file saveFile;
+	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
+	memset(&saveFile.name[0],0,FILE_BROWSER_MAX_PATH_LEN);
+	sprintf((char*)saveFile.name,"%s/%s%s.mpk",savepath->name,ROM_SETTINGS.goodname,saveregionstr());
+
+	return saveFile_deleteFile(&saveFile);
+}
+
+void internal_ReadController(int Control, BYTE *Command)
+{
+	switch (Command[2])
+	{
+		case 1:
+			if (Controls[Control].Present)
+			{
+				BUTTONS Keys;
+				getKeys(Control, &Keys);
+				*((unsigned long *)(Command + 3)) = Keys.Value;
+			}
+		break;
+		case 2: // read controller pack
+			if (Controls[Control].Present)
+			{
+				if (Controls[Control].Plugin == PLUGIN_RAW)
+					readController(Control, Command);
+			}
+		break;
+		case 3: // write controller pack
+			if (Controls[Control].Present)
+			{
+				if (Controls[Control].Plugin == PLUGIN_RAW)
+					readController(Control, Command);
+			}
+		break;
+	}
+}
+
+/* [Xbox360] ★ EL RUMBLE PAK, emulado aqui como el Controller Pak (Wii64 lo
+ * tenia declarado en plugin.h como "not implemeted for non raw data": con el
+ * el juego no veia ningun accesorio).  Protocolo, el de
+ * mupen64plus-input-sdl (plugin.c, RD_READPAK / RD_WRITEPAK):
+ *   - estado (0x00): hay accesorio, igual que el Controller Pak;
+ *   - lectura en 0x8000..0x8FFF: 32 bytes a 0x80, que es como el juego lo
+ *     identifica (escribe 0x80 en 0x8000 y lo relee); fuera, ceros;
+ *   - escritura en 0xC000..0xCFFF: el primer byte enciende (!= 0) o apaga
+ *     (0) el motor.
+ * La vibracion la hace xbox64_rumble (xbox/input_n64.c) en el mando de
+ * Xbox 360 del mismo puerto, como pcsxr-360 (PSxInputSetVibration). */
+void xbox64_rumble(int puerto, int encendido);
+
+void internal_ControllerCommand(int Control, BYTE *Command)
+{
+	switch (Command[2])
+	{
+		case 0x00: // check
+		case 0xFF:
+			if ((Command[1] & 0x80))
+				break;
+			if (Controls[Control].Present)
+			{
+				Command[3] = 0x05;
+				Command[4] = 0x00;
+				switch(Controls[Control].Plugin)
+				{
+					case PLUGIN_MEMPAK:
+						Command[5] = 1;
+					break;
+					case PLUGIN_RUMBLE_PAK:	/* [Xbox360] ver xbox64_rumble arriba */
+						Command[5] = 1;
+					break;
+					case PLUGIN_RAW:
+						Command[5] = 1;
+					break;
+					default:
+						Command[5] = 0;
+					break;
+				}
+			}
+			else
+				Command[1] |= 0x80;
+		break;
+		case 0x01:
+			if (!Controls[Control].Present)
+				Command[1] |= 0x80;
+		break;
+		case 0x02: // read controller pack
+			if (Controls[Control].Present)
+			{
+				switch(Controls[Control].Plugin)
+				{
+					case PLUGIN_MEMPAK:
+					{
+						int address = (Command[3] << 8) | Command[4];
+						if (address == 0x8001)
+						{
+							memset(&Command[5], 0, 0x20);
+							Command[0x25] = mempack_crc(&Command[5]);
+						}
+						else
+						{
+							address &= 0xFFE0;
+							if (address <= 0x7FE0)
+								memcpy(&Command[5], &mempack[Control][address], 0x20);
+							else
+								memset(&Command[5], 0, 0x20);
+							Command[0x25] = mempack_crc(&Command[5]);
+						}
+					}
+					break;
+					case PLUGIN_RUMBLE_PAK:	/* [Xbox360] la identificacion: 0x80 en 0x8000..0x8FFF */
+					{
+						const int address = ((Command[3] << 8) | Command[4]) & 0xFFE0;
+						memset(&Command[5], (address >= 0x8000 && address < 0x9000) ? 0x80 : 0x00, 0x20);
+						Command[0x25] = mempack_crc(&Command[5]);
+					}
+					break;
+					case PLUGIN_RAW:
+						controllerCommand(Control, Command);
+					break;
+					default:
+						memset(&Command[5], 0, 0x20);
+						Command[0x25] = 0;
+				}
+			}
+			else
+				Command[1] |= 0x80;
+			break;
+		case 0x03: // write controller pack
+			if (Controls[Control].Present)
+			{
+				switch(Controls[Control].Plugin)
+				{
+					case PLUGIN_MEMPAK:
+					{
+						int address = (Command[3] << 8) | Command[4];
+						if (address == 0x8001)
+							Command[0x25] = mempack_crc(&Command[5]);
+						else
+						{
+							address &= 0xFFE0;
+							if (address <= 0x7FE0)
+							{
+								mempakWritten = true;
+								memcpy(&mempack[Control][address], &Command[5], 0x20);
+								Command[0x25] = mempack_crc(&Command[5]);
+							}
+						}
+						break;
+						case PLUGIN_RUMBLE_PAK:	/* [Xbox360] 0xC000..0xCFFF: el motor */
+						{
+							const int address = ((Command[3] << 8) | Command[4]) & 0xFFE0;
+							if (address >= 0xC000 && address < 0xD000)
+								xbox64_rumble(Control, Command[5] != 0);
+							Command[0x25] = mempack_crc(&Command[5]);
+						}
+						break;
+						case PLUGIN_RAW:
+							controllerCommand(Control, Command);
+						break;
+						default:
+							Command[0x25] = mempack_crc(&Command[5]);
+						break;
+					}
+				}
+			}
+			else
+				Command[1] |= 0x80;
+		break;
+	}
+}
+
+void update_pif_write()
+{
+	int i=0, channel=0;
+	char challenge[30], response[30];
+#ifdef DEBUG_PIF
+	print_pif();
+#endif
+	if (PIF_RAMb[0x3F] > 1)
+	{
+		switch (PIF_RAMb[0x3F])
+		{
+			case 0x02:
+				// format the 'challenge' message into 30 nibbles for X-Scale's CIC code
+				for (i = 0; i < 15; i++) {
+					challenge[i*2] = (PIF_RAMb[48+i] >> 4) & 0x0f;
+					challenge[i*2+1] = PIF_RAMb[48+i] & 0x0f;
+				}
+				// calculate the proper response for the given challenge (X-Scale's algorithm)
+				n64_cic_nus_6105(challenge, response, CHL_LEN - 2);
+				PIF_RAMb[46] = 0;
+				PIF_RAMb[47] = 0;
+				// re-format the 'response' into a byte stream
+				for (i = 0; i < 15; i++) {
+					PIF_RAMb[48+i] = (response[i*2] << 4) + response[i*2+1];
+				}
+				// the last byte (2 nibbles) is always 0
+				PIF_RAMb[0x3F] = 0;
+			break;
+			case 0x08:
+				PIF_RAMb[0x3F] = 0;
+			break;
+		}
+		cic_challenge=1;
+		return;
+	}
+	while (i<0x40)
+	{
+		switch(PIF_RAMb[i])
+		{
+			case 0x00:
+				channel++;
+				if (channel > 6) i=0x40;
+			break;
+			case 0xFF:
+			break;
+			default:
+				if (!(PIF_RAMb[i] & 0xC0))
+				{
+					if (channel < 4)
+					{
+						if (Controls[channel].Present && Controls[channel].RawData)
+							controllerCommand(channel, &PIF_RAMb[i]);
+						else
+							internal_ControllerCommand(channel, &PIF_RAMb[i]);
+					}
+					else if (channel == 4)
+						EepromCommand(&PIF_RAMb[i]);
+					i += PIF_RAMb[i] + (PIF_RAMb[(i+1)] & 0x3F) + 1;
+					channel++;
+				}
+				else
+					i=0x40;
+			break;
+		}
+		i++;
+	}
+	cic_challenge=0;
+	controllerCommand(-1, NULL);
+#ifdef DEBUG_PIF
+	print_pif();
+#endif
+}
+
+void pif_reset_state()
+{
+	cic_challenge = 0;
+}
+
+void update_pif_read()
+{
+	int i=0, channel=0;
+	if (cic_challenge) return;
+#ifdef DEBUG_PIF
+	//   printf("read\n");
+	print_pif();
+#endif
+	while (i<0x40)
+	{
+		switch(PIF_RAMb[i])
+		{
+			case 0x00:
+				channel++;
+				if (channel > 6) i=0x40;
+			break;
+			case 0xFE:
+				i = 0x40;
+			break;
+			case 0xFF:
+			case 0xB4:
+			case 0x56:
+			case 0xB8:
+			break;
+			default:
+				if (!(PIF_RAMb[i] & 0xC0))
+				{
+					if (channel < 4)
+					{
+						if (Controls[channel].Present && Controls[channel].RawData)
+							readController(channel, &PIF_RAMb[i]);
+						else
+							internal_ReadController(channel, &PIF_RAMb[i]);
+					}
+					i += PIF_RAMb[i] + (PIF_RAMb[(i+1)] & 0x3F) + 1;
+					channel++;
+				}
+				else
+					i=0x40;
+			break;
+		}
+		i++;
+	}
+	readController(-1, NULL);
+#ifdef DEBUG_PIF
+	print_pif();
+#endif
+}

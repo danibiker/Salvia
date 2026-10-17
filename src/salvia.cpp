@@ -52,6 +52,30 @@ static bool salvia_midi_flush(void) {
  * cambio.  Lo usan el handler de SET_SYSTEM_AV_INFO y el recheck tras un cambio
  * de core-options en caliente. */
 static void applyCoreAvInfo(const struct retro_system_av_info& av) {
+	/* LOS TRES RELOJES, juntos y en una sola linea, porque el subsistema de
+	 * sincronizacion deriva sus consignas de ellos y hasta ahora no se
+	 * reconciliaban:
+	 *
+	 *   core      lo que declara el juego (N64: ~60,13 Hz)
+	 *   panel     contra lo que de verdad se presenta (59,94 NTSC / 50,00 PAL)
+	 *   audio     el dispositivo, fijo y abierto una sola vez
+	 *
+	 * Si `panel` y `core` difieren, la rejilla de deadlines y la de vblanks
+	 * derivan una contra otra: a 60,00 frente a 59,94 son ~1 ms cada 60 frames,
+	 * con un batido de ~17 s.  Eso es lo que se estaba midiendo como "la mitad
+	 * de los frames llegan tarde" con el emulador a pleno rendimiento, y es la
+	 * medida que decide si el rediseno del pacing va por ahi. */
+	{
+		const float panel = SDL_XBOX_GetRefreshRate();
+		LOG_INFO("Sync: relojes -> core %.4f Hz | panel %.4f Hz%s | audio %d Hz | desvio core-panel %.3f%%\n",
+			av.timing.fps,
+			panel,
+			(panel <= 0.0f) ? " (DESCONOCIDO)" : "",
+			(int)g_audio_device_rate,
+			(panel > 0.0f && av.timing.fps > 0.0)
+				? (float)((av.timing.fps / (double)panel - 1.0) * 100.0) : 0.0f);
+	}
+
 	gameMenu->sync->init_fps_counter((float)av.timing.fps);
 	gameMenu->g_audioRate.reset();
 	gameMenu->g_audioRate.init(BUFF_SIZE);
@@ -380,7 +404,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				if (!intl || !intl->us) return false;
 				usDefs = intl->us;
 				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
-				if (intl->local && lang != DEFAULT_LANG)
+				if (intl->local && lang != "en")
 					localDefs = intl->local;
 			}
 
@@ -459,7 +483,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				usV2 = intl->us;
 				v2 = intl->us;
 				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
-				if (intl->local && lang != DEFAULT_LANG)
+				if (intl->local && lang != "en")
 					v2 = intl->local;
 			}
 
@@ -753,6 +777,91 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return ok;
 		}
 
+		/* ===================================================================
+		 * 30002 / 30003 - Cores que renderizan con Direct3D (Xenon64)
+		 * ===================================================================
+		 *
+		 * Todos los demas cores entregan un buffer de CPU y hw_refresh lo
+		 * copia a la textura del juego.  Un core que ya renderiza con D3D no
+		 * puede hacer eso en Xbox 360: no existen StretchRect ni
+		 * GetRenderTargetData, la unica copia es Resolve() -que escribe
+		 * SIEMPRE tileado- y leer memoria de GPU por CPU va a 20 MB/s, o sea
+		 * unos 61 ms por frame de 640x480x4.
+		 *
+		 * Asi que en vez de copiar pixeles se intercambian dos punteros:
+		 *
+		 *   30002  el core nos pide NUESTRO device.  En Xbox 360 solo puede
+		 *          haber un IDirect3DDevice9 por proceso, asi que no es una
+		 *          optimizacion: es la unica forma de que el core dibuje.
+		 *   30003  el core nos da SU textura, y la ligamos en s0 en vez de la
+		 *          nuestra.  Todo lo de aguas abajo -aspecto, shaders,
+		 *          escalado entero, rotacion, overlay del menu- no se entera.
+		 *
+		 * El core avisa de cada frame llamando a video_refresh con el
+		 * centinela RETRO_HW_FRAME_BUFFER_VALID.  Ver hw_refresh.
+		 * ================================================================= */
+		case 30002: { // RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE
+			#if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
+			/* Por el accesor de la API publica de libSDLx360, y no por el
+			 * `extern LPDIRECT3DDEVICE9 D3D_Device` de SDL_xboxvideo.h: esa
+			 * cabecera es INTERNA del driver de video y el frontend no la
+			 * incluye. */
+			void *dev = SDL_XBOX_GetD3DDevice();
+			if (!data || !dev) return false;
+			*(void **)data = dev;
+			LOG_DEBUG("Core D3D: entregado el device %p", dev);
+			return true;
+			#else
+			return false;
+			#endif
+		}
+
+		case 30003: { // RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE
+			#if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
+			/* Tiene que coincidir EXACTAMENTE con la del core
+			 * (libretro/Xenon64/360/Xdk/xenon64/libretro_core.cpp). */
+			struct salvia_d3d_texture {
+				void     *texture;
+				unsigned  width;
+				unsigned  height;
+			};
+			const salvia_d3d_texture *t = (const salvia_d3d_texture *)data;
+
+			if (!t) return false;
+
+			/* texture = NULL significa "retirala": el core la va a liberar y
+			 * volvemos al camino normal.  Lo manda retro_unload_game ANTES de
+			 * soltar la superficie, porque si no el quad se quedaria
+			 * muestreando memoria muerta en el menu. */
+			if (!t->texture || !t->width || !t->height) {
+				SDL_XBOX_SetExternalGameTexture(NULL, 0, 0);
+				/* Se invalida el tamano cacheado para que el siguiente frame
+				 * por el camino normal vuelva a crear la textura del juego
+				 * (la rama de cambio de geometria de hw_refresh). */
+				gameMenu->current_video_settings.sw  = 0;
+				gameMenu->current_video_settings.sh  = 0;
+				gameMenu->current_video_settings.bpp = 0;
+				LOG_DEBUG("Core D3D: textura externa retirada");
+				return true;
+			}
+
+			if (!SDL_XBOX_SetExternalGameTexture(t->texture, (int)t->width, (int)t->height))
+				return false;
+
+			/* Para que el resto del frontend sepa el tamano del juego.  bpp a
+			 * 32: la textura del core es A8R8G8B8. */
+			gameMenu->current_video_settings.sw  = t->width;
+			gameMenu->current_video_settings.sh  = t->height;
+			gameMenu->current_video_settings.bpp = 32;
+
+			LOG_DEBUG("Core D3D: textura externa %ux%u (%p)",
+				t->width, t->height, t->texture);
+			return true;
+			#else
+			return false;
+			#endif
+		}
+
 		default: {
 			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
@@ -932,6 +1041,74 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 static inline void hw_refresh(const void *data, unsigned width, 
                                 unsigned height, std::size_t pitch) {
     if (!data) return;
+
+    #if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
+    /* >>> CORE QUE RENDERIZA CON DIRECT3D (Xenon64).  Ver los environments
+     * 30002/30003 en retro_environment.
+     *
+     * OJO CON EL CENTINELA: RETRO_HW_FRAME_BUFFER_VALID es (void*)-1, NO
+     * NULL, asi que el `if (!data)` de arriba NO lo filtra.  Sin esta rama el
+     * memcpy de abajo leeria de 0xFFFFFFFF.
+     *
+     * Aqui no hay nada que copiar: la imagen ya esta en la textura que el core
+     * nos dio por el 30003 y que el quad liga en s0.  Lo unico que queda es lo
+     * que hay que hacer en CADA frame de todas formas: aplicar las opciones de
+     * pantalla y la rotacion. */
+    if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+        gameMenu->checkDisplayOptions();
+
+        static unsigned last_hw_rotation_ext = (unsigned)-100;
+        if (last_hw_rotation_ext != g_screen_rotation) {
+            SDL_XBOX_SetRotation((int)g_screen_rotation);
+            last_hw_rotation_ext = g_screen_rotation;
+        }
+
+        /* ★★ EL SAVESTATE TIENE QUE PASAR POR AQUI.
+         *
+         * `take_screenshot()` no es solo la captura: es tambien quien pone
+         * `action_postponed.cycles = 0`, y ESE cero es lo que dispara
+         * `saveState()` en el bucle principal.  Con el `return` de abajo no
+         * se llamaba nunca, asi que `cycles` se quedaba clavado en 1 y el
+         * guardado no ocurria JAMAS en los cores que renderizan con D3D.
+         *
+         * La imagen no la tenemos en CPU -- la pinta el core en su textura --
+         * asi que hay que pedirsela al driver, que es quien tiene el device y
+         * sabe destilarla.  Cuesta unos 60 ms, y eso seria inasumible por
+         * frame pero es UNA VEZ, junto a un savestate de 8,7 MB que ademas se
+         * comprime con zlib.
+         *
+         * Si la captura falla se sigue igualmente, sin miniatura: la cadena
+         * lo tolera entera -- `saveState()` solo copia la imagen si el
+         * puntero no es NULL, y el hilo de guardado comprueba lo mismo antes
+         * de escribir el PNG. */
+        if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE) {
+            if (action_postponed.screenshot) {
+                delete[] action_postponed.screenshot;
+                action_postponed.screenshot = NULL;
+            }
+
+            action_postponed.width  = 0;
+            action_postponed.height = 0;
+            action_postponed.bpp    = 32;   /* la textura del core es A8R8G8B8 */
+
+            if (width > 0 && height > 0) {
+                const std::size_t total = (std::size_t)width * height * 4;
+                uint8_t *shot = new uint8_t[total];
+
+                if (SDL_XBOX_CaptureGameTexture(shot, (int)width, (int)height)) {
+                    action_postponed.screenshot = shot;
+                    action_postponed.width      = width;
+                    action_postponed.height     = height;
+                } else {
+                    delete[] shot;
+                }
+            }
+
+            action_postponed.cycles = 0;
+        }
+        return;
+    }
+    #endif
 
     const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
     const unsigned row_bytes = width * (bpp / 8);
@@ -1473,6 +1650,54 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     int16_t* samples = (int16_t*)stream;
     std::size_t count = len / sizeof(int16_t);
 
+    /* TASA REAL DE CONSUMO DEL DISPOSITIVO.
+     *
+     * POR QUE.  Es el ultimo reloj del sistema que nunca se ha medido:
+     * `g_audio_device_rate` se toma del `obtained` de SDL (init_sdl_audio) y se
+     * cree a ciegas.  Y hay una medida que apunta justo aqui: el DRC del
+     * remuestreador, que es un controlador proporcional con consigna en el 50%
+     * de ocupacion, se estabiliza en el 32-40% (medido, log 23). Un P puro deja
+     * error de regimen, y ese desvio de 15 puntos es exactamente lo que hace
+     * falta para sostener `adj = -0,006`: el frontend cree que tiene que
+     * producir un 0,6% menos de salida de la nominal. Si el dispositivo consume
+     * un 0,6% mas rapido que los 48000 declarados, cuadra en magnitud y signo.
+     *
+     * Descartado ya el resto: panel y core estan los dos en 60,0000 exactos
+     * (traza `Sync: relojes`), y el core declara 32000 cuando su AI corre a
+     * 32006, que son 0,019%: treinta veces poco.
+     *
+     * Cuenta los frames que el dispositivo se lleva de verdad y los divide por
+     * tiempo de reloj. Ventana larga (10 s) porque lo que se busca es una
+     * diferencia de decimas de por ciento, y una ventana corta no la resuelve.
+     *
+     * Corre en el HILO DE AUDIO, asi que aqui NO se registra nada: solo se
+     * publica el resultado en un entero de 32 bits y lo saca al log el hilo
+     * principal.  `Logger::write` es seguro entre hilos (seccion critica), pero
+     * escribe a fichero, y bloquear el callback de audio en un `fflush` -aunque
+     * sea cada 10 s- seria meter un corte de audio justo en la herramienta que
+     * vigila el audio.  Una escritura alineada de 32 bits es atomica en PPC, y
+     * hay un solo escritor y un solo lector. */
+    {
+        static DWORD  rateT0     = 0;
+        static double rateFrames = 0.0;
+
+        const DWORD ahora = GetTickCount();
+
+        rateFrames += (double)(count / 2);
+
+        if (rateT0 == 0) {
+            rateT0     = ahora;
+            rateFrames = 0.0;
+        } else if (ahora - rateT0 >= 10000) {
+            const double seg = (double)(ahora - rateT0) / 1000.0;
+            /* En miliherzios para no necesitar un double compartido: 48000 Hz
+             * son 48.000.000, de sobra dentro de 32 bits sin signo. */
+            g_audio_dev_rate_mhz = (unsigned int)(rateFrames / seg * 1000.0 + 0.5);
+            rateT0     = ahora;
+            rateFrames = 0.0;
+        }
+    }
+
 #ifdef AUDIO_LOG
     // Trace periodico cada 2s: callback info
     {
@@ -1787,7 +2012,12 @@ int launchGame(std::string rompath, bool tmpDelete){
 	//Deshabilitamos el fast forward si estaba a true y restauramos el vsync por defecto
 	if (gameMenu->current_fast_forward){
 		gameMenu->current_fast_forward = false;
-		SDL_XBOX_SetVSync(true);
+		/* Por Sync, igual que el manejador de la hotkey: el vsync tiene un
+		 * segundo dueno (el adaptativo de limit_fps) y llamar a
+		 * SDL_XBOX_SetVSync directo dejaria su espejo `vsyncOn` mintiendo, con
+		 * lo que el adaptativo podria "apagar" un vsync ya apagado o no
+		 * apagar el que si esta encendido. */
+		gameMenu->sync->set_vsync_permitido(true);
 	}
 
 	// Lista de partidas guardadas y SRAM solo si hay juego real cargado.
@@ -1867,14 +2097,101 @@ inline void updateGame() {
 	// 2. Calcula la logica del juego
 	// 3. Llama a audio_batch() -> (Aqui el audio bloquea si va muy rapido)
 	// 4. Llama a video_refresh() -> (Aqui se dibuja el frame y los FPS)
-	// Notificar al core el estado del buffer de audio (para frameskip)
-	if (audio_status_cb) {
-		size_t fill = gameMenu->g_audioBuffer.getUsed();
-		unsigned occupancy = (unsigned)(fill * 100 / gameMenu->g_audioBuffer.getCapacity());
-		bool underrun_likely = (fill < gameMenu->g_audioBuffer.getCapacity() / 4);
-		audio_status_cb(true, occupancy, underrun_likely);
+	/* Ocupacion del anillo de audio del frontend.  Se calcula SIEMPRE, no solo
+	 * cuando el core registro `audio_status_cb` (Xenon64 no lo registra),
+	 * porque el vsync adaptativo la necesita como SENAL: es la unica que
+	 * distingue "el core no llega" cuando el periodo de frame SI se cumple.
+	 *
+	 * Ese caso es real y es el del hilo grafico asincrono de Xenon64: el video
+	 * va a 60 VI/s -o sea que `dtAvg` esta clavado en el objetivo y el criterio
+	 * de periodo no ve nada- y en cambio el audio sale al 70%, porque el
+	 * invitado no consigue su ranura para la tarea de audio.  Si el core
+	 * entrega menos audio del que el tiempo real consume, el anillo se seca:
+	 * eso se ve aqui y en ningun otro sitio del frontend. */
+	{
+		const size_t cap  = gameMenu->g_audioBuffer.getCapacity();
+		const size_t fill = gameMenu->g_audioBuffer.getUsed();
+		const unsigned occupancy = cap ? (unsigned)(fill * 100 / cap) : 0;
+
+		if (cap)
+			gameMenu->sync->note_audio_ocupacion(occupancy);
+
+		// Notificar al core el estado del buffer de audio (para frameskip)
+		if (audio_status_cb)
+			audio_status_cb(true, occupancy, fill < cap / 4);
+
+		/* La tasa real del dispositivo, que publica el hilo de audio cada 10 s.
+		 * Se saca aqui y no alli para no bloquear el callback en el fichero de
+		 * log.  Solo cuando cambia, asi que en regimen son cuatro lineas por
+		 * minuto como mucho. */
+		{
+			static unsigned int ultima = 0;
+			const unsigned int mhz = g_audio_dev_rate_mhz;
+
+			if (mhz != 0 && mhz != ultima) {
+				const double real = (double)mhz / 1000.0;
+				const double nom  = (double)g_audio_device_rate;
+				ultima = mhz;
+
+				/* FASE 3: la alimentacion directa del resampler usa la tasa
+				 * MEDIDA, no la declarada.  Es correccion gratis, y es la unica
+				 * que el DRC no puede hacer sin gastar su autoridad. */
+				gameMenu->g_audioRate.setDeviceRateMeasured(real);
+
+				LOG_INFO("Sync: dispositivo de audio -> declarado %.0f Hz | medido %.3f Hz | desvio %+.3f%% | anillo %u%% | ratio %.5f\n",
+					nom, real,
+					(nom > 0.0) ? ((real / nom - 1.0) * 100.0) : 0.0,
+					occupancy, gameMenu->g_audioRate.getBaseRatio());
+			}
+		}
+
+		/* La PANTALLA, contada por el hardware.  Ventana de 10 s por el mismo
+		 * motivo que la del audio: se buscan decimas de por ciento.
+		 *
+		 * `vbl/frame` es el dato que no se puede obtener de ninguna otra forma.
+		 * Con core y panel a 60 debe salir 1,00 clavado.  Con un core PAL a 50
+		 * en un panel a 60 debe salir 1,20 -alternando 1 y 2 en patron 5:6-,
+		 * porque 50 no divide a 60 y no hay swap interval entero que lo arregle.
+		 * Si en ese caso saliese 1,00, el Present no esta haciendo lo que creo y
+		 * hay que pararse ahi antes de seguir. */
+		{
+			static DWORD        t0     = 0;
+			static unsigned int vb0    = 0;
+			static unsigned int miss0  = 0;
+			static unsigned int frames = 0;
+
+			unsigned int vb = 0, miss = 0;
+			const DWORD  ahora = GetTickCount();
+
+			SDL_XBOX_GetVBlankStats(&vb, &miss);
+			++frames;
+
+			if (t0 == 0 || vb == 0) {
+				/* vb == 0: plataforma sin reloj de hardware (Windows). */
+				t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
+			} else if (ahora - t0 >= 10000) {
+				const double seg = (double)(ahora - t0) / 1000.0;
+				const double hz  = (double)(vb - vb0) / seg;
+				const float  dec = SDL_XBOX_GetRefreshRate();
+
+				LOG_INFO("Sync: pantalla -> declarado %.4f Hz | contado %.4f Hz | desvio %+.3f%% | vbl/frame %.3f | perdidos %u\n",
+					dec, hz,
+					(dec > 0.0f) ? ((hz / (double)dec - 1.0) * 100.0) : 0.0,
+					frames ? ((double)(vb - vb0) / (double)frames) : 0.0,
+					miss - miss0);
+
+				t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
+			}
+		}
 	}
 	retro_run();
+
+	/* FASE 3: ancla la FASE del muestreo del DRC.  A partir de aqui, el primer
+	 * lote de audio del frame siguiente recomputa el ratio, y los demas reusan
+	 * el ya calculado.  Sin esto el controlador se muestreaba una vez por LOTE
+	 * -varias veces por frame, con fase distinta cada vez- y eso mete ruido en
+	 * un lazo cuya constante de tiempo es de un frame.  Ver `processAndWrite`. */
+	gameMenu->g_audioRate.frameEnd();
 
 	/* Red de seguridad: si el usuario cambio una core-option en este frame, el
 	 * core ya la proceso dentro del retro_run de arriba y puede haber cambiado
@@ -2048,7 +2365,7 @@ static void __declspec(noinline) printAndDelay(){
  *  MSVC error C2712 forbids SEH __try in any function that requires
  *  C++ object unwinding. */
 static void __declspec(noinline) runGameLoop() {
-	__try {
+	//__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
 
@@ -2106,10 +2423,10 @@ static void __declspec(noinline) runGameLoop() {
 			gameMenu->sync->note_present(flipEnd);
 			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
 		}
-	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		printAndDelay();
-		LOG_ERROR("FATAL: Unhandled exception");
-	}
+	//} __except (EXCEPTION_EXECUTE_HANDLER) {
+	//	printAndDelay();
+	//	LOG_ERROR("FATAL: Unhandled exception");
+	//}
 }
 
 /**

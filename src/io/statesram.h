@@ -68,6 +68,15 @@ struct SaveData {
 		bufferSize = 0;
 		running = false;
 		slot = 0;
+		/* Estos cuatro no se inicializaban.  `buffer` es el que decide si hay
+		 * trabajo en vuelo -- ver las guardas de saveSram()/saveState() --,
+		 * asi que arrancar con basura seria descartar el primer guardado o,
+		 * peor, liberarla. */
+		buffer = NULL;
+		screenshot = NULL;
+		width = 0;
+		height = 0;
+		bpp = 16;
 	}
 	
 } g_saveQueue;
@@ -192,13 +201,26 @@ void saveSram(const char* sram_path) {
 
     if (size == 0 || !data) return;
 
-    // 1. Comparación con nuestra copia persistente
+    // 1. Comparaciï¿½n con nuestra copia persistente
     bool needsSave = (g_sram_data_last == NULL) || 
                      (g_sram_size_last != size) || 
                      (memcmp(g_sram_data_last, data, size) != 0);
 
     if (needsSave) {
-        // 2. Actualizamos nuestra copia de comparación
+        /* â˜… ANTES DE TOCAR NADA: si el hilo sigue con el trabajo anterior, se
+         * descarta ESTE volcado entero y se sale SIN actualizar
+         * `g_sram_data_last`.  Ese orden importa: si se actualizara y luego
+         * se descartase, el `memcmp` de arriba dejaria de ver diferencia y el
+         * guardado no se reintentaria NUNCA.  Dejandolo rancio, el proximo
+         * volcado periodico lo repite.  Ver la nota larga de mas abajo. */
+        SDL_mutexP(g_saveQueue.saveMutex);
+        if (g_saveQueue.buffer) {
+            SDL_mutexV(g_saveQueue.saveMutex);
+            return;
+        }
+        SDL_mutexV(g_saveQueue.saveMutex);
+
+        // 2. Actualizamos nuestra copia de comparaciï¿½n
         if (g_sram_size_last != size) {
             if (g_sram_data_last) free(g_sram_data_last);
             g_sram_data_last = malloc(size);
@@ -212,9 +234,39 @@ void saveSram(const char* sram_path) {
             memcpy(hiloBuffer, data, size);
 
             SDL_mutexP(g_saveQueue.saveMutex);
-            // Si el hilo aún no ha terminado el anterior, liberamos para evitar leak
-            if (g_saveQueue.buffer) free(g_saveQueue.buffer); 
-            
+
+            /* â˜…â˜… AQUI HABIA UN USO-DESPUES-DE-LIBERAR, y el comentario que
+             * tenia lo decia sin darse cuenta: "si el hilo aun no ha
+             * terminado el anterior, liberamos para evitar leak".  Si el hilo
+             * no ha terminado es que ESTA USANDO ese buffer -- lo copia bajo
+             * el mutex y luego trabaja FUERA de el (SaveThreadFunc) --, asi
+             * que liberarlo aqui le quita la memoria de debajo.
+             *
+             * Se veia asi, comprimiendo un savestate de 8,7 MB:
+             *
+             *   Access violation reading 0x44490030
+             *   memcpy -> read_buf -> deflate -> gzwrite
+             *   -> guardar_comprimido_zlib(buffer=0x44490030, size=8700340)
+             *
+             * â˜… Y POR QUE APARECE AHORA: hasta ahora Xenon64 se compilaba con
+             * NO_SRAM, asi que `saveSram()` salia por el `size == 0` de
+             * arriba y nunca encolaba nada.  Al delegar la SRAM en el
+             * frontend empieza a encolar cada pocos segundos, y al mismo
+             * tiempo los savestates de ese core son de 8,7 MB: comprimirlos
+             * tarda lo suficiente como para que la ventana deje de ser
+             * teorica.
+             *
+             * El arreglo es no pisar nunca un trabajo en vuelo.  La
+             * comprobacion de verdad esta ARRIBA, antes de actualizar
+             * `g_sram_data_last`; esta segunda es la de carrera: entre
+             * aquella y esta el hilo no puede haber EMPEZADO nada nuevo
+             * -somos el unico productor- pero mas vale no suponerlo. */
+            if (g_saveQueue.buffer) {
+                SDL_mutexV(g_saveQueue.saveMutex);
+                free(hiloBuffer);
+                return;
+            }
+
             g_saveQueue.buffer = hiloBuffer;
             g_saveQueue.bufferSize = size;
             g_saveQueue.targetPath = sram_path;
@@ -227,7 +279,7 @@ void saveSram(const char* sram_path) {
 }
 
 void saveState() {
-    // 1. Obtener tamaños de ambos estados
+    // 1. Obtener tamaï¿½os de ambos estados
     std::size_t core_state_size = retro_serialize_size();
     std::size_t ra_state_size = 0;
     
@@ -236,7 +288,7 @@ void saveState() {
         ra_state_size = rc_client_progress_size(ra_client);
     }
 
-    // 2. Calcular tamaño total del buffer: Core + Marcador(4) + TamañoRA(4) + DatosRA
+    // 2. Calcular tamaï¿½o total del buffer: Core + Marcador(4) + Tamaï¿½oRA(4) + DatosRA
     // Reservamos espacio extra para una cabecera de seguridad de RA
     std::size_t total_buffer_size = core_state_size + 8 + ra_state_size;
     void *buffer = malloc(total_buffer_size);
@@ -246,10 +298,10 @@ void saveState() {
     // 3. Serializar el Core de Libretro al principio del buffer
     if (retro_serialize(buffer, core_state_size)) {
         
-        // 4. Serializar datos de RetroAchievements a continuación
+        // 4. Serializar datos de RetroAchievements a continuaciï¿½n
         uint8_t* ra_ptr = (uint8_t*)buffer + core_state_size;
         
-        // Escribimos un marcador "RCHV" y el tamaño para poder leerlo luego de forma segura
+        // Escribimos un marcador "RCHV" y el tamaï¿½o para poder leerlo luego de forma segura
         std::memcpy(ra_ptr, "RCHV", 4);
         std::memcpy(ra_ptr + 4, &ra_state_size, 4);
         
@@ -265,17 +317,35 @@ void saveState() {
             std::memcpy(hiloBuffer, buffer, total_buffer_size);
 
             SDL_mutexP(g_saveQueue.saveMutex);
-            
+
+            /* â˜… MISMO USO-DESPUES-DE-LIBERAR QUE EN saveSram(), y aqui no lo
+             * tapa la guarda de HK_SAVESTATE: esa solo mira que no haya otro
+             * SAVE_STATE pendiente, asi que un savestate podia liberar el
+             * buffer de un SAVE_SRAM que el hilo estuviera escribiendo.
+             *
+             * Si hay trabajo en vuelo se descarta ESTE, y se avisa: al
+             * contrario que la SRAM -que se reintenta sola en el siguiente
+             * volcado periodico- un savestate lo ha pedido el usuario y
+             * tiene que enterarse de que no se ha hecho. */
             if (g_saveQueue.buffer) {
-                free(g_saveQueue.buffer);
+                SDL_mutexV(g_saveQueue.saveMutex);
+                free(hiloBuffer);
+                free(buffer);
+                if (action_postponed.screenshot) {
+                    delete[] action_postponed.screenshot;
+                    action_postponed.screenshot = NULL;
+                }
+                gameMenu->showSystemMessage(
+                    LanguageManager::instance()->get("msg.error.savestate"), 3000);
+                return;
             }
-            
+
             g_saveQueue.buffer = hiloBuffer;
             g_saveQueue.bufferSize = total_buffer_size;
             g_saveQueue.targetPath = targetPath;
             g_saveQueue.slot = g_currentSlot;
 
-            // Gestión de la captura de pantalla para el Slot
+            // Gestiï¿½n de la captura de pantalla para el Slot
             g_saveQueue.width = action_postponed.width;
             g_saveQueue.height = action_postponed.height;
             g_saveQueue.bpp = action_postponed.bpp;
@@ -285,6 +355,17 @@ void saveState() {
             if (total_bytes > 0 && action_postponed.screenshot != NULL) {
                 g_saveQueue.screenshot = new uint8_t[total_bytes];
                 std::memcpy(g_saveQueue.screenshot, action_postponed.screenshot, total_bytes);
+            } else {
+                /* â˜… EL `else` NO ES COSMETICO.  Sin el, un guardado sin
+                 * captura se quedaba con el puntero del guardado ANTERIOR,
+                 * que el hilo ya habia liberado con delete[]: lectura de
+                 * memoria liberada al escribir el PNG y doble liberacion
+                 * despues.  Antes no se notaba porque siempre habia captura;
+                 * los cores que renderizan con D3D no la tienen (ver la rama
+                 * de RETRO_HW_FRAME_BUFFER_VALID en hw_refresh). */
+                g_saveQueue.screenshot = NULL;
+                g_saveQueue.width      = 0;
+                g_saveQueue.height     = 0;
             }
             
             g_saveQueue.action = SAVE_STATE;
@@ -312,7 +393,7 @@ void loadState(){
 	}
 
     const std::string state_path = Constant::checkPath(getSlotPath(romPaths.savestate, g_currentSlot));
-    // 1. Obtener el tamaño que espera el núcleo (Core)
+    // 1. Obtener el tamaï¿½o que espera el nï¿½cleo (Core)
     std::size_t core_state_size = retro_serialize_size();
     if (core_state_size == 0) return;
 
@@ -324,18 +405,18 @@ void loadState(){
         return;
     }
 
-    // 3. Cargar el estado del Núcleo (Core)
+    // 3. Cargar el estado del Nï¿½cleo (Core)
     void* core_buffer = malloc(core_state_size);
     if (!core_buffer) {
         gzclose(file);
         return;
     }
 
-    // Leemos exactamente el tamaño que el core espera
+    // Leemos exactamente el tamaï¿½o que el core espera
     int bytesRead = gzread(file, core_buffer, (unsigned)core_state_size);
     
     if (bytesRead == (int)core_state_size) {
-        // Inyectamos los datos en el núcleo de emulación
+        // Inyectamos los datos en el nï¿½cleo de emulaciï¿½n
         retro_unserialize(core_buffer, core_state_size);
         
         // 4. Intentar cargar el bloque de RetroAchievements (Cabecera de 8 bytes)
@@ -343,7 +424,7 @@ void loadState(){
         uint32_t ra_data_size = 0;
         
 		uint8_t* ra_buffer = NULL;
-        // Intentamos leer el marcador "RCHV" y el tamaño de los datos
+        // Intentamos leer el marcador "RCHV" y el tamaï¿½o de los datos
         if (gzread(file, ra_marker, 4) == 4 && memcmp(ra_marker, "RCHV", 4) == 0) {
             if (gzread(file, &ra_data_size, 4) == 4 && ra_data_size > 0) {
                 ra_buffer = (uint8_t*)malloc(ra_data_size);
@@ -366,7 +447,7 @@ void loadState(){
 
         gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(g_currentSlot), 3000);
     } else {
-        LOG_ERROR("Error de lectura: El archivo es más pequeño de lo esperado.");
+        LOG_ERROR("Error de lectura: El archivo es mï¿½s pequeï¿½o de lo esperado.");
     }
 
     // Limpieza final
@@ -389,7 +470,7 @@ bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {
     }
 }
 
-// Función que ejecutará el hilo
+// Funciion que ejecuta el hilo
 int SaveThreadFunc(void* data) {
     SaveData* sd = (SaveData*)data;
     while (sd->running) {
@@ -422,7 +503,7 @@ int SaveThreadFunc(void* data) {
 					SDL_mutexP(sd->saveMutex);
 					sd->buffer = NULL;
 					sd->bufferSize = 0;
-					sd->action = SAVE_NONE; // IMPORTANTE: Resetea la acción
+					sd->action = SAVE_NONE; // IMPORTANTE: Resetea la acciï¿½n
 					SDL_mutexV(sd->saveMutex);
 				}
 				break;
@@ -448,7 +529,13 @@ int SaveThreadFunc(void* data) {
 					SDL_mutexP(sd->saveMutex);
 					sd->buffer = NULL;
 					sd->bufferSize = 0;
-					sd->action = SAVE_NONE; // IMPORTANTE: Resetea la acción
+					/* Y el puntero de la captura TAMBIEN, que se acaba de
+					 * liberar: dejarlo colgando era la mitad del problema que
+					 * arregla el `else` de saveState(). */
+					sd->screenshot = NULL;
+					sd->width = 0;
+					sd->height = 0;
+					sd->action = SAVE_NONE; // IMPORTANTE: Resetea la acciï¿½n
 					SDL_mutexV(sd->saveMutex);
 				}
 				break;

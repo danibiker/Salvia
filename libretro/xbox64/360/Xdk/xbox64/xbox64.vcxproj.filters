@@ -1,0 +1,131 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ===========================================================================
+  Filtros del explorador de soluciones.  NO afecta al build.
+  ===========================================================================
+
+  Este fichero existe por una sola razon: que los 29 objetos de Rice_GX se
+  vean en su propia carpeta y no se mezclen con los ~120 del resto.
+
+  ★ LO QUE NO ESTA AQUI NO ES UN OLVIDO.  Un fichero que no aparece en el
+  .filters se muestra en la RAIZ del proyecto, que es exactamente donde
+  estaban todos hasta ahora (antes no habia .filters).  Asi que listar
+  solo Rice deja el resto del arbol tal y como estaba, sin tocar 120 lineas
+  para no cambiar nada.
+
+  ★ SI VISUAL STUDIO REESCRIBE ESTE FICHERO (pasa en cuanto se anyade o
+  quita un fichero desde el IDE), se llevara por delante estos comentarios y
+  puede repartir el resto del arbol en filtros por carpeta.  No rompe nada:
+  los filtros son cosmeticos y el build sale de xbox64.vcxproj.  Pero
+  conviene mirar el diff antes de dar por bueno el commit.
+
+  ★★ Y OJO CON LO CONTRARIO: anyadir un fuente ARRASTRANDOLO al filtro desde
+  el IDE lo mete en el .vcxproj SIN los defines por fichero
+  (__GX__;__LINUX__;XBOX64_PLUGIN_RICE).  Sin ellos, un .cpp de Rice compila
+  la rama de OpenGL de escritorio y pide <SDL.h> y <GL/gl.h>.  Los fuentes
+  se anyaden editando el .vcxproj, no arrastrando.
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Rice_GX">
+      <UniqueIdentifier>{8B6BAB3E-D417-425E-92F5-D958588BACAE}</UniqueIdentifier>
+    </Filter>
+    <!-- El objeto 29 de Makefile.Rice vive FUERA de Rice_GX/, en
+         source/TextureArchive/.  Se le da su propio subfiltro para que esa
+         rareza se vea en el arbol del IDE y no haya que volver a
+         descubrirla leyendo el Makefile. -->
+    <Filter Include="Rice_GX\TextureArchive">
+      <UniqueIdentifier>{C8B8D5B1-8C40-45E1-93FC-DF698ED6D655}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Mismo orden que Makefile.Rice y que el .vcxproj. -->
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLGraphicsContext.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Debugger.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Video.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Config.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\GraphicsContext.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TextureFilters.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\DeviceBuilder.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Render.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RSP_Parser.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TextureManager.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderBase.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\FrameBuffer.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Texture.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLRender.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLTexture.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TEVBlender.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\TEVCombiner.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLExtRender.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\blender.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\math.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\Combiner.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RSP_S2DEX.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderExt.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\ConvertImageGX.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\DecodedMux.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\RenderTexture.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLDecodedMux.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\Rice_GX\OGLRenderExt.cpp">
+      <Filter>Rice_GX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\TextureArchive\ArchiveReader.cpp">
+      <Filter>Rice_GX\TextureArchive</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

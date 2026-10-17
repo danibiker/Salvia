@@ -372,6 +372,44 @@ extern DECLSPEC SDL_Surface * SDLCALL SDL_SetVideoMode
  * =================================================================== */
 extern DECLSPEC SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp);
 
+/* ===================================================================
+ * TEXTURA EXTERNA: cores que renderizan ellos mismos con Direct3D
+ * ===================================================================
+ *
+ * El camino normal es: el core entrega un buffer de CPU -> hw_refresh lo
+ * copia a la textura que creo XBOX_ResizeGameTexture -> el quad la
+ * muestrea.  Un core que YA renderiza con D3D (Xenon64, el de N64) no
+ * puede pasar por ahi en esta consola: no existen StretchRect ni
+ * GetRenderTargetData, la unica copia es Resolve() -que escribe siempre
+ * tileado- y leer memoria de GPU por CPU va a unos 20 MB/s.
+ *
+ * Con estas dos funciones el core nos da su propio IDirect3DTexture9 y
+ * el quad la liga en s0 en su lugar.  No se copia ni un pixel, y todo lo
+ * de aguas abajo -relacion de aspecto, shaders, escalado entero,
+ * rotacion, overlay del menu- sigue funcionando igual, porque todo eso
+ * vive despues del enlace del sampler.
+ *
+ * Mientras hay textura externa, XBOX_RenderSurface NO hace el par
+ * UnlockRect/LockRect de la textura propia: la externa es de la GPU y no
+ * se bloquea nunca.  Con texture = NULL se vuelve al camino normal.
+ *
+ * SDL_XBOX_GetD3DDevice existe porque en Xbox 360 solo puede haber UN
+ * IDirect3DDevice9 por proceso: el core no puede crear el suyo y tiene
+ * que adoptar este.
+ * =================================================================== */
+extern DECLSPEC void* SDL_XBOX_GetD3DDevice(void);
+extern DECLSPEC int   SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height);
+
+/* Copia la imagen del juego a un buffer de CPU, en ARGB de 32 bits y `w`*`h`
+ * denso, destilando y escalando.  Solo sirve cuando hay textura externa, o
+ * sea con un core que renderiza con D3D; devuelve 0 si no la hay o si falla.
+ *
+ * Es CARA (~60 ms para un frame entero: leer memoria de GPU por CPU va a unos
+ * 20 MB/s), asi que es para cosas de una vez -- la miniatura de un
+ * savestate--, nunca por frame.  El porque largo esta junto a la
+ * implementacion, en SDL_xboxvideo.c. */
+extern DECLSPEC int   SDL_XBOX_CaptureGameTexture(void *dst, int w, int h);
+
 /*
  * Makes sure the given list of rectangles is updated on the given screen.
  * If 'x', 'y', 'w' and 'h' are all 0, SDL_UpdateRect will update the entire
@@ -441,6 +479,13 @@ extern DECLSPEC void SDL_XBOX_SetRotation(int rotation);
    con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
 extern DECLSPEC void SDL_XBOX_SetVSync(int enabled);
 
+/* Igual, pero SIN Reset: en Xbox 360 el intervalo es un render state
+   (D3DRS_PRESENTINTERVAL).  Es la unica via valida mientras un core libretro
+   tenga recursos D3DPOOL_DEFAULT en el device compartido -un Reset se los
+   invalida sin avisarle y la pantalla se queda negra-.  Barata: pensada para
+   llamarse cada frame. */
+extern DECLSPEC void SDL_XBOX_SetPresentInterval(int enabled);
+
 /* Specify the main xbox resolution. w<=0 || h<=0 => "Auto": usa la resolucion
    del dashboard via XGetVideoMode, capada a 1280x720. */
 extern void SDL_XBOX_SetScreenResolution(int w, int h);
@@ -448,6 +493,30 @@ extern void SDL_XBOX_SetScreenResolution(int w, int h);
 /* Devuelve las dimensiones reales del backbuffer resueltas por
    SDL_XBOX_SetScreenResolution (necesario cuando se pidio "Auto"). */
 extern void SDL_XBOX_GetScreenResolution(int *w, int *h);
+
+/* Tasa de refresco REAL del panel en Hz, 0 si no se conoce.  Es el reloj contra
+   el que de verdad se presenta, y no tiene por que coincidir con el fps que
+   declara el core: 59,94 (NTSC) o 50,00 (PAL) frente a, por ejemplo, los 60,13
+   del N64.  Esa diferencia es deriva permanente si el pacing no la conoce. */
+extern float SDL_XBOX_GetRefreshRate(void);
+
+/* Contadores del reloj de presentacion por HARDWARE, acumulados desde la
+   creacion del device: vblanks vistos y swaps que perdieron su vblank
+   (D3DVBLANK_SWAPMISSED).  Contar vblanks contra el reloj de CPU da la tasa de
+   refresco REAL -y con ella si SDL_XBOX_GetRefreshRate reporta el valor real o
+   el nominal-, y `missed` es verdad de terreno sobre si llegamos a tiempo, en
+   lugar de estimarlo con medias y umbrales. */
+extern DECLSPEC void SDL_XBOX_GetVBlankStats(unsigned int *count, unsigned int *missed);
+
+/* Espera BLOQUEANTE al siguiente vblank, con tope en ms.  Devuelve 0 si la
+   plataforma no sabe esperar, para que el llamante use su propio camino.  Es la
+   pieza que convierte la espera activa del limitador (0,5-0,9 ms/frame girando
+   en YieldProcessor, CPU robada al core en el mismo hilo) en tiempo devuelto a
+   la emulacion. */
+extern DECLSPEC int SDL_XBOX_WaitVBlank(unsigned int msMax);
+
+/* Avance del barrido en el frame actual, 0-100; -1 si no se sabe.  No bloquea. */
+extern DECLSPEC int SDL_XBOX_GetScanlinePercent(void);
 
 /*
  * Set the gamma correction for each of the color channels.

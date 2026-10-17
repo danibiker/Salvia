@@ -1,0 +1,701 @@
+AUDITORIA: DONDE glN64_GX (Wii64) SE APARTA DE GLideN64
+========================================================
+
+Wii64  : C:\develop\proyectos\personal\Wii64\glN64_GX  (rebasado a 1b5041a)
+Copia  : libretro/Xenon64/source/glN64_GX/
+Ref.   : C:\develop\proyectos\personal\GLideN64\src
+
+★★ ESTE FICHERO NO CAMBIA NADA.  Es un MAPA, no una lista de tareas.
+
+QUE ES Y PARA QUE SIRVE
+------------------------
+Buena parte de FrameBuffer.cpp, gDP.cpp, gSP.cpp y Textures.cpp de Wii64 es
+codigo PORTADO DE GLideN64, y lo porta SIMPLIFICANDOLO.  Cinco defectos
+resueltos el 2026-09-22 son exactamente eso (puntos I, K, L y M de
+DIVERGENCIAS.txt).  Cada uno costo entre cuatro y seis idas y venidas
+porque habia que descubrir la pieza portada, encontrar su original y
+compararlos.
+
+Esto es esa comparacion hecha de antemano.  Cuando aparezca un defecto en
+esta zona, la consulta es inmediata en vez de una caceria.
+
+★ LO QUE **NO** ES: una lista de cosas que aplicar.  Una diferencia aqui NO
+es un bug: puede ser deliberada, puede estar tapando otra cosa que Wii64
+tampoco porto, o puede no dispararse nunca en los juegos que probamos.
+Se aplica UNA cuando un defecto MEDIDO apunta a ella.  Aplicarlas en tanda
+seria justo el error que esta auditoria existe para evitar.
+
+METODO, y por que no es una suposicion
+---------------------------------------
+El indice no me lo he inventado: lo da el propio upstream.  Wii64 marca con
+comentarios cada pieza que trajo de GLideN64 ("// GLideN64's ...", "Ported
+from ...", "taken from ..."), y hay 28.  De ahi salen las entradas de abajo;
+para cada una se busca el original en la referencia y se comparan.
+
+    grep -rn "GLideN64" source/glN64_GX/
+
+LEYENDA
+    OK     comparado, equivalente.  No volver a mirarlo.
+    DIF    comparado, HAY diferencia.  Descrita abajo.
+    HECHO  diferencia ya corregida; ver DIVERGENCIAS.txt
+
+Estado a 2026-09-22: las 28 comparadas, 0 pendientes.
+
+
+================================ RESUMEN ================================
+
+ #  Pieza                                   Wii64                 Estado
+ -- --------------------------------------- --------------------- ------
+  1 _fbUpdateEndAddress                     FrameBuffer.cpp:72    OK
+  2 copyRdram / isValid                     FrameBuffer.cpp:85    DIF ★★★
+  3 _fbIsOverlapping                        FrameBuffer.cpp:247   DIF ★★
+  4 _fbFindSubBuffer                        FrameBuffer.cpp:293   DIF ★★
+  5 FrameBuffer_RemoveBuffersOfWidth        FrameBuffer.cpp:451   OK
+  6 FrameBuffer_GetBuffer                   FrameBuffer.cpp:989   OK
+  7 FrameBuffer_ActivateBufferTextureBG     FrameBuffer.cpp:1023  DIF
+  8 hack_fbTextureOffset                    FrameBuffer.cpp:1129  OK
+  9 FrameBuffer_ActivateBufferTexture       FrameBuffer.cpp:1041  HECHO (I)
+ 10 _gDPCheckForFrameBufferTexture          gDP.cpp:737           HECHO (I)
+ 11 DepthClearColor / setDepthClearColor    gDP.cpp:1095          OK
+ 12 gDPFillRectangle                        gDP.cpp:1109          HECHO (L)
+ 13 _gDPTextureRectangleBGCopy              gDP.cpp:1289          DIF
+ 14 _gDPArtifactDepthCopy                   gDP.cpp:1425          DIF (diseno)
+ 15 copyWhiteToRDRAM                        gDP.cpp:1595          OK
+ 16 loadInfo[tmem & mascara]                gDP.cpp x6            DIF ★★★
+ 17 _gSPDetailBaseTile                      gSP.cpp:1648          HECHO (K)
+ 18 needReplaceTex1ByTex0                   gSP.cpp:1667          DIF ★★
+ 19 Stripped background (S2DEX)             gSP.cpp:1825          OK
+ 20 _useOnePieceBgCode                      gSP.cpp:2409          DIF ★★
+ 21 clamp de escala cero                    gSP.cpp:2476, :2967   OK
+ 22 correctores de coordenadas              gSP.cpp:2637          OK
+ 23 bloques YUV (Ogre Battle)               gSP.cpp:2776          OK
+ 24 _legacyBlending                         OpenGL.cpp:955        DIF ★★
+ 25 depth clamp vs GL_DEPTH_CLAMP           OpenGL.cpp:1396       DIF ★★
+ 26 _getTexRectParams                       RDP.cpp:247           DIF ★★★
+ 27 hack de Winback                         RDP.cpp:298           DIF (en 26)
+ 28 _calcTileSizes                          Textures.cpp:2231     DIF ★★★
+ -- puerta de la cadena de mips             Textures.cpp:2525     HECHO (M)
+
+★ FUERA DEL INDICE, encontrado al comparar el 13: hay una pieza ENTERA de
+GLideN64 que Wii64 no porta, y se describe abajo -- `texturedRectSpecial`.
+
+Aparte, once ficheros de microcodigo (F3DAM, F3DBETA, F3DEX095,
+F3DEX2ACCLAIM, F3DFLX2, F3DGOLDEN, F3DSETA, F3DZEX2, F5Rogue, Turbo3D,
+ZSortBOSS) son ports de fichero ENTERO desde uCodes/ de GLideN64.  Son otra
+categoria: ahi la comparacion util es fichero contra fichero, no regla a
+regla, y solo merece la pena si falla el juego que usa ese microcodigo.
+
+
+============================== HALLAZGOS ==============================
+
+★★★ 2.  copyRdram / isValid  --  LA PIEZA QUE FALTA, Y ES DELIBERADA
+----------------------------------------------------------------------
+    Wii64      FrameBuffer.cpp:85 `FrameBuffer_CopyRdram`, :122 `IsValid`
+    GLideN64   src/FrameBuffer.cpp:216 `copyRdram()`, :255 `isValid()`
+
+GLideN64 tiene TRES formas de saber si el juego ha pisado un buffer:
+
+  a) AUXILIAR: estampa cuatro palabras (`fingerprint`) al principio y luego
+     mira si siguen ahi.
+  b) PRINCIPAL: `m_RdramCopy.resize(dataSize); memcpy(m_RdramCopy.data(),
+     RDRAM + m_startAddress, dataSize);`  -- una FOTO ENTERA de RDRAM, que
+     `isValid()` compara despues.
+  c) `m_cleared` + `setBufferClearParams(fillcolor, ulx,uly,lrx,lry)`:
+     apunta con que color y en que rect se limpio, e `isValid()` recorre
+     RDRAM contando pixeles que no casan (umbral 1%).
+
+Wii64 porta SOLO (a), y sale antes para todo lo que no sea auxiliar:
+
+    if (!_fbIsAuxiliary( buffer )) return;      // auxiliar = width != VI.width
+
+Y lo dice en su propia cabecera (FrameBuffer.h:56-59): *"Rather than
+snapshot the games pixels... which is what makes it immune to the game
+rewriting its own frame buffer"*.  O sea que es una decision consciente, y
+el efecto buscado es justo el contrario del que hace falta a veces.
+
+★ CONSECUENCIA MEDIDA: para un buffer PRINCIPAL no hay ninguna forma de
+detectar que la CPU lo ha reescrito.  `fingerprint` se queda en FALSE e
+`IsValid` devuelve TRUE siempre (`if (!buffer->fingerprint) return TRUE`).
+Es el agujero por el que se cae Killer Instinct Gold: doble buffer de
+640x480, ningun `gDPFillRectangle`, y la estela crece porque el EFB acumula
+lo de todos los frames anteriores mientras el juego SI limpia RDRAM por su
+cuenta.  Ver DIVERGENCIAS punto L y el log 46.
+
+Coste de portarlo: (b) es una copia de 614 KB por frame en 640x480 mas la
+comparacion; (c) es mas barato pero exige guardar los parametros del
+borrado, que Wii64 tampoco tiene (su `cleared` es del DepthBuffer, no del
+FrameBuffer).  No es un arreglo de una linea.
+
+
+★★ 3.  _fbIsOverlapping  --  una condicion de mas y un limite de menos
+------------------------------------------------------------------------
+    Wii64      FrameBuffer.cpp:247
+    GLideN64   src/FrameBuffer.cpp:710 `isOverlapping()`
+
+    GLideN64                              Wii64
+    endAddress <  b2->endAddress          igual
+    width == && size ==                   igual
+    (nada)                                + startAddress < b2->startAddress
+    diff % stride == 0                    igual
+    diff / stride < 5                     ★ NO ESTA
+
+Dos diferencias, y la segunda importa: la referencia solo considera
+"solapado" un desbordamiento de MENOS DE CINCO FILAS; Wii64 acepta
+cualquiera.  Quien lo usa es `FrameBuffer_RemoveIntersections`, y la rama
+cambia la vida del buffer: con "solapado" se RECORTA el `endAddress` del
+vecino; sin el, el vecino se BORRA.
+
+O sea que Wii64 conserva (recortados) buffers que la referencia tiraria.
+Buffers de mas en la lista es justo lo que puede hacer que
+`FrameBuffer_FindBuffer` devuelva el equivocado.
+
+
+★★ 4.  _fbFindSubBuffer  --  el predicado no es el mismo
+----------------------------------------------------------
+    Wii64      FrameBuffer.cpp:293
+    GLideN64   src/FrameBuffer.cpp:823 (lambda `isSubBuffer`)
+
+GLideN64 son DOS condiciones en OR, y la segunda mira el final:
+
+    if (diffFromStart % stride != 0)            return true;
+    if ((endAddress - _address + 1) / stride > 5) return true;
+
+Wii64 es UNA en AND, y las dos miran el principio:
+
+    if ((diff % stride) != 0 && (diff / stride) < 5) return current;
+
+Ademas Wii64 no exige `m_swapCount == getBuffersSwapCount()` (que el buffer
+sea de ESTE frame) ni `!m_cfb`.  Sin el primero puede devolver como
+sub-buffer uno de un frame anterior.
+
+
+★★★ 16.  loadInfo[tmem & 0x1FF]  --  la mascara ignora el TLUT
+----------------------------------------------------------------
+    Wii64      gDP.cpp:871, :906, :938, :962, :1307, :1436 y
+               Textures.cpp:2251  -- SIEMPRE `& 0x1FF`
+    GLideN64   src/Textures.cpp:868
+
+        const u32 tMemMask = gDP.otherMode.textureLUT == G_TT_NONE ? 0x1FF : 0xFF;
+        gDPLoadTileInfo &info = gDP.loadInfo[pTile->tmem & tMemMask];
+
+La referencia usa 0x1FF solo SIN paleta; con TLUT usa 0xFF, porque la mitad
+alta de la TMEM la ocupa la paleta y los indices se pliegan.  Wii64 usa
+0x1FF en los siete sitios, asi que para texturas CI la informacion de carga
+se guarda y se lee en ranuras distintas de las de la referencia.
+
+★ Es territorio de las SILUETAS NEGRAS DE PAPER MARIO, que son CI4 con dos
+paletas y cuya investigacion se quedo en "la diferencia con la referencia
+esta en un sitio que no se encontro"
+([[project_xenon64_papermario_siluetas]]).  NO significa que sea la causa:
+significa que es la primera piedra que hay que levantar si se retoma, y que
+ahora se sabe donde esta.
+
+
+★★ 18.  needReplaceTex1ByTex0  --  una opcion de usuario que aqui esta fija
+-----------------------------------------------------------------------------
+    Wii64      gSP.cpp:1667
+    GLideN64   src/Textures.cpp:2209
+
+    GLideN64   config.generalEmulation.enableInaccurateTextureCoordinates &&
+               level == 0 && textureLOD == G_TL_LOD && textureDetail == G_TD_CLAMP
+    Wii64      (sin la opcion)
+
+Y esa opcion vale **0 por defecto** (`src/Config.cpp:58`).  O sea que en la
+referencia este camino esta APAGADO salvo que el usuario lo encienda, y en
+Wii64 esta SIEMPRE encendido.  Afecta a que textura se ata a la unidad 1.
+
+
+★★★ 26/27.  _getTexRectParams  --  de tres modos de lectura solo hay uno
+--------------------------------------------------------------------------
+    Wii64      RDP.cpp:248
+    GLideN64   src/RDP.cpp:232
+
+Un TEXRECT lleva dos palabras mas (s/t y dsdx/dsdy) y **no siempre vienen en
+el mismo sitio**.  GLideN64 husmea los dos comandos siguientes y elige:
+
+    cmd1 = RDRAM[PC+0] >> 24 ;  cmd2 = RDRAM[PC+8] >> 24
+
+    gspTexRect   cmd1==G_RDPHALF_1 && cmd2==G_RDPHALF_2
+                 w2 = RDRAM[PC+4]; PC+=8;  w3 = RDRAM[PC+4]; PC+=8   (16 B)
+    halfTexRect  cmd1==0xB3 || cmd1==0xF1
+                 w2 = 0;           w3 = RDRAM[PC+4]; PC+=8           ( 8 B)
+    gdpTexRect   el resto (por defecto)
+                 w2 = RDRAM[PC+0]; w3 = RDRAM[PC+4]; PC+=8           ( 8 B)
+
+★ Wii64 hace **siempre el primero**.  No existen `halfTexRect` ni
+`gdpTexRect`.  Si una display list trae las dos palabras EN LINEA en vez de
+envueltas en G_RDPHALF_1/2, Wii64 lee las palabras equivocadas Y **deja el PC
+8 bytes por delante**, o sea que desde ahi interpreta mal el resto de la
+lista.  Es la unica diferencia de esta auditoria que puede desincronizar el
+parser, no solo dibujar mal.
+
+El caso F5Rogue / F5Indi_Naboo si esta portado (Wii64 RDP.cpp:257), pero en
+la referencia vive DENTRO de `gdpTexRect` y aqui esta delante de todo.
+
+**Winback** (#27): en la referencia es `gdpTexRect` + `hack_WinBack` ->
+`PC += 8; return false`, o sea consume 8 bytes y salta el texrect.  En Wii64
+el hack esta DESPUES de `_getTexRectParams` (RDP.cpp:299), que ya ha
+consumido 16, y ademas su arbol de decision no es el mismo (`cmd1==0xB3`
+mira `cmd2==0xB2`, cosa que la referencia no hace).  Inerte hoy:
+`GLN64_GAMEHACKS` esta a 0 y `GetGameSpecificHack()` devuelve NULL.
+
+Detalle menor del mismo sitio: GLideN64 descarta el rect con
+`if (lrx < ulx || lry < uly) return;` (RDP.cpp:305) y Wii64 no lo hace.
+
+
+★★★ 28.  _calcTileSizes  --  hibrido: la mitad es la referencia y la mitad
+          es el glN64 viejo que la referencia BORRO
+------------------------------------------------------------------------------
+    Wii64      Textures.cpp:2231  (dentro de `TextureCache_Update`)
+    GLideN64   src/Textures.cpp:859
+
+Es la comparacion mas larga y la unica donde la ESTRUCTURA no coincide.
+
+    GLideN64                          Wii64
+    if (info.loadType==LOADTYPE_TILE) if (useLoadedInfo)               [A]
+    else                              else if (textureMode==TEXRECT)   [B]
+                                      else                             [C]
+
+  [A] La rama de "usa lo que dijo la carga".  GLideN64 la toma **siempre que
+      la carga fuera LOADTYPE_TILE**; Wii64 le anade `&& textureMode ==
+      TEXTUREMODE_TEXRECT` (`useLoadedInfo`, Textures.cpp:2252).  Para un
+      TRIANGULO con carga por tile, la referencia usa la info de carga y
+      nosotros nos vamos a [C].  Es la diferencia estructural.
+
+  [B] **No existe en la referencia.**  Es la cadena larga de `else if` con
+      `texRectWidth`/`texRectHeight` del glN64 original; GLideN64 la borro
+      cuando escribio `_calcTileSizes`.
+
+  [C] Equivale al `else` de la referencia, con dos matices:
+        - la referencia calcula `tile_width = lrs - uls + 1` en `int` SIN
+          enmascarar, y Wii64 usa el `tileWidth` ya pasado por `& 0x3FF`;
+        - la referencia decide con `mask_width` (que YA vale `tile_width`
+          cuando `masks==0`), y Wii64 exige `masks != 0` y luego cae a dos
+          escalones mas (`loadWidth`, `lineWidth`) que la referencia no tiene.
+
+  Ademas, dentro de [A]:
+        - referencia `width = min(info.width, info.texWidth)` y si sale 0 ->
+          `tileWidth`;  Wii64 `(texWidth!=0) ? min(...) : info.width`.  Con
+          `texWidth==0` e `info.width!=0` dan cosas distintas.
+        - `hack_MK64` (altura impar -> `height--`) no esta portado.
+
+  Y falta la red de seguridad del principio (GLideN64 Textures.cpp:885-894):
+  con `tileWidth==1 && tileHeight==1 && cycleType==G_CYC_COPY` la referencia
+  RECUPERA el tamano de las coordenadas del propio texrect (`RDP.w0/w1`).
+  Sin eso queda una textura de 1x1.
+
+  `info.bytes` (referencia :875-879, con el `*2` de las texturas de 32 bits)
+  no existe en Wii64: su `gDPLoadTileInfo` no tiene ese campo.
+
+  Anadido de Wii64 sin contrapartida: `if (clampWidth > 256) clamps = 0;`
+  (:2368) y todo el `mirrorFix` / `TextureCache_UseMirrorFixes()`.
+
+★ Y aqui esta el hallazgo 16 (`& 0x1FF` en vez de `tMemMask`), que es una
+linea de esta misma funcion.  Si algun dia se toca esto, las dos van juntas.
+
+
+★★ 24.  _legacyBlending  --  en la referencia es el modo RAPIDO Y MALO
+-------------------------------------------------------------------------
+    Wii64      OpenGL.cpp:955-1128  (rama `#else // !__GX__`... o sea __GX__)
+    GLideN64   src/GraphicsDrawer.cpp:253
+
+La tabla de ~40 `case` es la misma, caso por caso.  Lo que NO es lo mismo es
+CUANDO se usa.  En la referencia (GraphicsDrawer.cpp:603):
+
+    if (_forceLegacyBlending || config.generalEmulation.enableLegacyBlending != 0)
+        _legacyBlending();
+    else
+        ... el blender emulado en el shader ...
+
+y la opcion vale **0 por defecto** (`src/Config.cpp:56`).  Su propia
+descripcion (`Config_mupenplus.cpp:168`): *"Do not use shaders to emulate N64
+blending modes. Works faster on slow GPU. **Can cause glitches**."*
+
+★ En Wii64 es el UNICO camino de mezcla: no hay blender en el shader.  O sea
+que los defectos de mezcla que aparezcan en nuestro port son **esperables** y
+la respuesta de la referencia es una via que no tenemos.  Esto no se
+"arregla" con un parche: es la diferencia de diseno entre los dos plugins, y
+vale mas tenerla escrita que volver a descubrirla en cada caso.
+
+Dos anadidos de Wii64 dentro de la tabla, que la referencia NO tiene:
+
+    case 0x0550:   // "bomberman 64 title screen dim layer"
+        ONE / ONE                     <- referencia: SRCALPHA / INVSRCALPHA
+                                         (agrupado con 0xF550, 0x0150, 0x0D18)
+
+    if (cycleType == G_CYC_FILL)      <- no existe en _legacyBlending()
+        BLEND, SRCALPHA, INVSRCALPHA     (OpenGL.cpp:1121-1126)
+
+Comprobado y SIN diferencia: Wii64 llama `clearOnCvg` a lo que la referencia
+llama `colorOnCvg`, pero es **el mismo bit** (quinto del bloque, gDP.h:175
+contra gDP.h:154) y la rama que cuelga de el es identica.
+
+
+★★★ EXTRA.  texturedRectSpecial: de cinco manejadores hay UNO
+--------------------------------------------------------------
+    GLideN64   src/GraphicsDrawer.cpp:1974 `_setSpecialTexrect()`
+
+La referencia tiene un puntero `texturedRectSpecial` que elige POR NOMBRE DE
+JUEGO un tratamiento distinto del texrect, y lo llama ANTES de dibujar
+(GraphicsDrawer.cpp:1354); si devuelve true, el dibujo no se hace:
+
+    juego                          manejador                     en Wii64
+    ------------------------------ ----------------------------- ---------
+    BEETLE / HSV / DUCK DODGERS /
+    DAFFY DUCK                     texturedRectShadowMap         NO EXISTE
+    PERFECT DARK / TUROK           texturedRectDepthBufferCopy   ver 14
+    CONKER BFD                     texturedRectCopyToItself      NO EXISTE
+    YOSHI STORY                    texturedRectBGCopy            ver 13
+    PAPER MARIO / MARIO STORY      texturedRectPaletteMod        NO EXISTE
+
+Comprobado con grep en todo `source/glN64_GX/`: cero apariciones de
+`PaletteMod`, `ShadowMap` y `CopyToItself`.
+
+★★ `texturedRectPaletteMod` (GraphicsDrawer.cpp:1289) es PARA PAPER MARIO y
+hace dos cosas que nada mas hace:
+
+    // Modify palette for Paper Mario "2D lighting" effect
+    if (gDP.scissor.lrx != 16 || gDP.scissor.lry != 1 ||
+        _params.lrx  != 16 || _params.lry  != 1) return false;
+    ... env16 y prim16 desde gDP.envColor / gDP.primColor ...
+    u16 * src = (u16*)&TMEM[256];
+    u16 * dst = (u16*)(RDRAM + gDP.colorImage.address);
+    for (u32 i = 0; i < 16; ++i)
+        dst[i ^ 1] = (src[i << 2] & 0x100) ? prim16 : env16;
+
+o sea **fabrica una paleta de 16 entradas en RDRAM** eligiendo entre el color
+primitivo y el de entorno.  Y antes de eso, con `textureImage.address==0x400`:
+
+    // Paper Mario uses complex set of actions to prepare darkness texture.
+    // ... All that stuff is hardly possible to reproduce with GL, so I just
+    // use dirty hacks to emualte it.
+    memcpy(RDRAM + 0x400, RDRAM + 0x14d500, 4096);
+
+★ Esto cae EXACTAMENTE encima de las siluetas negras de Paper Mario
+([[project_xenon64_papermario_siluetas]]), que son CI4 con dos paletas y una
+de las dos decodifica mal.  **No es una conclusion: es una pista.**  No esta
+medido que nuestro Paper Mario pase por ahi.  La medida que lo decide es una
+sonda de dos lineas: contar texrects con `scissor.lrx==16 && scissor.lry==1`
+y cargas con `textureImage.address == 0x400`.  Si salen a cero, esta via
+queda descartada y no se ha tocado nada.
+
+
+★★ 20.  _useOnePieceBgCode  --  dos funciones para un solo booleano
+---------------------------------------------------------------------
+    Wii64      gSP.cpp:2409 `_useOnePieceBgCode` y gSP.cpp:2380
+               `_bgSourceIsFrameBuffer`
+    GLideN64   src/uCodes/S2DEX.cpp:888
+
+En la referencia es UNA funcion que calcula un booleano `fbImage` y lo usa
+para dos cosas: decidir el camino (valor de retorno) y decirle al camino
+elegido si la imagen es un framebuffer (parametro de salida).
+
+    fbImage = buffer != NULL && buffer->size == imageSiz
+              && (!isDepthBuffer || changed)
+              && (imageFmt != G_IM_FMT_CI || imageSiz != G_IM_SIZ_8b);
+    if (fbImage && (m_cfb || !isValid(false))) { removeBuffer(...); fbImage = false; }
+
+    if (bgMode == bgOnePiece)      return true;
+    if (hacks & hack_RE2)          return true;
+    return fbImage;
+
+Wii64 lo parte en DOS funciones que calculan cosas distintas:
+
+    _bgSourceIsFrameBuffer()  port fiel del `fbImage` (le falta `m_cfb` y no
+                              BORRA el buffer invalido, solo lo rechaza).
+                              Se usa en gSP.cpp:2444 y :2570 para atar la
+                              textura.
+    _useOnePieceBgCode()      SOLO `frameBufferTextures && buffer != NULL &&
+                              buffer->size == imageSiz`.  Pierde los tres
+                              filtros (profundidad, CI de 8 bits, validez).
+                              Es la que DECIDE el camino.
+
+★ Consecuencia: Wii64 puede irse por el camino de una pieza y luego NO atar
+el framebuffer -- una combinacion que la referencia no puede producir, porque
+para ella es el MISMO booleano.
+
+Y ojo al valor por defecto, que va al reves de lo que parece:
+`graphics2D.bgMode = BGMode::bgStripped` (`src/Config.cpp:71`).  O sea que
+por defecto la referencia se va al camino TROCEADO salvo que haya
+framebuffer, igual que nosotros.  `hack_RE2` no esta portado.
+
+
+★★ 25.  El clamp de z NO es GL_DEPTH_CLAMP
+---------------------------------------------
+    Wii64      OpenGL.cpp:1396, dentro del bucle de vertices de
+               `OGL_DrawTriangles`
+
+    // Clamp rather than let GX clip, GLideN64 does GL_DEPTH_CLAMP.
+    f32 zClamp = OGL.vertices[i].z * invW;
+    if (zClamp < -1.0f) zClamp = -1.0f; else if (zClamp > 1.0f) zClamp = 1.0f;
+
+★ No son lo mismo, y la diferencia es geometrica: `GL_DEPTH_CLAMP` es estado
+del rasterizador -- la geometria NO se recorta contra los planos y **cada
+fragmento** se satura al final.  Recortar la z DE UN VERTICE mueve ese
+vertice, o sea **inclina el plano del triangulo**: los otros dos vertices
+siguen donde estaban y toda la interpolacion de z entre ellos cambia.  Un
+triangulo grande que asome por el plano lejano sale con la profundidad mal en
+TODA su superficie, no solo en el trozo que asomaba.
+
+Roza el `GXprojZGuard` del punto J (que ya dio dos defectos: la niebla de
+GoldenEye y la de Zelda) y [[project_xenon64_planos_recorte_z]].  Antes de
+tocar nada aqui hay que releer los dos.
+
+
+ 7.  FrameBuffer_ActivateBufferTextureBG  --  usa la escala GLOBAL
+--------------------------------------------------------------------
+    Wii64      FrameBuffer.cpp:1023
+    GLideN64   src/FrameBuffer.cpp:509 `getTextureBG()`
+
+    GLideN64   scaleS = m_scale        / pTexture->width
+    Wii64      scaleS = OGL.GXscaleX   / realWidth
+
+`offsetS/offsetT` desde `gSP.bgImage.imageX/Y` y los `shiftScale` a 1: igual
+en los dos.  Lo que cambia es de donde sale la escala: la referencia usa la
+**del buffer** y Wii64 la **global**.
+
+★ Y es incoherente con su propia hermana: `FrameBuffer_ActivateBufferTexture`
+(la de al lado) SI usa `buffer->scaleX/scaleY` -- ese cambio entro con el
+rebase de hoy y esta version no se toco.  Si los dos valores coinciden
+siempre, da igual; si algun dia no, este es el sitio.
+
+Falta ademas la barrera de la referencia para cuando el buffer que se lee ES
+el que se esta pintando (`this == getCurrent()` -> `textureBarrier()` o
+`_copyFrameBufferTexture()`).
+
+
+13.  _gDPTextureRectangleBGCopy  --  tres guardas de mas, y uno de menos
+--------------------------------------------------------------------------
+    Wii64      gDP.cpp:1289
+    GLideN64   src/GraphicsDrawer.cpp:1261 `texturedRectBGCopy`
+
+    GLideN64                        Wii64
+    colorImage.size > 8b -> no      colorImage.size != 8b -> no   ★ rechaza 4b
+    (nada)                          !OGL.frameBufferTextures -> no
+    (nada)                          cycleType == G_CYC_COPY  -> no
+    (nada)                          dsdx != 1 || dtdy != 1   -> no
+    (nada)                          texAddr == 0             -> no
+    sin recorte                     recorta X a [0, ciWidth] y comprueba
+                                    RDRAMSize por adelantado
+    removeBuffer(ci.address)        FrameBuffer_InvalidateBuffer(ci.address)
+
+El recorte y las comprobaciones de RDRAM son defensa razonable en consola.
+Los tres `-> no` del medio son la clase [[feedback_no_anadir_lo_que_la_
+referencia_no_tiene]]: la referencia no los lleva.
+
+Comprobado y SIN diferencia, aunque lo parezca: la referencia divide `s` y
+`t` entre 32 (`_params.s/32`) y Wii64 no.  Es correcto -- su `RDP_TexRect`
+pasa `_FIXED2FLOAT(s, 5)`, que ya es la misma division.
+
+Disparo: los dos lo reservan para Yoshi's Story.  Aqui esta INERTE, porque
+va por `GetGameSpecificHack() == &hack_yoshistory` y `GLN64_GAMEHACKS` es 0.
+
+
+14.  _gDPArtifactDepthCopy  --  no es un port, es otra cosa
+--------------------------------------------------------------
+    Wii64      gDP.cpp:1425 (+ `_gDPPeekDepth`, `_gDPResolveArtifactDepths`)
+    GLideN64   src/GraphicsDrawer.cpp:1212 `texturedRectDepthBufferCopy`
+
+La referencia NO lee la GPU: el juego ya ha cargado la fila de profundidad en
+la TMEM con un LoadBlock, y ella la copia de TMEM a la color image con
+`swapword`.  Wii64 hace lo contrario -- muestrea el z-buffer con `GX_PeekZ` y
+RECODIFICA al formato de profundidad del N64.
+
+★ Y nuestro `GX_PeekZ` es un **stub que devuelve el plano lejano**
+(gx_d3d9.cpp:2988; divergencia D de DIVERGENCIAS.txt), asi que en Perfect
+Dark y Turok este camino escribe "lejos" en todas las muestras.  Si algun dia
+molesta, la alternativa barata NO es implementar `GX_PeekZ`: es portar la
+version de la referencia, que solo toca TMEM y RDRAM y no necesita GPU.
+
+
+=============================== COMPROBADAS Y OK ===============================
+
+ 1. `_fbUpdateEndAddress` (FrameBuffer.cpp:72) contra `updateEndAddress()`
+    (src/FrameBuffer.cpp:190).  GLideN64 acota con `min(RDRAMSize, ...)` y
+    Wii64 con `(end < RDRAMSize) ? end : RDRAMSize - 1`.  Parece un off-by-one
+    y NO lo es: en GLideN64 `RDRAMSize` es una MASCARA (`& RDRAMSize` en
+    RSP.h:25) y aqui es el TAMANO (ver [[reference_gln64_rdramsize_mascara]]).
+    Los dos acotan al ultimo byte valido.  Equivalente.
+
+ 5. `FrameBuffer_RemoveBuffersOfWidth` (FrameBuffer.cpp:451) contra
+    `removeBuffers()` (src/FrameBuffer.cpp:968).  La referencia pone
+    `m_pCurrent = nullptr` y Wii64 no toca `frameBuffer.current`.  Parecia un
+    puntero colgando y NO lo es: `frameBuffer.current` se asigna UNA vez en
+    `FrameBuffer_Init` y no lo lee nadie (grep: 1 sola aparicion).  Es un
+    campo muerto.  Equivalente.
+
+11. `DepthClearColor` / `gDPSetDepthClearColor` (gDP.cpp:1095) contra
+    `setDepthClearColor()` (src/RSP.cpp:241-253).  Lista de juegos y valores
+    IDENTICOS, incluido el 0xFFFCFFFC por defecto.  Comprobado al diagnosticar
+    Killer Instinct, que no esta en ninguna de las dos listas.
+
+ 6. `FrameBuffer_GetBuffer` (FrameBuffer.cpp:989) contra `getBuffer()`
+    (src/FrameBuffer.cpp:700).  Los dos: recorren la lista y devuelven el
+    primero con `startAddress` EXACTO.  Equivalente.
+    ★ Su vecina `FrameBuffer_FindBuffer` (:1003) si difiere de `findBuffer()`
+    (src/FrameBuffer.cpp:691) en el desempate: la referencia devuelve el
+    PRIMERO que contiene la direccion (y su lista es `emplace_front`, o sea
+    el mas reciente) y Wii64 recorre entera y se queda con el de
+    `startAddress` MAS ALTO.  No esta en el indice de piezas portadas, pero
+    es vecina de los hallazgos 3 y 4 y conviene tenerlo escrito.
+
+ 8. `hack_fbTextureOffset` (FrameBuffer.cpp:1129) contra las dos fabricas de
+    uniformes de la referencia (glsl_CombinerProgramUniformFactoryFast.cpp:56
+    y ...Accurate.cpp:60).  Mismo efecto: -1.0 en S y T cuando el filtro no
+    es POINT y la textura es de framebuffer.  La referencia lo aplica en
+    `texCoordOffset` por dibujo y Wii64 sobre `texture->offsetS/T` al
+    activar, pero el bloque de arriba reasigna los dos SIEMPRE, asi que no se
+    acumula.  Y solo se llega ahi con texturas de framebuffer, que es la
+    tercera condicion de la referencia.  Equivalente.
+    El bit lo enciende `_RSP_SetGameHacks` para CONKER BFD y MarioTennis,
+    igual que `src/RSP.cpp:308` y `:356`.
+
+15. `_gDPCopyWhiteToRDRAM` (gDP.cpp:1595) contra `copyWhiteToRDRAM()`
+    (src/BufferCopy/ColorBufferToRDRAM.cpp:267).  Un `memset` de 0xFF sobre
+    `VI.width*VI.height*2` bytes es identico a escribir 0xFFFF por pixel con
+    el `^1`, sea cual sea el orden de bytes.  `FrameBuffer_RestampMarkers`
+    hace el papel de `copyRdram()`.  El disparador tambien casa:
+    `gDP.m_subscreen = (gDP.otherMode._u64 == 0x00000cf00f0a0004)` con el
+    mismo guarda `hack_subscreen && G_IM_FMT_I && G_IM_SIZ_8b`
+    (gDP.cpp:517 contra src/FrameBuffer.cpp:922).  Equivalente.
+    Unica diferencia: la referencia dispara desde la copia del color buffer
+    a RDRAM y Wii64 desde `gDPFullSync`.
+
+19. `BgRect1CycStripped` (gSP.cpp:1825) contra src/uCodes/S2DEX.cpp:979.
+    362 lineas contra 348; comparadas con un diff normalizado.  Todo lo que
+    sale son casts de C++ a C, llaves, `std::max`, y la lambda `setTexture()`
+    puesta en linea (4 usos + 1 par, cuentan igual).  Las escrituras a DMEM
+    (0x548..0x57C), las formulas y el orden de los comandos son IDENTICOS.
+    ★★ CON UNA EXCEPCION QUE NO HAY QUE "ARREGLAR": la referencia hace
+    `aFormat16[objBg.imageFmt ^ 1]` y Wii64 `aFormat16[objBg.imageFmt]`.  El
+    `^1` es el ajuste de mitad de palabra de un host LITTLE-endian leyendo un
+    `u32[]` como `u16*`; en big-endian (Wii y Xbox 360) sobra.  Quitarlo es
+    la adaptacion CORRECTA -- restaurarlo romperia el fondo.
+    No portado: `config.graphics2D.enableNativeResTexrects` y el
+    `setBackgroundDrawingMode()` que lo acompana.
+    Y confirma el diseno del hallazgo 26: donde la referencia pone
+    `RDP.w2/w3` y un `ValueKeeper<bool>(RSP.LLE, true)`, Wii64 pone
+    `RDP_SetTexRectParams()` + `RDP_texRectParamsArmed`.  Misma idea.
+
+21. Clamps de escala cero (gSP.cpp:2476-2477 y :2967-2968) contra
+    src/uCodes/S2DEX.cpp:397-398.  `max(scaleW, (u16)1)` antes de convertir,
+    en los dos caminos (fondo y sprite), y citando el commit.  Equivalente.
+    (El tercer clamp de la referencia, :400-401, es de su camino con matriz,
+    que usa otro arbol de formulas que Wii64 no tiene.)
+
+22. `S2DEXCoordCorrector` (gSP.cpp:2637) contra src/uCodes/S2DEX.cpp:284.
+    Las CUATRO tablas de constantes coinciden valor a valor (A01 de 8, A23 de
+    4, B03_v1_3 de 32, B03 de 4) y las formulas de O1/O2/O3 tambien.  La
+    unica diferencia es el mismo `^1` del 19, y aqui el comentario de Wii64
+    ya lo dice ("big endian adapted").  Equivalente.
+
+23. `_YUVtoRGBA` / `_drawYUVImageToFrameBuffer` (gSP.cpp:2776, :2796) contra
+    src/uCodes/S2DEX.cpp:552, :575.  Coeficientes, el `*0.125`, el recorte a
+    [0,31] y el empaquetado a RGBA5551: identicos.  Wii64 anade
+    comprobaciones de `RDRAMSize`.
+    ★ Y en el recorte del bloque de 16x16 Wii64 es MAS correcto: la
+    referencia hace `*(dst++)` dentro del `if (h<height && w<width)`, o sea
+    que cuando recorta NO avanza el puntero y descuadra la fila; Wii64
+    indexa con `dst[w]`.  No portado: `pBuffer->m_isOBScreen = true` (ese
+    campo no existe en Wii64).
+
+★ Comprobada tambien la lista de `_RSP_SetGameHacks` (RSP.cpp:464) contra
+  `src/RSP.cpp:298-362`, por [[feedback_portar_la_lista_entera]].  La
+  referencia tiene 28 ramas y Wii64 nueve, pero eso NO es un agujero: de los
+  28 hacks de la referencia, Wii64 solo LEE siete (`fbTextureOffset`,
+  `fbCopyToRDRAM`, `subscreen`, `clearAloneDepthBuffer`,
+  `rectDepthBufferCopyPD`, `doNotResetOtherModeH` y `L`), y **para esos siete
+  la lista de juegos esta completa**.  Dos apuntes:
+    - Wii64 ANADE `TUROK_DINOSAUR_HUNTE -> hack_rectDepthBufferCopyPD`, que
+      la referencia no tiene, y con su propio comentario "TODO check if this
+      works here".
+    - Conker en la referencia lleva ademas `hack_blurPauseScreen` y
+      `hack_rectDepthBufferCopyCBFD`, y Zelda `hack_ZeldaMonochrome`: ninguno
+      de los tres esta implementado aqui.  Ver
+      [[reference_gliden64_conker_framebuffer]].
+
+
+================================ COMO SEGUIR ================================
+
+**LAS 28 ESTAN COMPARADAS.  No queda ningun PEND.**  Recuento final:
+
+    10 iguales    4 ya arregladas    14 con diferencia    0 sin mirar
+
+de las 14, cuatro son ★★★ (2, 16, 26, 28), seis ★★ (3, 4, 18, 20, 24, 25) y
+cuatro menores (7, 13, 14, 27).  Mas un hallazgo FUERA del indice, que es el
+mayor de todos: `texturedRectSpecial`.
+
+Lo unico que queda sin comparar del arbol son los once ficheros de
+microcodigo copiados enteros (F3DAM, F3DBETA, F3DEX095, F3DEX2ACCLAIM,
+F3DFLX2, F3DGOLDEN, F3DSETA, F3DZEX2, F5Rogue, Turbo3D, ZSortBOSS).  Esos son
+otra categoria: comparacion fichero contra fichero, y solo cuando falle el
+juego que usa ese microcodigo.
+
+DONDE MIRAR SEGUN EL SINTOMA
+-----------------------------
+    siluetas / paletas de Paper Mario   EXTRA (texturedRectPaletteMod),
+                                        luego 16 y 28 (misma funcion)
+    estelas, buffer que no se limpia    2 (copyRdram/isValid)
+    se dibuja del buffer equivocado     3, 4, 6
+    tamano de textura, tiles            28 y 16, juntos
+    mezcla / transparencias             24 ANTES que nada: puede que la
+                                        respuesta sea "la referencia no usa
+                                        este camino" y no haya parche
+    profundidad, z-fighting, niebla     25 junto con el punto J
+    fondos S2DEX (Yoshi, Pokemon)       20, 13, 7
+    la lista se desincroniza            26 (es la unica que puede)
+
+★ Y LA REGLA, que es lo que esta auditoria tiene que dejar puesto: una
+entrada DIF no se toca hasta que un defecto medido apunte a ella.  Si se
+toca, se toca ESTRECHANDO, no eliminando -- quitar entero el guarda del
+punto I arreglo los menus de Pokemon Stadium y rompio el texto del HUD.
+
+★★ Y AL REVES TAMBIEN: tres de las diez "iguales" lo son porque Wii64 se
+aparta de la referencia CON RAZON -- el `^1` de big-endian (19 y 22) y el
+`/32` que ya viene hecho del llamante (13).  Antes de "restaurar la
+referencia" en cualquier sitio, comprobar que no es uno de estos.
+
+
+★★★ EL PUNTO CIEGO DE ESTE MAPA  (leer antes de confiar en el)
+----------------------------------------------------------------
+El indice sale de los comentarios "GLideN64" de Wii64, o sea que este fichero
+cubre **lo que Wii64 PORTO**.  Por construccion NO puede ver la otra clase de
+agujero: **lo que glN64 nunca termino**.  Eso no lleva comentario, no tiene
+indice, y no se encuentra con ningun grep -- solo aparece cuando un defecto
+concreto lleva hasta la funcion.
+
+Caso real, el mismo dia: la sombra de Pilotwings 64.  `gSPModifyVertex`
+(gSP.cpp:1548) tiene cuatro subcomandos y glN64 implementa DOS; los dos que
+colocan un vertice directamente en pantalla (`G_MWO_POINT_XYSCREEN` y
+`G_MWO_POINT_ZSCREEN`) son `case` VACIOS, marcados `DEBUG_UNHANDLED` por el
+propio upstream.  GLideN64 los implementa (src/gSP.cpp:2039-2070) y no
+necesita nada especifico de Pilotwings para que el juego funcione: en TODO
+GLideN64 la unica mencion al juego es un comentario de CRC de microcodigo
+(GBI.cpp:73).  Ver el punto N de DIVERGENCIAS.txt.
+
+★ LA REGLA QUE DEJA ESTO: si un defecto no casa con ninguna de las 28
+entradas, **la siguiente pregunta no es "cual me he saltado" sino "esta la
+funcion siquiera implementada"**.
+
+Lo que NO sirve para contestarla, comprobado en vez de supuesto: el propio
+`DEBUG_UNHANDLED` de glN64.  Primero recomende ese grep aqui y luego lo
+corri: da CUATRO sitios en todo el arbol y la etiqueta miente en tres.
+
+    gSP.cpp:1656  G_MWO_POINT_ZSCREEN   hueco DE VERDAD (el de arriba)
+    gSP.cpp:1721  gSPPerspNormalize     vacia, pero en la REFERENCIA tambien
+                                        lo esta (src/gSP.cpp:2114, y alli la
+                                        etiqueta es DEBUG_IGNORED, que es la
+                                        correcta).  No es un hueco.
+    gSP.cpp:1885  gSPLine3D             SI llama a OGL_DrawLine: etiqueta rancia
+    gSP.cpp:1893  gSPLineW3D            idem
+
+O sea que el censo queda CERRADO -- no hay mas huecos marcados -- pero por
+haber solo cuatro, no porque la etiqueta sea de fiar.  La senal buena es el
+**cuerpo vacio** (un `case` o una funcion que solo tiene el DebugMsg), no la
+etiqueta; y para un subcomando concreto, lo definitivo es abrir la funcion
+equivalente en GLideN64 y contar las ramas.
+
+★ Y LA REGLA, que es lo que esta auditoria tiene que dejar puesto: una
+entrada DIF no se toca hasta que un defecto medido apunte a ella.  Si se
+toca, se toca ESTRECHANDO, no eliminando -- quitar entero el guarda del
+punto I arreglo los menus de Pokemon Stadium y rompio el texto del HUD.
