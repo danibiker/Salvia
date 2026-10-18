@@ -61,7 +61,7 @@ void Logger::write(int level, const char* fmt, ...) {
 		// Usamos sizeof(finalBuffer) - 2 para dejar sitio al \n y al \0
 		int res = _snprintf(finalBuffer, sizeof(finalBuffer) - 1, "%s", messageBuffer);
 
-		// Si hubo truncado o error, aseguramos el cierre y el salto de l�nea al final
+		// Si hubo truncado o error, aseguramos el cierre y el salto de linea al final
 		if (res < 0 || res >= (int)sizeof(finalBuffer) - 1) {
 			finalBuffer[sizeof(finalBuffer) - 1] = '\0';
 		}
@@ -70,9 +70,32 @@ void Logger::write(int level, const char* fmt, ...) {
 		strcat(levelStr, ERRLEVELSTXT[level]);
 		strcat(levelStr, "] ");
 
+#ifdef _XBOX
+		/* En la Xbox 360 OutputDebugStringA acaba en la salida de depuracion del kernel,
+		 * que VUELVE a interpretar el texto como formato de printf.  Un '%' que venga en
+		 * los datos (una URL con "%20System" lleva un "%20S": cadena ancha) lee un
+		 * argumento que no existe: excepcion en el kernel y reinicio de la consola
+		 * (descarga de cheats de Master System, excepcion en 0x8010DF28).  Se duplica
+		 * cada '%' para que salga tal cual.  Va aqui y no en cada llamada porque
+		 * cualquier LOG_* con una URL, un nombre de ROM o texto de la red puede traerlo. */
+		char safeBuffer[MAX_MSG_BUFFER_LEN * 2];
+		{
+			int j = 0;
+			for (int i = 0; finalBuffer[i] != '\0' && j < (int)sizeof(safeBuffer) - 2; i++){
+				if (finalBuffer[i] == '%')
+					safeBuffer[j++] = '%';
+				safeBuffer[j++] = finalBuffer[i];
+			}
+			safeBuffer[j] = '\0';
+		}
+		const char* salida = safeBuffer;
+#else
+		const char* salida = finalBuffer;
+#endif
+
 		OutputDebugStringA(timestamp);
 		OutputDebugStringA(levelStr);
-		OutputDebugStringA(finalBuffer);
+		OutputDebugStringA(salida);
 
 		char* ptr = strchr(finalBuffer, '\n');
 		if (ptr == nullptr) {

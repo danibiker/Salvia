@@ -19,7 +19,7 @@ static char          g_cheatResult[520] = {0}; // ruta del .cht descargado (o va
 static char          g_cheatSourceName[260] = {0}; // nombre REAL del .cht en GitHub (basename)
 
 // Guarda el nombre real (basename) del .cht elegido en GitHub, para mostrarlo en el menu de
-// cheats (el contenido se guarda localmente como romPaths.cht, con el nombre de la ROM).
+// cheats (el contenido se guarda localmente con nombre de hash: ver cheatHashedPath).
 static void setCheatSourceName(const std::string& n){
 	strncpy(g_cheatSourceName, n.c_str(), sizeof(g_cheatSourceName) - 1);
 	g_cheatSourceName[sizeof(g_cheatSourceName) - 1] = '\0';
@@ -47,15 +47,113 @@ static std::string getRdbSystemName(){
 	return RDB_SYSTEM_NAMES[cart];
 }
 
-// Resuelve la ruta del .cht: primero por CRC via .rdb (nombre canonico No-Intro) si
-// existe ese fichero; si no se puede, cae al .cht por nombre de ROM (fallbackByName).
+// --- Nombres de fichero cortos y univocos -------------------------------------------
+// El disco de la Xbox 360 (FATX) solo admite nombres de hasta 42 caracteres y un juego de
+// caracteres limitado, y los nombres No-Intro de las ROM y de los sistemas de
+// libretro-database se pasan con facilidad ("Nintendo - Super Nintendo Entertainment
+// System.rdb" son 50). Ademas, un core multisistema (Genesis Plus GX: Mega Drive, Master
+// System, Game Gear, SG-1000, Mega-CD) comparte UNA carpeta de cheats, y dos ROM con el
+// mismo nombre de sistemas distintos se pisaban el .cht. Por eso lo que se DESCARGA se
+// guarda con nombres de hash hexadecimal: siempre validos en FATX y univocos por sistema.
+
+static std::string hex8(uint32_t v){
+	char b[9];
+	sprintf(b, "%08X", (unsigned int)v);
+	return std::string(b);
+}
+
+static uint32_t crcStr(const std::string& s){
+	uLong c = crc32(0L, Z_NULL, 0);
+	c = crc32(c, (const Bytef*)s.data(), (uInt)s.size());
+	return (uint32_t)c;
+}
+
+// data/cheats/<sub> bajo el directorio de la aplicacion.
+static std::string cheatsDataDir(const char* sub){
+	return Constant::getAppDir() + Constant::getFileSep() + "data" + Constant::getFileSep() +
+		"cheats" + Constant::getFileSep() + sub;
+}
+
+// Caches por sistema (.rdb de libretro-database e indice de .cht de la API de GitHub):
+// <crc32 del nombre del sistema>.rdb / .idx.
+static std::string rdbLocalPath(const std::string& sys){
+	return cheatsDataDir("database") + Constant::getFileSep() + hex8(crcStr(sys)) + ".rdb";
+}
+static std::string idxLocalPath(const std::string& sys){
+	return cheatsDataDir("index") + Constant::getFileSep() + hex8(crcStr(sys)) + ".idx";
+}
+
+// .cht descargado del juego actual, junto a romPaths.cht:
+//   <crc32 del nombre del sistema>_<crc32 de la ROM>.cht    (21 caracteres)
+// Para las imagenes de CD, cuyo CRC no se calcula (g_currentRomCrc = 0), la segunda
+// mitad es el crc32 del nombre de la ROM. "" si el sistema no tiene base de cheats.
+static std::string cheatHashedPath(){
+	if (romPaths.cht.empty()) return "";
+	const std::string sys = getRdbSystemName();
+	if (sys.empty()) return "";
+	dirutil dir;
+	const uint32_t juego = (g_currentRomCrc != 0) ? g_currentRomCrc
+	                                              : crcStr(dirutil::getFileNameNoExt(romPaths.rompath));
+	return dir.getFolder(romPaths.cht) + Constant::getFileSep() +
+		hex8(crcStr(sys)) + "_" + hex8(juego) + ".cht";
+}
+
+static long fileSizeOf(const std::string& path){
+	FILE* f = fopen(path.c_str(), "rb");
+	if (!f) return -1;
+	long n = -1;
+	if (fseek(f, 0, SEEK_END) == 0) n = ftell(f);
+	fclose(f);
+	return n;
+}
+
+// Descarga a un temporal y solo si termina bien (y no esta vacio) lo confirma en disco y
+// lo pone en su sitio. Si algo falla, el fichero anterior queda intacto y no quedan
+// restos a medias. Antes se descargaba directamente sobre el fichero final.
+static bool fetchToFileSafe(CurlClient& dl, const std::string& url, const std::string& finalPath,
+                            float* progressOut){
+	const std::string tmp = finalPath + ".tmp";
+	const std::string bak = finalPath + ".bak";
+
+	if (!dl.fetchFile(url, tmp, progressOut))   // en error ya borra el temporal
+		return false;
+	if (fileSizeOf(tmp) <= 0){
+		remove(tmp.c_str());
+		return false;
+	}
+	Fileio::commit(tmp.c_str());
+
+	// rename no sobrescribe: se aparta el anterior y se recupera si el cambio falla.
+	remove(bak.c_str());
+	const bool habia = dirutil::fileExists(finalPath.c_str());
+	if (habia && rename(finalPath.c_str(), bak.c_str()) != 0){
+		remove(tmp.c_str());
+		return false;
+	}
+	if (rename(tmp.c_str(), finalPath.c_str()) != 0){
+		remove(tmp.c_str());
+		if (habia) rename(bak.c_str(), finalPath.c_str());
+		return false;
+	}
+	if (habia) remove(bak.c_str());
+	Fileio::commit(finalPath.c_str());
+	return true;
+}
+
+// Resuelve la ruta del .cht al cargar el juego: primero el descargado con nombre de hash
+// (cheatHashedPath); si no, por CRC via .rdb (nombre canonico No-Intro); si no, el .cht
+// por nombre de ROM (fallbackByName), que es donde el usuario deja los suyos a mano.
 static std::string resolveCheatPath(const std::string& fallbackByName){
+	{
+		const std::string porHash = cheatHashedPath();
+		if (!porHash.empty() && dirutil::fileExists(porHash.c_str()))
+			return porHash;
+	}
 	if (g_currentRomCrc == 0) return fallbackByName;
 	std::string sys = getRdbSystemName();
 	if (sys.empty()) return fallbackByName;
 
-	std::string rdbPath = Constant::getAppDir() + Constant::getFileSep() + "data" + Constant::getFileSep() + "cheats" + Constant::getFileSep() +
-		"database" + Constant::getFileSep() + sys + ".rdb";
+	std::string rdbPath = rdbLocalPath(sys);
 
 	std::string canonical;
 	if (RdbReader::findNameByCrc(rdbPath, g_currentRomCrc, canonical)){
@@ -92,8 +190,7 @@ static bool getChtFolderList(const std::string& sys, std::vector<std::string>& f
 	filenames.clear();
 
 	dirutil dir;
-	const std::string idxPath = Constant::getAppDir() + Constant::getFileSep() + "data" + Constant::getFileSep() +
-		"cheats" + Constant::getFileSep() + "index" + Constant::getFileSep() + sys + ".idx";
+	const std::string idxPath = idxLocalPath(sys);
 
 	// Cache local
 	if (dir.fileExists(idxPath.c_str())){
@@ -189,8 +286,8 @@ static std::string pickBestCht(const std::vector<std::string>& listing,
 // 1) intento directo por nombre EXACTO de ROM; 2) si falla, listo la carpeta REAL de .cht del
 // sistema (cacheada) y elijo por match de nombre normalizado -- los nombres de los .cht NO
 // derivan del .rdb (p.ej. PSX usa "(World)" + sufijo de dispositivo, no las regiones Redump).
-// Prefiero la variante GameShark y descarto Game Buster (pcsxr-360 no la parsea). Guardo en
-// romPaths.cht (nombre de ROM). Devuelve la ruta, o "" si no hay.
+// Prefiero la variante GameShark y descarto Game Buster (pcsxr-360 no la parsea). Guardo con
+// nombre de hash (cheatHashedPath) por fetchToFileSafe. Devuelve la ruta, o "" si no hay.
 static std::string downloadCheatForCurrentGame(float* progressOut){
 	const std::string RAW = "https://raw.githubusercontent.com/libretro/libretro-database/master/";
 	CurlClient dl;
@@ -198,23 +295,29 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 
 	std::string sys = getRdbSystemName();
 	if (sys.empty() || romPaths.cht.empty()) return "";
+	const std::string destino = cheatHashedPath();
+	if (destino.empty()) return "";
 
 	LOG_DEBUG("Cheats download sys: %s", sys.c_str());
 
 	dirutil dir;
 	const std::string romNoExt = dir.getFileNameNoExt(romPaths.rompath);
 	const std::string sysEnc   = dl.escape(sys);
-	LOG_DEBUG("romNoExt: %s, sysEnc: %s", romNoExt.c_str(), sysEnc.c_str());
+	// ★ Nada escapado para URL en el log: en la Xbox 360 OutputDebugStringA acaba en la
+	// salida de depuracion del kernel, que vuelve a interpretar el texto como formato de
+	// printf. "Sega%20-%20Master%20System" lleva un "%20S" (cadena ancha, ancho 20) que lee
+	// un argumento inexistente: excepcion en el kernel (0x8010DF28) y reinicio de la consola.
+	LOG_DEBUG("romNoExt: %s", romNoExt.c_str());
 	const std::string chtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(romNoExt) + ".cht";
 
 	// 1) Intento directo por nombre de ROM (funciona si ya tiene nombre canonico).
 	//    fetchFile devuelve true solo en 2xx; en 404 borra el fichero parcial y da false.
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_SEARCH);
 
-	LOG_DEBUG("cht download: %s", chtUrl.c_str());
-	if (dl.fetchFile(chtUrl, romPaths.cht, progressOut)){
+	LOG_DEBUG("cht download: %s.cht -> %s", romNoExt.c_str(), destino.c_str());   // sin la URL: ver arriba
+	if (fetchToFileSafe(dl, chtUrl, destino, progressOut)){
 		setCheatSourceName(romNoExt + ".cht");   // acierto directo: el nombre en GitHub = nombre de ROM
-		return romPaths.cht;
+		return destino;
 	}
 
 	// 2) Listar la carpeta REAL de .cht del sistema y elegir por match de nombre normalizado.
@@ -228,13 +331,12 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	//     nombre canonico (que normaliza bien contra los .cht). Solo cartuchos: las imagenes de
 	//     CD (PSX) tienen CRC capado a 0 y no entran aqui.
 	if (best.empty() && g_currentRomCrc != 0){
-		std::string rdbPath = Constant::getAppDir() + Constant::getFileSep() + "data" + Constant::getFileSep() +
-			"cheats" + Constant::getFileSep() + "database" + Constant::getFileSep() + sys + ".rdb";
+		std::string rdbPath = rdbLocalPath(sys);
 		if (!dir.fileExists(rdbPath.c_str())){
 			std::string rdbDir = dir.getFolder(rdbPath);
 			if (!dir.dirExists(rdbDir.c_str())) dir.createDirRecursive(rdbDir.c_str());
 			InterlockedExchange(&g_cheatStage, CHEAT_STAGE_DB);
-			dl.fetchFile(RAW + "rdb/" + sysEnc + ".rdb", rdbPath, progressOut);  // si falla -> findNameByCrc dara false
+			fetchToFileSafe(dl, RAW + "rdb/" + sysEnc + ".rdb", rdbPath, progressOut);  // si falla -> findNameByCrc dara false
 		}
 		std::string canonical;
 		if (RdbReader::findNameByCrc(rdbPath, g_currentRomCrc, canonical) && !canonical.empty())
@@ -243,12 +345,12 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 
 	if (best.empty()) return "";
 
-	// 3) Descargar el elegido -> romPaths.cht (nombre de ROM, para que lo reencuentre
-	//    resolveCheatPath en la siguiente carga).
+	// 3) Descargar el elegido -> nombre de hash (cheatHashedPath), que es lo primero que busca
+	//    resolveCheatPath en la siguiente carga.
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_CHEAT);
-	if (dl.fetchFile(RAW + "cht/" + dl.escape(sysEnc) + "/" + dl.escape(best), romPaths.cht, progressOut)){
+	if (fetchToFileSafe(dl, RAW + "cht/" + dl.escape(sysEnc) + "/" + dl.escape(best), destino, progressOut)){
 		setCheatSourceName(best);   // nombre real del .cht en GitHub (p.ej. "Foo (World) (GameShark).cht")
-		return romPaths.cht;
+		return destino;
 	}
 
 	return "";
@@ -270,6 +372,7 @@ static DWORD WINAPI cheatDownloadWorker(LPVOID){
 // ~30ms hasta que el worker termina. runGameLoop queda bloqueado aqui, asi que este bucle ES el
 // render durante la descarga. Devuelve la ruta del .cht descargado, o "".
 std::string downloadCheatWithProgress(){
+
 	g_cheatProgress  = 0.0f;
 	g_cheatResult[0] = '\0';
 	InterlockedExchange(&g_cheatDone, 0);
@@ -306,7 +409,7 @@ std::string downloadCheatWithProgress(){
 
 // Nombre REAL del .cht en el repo de GitHub descargado en la ultima llamada (basename), o ""
 // si no hubo descarga con exito. Valido tras retornar downloadCheatWithProgress() (el worker
-// ya termino). El contenido se guarda como romPaths.cht; esto es solo para mostrarlo.
+// ya termino). El contenido se guarda con nombre de hash; esto es solo para mostrarlo.
 std::string lastCheatSourceName(){
 	return std::string(g_cheatSourceName);
 }
