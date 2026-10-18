@@ -2138,10 +2138,10 @@ inline void updateGame() {
 				 * que el DRC no puede hacer sin gastar su autoridad. */
 				gameMenu->g_audioRate.setDeviceRateMeasured(real);
 
-				LOG_INFO("Sync: dispositivo de audio -> declarado %.0f Hz | medido %.3f Hz | desvio %+.3f%% | anillo %u%% | ratio %.5f\n",
-					nom, real,
-					(nom > 0.0) ? ((real / nom - 1.0) * 100.0) : 0.0,
-					occupancy, gameMenu->g_audioRate.getBaseRatio());
+				//LOG_INFO("Sync: dispositivo de audio -> declarado %.0f Hz | medido %.3f Hz | desvio %+.3f%% | anillo %u%% | ratio %.5f\n",
+				//	nom, real,
+				//	(nom > 0.0) ? ((real / nom - 1.0) * 100.0) : 0.0,
+				//	occupancy, gameMenu->g_audioRate.getBaseRatio());
 			}
 		}
 
@@ -2154,35 +2154,35 @@ inline void updateGame() {
 		 * porque 50 no divide a 60 y no hay swap interval entero que lo arregle.
 		 * Si en ese caso saliese 1,00, el Present no esta haciendo lo que creo y
 		 * hay que pararse ahi antes de seguir. */
-		{
-			static DWORD        t0     = 0;
-			static unsigned int vb0    = 0;
-			static unsigned int miss0  = 0;
-			static unsigned int frames = 0;
-
-			unsigned int vb = 0, miss = 0;
-			const DWORD  ahora = GetTickCount();
-
-			SDL_XBOX_GetVBlankStats(&vb, &miss);
-			++frames;
-
-			if (t0 == 0 || vb == 0) {
-				/* vb == 0: plataforma sin reloj de hardware (Windows). */
-				t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
-			} else if (ahora - t0 >= 10000) {
-				const double seg = (double)(ahora - t0) / 1000.0;
-				const double hz  = (double)(vb - vb0) / seg;
-				const float  dec = SDL_XBOX_GetRefreshRate();
-
-				LOG_INFO("Sync: pantalla -> declarado %.4f Hz | contado %.4f Hz | desvio %+.3f%% | vbl/frame %.3f | perdidos %u\n",
-					dec, hz,
-					(dec > 0.0f) ? ((hz / (double)dec - 1.0) * 100.0) : 0.0,
-					frames ? ((double)(vb - vb0) / (double)frames) : 0.0,
-					miss - miss0);
-
-				t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
-			}
-		}
+		//{
+		//	static DWORD        t0     = 0;
+		//	static unsigned int vb0    = 0;
+		//	static unsigned int miss0  = 0;
+		//	static unsigned int frames = 0;
+		//
+		//	unsigned int vb = 0, miss = 0;
+		//	const DWORD  ahora = GetTickCount();
+		//
+		//	SDL_XBOX_GetVBlankStats(&vb, &miss);
+		//	++frames;
+		//
+		//	if (t0 == 0 || vb == 0) {
+		//		/* vb == 0: plataforma sin reloj de hardware (Windows). */
+		//		t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
+		//	} else if (ahora - t0 >= 10000) {
+		//		const double seg = (double)(ahora - t0) / 1000.0;
+		//		const double hz  = (double)(vb - vb0) / seg;
+		//		const float  dec = SDL_XBOX_GetRefreshRate();
+		//
+		//		LOG_INFO("Sync: pantalla -> declarado %.4f Hz | contado %.4f Hz | desvio %+.3f%% | vbl/frame %.3f | perdidos %u\n",
+		//			dec, hz,
+		//			(dec > 0.0f) ? ((hz / (double)dec - 1.0) * 100.0) : 0.0,
+		//			frames ? ((double)(vb - vb0) / (double)frames) : 0.0,
+		//			miss - miss0);
+		//
+		//		t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
+		//	}
+		//}
 	}
 	retro_run();
 

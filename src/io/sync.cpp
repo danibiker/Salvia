@@ -625,26 +625,26 @@ void Sync::note_present(double now) {
      *
      * Va por LOG_INFO y no por `pace_trace` porque FRAMEPACE_LOG no esta
      * definido en el vcxproj; una linea cada 2 s no molesta. */
-    if ((now - paceSummaryLast) >= 2000.0) {
-        paceSummaryLast = now;
-        LOG_INFO("[PACE] dt=%.2f ema=%.2f target=%.2f vbl/frame=%.4f resbalan=%.2f%% | freno=%c%c%c%c doble=%d (late=%d/%d) | flip avg=%.2f max=%.2f blk=%d/%d | vs=%d camb=%d aud=%.0f | dorm=%.2f giro=%.2f\n",
-                 paceSum / (double)paceCount, dtAvg, frameTarget,
-                 (double)vblSum / (double)paceCount,
-                 (vblSum ? ((double)vblSum / (double)paceCount - 1.0) * 100.0 : 0.0),
-                 /* Quien freno en la ventana.  En regimen debe haber UNA sola
-                  * letra y `doble=0`; dos letras o `doble>0` es el defecto de
-                  * los dos relojes que esta fase existe para erradicar. */
-                 (paceMaskAcum & PACE_VBLANK)  ? 'V' : '-',
-                 (paceMaskAcum & PACE_TIMER)   ? 'T' : '-',
-                 (paceMaskAcum & PACE_AUDIO)   ? 'A' : '-',
-                 (paceMaskAcum & PACE_PRESENT) ? 'P' : '-',
-                 paceDoble,
-                 paceLate, paceCount,
-                 (flipCount > 0) ? (flipSum / (double)flipCount) : 0.0, flipMax,
-                 flipBlockedCount, flipCount,
-                 vsyncOn ? 1 : 0, vsyncCambios, audioOcup,
-                 sleepSum / (double)paceCount, spinSum / (double)paceCount);
-    }
+    //if ((now - paceSummaryLast) >= 2000.0) {
+    //    paceSummaryLast = now;
+    //    LOG_INFO("[PACE] dt=%.2f ema=%.2f target=%.2f vbl/frame=%.4f resbalan=%.2f%% | freno=%c%c%c%c doble=%d (late=%d/%d) | flip avg=%.2f max=%.2f blk=%d/%d | vs=%d camb=%d aud=%.0f | dorm=%.2f giro=%.2f\n",
+    //             paceSum / (double)paceCount, dtAvg, frameTarget,
+    //             (double)vblSum / (double)paceCount,
+    //             (vblSum ? ((double)vblSum / (double)paceCount - 1.0) * 100.0 : 0.0),
+    //             /* Quien freno en la ventana.  En regimen debe haber UNA sola
+    //              * letra y `doble=0`; dos letras o `doble>0` es el defecto de
+    //              * los dos relojes que esta fase existe para erradicar. */
+    //             (paceMaskAcum & PACE_VBLANK)  ? 'V' : '-',
+    //             (paceMaskAcum & PACE_TIMER)   ? 'T' : '-',
+    //             (paceMaskAcum & PACE_AUDIO)   ? 'A' : '-',
+    //             (paceMaskAcum & PACE_PRESENT) ? 'P' : '-',
+    //             paceDoble,
+    //             paceLate, paceCount,
+    //             (flipCount > 0) ? (flipSum / (double)flipCount) : 0.0, flipMax,
+    //             flipBlockedCount, flipCount,
+    //             vsyncOn ? 1 : 0, vsyncCambios, audioOcup,
+    //             sleepSum / (double)paceCount, spinSum / (double)paceCount);
+    //}
 
     /* Reiniciamos SOLO los acumuladores de la ventana; el planificador
      * (paceAnchor/paceFrame) no se toca aqui: re-anclarlo cambiaria la fase. */

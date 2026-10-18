@@ -45,6 +45,7 @@ extern "C" {
 #include "../../../xbox/audio_n64.h"
 #include "../../../xbox/savestate_n64.h"
 #include "../../../xbox/xbox_mem.h"      /* xbox64_mem_guardado */
+#include "../../../xbox/trucos_n64.h"    /* retro_cheat_reset / retro_cheat_set */
 #include "../../../xenon/video_handoff.h"
 }
 
@@ -2864,8 +2865,14 @@ size_t retro_get_memory_size(unsigned id)
     }
 }
 
-void retro_cheat_reset(void) { }
+/* Trucos GameShark de los .cht de libretro (Salvia los manda desde su menu de
+ * trucos).  El motor es el de mupen64plus, en xbox/trucos_n64.c; se aplica en
+ * cada VI desde new_vi (timers.c). */
+void retro_cheat_reset(void)
+{
+    xbox64_trucos_borrar();
+}
 void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
-    (void)index; (void)enabled; (void)code;
+    xbox64_trucos_poner(index, enabled ? 1 : 0, code);
 }

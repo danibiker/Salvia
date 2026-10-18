@@ -614,6 +614,7 @@
     <ClCompile Include="..\..\..\xbox\debug_libretro.c" />
     <ClCompile Include="..\..\..\xbox\plugins_fase1.c" />
     <ClCompile Include="..\..\..\xbox\input_n64.c" />
+    <ClCompile Include="..\..\..\xbox\trucos_n64.c" />
     <ClCompile Include="..\..\..\xbox\audio_n64.c" />
     <ClCompile Include="..\..\..\xbox\savestate_n64.c" />
     <ClCompile Include="..\..\..\xbox\xbox_mem.c" />

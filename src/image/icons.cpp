@@ -110,17 +110,17 @@ bool Icons::drawIconCart(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPo
     SDL_Surface* ico = getIconCart(icoPos);
     
     // Si no esta cargado en memoria, lo procesamos ahora
-    if (ico == NULL) {
+    if (ico == NULL && icoPos < max_carts) {
         int face_h = Fonts::getLineSkip(Fonts::FONTBIG) - icon_w_add / 2;
         icons_carts[icoPos].srf = loadAndResizeIcon(dest, ICONS_CARTS_PATH[icoPos], face_h);
         ico = getIconCart(icoPos);
-        
-        if (ico == NULL) {
-			icons_carts[icoPos].failed = true;
-            return false; // Error al cargar o procesar el archivo
-        }
     }
     
-    SDL_BlitSurface(ico, NULL, dest, dstRect);
+	 if (ico == NULL) {
+		icons_carts[icoPos].failed = true;
+        return false; // Error al cargar o procesar el archivo
+     } else
+		SDL_BlitSurface(ico, NULL, dest, dstRect);
+
     return true;
 }

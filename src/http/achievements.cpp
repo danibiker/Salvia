@@ -567,22 +567,31 @@ void Achievements::load_game(const uint8_t* rom, std::size_t rom_size, std::stri
 	 * RetroAchievements estan escritos contra el layout LE (byte-swapped) que
 	 * se usa en PC, asi que en hosts BE necesitamos XOR cada direccion con 1
 	 * para intercambiar bytes dentro de cada word de 16 bits.
-	 * En hosts LE esto NO es necesario porque el core ya hace el swap. */
+	 * En hosts LE esto NO es necesario porque el core ya hace el swap.
+	 *
+	 * Nintendo 64 (MIPS R4300i, big-endian): el core entrega la RDRAM como un
+	 * array de u32 en el orden del host.  En PC (mupen64plus, LE), que es donde
+	 * se escribieron los logros, cada palabra de 32 bits queda con sus 4 bytes
+	 * invertidos respecto a la consola; en Xbox 360 (BE) quedan en el orden de
+	 * la N64.  Para ver lo mismo que en PC hay que hacer XOR con 3. */
 #if SALVIA_HOST_IS_BIG_ENDIAN
 	switch (console_id) {
 		case RC_CONSOLE_MEGA_DRIVE:  /* Genesis / Mega Drive (68000) */
 		case RC_CONSOLE_SEGA_CD:     /* Sega CD / Mega CD (68000) */
 		case RC_CONSOLE_SEGA_32X:    /* 32X (68000 + SH-2) */
-			byte_swap_memory = true;
+			byte_swap_memory = 1;
+			break;
+		case RC_CONSOLE_NINTENDO_64: /* RDRAM en palabras de 32 bits */
+			byte_swap_memory = 3;
 			break;
 		default:
-			byte_swap_memory = false;
+			byte_swap_memory = 0;
 			break;
 	}
-	LOG_DEBUG("RetroAchievements: console_id=%u, byte_swap_memory=%s",
-	          console_id, byte_swap_memory ? "YES" : "NO");
+	LOG_DEBUG("RetroAchievements: console_id=%u, byte_swap_memory=xor %u",
+	          console_id, (unsigned)byte_swap_memory);
 #else
-	byte_swap_memory = false;
+	byte_swap_memory = 0;
 #endif
 
 	/* Construir mapa de memoria basado en las regiones de la consola */
@@ -942,11 +951,13 @@ uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t n
             uint8_t* base_ptr = self.memory_map[i].buffer;
 
             if (self.byte_swap_memory) {
-                /* XOR con 1 para intercambiar bytes dentro de cada word
-                 * de 16 bits (cores 68000 en hosts big-endian) */
+                /* XOR con la mascara: 1 intercambia los bytes de cada word
+                 * de 16 bits (68000), 3 invierte los de cada palabra de 32
+                 * bits (N64).  Solo en hosts big-endian; ver load_game(). */
+                const uint32_t mascara = self.byte_swap_memory;
                 uint32_t j;
                 for (j = 0; j < num_bytes; j++)
-                    buffer[j] = base_ptr[(local_addr + j) ^ 1];
+                    buffer[j] = base_ptr[(local_addr + j) ^ mascara];
             } else {
                 memcpy(buffer, base_ptr + local_addr, num_bytes);
             }

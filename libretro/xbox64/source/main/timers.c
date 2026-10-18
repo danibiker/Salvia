@@ -11,6 +11,7 @@
 #include "../r4300/r4300.h"
 #include "../gui/DEBUG.h"
 #include "gamehacks.h"
+#include "../../xbox/trucos_n64.h"   /* [Xbox360] trucos GameShark */
 
 timers Timers = {0.0, 0.0, 0, 1, 0, 100};
 float VILimit = 60.0;
@@ -57,6 +58,9 @@ void InitTimer(void) {
 	}
 	VILimitMicroseconds = (double) 1000000.0/(VILimit * temp / 100);
 	Timers.frameDrawn = 0;
+	/* [Xbox360] Una vez por ROM (rom_gc.c): los trucos cuentan sus VI de
+	 * arranque desde aqui, como g_gs_vi_counter de mupen64plus. */
+	xbox64_trucos_rom_nueva();
 }
 
 extern unsigned int usleep(unsigned int us);
@@ -115,6 +119,14 @@ void new_vi(void) {
 	static int VI_WaitCounter = 0;
 	long time;
 	
+	/* [Xbox360] Los trucos GameShark, en cada VI como gs_apply_cheats de
+	 * mupen64plus (main.c new_vi).  Ver xbox/trucos_n64.c.  ★ ANTES del
+	 * `r4300.stop` de abajo: xbox64_frame_boundary (interupt.c, justo antes
+	 * de llamar aqui) pone r4300.stop en CADA VI para cerrar el frame, asi
+	 * que detras de ese `return` no se llegaba nunca (log 17: el truco
+	 * llegaba al nucleo y no escribia nada, con dynarec y con interprete). */
+	xbox64_trucos_vi();
+
 	if (r4300.stop) {
 		CounterTime = ticks_to_microsecs(gettick());
 		VI_Counter = 0;

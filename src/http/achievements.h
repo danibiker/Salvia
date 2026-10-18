@@ -921,7 +921,7 @@ public:
 	}
 
 private:
-    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
+    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(0), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
 		memset(memory_map, 0, sizeof(memory_map));
 		hardcoreMode = false;
 		InitializeCriticalSection(&m_csMessages);
@@ -947,7 +947,11 @@ private:
     std::size_t sram_size;
 	volatile bool shouldRefresh;
 	bool hardcoreMode;
-	bool byte_swap_memory;  // true cuando el core emula una CPU big-endian de 16 bits
+	/* Mascara XOR que se aplica a cada direccion de byte en read_memory() para
+	 * reproducir en un host big-endian el layout que tienen los logros en PC:
+	 * 0 = tal cual, 1 = palabras de 16 bits (68000), 3 = palabras de 32 bits
+	 * (N64: la RDRAM son u32 en el orden del host).  Ver load_game(). */
+	uint32_t byte_swap_memory;
 	                        // (68000) en un host big-endian y necesita XOR de direcciones
 	SDL_PixelFormat *screenFormat;
 

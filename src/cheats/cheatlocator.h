@@ -67,23 +67,6 @@ static std::string resolveCheatPath(const std::string& fallbackByName){
 	return fallbackByName;
 }
 
-// Percent-encode de un segmento de path para GitHub raw: codifica solo lo que rompe
-// una URL (espacio -> %20, y algunos mas), dejando literales (),[],',&,. etc. como en
-// las URLs de libretro-database. NO codifica '/': se aplica por segmento.
-static std::string urlEncodeSegment(const std::string& s){
-	static const char* hexd = "0123456789ABCDEF";
-	std::string out;
-	for (std::size_t i = 0; i < s.size(); ++i){
-		unsigned char c = (unsigned char)s[i];
-		if (c == ' ' || c == '%' || c == '#' || c == '?' || c == '+' || c < 0x20 || c >= 0x7f){
-			out += '%'; out += hexd[c >> 4]; out += hexd[c & 0x0f];
-		} else {
-			out += (char)c;
-		}
-	}
-	return out;
-}
-
 // Puntua la coincidencia de region entre dos nombres (tokens de region en comun); mayor =
 // mejor. Sirve para elegir la variante regional correcta cuando el juego no tiene CRC.
 static int regionScore(const std::string& cand, const std::string& rom){
@@ -210,22 +193,26 @@ static std::string pickBestCht(const std::vector<std::string>& listing,
 // romPaths.cht (nombre de ROM). Devuelve la ruta, o "" si no hay.
 static std::string downloadCheatForCurrentGame(float* progressOut){
 	const std::string RAW = "https://raw.githubusercontent.com/libretro/libretro-database/master/";
-
+	CurlClient dl;
 	g_cheatSourceName[0] = '\0';   // se rellena abajo solo si la descarga tiene exito
 
 	std::string sys = getRdbSystemName();
 	if (sys.empty() || romPaths.cht.empty()) return "";
 
+	LOG_DEBUG("Cheats download sys: %s", sys.c_str());
+
 	dirutil dir;
 	const std::string romNoExt = dir.getFileNameNoExt(romPaths.rompath);
-	const std::string sysEnc   = urlEncodeSegment(sys);
-
-	CurlClient dl;
+	const std::string sysEnc   = dl.escape(sys);
+	LOG_DEBUG("romNoExt: %s, sysEnc: %s", romNoExt.c_str(), sysEnc.c_str());
+	const std::string chtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(romNoExt) + ".cht";
 
 	// 1) Intento directo por nombre de ROM (funciona si ya tiene nombre canonico).
 	//    fetchFile devuelve true solo en 2xx; en 404 borra el fichero parcial y da false.
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_SEARCH);
-	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(romNoExt) + ".cht", romPaths.cht, progressOut)){
+
+	LOG_DEBUG("cht download: %s", chtUrl.c_str());
+	if (dl.fetchFile(chtUrl, romPaths.cht, progressOut)){
 		setCheatSourceName(romNoExt + ".cht");   // acierto directo: el nombre en GitHub = nombre de ROM
 		return romPaths.cht;
 	}
@@ -259,7 +246,7 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	// 3) Descargar el elegido -> romPaths.cht (nombre de ROM, para que lo reencuentre
 	//    resolveCheatPath en la siguiente carga).
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_CHEAT);
-	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(best), romPaths.cht, progressOut)){
+	if (dl.fetchFile(RAW + "cht/" + dl.escape(sysEnc) + "/" + dl.escape(best), romPaths.cht, progressOut)){
 		setCheatSourceName(best);   // nombre real del .cht en GitHub (p.ej. "Foo (World) (GameShark).cht")
 		return romPaths.cht;
 	}

@@ -461,6 +461,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_virtualboy;
 		case 12:
 			return cart_gba;
+		case 14: 
+			return cart_n64;
 		case 19:
 			return cart_32x;
 		case 20:

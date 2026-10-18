@@ -7301,6 +7301,7 @@
     <ClCompile Include="src\utils\logger.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="libs\rcheevos\include\rc_consoles.h" />
     <ClInclude Include="src\audio\audiobuffer.h" />
     <ClInclude Include="src\audio\audiorate.h" />
     <ClInclude Include="src\audio\midisynth.h" />
