@@ -202,10 +202,10 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::mainLang].desc = "#mainLang: Main system lang. If not specified on xbox 360, it will try to find the configured"
 									 "\n#from the console with some of this values: es, en, fr, de, it (although only 'es' and 'en' are actually supported)";
 
-	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
+	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "eu");
 	configMain[cfg::scrapRegion].desc = "#Region for the artwork scraper";
 
-	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
+	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", DEFAULT_LANG);
 	configMain[cfg::scrapLang].desc = "#Language for the artwork scraper";
 
 	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)SC_SCREENCSRAPER);
@@ -441,12 +441,9 @@ void CfgLoader::checkSystemLang(){
 		}
 	}
 
-
 	configMain[cfg::mainLang].setPropValue(mainLang);
-	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", std::string("eu"));
-    configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", mainLang);
-	
-	xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
+
+    xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
 	parsearRegiones(xmlRegion.c_str(), mainLang, region);
 	xmlRegion.clear();
 	

@@ -462,13 +462,14 @@ void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
 		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
 	}
 
+	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
+	listaBkg->callback = &GestorMenus::selectBackground;
+	menuVideo->opciones.push_back(listaBkg);	
+
 	#ifndef _XBOX
 	//En xbox siempre mostramos pantalla completa
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
 	#endif
-	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
-	listaBkg->callback = &GestorMenus::selectBackground;
-	menuVideo->opciones.push_back(listaBkg);	
 
 	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
 	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
