@@ -79,6 +79,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	scrapGamesSelection = 1;
 
 	tmpTextOption = NULL;
+	menuLangsIdx = 0;
 }
 
 GestorMenus::~GestorMenus() {
@@ -292,6 +293,23 @@ void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig)
 	Menu *menuCoreOverrides = new Menu(LanguageManager::instance()->get("menu.core.overrides"), menuEmulation);
 	poblarMenuCoreOverrides(menuCoreOverrides, refConfig);
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.overrides"), menuCoreOverrides));
+
+	//--------Preferencia de idioma---------
+	//Obtenemos el idioma principal
+	buscarIdiomasMenu(refConfig->configMain[cfg::mainLang].valueStr);
+	//Rellenamos la lista
+    std::vector<std::string> langvals;
+	for (unsigned int i=0; i < menuLangs.size(); i++){
+		langvals.push_back(LanguageManager::instance()->get("menu.languages.code." + menuLangs[i]));
+	}
+	OpcionLista *listaLang = new OpcionLista(LanguageManager::instance()->get("menu.options.languages"), langvals, &menuLangsIdx);
+	menuEmulation->opciones.push_back(listaLang);
+
+	t_langMenuData *langMenuData = new t_langMenuData();
+	langMenuData->listLangs = &menuLangs;
+	langMenuData->refConfig = refConfig;
+	listaLang->callback = &GestorMenus::selectLang;
+	listaLang->context  = langMenuData;
 
 }
 
@@ -3132,4 +3150,37 @@ std::string GestorMenus::trOrDefault(const std::string &key, const char *fallbac
 	if (s.empty() || s[0] == '[')
 		return std::string(fallback);
 	return s;
+}
+
+void GestorMenus::buscarIdiomasMenu(std::string selectedLang){
+	//menuLangs;
+	dirutil dir;
+	vector<unique_ptr<FileProps>> files;
+	std::string rutaScan = Constant::getAppDir() + "\\assets\\i18n";
+	
+	dir.listFiles(rutaScan.c_str(), files, ".ini", "", true, false);
+
+	for (unsigned int i=0; i < files.size(); i++){
+		LOG_DEBUG("Lang file found %s", files.at(i).get()->filename.c_str());
+		const std::string lang = dir.getFileNameNoExt(files.at(i).get()->filename);
+		menuLangs.push_back(lang);
+		if (lang == selectedLang){
+			menuLangsIdx = i;
+		}
+	}
+	
+	LOG_DEBUG("Found %d language files", files.size());
+}
+
+std::string GestorMenus::selectLang(void* inst, void *index, void *values) {
+	if (!inst || !index || !values) return "";
+	t_langMenuData* langMenuData = static_cast<t_langMenuData*>(inst);
+	const int idx = *static_cast<int*>(index);
+	//std::vector<std::string>* labels = static_cast<std::vector<std::string>*>(values);
+	if (idx < 0 || idx >= (int)langMenuData->listLangs->size()) return "";
+	//Obtenemos el texto del elemento seleccionado
+	std::string mainLang = langMenuData->listLangs->at(idx);
+	langMenuData->refConfig->configMain[cfg::mainLang].setPropValue(mainLang);
+	//bool fileFound = LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	return "";
 }

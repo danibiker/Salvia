@@ -203,7 +203,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 			std::string user = CfgLoader::configMain[cfg::scrapUser].valueStr;
 			std::string pass = CfgLoader::configMain[cfg::scrapPass].valueStr;
 			fullUrl = urlBase + "?devid=" + DEV_ID_SCREENSCRAPPER +"&devpassword=" + DEV_PASS_SCREENSCRAPPER 
-				+ "&softname=salvia&output=xml&ssid=" + user + "&sspassword=" + pass;
+				+ "&softname=salvia&output=xml&ssid=" + downloader.escape(user) + "&sspassword=" + downloader.escape(pass);
 			fullUrl += "&systemeid=" + Constant::TipoToStr(sistema);
 			fullUrl +=  "&romtype=rom&romnom=" + peticion.romname;
 		} else if (scrapperConfig.origin == SC_THEGAMESDB){
