@@ -463,6 +463,11 @@ void cpu_init(void){
 void cpu_deinit(void){
 	// No need to check these if we were in the pure interp
 	if(dynacore != 2 && !cpu_inited){
+#ifdef PPC_DYNAREC
+		/* [Xbox360] Las variantes de TLB antes de liberar los bloques: ver
+		 * dynarec_tlbvar_vaciar en ppc/Wrappers.h (Logs Salvia (5)). */
+		dynarec_tlbvar_vaciar();
+#endif
 		for (i=0; i<0x100000; i++) {
 		if (blocks[i]) {
 #ifdef PPC_DYNAREC

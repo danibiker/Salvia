@@ -201,9 +201,10 @@ static void remove_outgoing_links(PowerPC_func_node** node, PowerPC_func* func){
 	MetaCache_Free(*node); // Free the PowerPC_func_node*
 }
 
-static void unlink_func(PowerPC_func* func){
-//	start_section(UNLINK_SECTION);
-	
+/* [Xbox360] La primera mitad de unlink_func, tal cual, sacada para
+ * RecompCache_UnlinkIn (las variantes de TLB, Wrappers.c): los enlaces que
+ * ENTRAN.  unlink_func la llama igual que antes. */
+static void unlink_in(PowerPC_func* func){
 	// Remove any incoming links to this func
 	PowerPC_func_link_node* link, * next_link;
 	for(link = func->links_in; link != NULL; link = next_link){
@@ -255,7 +256,13 @@ static void unlink_func(PowerPC_func* func){
 		MetaCache_Free(link);
 	}
 	func->links_in = NULL;
-	
+}
+
+static void unlink_func(PowerPC_func* func){
+//	start_section(UNLINK_SECTION);
+
+	unlink_in(func);
+
 	// Remove any references to outgoing links from this func
 	remove_outgoing_links(&func->links_out, func);
 	func->links_out = NULL;
@@ -267,6 +274,9 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 	/* [Xbox360] [Conker, log 14] Que `dynarec()` no enlace desde ella si era
 	 * `last_func`: ver `note_freed_func` en ppc/Recompile.c. */
 	note_freed_func(func);
+	/* [Xbox360] [JR rapido] Ningun JR/JALR puede saltar ya a ella por la tabla
+	 * (xb_jr_tabla, ppc/Wrappers.h).  Antes de liberar: lee su rango. */
+	dynarec_jr_olvida_func(func);
 	// Free the code associated with the func
 	__lwp_heap_free(cache, func->code);
 	MetaCache_Free(func->code_addr);
@@ -279,7 +289,12 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 
 	// Remove any pointers to this code
 	// Remove the func from the block.
-	if (blocks[addr>>12])
+	/* [Xbox360] [Castlevania, variantes de TLB] Del arbol de SU bloque, que
+	 * puede ser una variante apartada y no `blocks[addr>>12]`.  Sin dueno
+	 * apuntado, como siempre. */
+	if (func->xb_owner)
+		remove_func(&func->xb_owner->funcs, func);
+	else if (blocks[addr>>12])
 		remove_func(&blocks[addr>>12]->funcs, func);
 	// Remove func links
 	unlink_func(func);
@@ -426,6 +441,27 @@ void RecompCache_Free(unsigned int addr){
 			return;
 		}
 	}
+}
+
+/* [Xbox360] Ver Recomp-Cache.h.  La misma busqueda que RecompCache_Free, por
+ * el puntero de la funcion en vez de por su direccion. */
+void RecompCache_FreeFunc(PowerPC_func* func){
+	int i;
+	CacheMetaNode* n = NULL;
+	for(i=heapSize-1; i>=0; --i){
+		if(cacheHeap[i]->func == func){
+			n = cacheHeap[i];
+			heapSwap(i, --heapSize);
+			free_func(n->func, n->addr);
+			cacheSize -= n->size;
+			__lwp_heap_free(node_heap, n);
+			return;
+		}
+	}
+}
+
+void RecompCache_UnlinkIn(PowerPC_func* func){
+	unlink_in(func);
 }
 
 void RecompCache_Update(PowerPC_func* func){

@@ -94,4 +94,11 @@ void invalidate_func(unsigned int addr)
 	DEBUG_print("dynarec_ausente: se ha LLAMADO a invalidate_func()", DBG_USBGECKO);
 }
 
+/* [Xbox360] Las variantes de TLB (ppc/Wrappers.h): cpu_deinit la llama en la
+ * misma rama que deinit_block. */
+void dynarec_tlbvar_vaciar(void)
+{
+	DEBUG_print("dynarec_ausente: se ha LLAMADO a dynarec_tlbvar_vaciar()", DBG_USBGECKO);
+}
+
 #endif /* !XBOX64_DYNAREC */

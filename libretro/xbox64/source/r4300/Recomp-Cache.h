@@ -73,6 +73,19 @@ void RecompCache_Init(void);
 void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* func);
 void RecompCache_Realloc(PowerPC_func* func, unsigned int new_size);
 void RecompCache_Free(unsigned int addr);
+/* [Xbox360] ★ [Castlevania, variantes de TLB] LIBERAR POR PUNTERO, NO POR
+ * DIRECCION.  Con variantes, dos funciones de la misma pagina virtual (de
+ * paginas fisicas distintas) pueden empezar en la MISMA direccion, y
+ * RecompCache_Free(addr) liberaria la primera que encuentre: la de otra
+ * variante.  Donde se tiene la funcion, se libera esa. */
+void RecompCache_FreeFunc(PowerPC_func* func);
+/* [Xbox360] Deshace los enlaces que ENTRAN en `func` (los saltos de otras
+ * funciones vuelven al despachador), sin liberarla y sin tocar los que salen
+ * de ella.  Es lo que se hace al apartar una variante: ningun salto enlazado
+ * puede llegar a su codigo mientras la pagina virtual apunte a otra fisica.
+ * Los que salen se quedan: si su destino se libera, el propio desenlace del
+ * destino parchea este codigo, este o no apartado. */
+void RecompCache_UnlinkIn(PowerPC_func* func);
 void release(int minNeeded);
 // Update the LRU info of the indicated block
 //   (call when the block is accessed)

@@ -33,6 +33,7 @@ typedef struct hole_node {
 } PowerPC_func_hole_node;
 
 struct func;
+struct xb_ppc_block;   /* [Xbox360] el dueno de cada funcion: ver PowerPC_func */
 
 typedef struct func_node {
 	struct func* function;
@@ -55,18 +56,36 @@ typedef struct func {
 	PowerPC_func_link_node* links_in;
 	PowerPC_func_node*      links_out;
 	PowerPC_instr** code_addr;
+	/* [Xbox360] ★ [Castlevania, variantes de TLB] EL BLOQUE EN CUYO ARBOL
+	 * VIVE.  Antes era siempre `blocks[start_addr >> 12]`; con varias
+	 * variantes por pagina virtual (una por pagina fisica, ver Wrappers.c,
+	 * "LAS VARIANTES DE TLB") puede ser una apartada.  Lo pone
+	 * recompile_block y lo usa free_func para quitarla del arbol bueno. */
+	struct xb_ppc_block* xb_owner;
 } PowerPC_func;
 
 PowerPC_func* find_func(PowerPC_func_node** root, unsigned int addr);
 void insert_func(PowerPC_func_node** root, PowerPC_func* func);
 void remove_func(PowerPC_func_node** root, PowerPC_func* func);
 
-typedef struct {
+typedef struct xb_ppc_block {
 	MIPS_instr*     mips_code;     // The code to recompile
 	uint            start_address; // The address this code begins for the 64
 	//PowerPC_instr** code_addr;     // table of block offsets to code pointer,
 	                               //   its length is end_addr - start_addr
 	PowerPC_func_node* funcs;      // BST of functions in this block
+	/* [Xbox360] ★ [Castlevania] LAS VARIANTES DE TLB (Wrappers.c): solo en
+	 * paginas fuera de KSEG0/KSEG1.  Todo a 0 con calloc = bloque normal.
+	 *   xb_phys  pagina fisica + 1 de la que salio su codigo (0 = no se sabe)
+	 *   xb_pool  indice + 1 en el registro de variantes (0 = no esta)
+	 *   xb_var   la siguiente variante APARTADA de la misma pagina virtual;
+	 *            la cadena cuelga del bloque activo, `blocks[pagina]` */
+	uint               xb_phys;
+	uint               xb_pool;
+	struct xb_ppc_block* xb_var;
+	/* [Bomberman, Logs Salvia (11)] huella de los 4 KB de la fisica al
+	 * compilar (0 = sin huella): solo se reusa si sigue igual (var_hash) */
+	uint               xb_hash;
 } PowerPC_block;
 
 #define MAX_JUMPS        4096

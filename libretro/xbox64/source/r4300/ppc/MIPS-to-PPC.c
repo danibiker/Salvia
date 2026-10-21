@@ -49,13 +49,12 @@
 
 // Prototypes for functions used and defined in this file
 static void genCallInterp(MIPS_instr);
-#define JUMPTO_REG  0
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
-#define JUMPTO_REG_SIZE  2
 #define JUMPTO_OFF_SIZE  11
 #define JUMPTO_ADDR_SIZE 11
 static void genJumpTo(unsigned int loc, unsigned int type);
+static void genJumpToRegRapido(void);   /* [Xbox360] JR/JALR: ver Wrappers.h */
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
 static void genCallDynaMem(memType type, int count, int reverse, int _rs, int _rt, short immed);
@@ -2355,6 +2354,44 @@ static int CACHE(MIPS_instr mips){
 
 	switch(_rt){
 	case 0:   /* Index Invalidate */
+		/* [Xbox360] ★★ [Castlevania con esqueletos, Logs Salvia (3)] INDEX
+		 * INVALIDATE NO LLEVA UNA DIRECCION DE CODIGO: LLEVA UN INDICE DE
+		 * LINEA DE LA I-CACHE.  `osInvalICache` de libultra, con un tamano de
+		 * 16 KB o mas, vacia la I-cache ENTERA recorriendola por indice desde
+		 * K0BASE: 0x80000000, 0x80000020 ... 0x80003FE0.  Tratarlo como Hit
+		 * Invalidate (lo que hacia not64, de donde se porto) liberaba la
+		 * funcion que vive en ESA direccion -- el vector de excepciones y el
+		 * codigo del sistema, que nadie ha tocado -- y se recompilaba en cada
+		 * frame.  MEDIDO (sonda [CPU4]): con esqueletos ~1.400 funciones/s
+		 * liberadas, todas por debajo de 0x80004000 (80000180, 8000053C,
+		 * 80000694, 800008D0, 800023F8...), con la escritura en saltos de
+		 * linea de cache; ~2.500 recompilaciones/s, 8-9 ms por VI, y el juego
+		 * de 60 a 41-46 VI/s.
+		 *
+		 * La referencia no hace nada con CACHE: mupen64plus-core
+		 * (mips_instructions.def, CACHE = ADD_TO_PC(1)) y Wii64 HEAD
+		 * (`return CONVERT_ERROR`).  Aqui el codigo que cambia ya lo cubren
+		 * los almacenes, la DMA y el puente fisica->virtual (ppc/Wrappers.c,
+		 * `invalidate_func`), que no existia cuando se porto esto.  Se queda
+		 * el Hit Invalidate, que si lleva la direccion VIRTUAL de lo que
+		 * cambio (el overlay por TLB).
+		 *
+		 * [Bomberman 64 2nd Attack, Logs Salvia (10)] Descartado como causa de
+		 * su cuelgue: con el Hit Invalidate de antes petaba igual (eran las
+		 * variantes de TLB, ver var_hash en Wrappers.c). */
+#if XBOX64_TRAZAS
+		{
+			static int dicho0 = 0;
+			if(!dicho0){
+				dicho0 = 1;
+				sprintf(txtbuffer, "[DYNA] CACHE Index Invalidate (pc=%08X): "
+				        "no se invalida nada (indice de I-cache, no direccion)",
+				        get_src_pc());
+				DEBUG_print(txtbuffer, DBG_USBGECKO);
+			}
+		}
+#endif
+		return CONVERT_SUCCESS;
 	case 16:  /* Hit Invalidate   */
 	{
 		int rs;
@@ -2516,24 +2553,21 @@ static int JR(MIPS_instr mips){
 #ifdef COMPARE_CORE
 	GEN_LI(R4, 1);
 #endif
-	genUpdateCount(0);
+	/* [Xbox360] Con la comprobacion de la interrupcion en cr3, como los saltos
+	 * enlazados: la via rapida no entra si hay una pendiente. */
+	genUpdateCount(1);
 	invalidateRegisters();
 
-#ifdef INTERPRET_JR
-	genJumpTo(REG_LOCALRS, JUMPTO_REG);
-#else // INTERPRET_JR
-	// TODO: jr
-#endif
+	/* [Xbox360] Wii64 dejaba aqui `#ifdef INTERPRET_JR` con la version
+	 * compilada en `// TODO: jr`: el salto volvia siempre al despachador.
+	 * Ahora, la tabla de saltos (genJumpToRegRapido, Wrappers.h). */
+	genJumpToRegRapido();
 
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){ if(is_j_dst(0)){ unget_last_src(); delaySlotNext = 2; } }
 	else nop_ignored();
 
-#ifdef INTERPRET_JR
 	return INTERPRETED;
-#else // INTERPRET_JR
-	return CONVER_ERROR;
-#endif
 }
 
 static int JALR(MIPS_instr mips){
@@ -2555,7 +2589,7 @@ static int JALR(MIPS_instr mips){
 #ifdef COMPARE_CORE
 	GEN_LI(R4, 1);
 #endif
-	genUpdateCount(0);
+	genUpdateCount(1);   /* [Xbox360] cr3 para la via rapida: ver JR */
 
 	// Set LR to next instruction
 	int rd = mapRegisterNew(MIPS_GET_RD(mips));
@@ -2566,21 +2600,17 @@ static int JALR(MIPS_instr mips){
 
 	flushRegisters();
 
-#ifdef INTERPRET_JALR
-	genJumpTo(REG_LOCALRS, JUMPTO_REG);
-#else // INTERPRET_JALR
-	// TODO: jalr
-#endif
+	/* [Xbox360] La via rapida usa r3-r7 a pelo: que el reparto de registros
+	 * no crea que `rd` sigue en uno de ellos (ya esta escrito: flush).  El
+	 * `// TODO: jalr` de Wii64 se fue con INTERPRET_JALR: ver JR. */
+	invalidateRegisters();
+	genJumpToRegRapido();
 
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){ if(is_j_dst(0)){ unget_last_src(); delaySlotNext = 2; } }
 	else nop_ignored();
 
-#ifdef INTERPRET_JALR
 	return INTERPRETED;
-#else // INTERPRET_JALR
-	return CONVERT_ERROR;
-#endif
 }
 
 static int SYSCALL(MIPS_instr mips){
@@ -4894,6 +4924,48 @@ static int D(MIPS_instr mips){
 static const float two16 = 65536.0f;   /* 0x1p16 */
 
 static int CVT_FP_W(MIPS_instr mips, int dbl){
+#if defined(_MSC_VER) && defined(_XBOX)
+	/* [Xbox360] ★★ [Castlevania y Conker, Logs Salvia (4)] CVT.S.W / CVT.D.W
+	 * COMPILADAS, SIN `psq_l`.  Iban al interprete (INTERPRET_FP_W en
+	 * Interpreter.h) porque la version de Wii64, la de abajo, usa la carga
+	 * cuantizada de Gekko, que Xenon no tiene.  MEDIDO (sonda [CPU4], cop1
+	 * 14.20): 300.000-700.000 CVT.S.W por segundo con esqueletos y en las
+	 * secuencias de Conker, ~1,5-2 ms por VI solo en salir al interprete.
+	 *
+	 * La secuencia es la de GliGli (mupen64-360, MIPS-to-PPC.c:3369), el
+	 * numero magico: el double 0x43300000_80000000 vale 2^52 + 2^31; con el
+	 * entero, con el signo cambiado, en la palabra baja vale 2^52 + 2^31 +
+	 * entero, y la resta deja el entero EXACTO (cabe en 52 bits).  `fsubs`
+	 * en sencilla redondea una sola vez, igual que (float)entero.  Lo unico
+	 * distinto de GliGli es DONDE: alli -8(r1), aqui DYNAOFF_CVT (Wrappers.h),
+	 * 8 bytes del marco del trampolin que no usa nadie.  Entre las escrituras
+	 * y las lecturas no se llama a nada, asi que nadie mas los toca. */
+	genCheckFP();
+
+	int fs = MIPS_GET_FS(mips);
+	flushFPR(fs);
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	int r2 = mapRegisterTemp();
+
+	// r2 = r4300.fpr_single[fs]; r2 = *r2 (el entero)
+	GEN_LWZ(r2, (fs*4)+offsetof(R4300,fpr_single), DYNAREG_R4300);
+	GEN_LWZ(r2, 0, r2);
+	// f0 = 2^52 + 2^31
+	GEN_LIS(R0, 0x4330);
+	GEN_STW(R0, DYNAOFF_CVT, R1);
+	GEN_LIS(R0, 0x8000);
+	GEN_STW(R0, DYNAOFF_CVT + 4, R1);
+	GEN_LFD(F0, DYNAOFF_CVT, R1);
+	// fd = 2^52 + 2^31 + entero
+	GEN_XORIS(R0, r2, 0x8000);
+	GEN_STW(R0, DYNAOFF_CVT + 4, R1);
+	GEN_LFD(fd, DYNAOFF_CVT, R1);
+	// fd = entero
+	GEN_FSUB(fd, fd, F0, dbl);
+
+	unmapRegisterTemp(r2);
+	return CONVERT_SUCCESS;
+#else
 	r4300.two16 = two16;
 	genCheckFP();
 
@@ -4915,6 +4987,7 @@ static int CVT_FP_W(MIPS_instr mips, int dbl){
 	unmapFPRTemp(tmp);
 	unmapRegisterTemp(r2);
 	return CONVERT_SUCCESS;
+#endif
 }
 
 static int W(MIPS_instr mips){
@@ -5032,34 +5105,111 @@ static void genCallInterp(MIPS_instr mips){
 	if(mips_is_jump(mips)) delaySlotNext = 2;
 }
 
+/* [Xbox360] Solo JUMPTO_OFF y JUMPTO_ADDR: la rama JUMPTO_REG (cargar el
+ * registro y `blr`) era de JR/JALR, que van por genJumpToRegRapido. */
 static void genJumpTo(unsigned int loc, unsigned int type){
+	// Calculate the destination address
+	loc <<= 2;
+	if(type == JUMPTO_OFF) loc += get_src_pc();
+	else loc |= get_src_pc() & 0xf0000000;
+	// Create space to load destination func*
+	set_next_dst(PPC_NOP);
+	set_next_dst(PPC_NOP);
+	// Make this function the LRU
+	GEN_LWZ(R3, offsetof(R4300,nextLRU), DYNAREG_R4300);
+	GEN_STW(R3, offsetof(PowerPC_func, lru), DYNAREG_FUNC);
+	GEN_ADDI(R0, R3, 1);
+	GEN_STW(R0, offsetof(R4300,nextLRU), DYNAREG_R4300);
+	// Load the address as the return value
+	GEN_LIS(R3, extractUpper16(loc));
+	GEN_ADDI(R3, R3, extractLower16(loc));
+	// Since we could be linking, return on interrupt
+	GEN_BGELR(CR3, 0);
+	// Store r4300.last_pc for linking
+	GEN_STW(R3, offsetof(R4300,last_pc), DYNAREG_R4300);
+	GEN_BLR(1);
+}
 
-	if(type == JUMPTO_REG){
-		// Load the register as the return value
-		GEN_LWZ(R3, (loc*8+4)+offsetof(R4300,gpr), DYNAREG_R4300);
-		GEN_BLR(0);
-	} else {
-		// Calculate the destination address
-		loc <<= 2;
-		if(type == JUMPTO_OFF) loc += get_src_pc();
-		else loc |= get_src_pc() & 0xf0000000;
-		// Create space to load destination func*
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		// Make this function the LRU
-		GEN_LWZ(R3, offsetof(R4300,nextLRU), DYNAREG_R4300);
-		GEN_STW(R3, offsetof(PowerPC_func, lru), DYNAREG_FUNC);
-		GEN_ADDI(R0, R3, 1);
-		GEN_STW(R0, offsetof(R4300,nextLRU), DYNAREG_R4300);
-		// Load the address as the return value
-		GEN_LIS(R3, extractUpper16(loc));
-		GEN_ADDI(R3, R3, extractLower16(loc));
-		// Since we could be linking, return on interrupt
-		GEN_BGELR(CR3, 0);
-		// Store r4300.last_pc for linking
-		GEN_STW(R3, offsetof(R4300,last_pc), DYNAREG_R4300);
-		GEN_BLR(1);
-	}
+/* [Xbox360] ★★ JR/JALR SIN VOLVER AL DESPACHADOR: el porque y las
+ * condiciones, en `xb_jr_tabla` (Wrappers.h).  Sustituye a la rama
+ * JUMPTO_REG de genJumpTo, que era solo las dos primeras instrucciones de
+ * aqui con un `blr` detras: cada salida de abajo es ESE `blr` (r3 = destino,
+ * r30 = esta funcion, LR sin tocar), asi que si algo no cuadra el despachador
+ * lo resuelve exactamente como antes.  Medido (logs (2), 2026-10-21): Mario
+ * 64 ~7 saltos directos por vuelta al despachador; V-Rally y Turok, 15-35.
+ *
+ * Llega con los registros volcados (invalidateRegisters) y cr3 = la
+ * comprobacion de la interrupcion (genUpdateCount(1)).  Usa r0 y r3-r7, cr5 y
+ * ctr, que a la salida de una funcion no lleva nadie.  ~35 instrucciones. */
+static void genJumpToRegRapido(void){
+	const unsigned int tabla = (unsigned int)&xb_jr_tabla[0];
+	const unsigned int inval = (unsigned int)invalid_code;
+
+	// r3 = destino (lo mismo que deja genJumpTo para el despachador)
+	GEN_LWZ(R3, (REG_LOCALRS*8+4)+offsetof(R4300,gpr), DYNAREG_R4300);
+	// Interrupcion pendiente: al despachador, como siempre
+	GEN_BGELR(CR3, 0);
+
+	// r4 = &xb_jr_tabla[(r3 >> 2) & (XB_JR_N-1)]; r5 = su direccion
+	GEN_LIS(R4, extractUpper16(tabla));
+	GEN_ADDI(R4, R4, extractLower16(tabla));
+	// r6 = ((r3 >> 2) & (N-1)) * 8 = (r3 << 1) & ((N-1) << 3)
+	GEN_RLWINM(R6, R3, 1, 32 - (XB_JR_BITS + 3), 28);
+	GEN_LWZUX(R5, R4, R6);
+	GEN_CMPL(CR5, R5, R3);
+	GEN_BNELR(CR5, 0);                       // otra direccion (o de TLB)
+	// r5 = la funcion; 0 = entrada libre
+	GEN_LWZ(R5, 4, R4);
+	GEN_CMPLI(CR5, R5, 0);
+	GEN_BCLR(0, 0xC, (CR5<<2)+2);            // beqlr
+
+	// invalid_code de la pagina y de su alias (update_invalid_addr)
+	GEN_LIS(R4, extractUpper16(inval));
+	GEN_ADDI(R4, R4, extractLower16(inval));
+	GEN_RLWINM(R6, R3, 20, 12, 31);          // r6 = r3 >> 12
+	GEN_LBZX(R0, R4, R6);
+	GEN_CMPLI(CR5, R0, 0);
+	GEN_BNELR(CR5, 0);
+	GEN_XORIS(R6, R6, 0x0002);               // (r3 ^ 0x20000000) >> 12
+	GEN_LBZX(R0, R4, R6);
+	GEN_CMPLI(CR5, R0, 0);
+	GEN_BNELR(CR5, 0);
+
+	// r4300.stop: el `while` del despachador
+	GEN_LWZ(R0, offsetof(R4300,stop), DYNAREG_R4300);
+	GEN_CMPLI(CR5, R0, 0);
+	GEN_BNELR(CR5, 0);
+
+	// start_addr <= r3 < end_addr (el mismo rango que find_func)
+	GEN_LWZ(R6, offsetof(PowerPC_func,start_addr), R5);
+	GEN_CMPL(CR5, R3, R6);
+	GEN_BCLR(0, 0xC, (CR5<<2)+0);            // bltlr
+	GEN_LWZ(R7, offsetof(PowerPC_func,end_addr), R5);
+	GEN_CMPL(CR5, R3, R7);
+	GEN_BGELR(CR5, 0);
+	// r7 = func->code_addr[(r3 - start) >> 2]; 0 = sin compilar
+	GEN_SUBF(R6, R6, R3);                    // r6 = r3 - start
+	GEN_RLWINM(R6, R6, 0, 0, 29);            // palabras -> punteros de 4 bytes
+	GEN_LWZ(R7, offsetof(PowerPC_func,code_addr), R5);
+	GEN_LWZX(R7, R7, R6);
+	GEN_CMPLI(CR5, R7, 0);
+	GEN_BCLR(0, 0xC, (CR5<<2)+2);            // beqlr
+
+	// Lo que haria el despachador: last_pc, LRU (como JUMPTO_ADDR), r30
+	/* ★★ [logs (1), 2026-10-21] NUNCA `addi rX, r0, n`: CON r0 DE FUENTE,
+	 * addi NO LEE EL REGISTRO, USA UN 0 LITERAL (igual que addis y la base de
+	 * las cargas).  La primera version hacia `addi r0,r0,1` y dejaba
+	 * nextLRU = 1 en cada salto rapido (el LRU de la cache de codigo hecho
+	 * trizas).  Por eso r6, libre aqui.  JUMPTO_ADDR hace lo mismo con r3 de
+	 * fuente. */
+	GEN_STW(R3, offsetof(R4300,last_pc), DYNAREG_R4300);
+	GEN_LWZ(R6, offsetof(R4300,nextLRU), DYNAREG_R4300);
+	GEN_STW(R6, offsetof(PowerPC_func,lru), R5);
+	GEN_ADDI(R6, R6, 1);
+	GEN_STW(R6, offsetof(R4300,nextLRU), DYNAREG_R4300);
+	GEN_MR(DYNAREG_FUNC, R5);
+	GEN_MTCTR(R7);
+	GEN_BCTR(0);
 }
 
 #ifdef LAZY_GEN_CALLS

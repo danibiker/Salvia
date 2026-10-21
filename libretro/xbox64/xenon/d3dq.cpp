@@ -1199,12 +1199,19 @@ void d3dq_mete_swap(void)
  * seguia esperando 0,2-0,4 s de cada segundo en el buzon (`sinc`).  Ahora 32
  * por pasada, 8 por clase, y se repone tambien mientras `retro_run` espera
  * al SWAP, que es tiempo muerto del dueno del device.
+ *
+ * ★★ [Logs Salvia (15)] Y AUN SE QUEDABA CORTO: cada bajon de Cruis'n
+ * coincide con texturas que el almacen no tenia (`alm=399/412`: 13 por el
+ * buzon) y cada una cuesta ~9,6 ms del hilo de la lista parado (`sinc=13
+ * (125041 us)`, 46 VI/s).  Ahora 24 por clase (rafagas de una misma talla
+ * dentro de un frame) y 48 MB: quedan ~250 MB de memoria fisica libres en
+ * partida.
  * ====================================================================== */
 #define ALM_CLASES      64u
-#define ALM_HONDO       16u             /* potencia de 2, > ALM_NIVEL */
-#define ALM_NIVEL       8u
+#define ALM_HONDO       32u             /* potencia de 2, > ALM_NIVEL */
+#define ALM_NIVEL       24u
 #define ALM_MAX_TEXELS  (256u * 256u)
-#define ALM_PRESUPUESTO (16u << 20)     /* bytes en el almacen, como mucho */
+#define ALM_PRESUPUESTO (48u << 20)     /* bytes en el almacen, como mucho */
 
 struct AlmClase
 {

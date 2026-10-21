@@ -202,7 +202,8 @@ static PowerPC_func* handle_overlap(PowerPC_func_node** node, PowerPC_func* func
 		freed->func = (*node)->function, freed->next = freed_funcs;
 		freed_funcs = freed;
 		// Free the hole
-		RecompCache_Free((*node)->function->start_addr);
+		/* [Xbox360] Por puntero: ver RecompCache_FreeFunc (Recomp-Cache.h). */
+		RecompCache_FreeFunc((*node)->function);
 
 	} else if(func->start_addr > (*node)->function->start_addr &&
 			  func->end_addr == (*node)->function->end_addr){
@@ -236,7 +237,7 @@ static PowerPC_func* handle_overlap(PowerPC_func_node** node, PowerPC_func* func
 		freed->func = (*node)->function, freed->next = freed_funcs;
 		freed_funcs = freed;
 		// We have some other non-containment overlap
-		RecompCache_Free((*node)->function->start_addr);
+		RecompCache_FreeFunc((*node)->function);   /* [Xbox360] por puntero */
 	}
 	return func;
 }
@@ -267,6 +268,10 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	func = handle_overlap(&ppc_block->funcs, func,
 	                      ppc_block, &addr, &need_pad, &needInsert);
 	if(needInsert) insert_func(&ppc_block->funcs, func);
+	/* [Xbox360] [Castlevania, variantes de TLB] Su arbol es el de ESTE bloque
+	 * (ver xb_owner en Recompile.h).  Tambien si es la de fuera de un hueco:
+	 * la de fuera ya era de este bloque. */
+	func->xb_owner = ppc_block;
 	current_func = func;
 
 	PowerPC_func_hole_node* hole;
@@ -753,7 +758,9 @@ static PowerPC_func_node* free_tree(PowerPC_func_node* node){
 	if(!node) return NULL;
 	node->left = free_tree(node->left);
 	node->right = free_tree(node->right);
-	RecompCache_Free(node->function->start_addr);
+	/* [Xbox360] Por puntero: con variantes de TLB la misma direccion puede
+	 * estar en otro arbol (RecompCache_FreeFunc, Recomp-Cache.h). */
+	RecompCache_FreeFunc(node->function);
 	return NULL;
 }
 

@@ -404,8 +404,9 @@ void hilo_emu_consumir_frame(void)
 
     /* [etapa 5] El almacen de texturas: el dueno del device crea por
      * adelantado las que el juego va a pedir, para que el productor no
-     * espere en el buzon.  Ver `d3dq_almacen_toma`. */
-    d3dq_almacen_repone(32u);
+     * espere en el buzon.  Ver `d3dq_almacen_toma`.  [Logs Salvia (15)]
+     * 64: el almacen ahora es de 24 por clase (d3dq.cpp). */
+    d3dq_almacen_repone(64u);
 
     /* Cuanto va por delante el emulador, en ordenes: es `maxcola` en la
      * linea [D3DQ3].  Con el modo hilo `d3dq_drena` no corre, asi que el
@@ -449,7 +450,7 @@ void hilo_emu_consumir_frame(void)
 #endif
             /* [log 31] Tiempo muerto del dueno del device: reponer el almacen
              * de texturas aqui tambien, poco cada vez. */
-            d3dq_almacen_repone(8u);
+            d3dq_almacen_repone(16u);
             d3dq_espera_trabajo(5);
 #if XBOX64_TRAZAS
             tesp += __mftb() - tw;

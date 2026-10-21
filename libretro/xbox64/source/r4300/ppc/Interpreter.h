@@ -538,8 +538,9 @@ unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
 
 //#define INTERPRET_J
 //#define INTERPRET_JAL
-#define INTERPRET_JR
-#define INTERPRET_JALR
+/* [Xbox360] INTERPRET_JR / INTERPRET_JALR ya no existen: su "version
+ * compilada" era un `// TODO` y JR/JALR van ahora por la tabla de saltos
+ * (genJumpToRegRapido, MIPS-to-PPC.c; ver Wrappers.h). */
 //#define INTERPRET_BC
 //#define INTERPRET_BRANCH
 
@@ -620,9 +621,15 @@ unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
  * precisamente porque este dynarec no la usa).
  *
  * Primero que arranque; optimizar una conversion sin un perfil que la
- * senyale seria cambiar codigo sin medida. */
+ * senyale seria cambiar codigo sin medida.
+ *
+ * ★ [Logs Salvia (4)] EL PERFIL YA LA SENALA: CVT.S.W (cop1 14.20 en [CPU4])
+ * 300.000-700.000 por segundo en Castlevania con esqueletos y en Conker,
+ * ~1,5-2 ms por VI de salidas al interprete.  `_W` ya se compila con el
+ * numero magico de GliGli (CVT_FP_W, MIPS-to-PPC.c), sin `psq_l` ni zona
+ * roja.  `_L` se queda interpretada (64 bits, poco frecuente: no sale en
+ * [CPU4]). */
 #if defined(_XBOX)
-#define INTERPRET_FP_W
 #define INTERPRET_FP_L
 #endif
 

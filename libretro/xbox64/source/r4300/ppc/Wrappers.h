@@ -52,6 +52,67 @@
 #define DYNAOFF_LR     12
 #endif
 
+/* [Xbox360] ★ [Castlevania/Conker, Logs Salvia (4)] 8 BYTES DE TRABAJO DEL
+ * CODIGO EMITIDO, DENTRO DEL MARCO DEL TRAMPOLIN (dyna_tramp, 112 bytes):
+ * ahi solo se usan el enlace hacia atras (0) y el LR (56); los DYNA_OFF_R28..
+ * MYLR de Wrappers.c son del marco de dyna_enter, el de ARRIBA.  Lo usa
+ * CVT_FP_W (MIPS-to-PPC.c) para el numero magico del entero a coma flotante,
+ * que en GliGli iba en -8(r1): la zona roja, que en Xbox 360 no existe.
+ * Alineado a 8 (el marco va a 16) y por encima del area del ABI (0..55). */
+#if defined(_MSC_VER) && defined(_XBOX)
+#define DYNAOFF_CVT    64
+#endif
+
+/* [Xbox360] ★★ [Castlevania con esqueletos, Logs Salvia (4)] LAS VARIANTES
+ * DE TLB.  El codigo compilado cuelga de la pagina VIRTUAL (blocks[]), y
+ * Castlevania remapea su ventana de overlays (0x0E/0x0F......) a OTRA pagina
+ * fisica ~1.700-2.000 veces por segundo (TLBWI, `misma=0`): cada remapeo
+ * tiraba el bloque entero y se recompilaba al volver, 700-850 veces por
+ * segundo, 5-7 ms por VI.  Con esto, al remapear, el bloque se APARTA
+ * (guardado con la fisica de la que salio) y, si la pagina vuelve a una
+ * fisica ya vista, se recupera su codigo en vez de recompilarlo, si la
+ * fisica sigue diciendo lo mismo (var_hash).  Ver "LAS VARIANTES DE TLB" en
+ * Wrappers.c.
+ *   XB_TLBVAR_N     variantes apartadas por pagina virtual, como mucho
+ *   XB_TLBVAR_POOL  bloques de variante vivos en total, como mucho */
+#define XB_TLBVAR_N     8u
+#define XB_TLBVAR_POOL  4096u
+
+/* [Xbox360] ★★ EL SALTO POR REGISTRO SIN VOLVER AL DESPACHADOR (JR/JALR).
+ * Wii64, not64 y mupen64-360 dejan `INTERPRET_JR`/`INTERPRET_JALR` puestos
+ * (Interpreter.h; aqui ya quitados): la version compilada es un
+ * `// TODO: jr`, y cada salto por
+ * registro -- cada RETORNO de funcion -- sale del codigo generado al
+ * despachador en C (`dynarec()`, Wrappers.c).  Medido con la sonda [CPU]
+ * (Logs Salvia (4)-(6)): Conker 500.000-700.000 vueltas/s, 3-4 ms por VI;
+ * Castlevania ~350.000/s, ~2 ms por VI.
+ *
+ * Con esto, como la referencia (mupen64plus-core new_dynarec: `jump_vaddr` ->
+ * `get_addr_ht`, tabla hash por direccion): el despachador apunta en
+ * `xb_jr_tabla` cada destino que resuelve, y el codigo emitido de JR/JALR
+ * (genJumpToRegRapido, MIPS-to-PPC.c) lo busca ahi y salta directo si:
+ *   - no hay interrupcion pendiente (cr3, como los saltos enlazados),
+ *   - la direccion coincide con la de la entrada (solo se apuntan KSEG0/KSEG1:
+ *     una de TLB nunca coincide y va al despachador como siempre),
+ *   - `invalid_code` de la pagina y de su alias KSEG0/KSEG1 estan a 0 (lo
+ *     mismo que mira `update_invalid_addr` en el despachador),
+ *   - `r4300.stop` esta a 0 (el `while` del despachador),
+ *   - la direccion cae dentro de la funcion y esa entrada esta compilada
+ *     (`code_addr[]`, que se lee en el momento: vale tras un Realloc).
+ * Si algo falla, `blr` con r3 = destino: el camino de antes, tal cual.
+ * Al entrar hace lo del despachador: r4300.last_pc = destino, LRU de la
+ * funcion, r30 = funcion.
+ *
+ * ★ LA ENTRADA NO PUEDE SOBREVIVIR A SU FUNCION: free_func
+ * (Recomp-Cache-Heap.c) borra las suyas (dynarec_jr_olvida_func) y los
+ * vaciados globales vacian la tabla (dynarec_olvida_enlace, cpu_deinit). */
+#define XB_JR_BITS      12u
+#define XB_JR_N         (1u << XB_JR_BITS)   /* 4096 entradas de 8 bytes */
+typedef struct {
+	unsigned int  vaddr;   /* 0 = libre                       */
+	PowerPC_func* func;    /* la funcion que contiene `vaddr` */
+} XbJrEntrada;
+
 /* El marco del ayudante `gen_checkfp` (MIPS-to-PPC.c:291).  Es el unico
  * marco que se apila el propio codigo emitido -- censado: no hay mas
  * GEN_STWU sobre R1 en los cinco .c de ppc/ -- y desde el se llama a C, asi
@@ -90,6 +151,19 @@ void dynarec(unsigned int address);
  * arrancar otro juego (`go`, r4300.c) y al cargar un estado
  * (xbox/savestate_n64.c).  Ver la nota en Wrappers.c. */
 void dynarec_olvida_enlace(void);
+/* [Xbox360] ★ [Logs Salvia (5): Castlevania -> Conker, Access violation al
+ * arrancar] LAS VARIANTES DE TLB, FUERA ANTES DE LIBERAR LOS BLOQUES.
+ * `cpu_deinit` (r4300.c) hace free() de todos los blocks[], y el registro de
+ * variantes se quedaba con punteros a bloques ya liberados: el vaciado del
+ * juego siguiente los recorria.  Se llama al principio de cpu_deinit; vacia
+ * tambien la tabla de saltos de JR. */
+void dynarec_tlbvar_vaciar(void);
+/* [Xbox360] El salto por registro rapido (xb_jr_tabla, arriba).  La tabla la
+ * lee el codigo emitido por su direccion; `olvida_func` la llama free_func
+ * antes de liberar una funcion; `vaciar`, los vaciados globales. */
+extern XbJrEntrada xb_jr_tabla[XB_JR_N];
+void dynarec_jr_olvida_func(PowerPC_func* func);
+void dynarec_jr_vaciar(void);
 /* [Xbox360] ★ LA AUTOPRUEBA DEL RECOMPILADOR CONTRA EL INTERPRETE.  Compila y
  * ejecuta cada instruccion sin memoria ni saltos con valores limite, ejecuta
  * la misma con `decodeNInterpret` y compara registros, HI/LO, FPR y fcr31.

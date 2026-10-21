@@ -21,6 +21,7 @@
 **/
 
 #include <stdlib.h>
+#include <string.h>             /* memset: dynarec_jr_vaciar */
 #include "../../gui/DEBUG.h"
 #include "../../xenon64_diag.h"   /* XBOX64_TRAZAS */
 #include "../Invalid_Code.h"
@@ -62,6 +63,45 @@ unsigned int dyna_mem(unsigned int, unsigned int, int, memType, unsigned int, in
 static PowerPC_instr* link_branch = NULL;
 static PowerPC_func* last_func;
 
+/* [Xbox360] El registro de LAS VARIANTES DE TLB (ver la nota larga junto a
+ * xb_tlbvar_cambia, mas abajo): todo bloque que ha sido variante, activo o
+ * apartado. */
+static PowerPC_block* s_var[XB_TLBVAR_POOL];
+static unsigned int   s_varN = 0;
+static void xb_tlbvar_vaciar(void);
+
+/* [Xbox360] ★★ El salto por registro rapido: ver xb_jr_tabla en Wrappers.h. */
+XbJrEntrada  xb_jr_tabla[XB_JR_N];
+
+extern "C" void dynarec_jr_vaciar(void){
+	memset(xb_jr_tabla, 0, sizeof(xb_jr_tabla));
+}
+
+/* Las entradas de `func`.  Solo se apuntan direcciones de DENTRO de la
+ * funcion, asi que basta con mirar su rango; si es mas largo que la tabla,
+ * la tabla entera. */
+extern "C" void dynarec_jr_olvida_func(PowerPC_func* func){
+	unsigned int n, k, a;
+	if(!func) return;
+	if((func->start_addr & 0xC0000000u) != 0x80000000u) return;   /* nunca se apunta */
+	n = ((func->end_addr - func->start_addr) >> 2) + 1u;
+	if(func->end_addr < func->start_addr || n >= XB_JR_N){
+		for(k = 0; k < XB_JR_N; k++)
+			if(xb_jr_tabla[k].func == func){
+				xb_jr_tabla[k].vaddr = 0;
+				xb_jr_tabla[k].func  = NULL;
+			}
+		return;
+	}
+	for(k = 0, a = func->start_addr; k < n; k++, a += 4){
+		XbJrEntrada* const e = &xb_jr_tabla[(a >> 2) & (XB_JR_N - 1u)];
+		if(e->func == func){
+			e->vaddr = 0;
+			e->func  = NULL;
+		}
+	}
+}
+
 /* [Xbox360] ★★ [log 38] EL ENLACE PENDIENTE NO PUEDE CRUZAR UN VACIADO.
  *
  * `dynarec()` enlaza el bloque que se acaba de ejecutar (`last_func`, su
@@ -90,6 +130,11 @@ void dynarec_olvida_enlace(void)
 	/* [log 50] Con todo el codigo tirado, las parejas fisica->virtual ya no
 	 * apuntan a nada; las de otro juego solo harian liberar de mas. */
 	olvida_fis_virt();
+	/* [Castlevania] Y las variantes apartadas: el vaciado recorre blocks[] y
+	 * a ellas no llega.  Ver xb_tlbvar_vaciar. */
+	xb_tlbvar_vaciar();
+	/* [JR rapido] Con todo el codigo tirado, ninguna entrada vale. */
+	dynarec_jr_vaciar();
 }
 
 /* Recompiled code stack frame:
@@ -559,6 +604,217 @@ static void apunta_fis_virt(unsigned int vaddr, unsigned long paddr)
 	s_fisVirt[pf][s_fvLleno % XB_FV_HUECOS] = v;
 }
 
+/* [Xbox360] ★★ LAS VARIANTES DE TLB (Castlevania con esqueletos, Logs Salvia
+ * (4); el interruptor, en Wrappers.h).
+ *
+ * El codigo compilado cuelga de la pagina VIRTUAL: `blocks[pagina]` con su
+ * arbol de funciones.  Cuando TLBWI desmapea una pagina pone su
+ * `invalid_code`, y el despachador, al volver a entrar, la tiraba entera
+ * (`invalidate_block`) y la recompilaba desde la fisica de ahora.  Bien si la
+ * fisica cambio -- el codigo es otro --, pero Castlevania cambia su ventana de
+ * overlays ENTRE UNAS POCAS fisicas sin parar: se recompilaba lo mismo una y
+ * otra vez.
+ *
+ * Ahora cada bloque de una pagina de TLB apunta de que fisica salio
+ * (`xb_phys`), y al remapear a OTRA fisica el bloque se APARTA en vez de
+ * tirarse: se deshacen los enlaces que ENTRAN en sus funciones (ningun salto
+ * enlazado puede llegar a su codigo mientras la pagina apunte a otra cosa) y
+ * se guarda en la cadena `xb_var` del bloque que pasa a ser el activo.  Si la
+ * fisica de ahora ya tiene un apartado, ese vuelve, con su codigo; si no,
+ * bloque nuevo y vacio, que es lo de antes.
+ *
+ * ★ POR QUE LO APARTADO SIGUE SIENDO VALIDO.  Solo cambia si alguien escribe
+ * en su fisica, y eso pasa por `invalidate_func` (almacenes, DMA): su puente
+ * fisica->virtual libera las funciones afectadas de los apartados igual que
+ * las del activo, y una pareja no se quita por "rancia" mientras quede un
+ * bloque que salio de esa fisica.  Los vaciados globales (cargar un estado,
+ * otro juego) tiran tambien lo apartado (`xb_tlbvar_vaciar`).
+ *
+ * ★ LO QUE NO CAMBIA.  Si el bloque no sabe de donde salio (`xb_phys` 0:
+ * codigo mezclado de dos fisicas, ver el despachador) o el registro esta
+ * lleno, se tira como siempre.
+ *
+ * Las funciones apartadas siguen en la cache del codigo: el LRU puede
+ * liberarlas (free_func las quita del arbol de su dueno, `xb_owner`), y sus
+ * enlaces de SALIDA se quedan: si el destino se libera o se aparta, su
+ * desenlace parchea este codigo. */
+static int var_registra(PowerPC_block* b){
+	if (b->xb_pool) return 1;
+	if (s_varN >= XB_TLBVAR_POOL) return 0;
+	s_var[s_varN] = b;
+	s_varN++;
+	b->xb_pool = s_varN;
+	return 1;
+}
+
+static void var_quita(PowerPC_block* b){
+	unsigned int k;
+	PowerPC_block* ult;
+	if (!b->xb_pool) return;
+	k = b->xb_pool - 1u;
+	s_varN--;
+	ult = s_var[s_varN];
+	s_var[k] = ult;
+	ult->xb_pool = k + 1u;
+	b->xb_pool = 0;
+}
+
+/* Los enlaces que ENTRAN en todas las funciones de un arbol. */
+static void var_desenlaza(PowerPC_func_node* n){
+	if (!n) return;
+	var_desenlaza(n->left);
+	var_desenlaza(n->right);
+	RecompCache_UnlinkIn(n->function);
+}
+
+/* Un apartado fuera: sus funciones a la cache libre y el struct a la basura. */
+static void var_tira(PowerPC_block* b){
+	invalidate_block(b, 1);
+	var_quita(b);
+	free(b);
+}
+
+/* El apartado de la pagina del activo `act` que salio de la fisica `ph`
+ * (pagina + 1), o NULL. */
+static PowerPC_block* var_busca(PowerPC_block* act, unsigned int ph){
+	PowerPC_block* b;
+	if (!act) return NULL;
+	for (b = act->xb_var; b; b = b->xb_var)
+		if (b->xb_phys == ph) return b;
+	return NULL;
+}
+
+/* [Xbox360] ★★ [Bomberman 64 2nd Attack, Logs Salvia (9)-(11)] LO GUARDADO
+ * SOLO SE REUSA SI LA FISICA SIGUE DICIENDO LO MISMO.  Con las variantes el
+ * juego petaba al acabar los creditos (saltaba a una direccion sin memoria:
+ * pass0 con mips_code NULL); sin variantes, bien.  Bomberman
+ * tiene mucho codigo por TLB (0x60000000 -> fisica 0x80250000, 0x10000000 ->
+ * 0x801D0000, 0x4000xxxx...) y cambia sus overlays.  Antes de las variantes,
+ * cualquier remapeo tiraba la pagina virtual entera: eso tapaba TODO camino
+ * que escriba codigo sin invalidarlo (almacenes con base >= $k0, que
+ * genCallDynaMem da por seguros; DMA del RSP; parejas perdidas del puente
+ * fisica->virtual cuando se llena).  Al quedarse con la misma fisica o
+ * recuperar un apartado, ese codigo viejo volvia a ejecutarse.
+ *
+ * Ahora cada bloque de variante guarda la huella de los 4 KB de su fisica al
+ * compilar (`xb_hash`, despachador) y solo se reusa si la huella de AHORA es
+ * la misma: codigo identico = compilado identico (una funcion no pasa de su
+ * pagina: pass0 pone un salto al final).  Si no, se tira como siempre.  Fuera
+ * de la RDRAM (8 MB) no hay huella (0) y nunca se reusa.  1024 palabras por
+ * cambio, mucho menos que recompilar.  Medido (logs (1)): Bomberman la tira
+ * ~16 veces (6000xxxx, misma fisica) y ya no peta; Castlevania, cientos en
+ * 0E005000 (pagina que el juego reescribe), y sigue a 60. */
+#define XB_VAR_RDRAM_PAGINAS 0x800u
+static unsigned int var_hash(unsigned int ph){
+	const unsigned int* w;
+	unsigned int k, h = 2166136261u;
+	if (!ph || ph - 1u >= XB_VAR_RDRAM_PAGINAS) return 0;
+	w = (const unsigned int*)fast_mem_access(0x80000000u | ((ph - 1u) << 12));
+	if (!w) return 0;
+	for (k = 0; k < 1024u; k++)
+		h = (h ^ w[k]) * 16777619u;   /* FNV-1a por palabras */
+	return h | 1u;                    /* nunca 0: 0 = sin huella */
+}
+
+/* El despachador, en una pagina de TLB con `invalid_code` puesto y bloque.
+ * 1 = resuelto aqui (la pagina queda lista); 0 = tirarla como siempre. */
+static int xb_tlbvar_cambia(unsigned int pag, unsigned long paddr){
+	PowerPC_block* act = blocks[pag];
+	PowerPC_block* b;
+	PowerPC_block* prev;
+	unsigned int ph, n;
+
+	if (!act || !paddr) return 0;
+	ph = (unsigned int)((paddr & 0x1FFFFFFFu) >> 12) + 1u;
+	if (!act->xb_phys) return 0;   /* no se sabe de donde salio: como siempre */
+	/* ★ [Logs Salvia (5)] LA MISMA FISICA: SE QUEDA, NO SE TIRA.  Con
+	 * esqueletos `reusa` y `nueva` salian 0 con ~450 paginas tiradas por
+	 * segundo: el juego remapea la ventana P1 -> P2 -> P1 ENTRE dos visitas
+	 * del despachador, que al llegar la ve otra vez en la fisica de la que
+	 * salio su codigo -- y la tiraba "por si acaso" y la recompilaba.  Su
+	 * codigo sigue siendo el de esa fisica: lo que se escriba en ella lo
+	 * libera el puente fisica->virtual, como en todo lo demas.  Es lo que hace
+	 * la referencia (mupen64plus `tlb_unmap` no invalida nada) y lo que este
+	 * arbol ya hace con TLBWR (pure_interp.c, Conker).  Solo se ponen a 0 sus
+	 * `invalid_code`.
+	 * [Logs Salvia (11)] Si la huella de la fisica no cuadra, ha cambiado
+	 * por un camino que no invalido: se tira como antes de las variantes. */
+	if (act->xb_phys == ph) {
+		if (!act->xb_hash || act->xb_hash != var_hash(ph)) return 0;
+		init_block(act);
+		return 1;
+	}
+	if (s_varN + 2u > XB_TLBVAR_POOL) return 0;   /* sin sitio: como siempre */
+
+	/* El apartado de esta fisica, si lo hay, fuera de la cadena. */
+	prev = act;
+	for (b = act->xb_var; b && b->xb_phys != ph; b = b->xb_var)
+		prev = b;
+	if (b) {
+		prev->xb_var = b->xb_var;
+		/* [Logs Salvia (11)] La fisica cambio desde que se aparto: su codigo
+		 * no vale.  El struct se queda (ya esta en el registro), vacio. */
+		if (!b->xb_hash || b->xb_hash != var_hash(ph)) {
+			invalidate_block(b, 1);
+			b->xb_hash = 0;
+		}
+	} else {
+		b = (PowerPC_block*)calloc(1, sizeof(PowerPC_block));
+		if (!b) return 0;
+		b->start_address = pag << 12;
+		b->xb_phys = ph;
+	}
+	var_registra(act);
+	var_registra(b);
+
+	/* Apartar el activo: nada enlazado entra ya en su codigo. */
+	var_desenlaza(act->funcs);
+	b->xb_var = act;          /* el apartado mas reciente, el primero */
+	blocks[pag] = b;
+	init_block(b);            /* invalid_code de la pagina y de su fisica a 0 */
+
+	/* Como mucho XB_TLBVAR_N apartados: los del final son los mas viejos. */
+	n = 0;
+	prev = b;
+	while (prev->xb_var) {
+		PowerPC_block* x = prev->xb_var;
+		if (++n > XB_TLBVAR_N) {
+			prev->xb_var = x->xb_var;
+			var_tira(x);
+		} else
+			prev = x;
+	}
+	return 1;
+}
+
+/* Los vaciados (dynarec_olvida_enlace): lo apartado no esta en blocks[].
+ * Primero el codigo que quede en cualquiera (los activos ya vienen vacios);
+ * despues los structs: los que siguen en blocks[] se quedan, sin cadena, y
+ * el resto fuera. */
+static void xb_tlbvar_vaciar(void){
+	unsigned int k;
+	for (k = 0; k < s_varN; k++)
+		invalidate_block(s_var[k], 1);
+	for (k = 0; k < s_varN; k++) {
+		PowerPC_block* b = s_var[k];
+		b->xb_pool = 0;
+		if (blocks[b->start_address >> 12] == b)
+			b->xb_var = NULL;
+		else
+			free(b);
+	}
+	s_varN = 0;
+}
+
+/* Ver Wrappers.h: desde cpu_deinit, ANTES de que libere los blocks[].  Con
+ * el registro vaciado aqui, los activos quedan como bloques normales (y
+ * cpu_deinit los libera) y los apartados ya no existen. */
+extern "C" void dynarec_tlbvar_vaciar(void){
+	xb_tlbvar_vaciar();
+	/* [JR rapido] cpu_deinit va a liberar todos los bloques. */
+	dynarec_jr_vaciar();
+}
+
 void dynarec(unsigned int address){
 	while(!r4300.stop){
 		//print_gecko("PC: %08X cop0[9]: %08X\r\n",address,r4300.reg_cop0[9]);
@@ -588,13 +844,31 @@ void dynarec(unsigned int address){
 			blocks[address>>12]->start_address = address & ~0xFFF;
 			init_block(blocks[address>>12]);
 		} else if(invalid_code_get(address>>12)){
-			invalidate_block(blocks[address>>12], 0);
+			/* [Xbox360] [Castlevania] Pagina de TLB remapeada: si es a la
+			 * misma fisica (y con la misma huella) se queda; si es a OTRA, se
+			 * aparta y se recupera la variante de la fisica de ahora, si la
+			 * hay.  Si no se puede (origen desconocido, huella distinta,
+			 * registro lleno), se tira como siempre.  Ver xb_tlbvar_cambia. */
+			if ((address & 0xC0000000u) == 0x80000000u ||
+			    !xb_tlbvar_cambia(address>>12, paddr))
+				invalidate_block(blocks[address>>12], 0);
 		}
 
 		PowerPC_func* func = find_func(&blocks[address>>12]->funcs, address);
 
 		if(!func || !func->code_addr[(address-func->start_addr)>>2]){
 			blocks[address>>12]->mips_code = (MIPS_instr*)fast_mem_access(paddr & ~0xFFF);
+			/* [Xbox360] [Castlevania] La fisica de la que sale lo que se va a
+			 * compilar, en el bloque.  Vacio: la de ahora.  Con codigo de OTRA
+			 * fisica (el TLB cambio sin invalidar: TLBWR, cargar un estado),
+			 * el bloque mezcla dos y pasa a "no se sabe" (0), que es tratarlo
+			 * como antes de las variantes. */
+			if ((address & 0xC0000000u) != 0x80000000u) {
+				PowerPC_block* const bb = blocks[address>>12];
+				const unsigned int ph = (unsigned int)((paddr & 0x1FFFFFFFu) >> 12) + 1u;
+				if (bb->xb_phys != ph)
+					bb->xb_phys = bb->funcs ? 0u : ph;
+			}
 #ifdef PROFILE
 			start_section(COMPILER_SECTION);
 #endif
@@ -603,6 +877,12 @@ void dynarec(unsigned int address){
 #ifdef PROFILE
 			end_section(COMPILER_SECTION);
 #endif
+			/* [Xbox360] [Bomberman, Logs Salvia (11)] La huella de la fisica de
+			 * la que acaba de salir este codigo: ver var_hash. */
+			if ((address & 0xC0000000u) != 0x80000000u) {
+				PowerPC_block* const bb = blocks[address>>12];
+				bb->xb_hash = bb->xb_phys ? var_hash(bb->xb_phys) : 0u;
+			}
 			/* [Xbox360] [log 50] El puente fisica -> virtual. */
 			apunta_fis_virt(address, paddr);
 		} else {
@@ -616,8 +896,26 @@ void dynarec(unsigned int address){
 		// Recompute the block offset
 		PowerPC_instr *code = (PowerPC_instr *)func->code_addr[index];
 
+		/* [Xbox360] [JR rapido] El destino resuelto, para el proximo JR/JALR
+		 * que salte aqui (Wrappers.h).  Solo KSEG0/KSEG1: en TLB la misma
+		 * virtual puede apuntar a otra fisica sin que nadie lo marque. */
+		if((address & 0xC0000000u) == 0x80000000u && code){
+			XbJrEntrada* const e = &xb_jr_tabla[(address >> 2) & (XB_JR_N - 1u)];
+			e->vaddr = address;
+			e->func  = func;
+		}
+
 		// Create a link if possible
-		if(link_branch && !func_was_freed(last_func))
+		/* [Xbox360] ★ [Bomberman, Logs Salvia (11)] Y NUNCA DESDE UNA VARIANTE
+		 * APARTADA.  Si la funcion de la que se sale es de un bloque que ya no
+		 * es el de su pagina (se acaba de apartar en esta misma vuelta: su
+		 * pagina cambio de fisica), el enlace quedaria en su codigo apuntando
+		 * a la variante de AHORA; al recuperarla, saltaria a codigo de otra
+		 * fisica.  Antes de las variantes esa funcion estaba liberada y
+		 * `func_was_freed` lo evitaba. */
+		if(link_branch && !func_was_freed(last_func) &&
+		   !(last_func->xb_owner &&
+		     last_func->xb_owner != blocks[last_func->start_addr >> 12]))
 			RecompCache_Link(last_func, link_branch, func, code);
 		else if(link_branch){
 			/* [Xbox360] [Conker, log 12] Enlace pendiente desde una funcion
@@ -733,7 +1031,7 @@ void invalidate_func(unsigned int addr){
 	if(!invalid_code_get(addr>>12)){
 		PowerPC_func* func = find_func(&blocks[addr>>12]->funcs, addr);
 		if(func)
-			RecompCache_Free(func->start_addr);
+			RecompCache_FreeFunc(func);   /* [Xbox360] por puntero (Recomp-Cache.h) */
 	}
 	/* [Xbox360] [log 50] ★ Y las funciones compiladas bajo una direccion de
 	 * TLB que sale de esta pagina fisica: ver `apunta_fis_virt`.  Sin mirar
@@ -752,34 +1050,52 @@ void invalidate_func(unsigned int addr){
 				 * busqueda.  Asi una pagina sin codigo de TLB, que es casi
 				 * cualquier almacenamiento, cuesta una sola lectura. */
 				if(!v) break;
-#ifndef USE_TLB_CACHE
-				/* [Xbox360] ★ [GoldenEye, ralentizaciones] LA PAREJA RANCIA SE
-				 * QUITA Y NO LIBERA NADA.  Si la virtual apunta HOY a OTRA
-				 * pagina fisica, lo que esta compilado ahi salio de esa otra:
-				 * escribir en esta no le afecta.  Y el codigo de la pareja
-				 * vieja ya lo marco el propio cambio de TLB (`invalid_code_set`
-				 * en TLBWI/TLBWR, pure_interp.c).  Medido con una sonda (log
-				 * 17): de 16384 funciones liberadas por el puente, 9735 eran de
-				 * parejas asi -- codigo valido tirado y recompilado, ~300/s.
-				 * Solo con la virtual MAPEADA a otra: sin mapear (`lut` 0) se
-				 * libera como antes, que es el patron de un overlay (desmapear,
-				 * escribir, volver a mapear la misma).  Al quitarla, las de
-				 * detras suben un hueco, para que el primero libre siga
-				 * acabando la busqueda. */
+				/* [Xbox360] [Castlevania] Las variantes de TLB: un apartado que
+				 * salio de ESTA fisica tiene el codigo que se esta pisando,
+				 * aunque la virtual apunte hoy a otra.  Se libera lo afectado
+				 * y la pareja no es "rancia" mientras quede un bloque de aqui.
+				 * Y el activo solo si salio de aqui (o no se sabe de donde).
+				 *
+				 * ★ [GoldenEye, ralentizaciones] LA PAREJA RANCIA SE QUITA Y NO
+				 * LIBERA NADA.  Si la virtual apunta HOY a OTRA pagina fisica (y
+				 * ningun bloque salio de esta), lo que esta compilado ahi salio
+				 * de esa otra: escribir en esta no le afecta.  Medido con una
+				 * sonda (log 17): de 16384 funciones liberadas por el puente,
+				 * 9735 eran de parejas asi -- codigo valido tirado y
+				 * recompilado, ~300/s.  Solo con la virtual MAPEADA a otra: sin
+				 * mapear (`lut` 0) se libera como antes, que es el patron de un
+				 * overlay (desmapear, escribir, volver a mapear la misma).  Al
+				 * quitarla, las de detras suben un hueco, para que el primero
+				 * libre siga acabando la busqueda. */
 				{
-					const unsigned long lut = tlb_LUT_r[v - 1u];
-					if(lut && ((lut & 0x1FFFFFFFu) >> 12) != pf){
-						unsigned int j;
-						for(j = i; j + 1u < XB_FV_HUECOS; j++)
-							s_fisVirt[pf][j] = s_fisVirt[pf][j + 1u];
-						s_fisVirt[pf][XB_FV_HUECOS - 1u] = 0u;
-#if XBOX64_TRAZAS
-						s_fvRancias++;
-#endif
-						continue;   /* el mismo hueco, que ahora es la siguiente */
+					PowerPC_block* const act = blocks[v - 1u];
+					PowerPC_block* const var = var_busca(act, pf + 1u);
+					const int actDeAqui = (act && act->xb_phys == pf + 1u);
+					if (var) {
+						PowerPC_func* const fv = find_func(&var->funcs, ((v - 1u) << 12) | (addr & 0xFFFu));
+						if (fv) {
+							if (fv == last_func) link_branch = NULL;
+							RecompCache_FreeFunc(fv);
+						}
 					}
-				}
+#ifndef USE_TLB_CACHE
+					if (!var && !actDeAqui) {
+						const unsigned long lut = tlb_LUT_r[v - 1u];
+						if(lut && ((lut & 0x1FFFFFFFu) >> 12) != pf){
+							unsigned int j;
+							for(j = i; j + 1u < XB_FV_HUECOS; j++)
+								s_fisVirt[pf][j] = s_fisVirt[pf][j + 1u];
+							s_fisVirt[pf][XB_FV_HUECOS - 1u] = 0u;
+#if XBOX64_TRAZAS
+							s_fvRancias++;
 #endif
+							continue;   /* el mismo hueco, que ahora es la siguiente */
+						}
+					}
+#endif
+					/* El activo salio de OTRA fisica: escribir aqui no le toca. */
+					if (act && act->xb_phys && !actDeAqui) { i++; continue; }
+				}
 				if(!blocks[v - 1u]) { i++; continue; }
 				f = find_func(&blocks[v - 1u]->funcs, ((v - 1u) << 12) | (addr & 0xFFFu));
 				if(!f) { i++; continue; }
@@ -794,7 +1110,7 @@ void invalidate_func(unsigned int addr){
 				/* La de la que se acaba de salir: sin enlace pendiente
 				 * desde ella (`freed_funcs` no la apuntaria; log 38). */
 				if(f == last_func) link_branch = NULL;
-				RecompCache_Free(f->start_addr);
+				RecompCache_FreeFunc(f);   /* [Xbox360] por puntero */
 				i++;
 			}
 		}
