@@ -5139,8 +5139,12 @@ extern "C" void gxd3d_fb_activa(void *gxtex)
  * leer un hueco se tiran sus lineas con `__dcbf` (la CPU nunca las escribe:
  * estan limpias y dcbf solo las invalida).
  *
- * Solo el caso que usa DepthCopy.cpp: destino de la mitad exacta del origen
- * y multiplo de 4.  Lo demas se cuenta en `mal` y no se copia. */
+ * Solo el caso que usa DepthCopy.cpp: ancho de destino multiplo de 4 y mitad
+ * exacta del origen.  En vertical, el doble exacto es la caja de GX; [1080
+ * Snowboarding] 238 filas del N64 ocupan 480 del EFB (escala 2,017) y el alto
+ * no es multiplo de 4: se toma el par de filas mas cercano al centro de cada
+ * fila y el ultimo bloque de 4x4 va a medias (DepthCopy.cpp no lee de mas).
+ * Lo demas se cuenta en `mal` y no se copia. */
 #define GXD3D_Z_HUECOS 3u
 #define GXD3D_Z_CAP    (1280u * 1024u)   /* 640x480x4 = 1.228.800 cabe */
 /* [Mario Kart 64, Banjo-Kazooie] La copia del COLOR a la RDRAM usa la misma
@@ -5272,9 +5276,16 @@ static void gxd3d_convierte_z(GXD3DZHueco *h, u16 *out, unsigned int dw, unsigne
         for (y = 0; y < dh; y++)
         {
             u16 *fila = out + (((y >> 2) * grupos) << 4) + ((y & 3u) << 2);
+            /* La fila PAR del hueco cuyo par (sy, sy+1) cubre el centro de la
+             * fila `y`.  Con el doble exacto (sh = 2*dh) sale 2y, la caja de
+             * GX de siempre; con otra escala (1080: 480/238), la mas cercana.
+             * Par por el `(y & 1) << 4` de los desplazamientos de abajo. */
+            unsigned int sy = (((2u * y + 1u) * sh) / (2u * dh)) & ~1u;
+            if (sy + 1u >= sh)
+                sy = (sh - 2u) & ~1u;
             for (x = 0; x < grupos; x++)
             {
-                const unsigned int base = XGAddress2DTiledOffset(x * 8u, y * 2u, sw, 4);
+                const unsigned int base = XGAddress2DTiledOffset(x * 8u, sy, sw, 4);
                 u16 *bloque = fila + (x << 4);
                 unsigned int i;
                 for (i = 0; i < 4u; i++)
@@ -5306,8 +5317,10 @@ static void gxd3d_copia_z(void *dest, u16 sl, u16 st, u16 sw, u16 sh, u16 dw, u1
 {
     D3DRECT r;
 
-    if (!dest || !dw || !dh || (dw & 3u) || (dh & 3u) ||
-        sw != (u16)(dw * 2u) || sh != (u16)(dh * 2u))
+    /* [1080] El alto ya no tiene que ser multiplo de 4 ni la mitad exacta:
+     * ver la nota de arriba.  `sh >= 2` para el par de filas. */
+    if (!dest || !dw || !dh || (dw & 3u) ||
+        sw != (u16)(dw * 2u) || sh < 2u || sh < dh)
     {
 #if XBOX64_TRAZAS
         s_stZMal++;
@@ -5412,7 +5425,7 @@ static void gxd3d_entrega_z(void)
         return;
     }
     __lwsync();   /* la fence antes que los texels */
-    if (mejor->w == (u16)(s_zDw * 2u) && mejor->h == (u16)(s_zDh * 2u))
+    if (mejor->w == (u16)(s_zDw * 2u) && mejor->h >= 2u && mejor->h >= s_zDh)
     {
         gxd3d_convierte_z(mejor, (u16 *)s_zDest, s_zDw, s_zDh);
 #if XBOX64_TRAZAS

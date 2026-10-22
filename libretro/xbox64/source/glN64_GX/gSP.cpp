@@ -139,8 +139,70 @@ static void _gSPUpdateCombW()
 	}
 	else
 	{
-		OGL.GXcombWok = false;
-		OGL.GXuseCombW = false;
+		/* [Xbox360] ★★ [1080 Snowboarding, la nieve que desaparece y deja ver la
+		 * montania del fondo, 2026-10-22] EL MISMO TEST SIN INVERTIR LA MATRIZ.
+		 *
+		 * Sin combW los vertices van ya divididos por w (OGL_DrawTriangles), asi
+		 * que uno detras del ojo (w <= 0) no se puede representar y su triangulo
+		 * entero se TIRA (OGL_AddTriangle, `wcull`; logs 23: 324/s en carrera).
+		 * GLideN64 no tiene el problema: GL recorta en homogeneas.  Con combW el
+		 * triangulo va en homogeneas y lo recorta D3D, como alli.
+		 *
+		 * combW vale si la z de clip es AFIN en la w: z = a*w + b.  Arriba se mira
+		 * en la inversa (I[0][3] = I[1][3] = 0 da b = 1/I[2][3] y
+		 * a = -I[3][3]/I[2][3]), y la inversa falla aunque la proyeccion sea una
+		 * perspectiva normal si la combinada es SINGULAR (un objeto aplastado a
+		 * escala 0 en un eje) o la inversion pierde precision (traslaciones
+		 * grandes).  Lo mismo, leido en las columnas (clip_j = sum v_i C[i][j]):
+		 * C[i][2] = a*C[i][3] para i = 0..2, y b = C[3][2] - a*C[3][3].  Solo
+		 * cuando la inversa ha dicho que no: donde ya valia, nada cambia.  Wii64
+		 * HEAD tiene el mismo test que arriba (gSP.cpp:122-147).
+		 * ★ RESUELTO (logs 28-30, confirmado por el usuario): en carrera 25-33
+		 * matrices/s salvadas asi, ninguna rechazada, `wcull` 0 (antes 324/s) y
+		 * la peor fila aceptada a 1 cuanto de 1/65536. */
+		f32 (*C)[4] = gSP.matrix.combined;   /* solo se lee */
+		int k = 0, i;
+		BOOL afin = FALSE;
+		f32 a = 0.0f;
+
+		for (i = 1; i < 3; i++)
+			if (fabsf( C[i][3] ) > fabsf( C[k][3] ))
+				k = i;
+		if (C[k][3] != 0.0f)
+		{
+			/* ★ [logs (29), sonda de matrices ya retirada] LA TOLERANCIA, CONTRA LA ESCALA DE LA
+			 * MATRIZ Y EL CUANTO DEL N64, NO CONTRA CADA FILA.  1080 mete la
+			 * rotacion de la camara en la proyeccion; sus columnas z,w por filas
+			 * salieron -0.0003052,-0.0003052 / 0.6243,0.6226 / -0.7848,-0.7825:
+			 * a = 1.0028 en las grandes, y en la pequenia los dos valores son el
+			 * mismo 20/65536, porque el punto fijo 16.16 de la matriz del N64 no
+			 * da para ese 0,28 por ciento.  Con una tolerancia relativa a la fila
+			 * (la primera version) esa fila tumbaba la matriz entera.  Ahora: un
+			 * 1e-4 de la fila mas grande, mas 4 cuantos de 1/65536 por cada lado.
+			 * El error de profundidad que deja es del orden del de la propia
+			 * matriz del N64, y es el mismo para dos capas coplanarias. */
+			const f32 tol = 1.0e-4f * (fabsf( C[k][2] ) + fabsf( C[k][3] )) +
+			                (4.0f / 65536.0f);
+			a = C[k][2] / C[k][3];
+			afin = TRUE;
+			for (i = 0; i < 3; i++)
+				if (fabsf( C[i][2] - a * C[i][3] ) > tol + (4.0f / 65536.0f) * fabsf( a ))
+					afin = FALSE;
+		}
+
+		if (afin)
+		{
+			const f32 b = C[3][2] - a * C[3][3];
+			OGL.GXcombW[2][3] = GXprojZScale * b;
+			OGL.GXcombW[2][2] = -GXprojZOffset - (GXprojZScale * a);
+			OGL.GXcombWok = true;
+			OGL.GXuseCombW = true;
+		}
+		else
+		{
+			OGL.GXcombWok = false;
+			OGL.GXuseCombW = false;
+		}
 	}
 
 	OGL.GXupdateMtx = true;

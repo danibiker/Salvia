@@ -658,6 +658,16 @@ static void _RSP_SetGameHacks()
 	 * necesite. */
 	else if (strstr( nombreIni, "HEXEN" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyToRDRAM;
+	/* [Xbox360] ★ [1080 Snowboarding, 2026-10-22] GLideN64 d4dce42e/d4692426:
+	 * [1080%20SNOWBOARDING] copyToRDRAM=1 y copyDepthToRDRAM=1, "essential for
+	 * correct work" (hoy sin entrada: son los valores por defecto de GLideN64).
+	 * Sin la de Z el sol se veia a traves de las paredes (el juego lee el Z de
+	 * la RDRAM); sin la del color, una pantalla del juego salia con basura.
+	 * Probado el 2026-10-22 (logs 26-27): las dos cosas bien.  VI de 320x238 en
+	 * un EFB de 480: ver DepthCopy_Active.  Ya no va en "foto" (gamehacks.c):
+	 * con foto nada de esto llegaria al juego. */
+	else if (strstr( nombreIni, "1080 SNOWBOARDING" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyToRDRAM | hack_copyDepthToRDRAM;
 	/* [Xbox360] [Paper Mario / Mario Story] GLideN64.custom.ini [PAPER%20MARIO]
 	 * y [MARIO%20STORY]: copyToRDRAM=1 (0ad54a88).  Y lo que GLideN64 pone en
 	 * su RSP.cpp para los mismos nombres y que solo actua sobre esa copia:

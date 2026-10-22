@@ -136,18 +136,21 @@ static void _dcConvert( u16 *dst, u32 width, u32 height )
 	const u32 claim = ((((u32)dst) & 31) == 0) && ((width & 15) == 0);
 	const u16 *tile = (const u16*)dcBuf;
 
-	for (u32 ty = 0; ty < (height >> 2); ty++)
+	// [Xbox360] [1080 Snowboarding, 238 lines] The last row of tiles may be partial:
+	// the copy holds whole 4x4 tiles, but only `height` lines go to the depth image.
+	for (u32 ty = 0; ty < ((height + 3) >> 2); ty++)
 	{
 		u16 *rowStart = dst + (ty << 2) * width;
+		const u32 rows = ((ty << 2) + 4 <= height) ? 4 : (height - (ty << 2));
 
 		for (u32 tx = 0; tx < tilesPerRow; tx++, tile += 16)
 		{
 			DC_PREFETCH( tile + 16 * 4 );
 
 			u16 *out = rowStart + (tx << 2);
-			const BOOL claimLine = claim && ((tx & 3) == 0);
+			const BOOL claimLine = claim && ((tx & 3) == 0) && rows == 4;
 
-			for (u32 r = 0; r < 4; r++, out += width)
+			for (u32 r = 0; r < rows; r++, out += width)
 			{
 				if (claimLine)
 					DC_CLAIM( out );
@@ -179,14 +182,18 @@ BOOL DepthCopy_Active()
 
 	// The GP's box filter halves the copy, so the EFB has to hold the frame at exactly
 	// 2x the size and tiles are 4x4 and output lines 16 pixels wide.
-	if (OGL.GXscaleX != 2.0f || OGL.GXscaleY != 2.0f)
+	// [Xbox360] [1080 Snowboarding] Only across: the shim's copy takes the nearest pair
+	// of EFB lines for any vertical scale (238 N64 lines in 480, 2.017) and a height
+	// that is not a multiple of 4 (see "LA COPIA DE PROFUNDIDAD" in xenon/gx_d3d9.cpp).
+	// At exactly 2x (OoT, Majora, DK64) it is the box filter as before.
+	if (OGL.GXscaleX != 2.0f || OGL.GXscaleY < 1.0f)
 		return FALSE;
 
-	if (VI.width == 0 || VI.height == 0 || (VI.width & 15) != 0 || (VI.height & 3) != 0)
+	if (VI.width == 0 || VI.height == 0 || (VI.width & 15) != 0)
 		return FALSE;
 
-	// Bigger than the copy buffer?
-	if ((VI.width * VI.height * 2) > DEPTHCOPY_BUF_SIZE)
+	// Bigger than the copy buffer?  Whole 4x4 tiles.
+	if ((VI.width * ((VI.height + 3) & ~3u) * 2) > DEPTHCOPY_BUF_SIZE)
 		return FALSE;
 
 	return TRUE;
@@ -279,7 +286,9 @@ void DepthCopy_EndDList()
 		OGL_DrawTriangles();
 	OGL_ApplyPendingClears();
 
-	GX_SetTexCopySrc( OGL.GXorigX, OGL.GXorigY, width << 1, height << 1 );
+	// [Xbox360] [1080] The frame's real height in the EFB: 2x for 240 lines, 480 for 238.
+	const u32 srcHeight = (u32)((f32)height * OGL.GXscaleY + 0.5f);
+	GX_SetTexCopySrc( OGL.GXorigX, OGL.GXorigY, width << 1, srcHeight );
 	GX_SetTexCopyDst( width, height, GX_TF_Z16, GX_TRUE );
 	GX_SetCopyFilter( GX_FALSE, NULL, GX_FALSE, NULL );
 	GX_CopyTex( dcBuf, GX_FALSE );

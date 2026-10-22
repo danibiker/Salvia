@@ -284,10 +284,11 @@ void GameSpecificHackSetup() {
 	 * 17), mas que sin lista en paralelo (25-28).  Medido con (U) (V1.1,
 	 * Rev A); las demas revisiones, con los CRC de mupen64plus.ini.
 	 *
-	 * [1080 Snowboarding, 2026-10-16] "FOTO", a peticion del usuario, como
-	 * Cruis'n.  CRC de mupen64plus.ini: los dos [!] y el que comparten la
-	 * mayoria de variantes de la (JU).  Earthworm Jim 3D (2026-10-16), igual,
-	 * a peticion del usuario; los volcados [!].
+	 * [1080 Snowboarding, 2026-10-22] YA NO VA EN "FOTO", a peticion del
+	 * usuario (iba desde el 2026-10-16): necesita la copia de Z y la del color
+	 * a la RDRAM (RSP.cpp), y con foto nada de lo que escribe el plugin llega
+	 * al juego.  Earthworm Jim 3D (2026-10-16) sigue en "foto", a peticion
+	 * del usuario; los volcados [!].
 	 *
 	 * [Quake 64, Quake II, Rayman 2, Turok - Dinosaur Hunter, Turok 2,
 	 * Turok 3 y Donald Duck, 2026-10-16] "ACTIVADO", a peticion del usuario,
@@ -296,9 +297,6 @@ void GameSpecificHackSetup() {
 	   (curCRC[0] == 0xFF2F2FB4 && curCRC[1] == 0xD161149A) ||   // Cruis'n USA (U) (V1.0)
 	   (curCRC[0] == 0x5306CF45 && curCRC[1] == 0xCBC49250) ||   // Cruis'n USA (U) (V1.1)
 	   (curCRC[0] == 0xB3402554 && curCRC[1] == 0x7340C004) ||   // Cruis'n USA (U) (V1.2, Rev B)
-	   (curCRC[0] == 0x58FD3F25 && curCRC[1] == 0xD92EAA8D) ||   // 1080 Snowboarding (E) (M4)
-	   (curCRC[0] == 0x1FBAF161 && curCRC[1] == 0x2C1C54F1) ||   // 1080 Snowboarding (JU) (M2)
-	   (curCRC[0] == 0x92072A84 && curCRC[1] == 0x275952F8) ||   // 1080 Snowboarding (JU) (variantes)
 	   (curCRC[0] == 0x492B9DE8 && curCRC[1] == 0xC6CCC81C) ||   // Earthworm Jim 3D (E) (M6)
 	   (curCRC[0] == 0xDF574191 && curCRC[1] == 0x9EB5123D))     // Earthworm Jim 3D (U)
 		hilo_lista_sp_db(2);
