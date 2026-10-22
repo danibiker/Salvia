@@ -121,6 +121,9 @@ extern "C" void gxd3d_texcache_habilitar(int on);
 /* [Wii64 443f68b] `[ZCOPIA]`, la copia de profundidad de DepthCopy.cpp
  * (xenon/gx_d3d9.cpp).  No escribe nada si ningun juego la ha pedido. */
 extern "C" void gxd3d_zcopia_informe(void);
+/* La velocidad del VI segun el codigo de pais de la cabecera de la ROM: 50 en
+ * PAL, 60 en NTSC (source/main/timers.c, de Wii64; no esta en timers.h). */
+extern "C" int GetVILimit(void);
 
 /* ====================================================================== */
 /* Callbacks del frontend                                                 */
@@ -1104,7 +1107,14 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->geometry.max_width    = FB_ANCHO;
     info->geometry.max_height   = FB_ALTO;
     info->geometry.aspect_ratio = 4.0f / 3.0f;
-    info->timing.fps            = 60.0;
+    /* ★ 50 EN LOS JUEGOS PAL.  Era 60 fijo: con sincronizacion por audio no
+     * se notaba (el audio PAL ya sale a su ritmo), pero los modos de video
+     * (Sync::limit_fps) pacean a esta cifra, y un juego PAL (1080 o Beetle
+     * Adventure Racing europeos) iba un 20 por ciento rapido.  Lo mismo que
+     * mupen64plus-libretro (50/60 por el tipo de sistema de la ROM).  El
+     * frontend lo pide tras `retro_load_game`, con la cabecera ya leida; sin
+     * ROM, `GetVILimit` da 60.  Tambien lo reenvia el cambio de DACRATE (abajo). */
+    info->timing.fps            = (double)GetVILimit();
 
     /* ★ LA FRECUENCIA DE VERDAD, NO UN 44100 DE ADORNO.
      *
