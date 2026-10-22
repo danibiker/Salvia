@@ -668,6 +668,16 @@ static void _RSP_SetGameHacks()
 	 * con foto nada de esto llegaria al juego. */
 	else if (strstr( nombreIni, "1080 SNOWBOARDING" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyToRDRAM | hack_copyDepthToRDRAM;
+	/* [Xbox360] [Star Wars Episode I Racer, 2026-10-22] El sol se veia a traves
+	 * de las paredes, como en 1080: el juego lee el Z de la RDRAM para saber si
+	 * esta tapado.  GLideN64 no tiene entrada (copyDepthToRDRAM es su valor por
+	 * defecto).  Solo la de Z: la del color no hace falta para esto y cuesta
+	 * ~4 ms por imagen.  Nombre interno de la cabecera: "STAR WARS EP1 RACER"
+	 * (comprobar en `[GLN64] rom interna=`).  Ojo: DepthCopy_Active exige un
+	 * EFB al doble en horizontal; en el modo de alta resolucion del juego (con
+	 * Expansion Pak) no se activaria. */
+	else if (strstr( nombreIni, "EP1 RACER" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyDepthToRDRAM;
 	/* [Xbox360] [Paper Mario / Mario Story] GLideN64.custom.ini [PAPER%20MARIO]
 	 * y [MARIO%20STORY]: copyToRDRAM=1 (0ad54a88).  Y lo que GLideN64 pone en
 	 * su RSP.cpp para los mismos nombres y que solo actua sobre esa copia:

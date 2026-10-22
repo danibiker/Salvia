@@ -252,8 +252,13 @@ extern unsigned char xbox64_mem_texcache[TEXCACHE_SIZE];
 /* [Wii64 443f68b] La copia de profundidad de glN64_GX (DepthCopy.cpp): el
  * bufer donde `GX_CopyTex(GX_TF_Z16)` deja la profundidad del EFB a 320x240
  * y la tabla de 64K entradas que la convierte.  Mismos tamanos que en
- * MEM2.h de upstream; aqui son arrays, como el resto de este fichero. */
-#define DEPTHCOPY_BUF_SIZE (320*240*2)
+ * MEM2.h de upstream; aqui son arrays, como el resto de este fichero.
+ * [Xbox360] [Star Wars Episode I Racer, logs (32)] A 320x480: en carrera el
+ * VI pasa a 320x480 (entrelazado) y con 320x240 DepthCopy_Active la apagaba
+ * (`[DCOPIA] inactiva`): el sol se veia a traves de las paredes.  Con el EFB
+ * a 640 de ancho (escala horizontal 2, la unica que admite la copia) el VI no
+ * pasa de 320, asi que 480 filas es el maximo; 150 KB mas de .bss. */
+#define DEPTHCOPY_BUF_SIZE (320*480*2)
 #define DEPTHCOPY_LUT_SIZE (65536*2)
 #define DEPTHCOPY_SIZE     (DEPTHCOPY_BUF_SIZE + DEPTHCOPY_LUT_SIZE)
 extern unsigned char xbox64_mem_dcbuf[DEPTHCOPY_BUF_SIZE];
