@@ -119,7 +119,7 @@ volatile unsigned int d3dq_dbg_alm_crea   = 0;
 #define SOMBRA_SAMP   4
 #define SOMBRA_STIPOS (80 / 4)
 #define SOMBRA_VSC    16
-#define SOMBRA_PSC    20     /* c0..c19: c16/c17 = GXD3D_LOD_CONST, c18/c19 = GXD3D_ATLAS_CONST (gx_d3d9_int.h) */
+#define SOMBRA_PSC    21     /* c0..c20: c16/c17 = GXD3D_LOD_CONST, c18/c19 = GXD3D_ATLAS_CONST, c20 = GXD3D_NIEBLAZ_CONST (gx_d3d9_int.h) */
 
 static DWORD          s_sRs[SOMBRA_RS];
 static unsigned char  s_sRsOk[SOMBRA_RS];

@@ -1520,6 +1520,20 @@ void OGL_UpdateStates()
 	}
 	else
 		GXD3D_SetRenderToDepth( 0 );
+
+	/* [Xbox360] [Beetle Adventure Racing, la niebla] El texrect de la niebla
+	 * por Z (gln64_nieblaZ, ver _gDPTexrectNieblaZ en gDP.cpp): el shader lo
+	 * pone el shim, y aqui el blend de GLideN64 ShadowMapShader::activate,
+	 * glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) ("DepthFogCombiner does
+	 * not support shader blending": setBlendMode(true), el blend clasico), sin
+	 * alpha compare: su shader no descarta.  CHANGED_RENDERMODE para que el
+	 * siguiente dibujo recomponga el suyo. */
+	if (gln64_nieblaZ)
+	{
+		GX_SetBlendMode( GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR );
+		GX_SetAlphaCompare( GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0 );
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
 #endif // __GX__
 }
 

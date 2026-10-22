@@ -2274,6 +2274,38 @@ static BOOL _gDPTexrectPaletteMod( f32 lrx, f32 lry )
 	}
 	return TRUE;
 }
+
+/* [Xbox360] ★ [Beetle Adventure Racing, la niebla] texturedRectShadowMap DE
+ * GLideN64 (GraphicsDrawer.cpp:1189-1208), con su shader ShadowMapShader
+ * (glsl_SpecialShadersFactory.cpp:59-134 y 618-664).  El juego hace la niebla
+ * con un texrect que lee el DEPTH IMAGE como textura de 16 bits y la TLUT
+ * cargada en la TMEM como curva: en el N64 cada pixel sale del color de
+ * niebla con alfa = TLUT[byte alto de su Z].  Aqui (como en GLideN64) la
+ * RDRAM no tiene ese Z al dia, asi que el texrect se dibuja con un shader
+ * especial del shim (GXD3D_SetNieblaZ): lee el Z del EFB en su pixel, lo pasa
+ * al formato del N64 (la zlut de GLideN64, DepthBuffer.cpp:353-367), y saca
+ * fogColor con alfa = TLUT[indice] >> 8, mezclado SRCALPHA / INVSRCALPHA
+ * (el blend lo pone OGL_UpdateStates con gln64_nieblaZ).
+ * Las condiciones, las suyas: hay framebuffer (su pCurrentBuffer) y la
+ * textura es de 16 bits y empieza dentro del depth image, con su mismo limite
+ * `ancho * ancho * 6 / 4`.  Solo en las ordenes de texrect (su texrectCmd).
+ * La TLUT es `*(u16*)&TMEM[256 + i]`, el valor del N64 tal cual (su
+ * PaletteTexture deshace el swapword: ver _gDPTexrectPaletteMod). */
+BOOL gln64_nieblaZ = FALSE;
+
+static BOOL _gDPTexrectNieblaZ( void )
+{
+	if ((config.generalEmulation.hacks & hack_texrectShadowMap) == 0)
+		return FALSE;
+	if (RSP.cmd != G_TEXRECT && RSP.cmd != G_TEXRECTFLIP)
+		return FALSE;
+	if (!OGL.frameBufferTextures)
+		return FALSE;
+	return (gDP.textureImage.size == G_IM_SIZ_16b &&
+	        gDP.textureImage.address >= gDP.depthImageAddress &&
+	        gDP.textureImage.address < (gDP.depthImageAddress +
+	                                    gDP.colorImage.width * gDP.colorImage.width * 6 / 4)) ? TRUE : FALSE;
+}
 #endif // __GX__
 
 void gDPTextureRectangle( f32 ulx, f32 uly, f32 lrx, f32 lry, s32 tile, f32 s, f32 t, f32 dsdx, f32 dtdy, const f32 *colorOverride )
@@ -2336,6 +2368,30 @@ void gDPTextureRectangle( f32 ulx, f32 uly, f32 lrx, f32 lry, s32 tile, f32 s, f
 	if (gln64_zCopiaDesde != 0)
 		gDP.changed |= CHANGED_RENDERMODE;
 
+#ifdef __GX__
+	/* [Beetle Adventure Racing] La niebla por Z: ver _gDPTexrectNieblaZ.  La
+	 * curva y el color se le dan al shim ANTES del dibujo (vacia lo pendiente
+	 * con su modo), y el blend lo fuerza OGL_UpdateStates. */
+	if (_gDPTexrectNieblaZ())
+	{
+		u8 alfa[256];
+		GXColor color;
+		u32 i;
+		for (i = 0; i < 256; i++)
+			alfa[i] = (u8)((*(const u16*)&TMEM[256 + i]) >> 8);
+		color.r = GXcastf32u8( gDP.fogColor.r );
+		color.g = GXcastf32u8( gDP.fogColor.g );
+		color.b = GXcastf32u8( gDP.fogColor.b );
+		color.a = 0xFF;
+		/* El Z del EFB va referido al viewport: el mismo paso al del N64 que
+		 * DepthCopy (DepthCopy_EndDList: nearz/farz y la palabra de borrado). */
+		gln64_nieblaZ = GXD3D_SetNieblaZ( 1, alfa, color, gSP.viewport.nearz, gSP.viewport.farz,
+		                                  (u16)(DepthClearColor >> 16) ) ? TRUE : FALSE;
+		if (gln64_nieblaZ)
+			gDP.changed |= CHANGED_RENDERMODE;
+	}
+#endif // __GX__
+
 	f32 lrs = s + (lrx - ulx - 1) * dsdx;
 	f32 lrt = t + (lry - uly - 1) * dtdy;
 
@@ -2378,6 +2434,16 @@ void gDPTextureRectangle( f32 ulx, f32 uly, f32 lrx, f32 lry, s32 tile, f32 s, f
 		gln64_zCopiaDesde = 0;               // el siguiente dibujo, normal
 		gDP.changed |= CHANGED_RENDERMODE;
 	}
+#ifdef __GX__
+	if (gln64_nieblaZ)
+	{
+		GXColor sinColor;
+		sinColor.r = sinColor.g = sinColor.b = sinColor.a = 0;
+		gln64_nieblaZ = FALSE;               // el siguiente dibujo, normal
+		GXD3D_SetNieblaZ( 0, NULL, sinColor, 0.0f, 1.0f, 0 );
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
+#endif // __GX__
 
 	gSP.textureTile[0] = textureTileOrg[0];
 	gSP.textureTile[1] = textureTileOrg[1];

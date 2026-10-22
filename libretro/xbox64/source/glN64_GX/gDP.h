@@ -413,6 +413,11 @@ extern gDPInfo gDP;
 // read by OGL_UpdateStates (render to depth, mode 3). See gDP.cpp.
 extern u32 gln64_zCopiaDesde;
 
+// [Xbox360] [Beetle Adventure Racing] TRUE while the texrect being drawn is
+// GLideN64's texturedRectShadowMap (depth based fog). Set by gDPTextureRectangle
+// around the draw and read by OGL_UpdateStates (its blend). See gDP.cpp.
+extern BOOL gln64_nieblaZ;
+
 extern u32 DepthClearColor;
 void gDPSetDepthClearColor();
 

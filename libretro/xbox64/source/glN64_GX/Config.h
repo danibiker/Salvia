@@ -27,6 +27,7 @@ extern Config config;
 #define hack_paperMarioSubscreen	(1<<5)  //[Xbox360] GLideN64 1f4d04f4 hack_paper_mario_subscreen: in the color copy to RDRAM, blue += 4 if 0 < b <= 0xFB. Paper Mario subscreen delay
 #define hack_rectDepthBufferCopyPD	(1<<8)  //Perfect Dark's depth buffer reads, which drive its light coronas
 #define hack_texrectPaletteMod		(1<<9)  //[Xbox360] GLideN64 texturedRectPaletteMod: Paper Mario "2D lighting" palette written to RDRAM by a 16x1 texrect, and its darkness texture at 0x400
+#define hack_texrectShadowMap		(1<<10) //[Xbox360] GLideN64 texturedRectShadowMap: a texrect that reads the depth image is drawn as fog colour with alpha = TLUT[N64 depth]. Beetle Adventure Racing fog
 #define hack_fbTextureOffset		(1<<23) //Offset Conker's shadow in CBFD and the Bob-ombs in Mario Tennis
 #define hack_fbCopyToRDRAM			(1<<24) //Write the EFB back to RDRAM for real. Majora's Mask pictograph
 #define hack_copyDepthToRDRAM		(1<<25) //Copy the EFB's depth into the N64 depth image a frame late. OoT/MM glows/sun, DK64 camera/sun

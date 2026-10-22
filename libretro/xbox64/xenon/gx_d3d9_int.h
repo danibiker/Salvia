@@ -97,6 +97,10 @@ struct GXD3DTevState
     /* GXD3D_SetDecalN64 (gccore.h): el decal del N64 por shader contra la
      * copia de Z. */
     u8  decN64;
+
+    /* GXD3D_SetNieblaZ (gccore.h): la niebla por Z de Beetle Adventure
+     * Racing, contra la copia de Z y la curva de GXD3D_NIEBLAZ_SAMPLER. */
+    u8  nieblaZ;
 };
 
 /* Lo llama GX_LoadTexObj: lo ligado en `mapid` es (1) o no es (0) una copia
@@ -117,6 +121,16 @@ void gxd3d_tev_rtz(u8 modo);
 void gxd3d_tev_decn64(u8 on);
 #define GXD3D_ZCOPIA_SAMPLER 3    /* uZCopia : register(s3)                  */
 #define GXD3D_ZCOPIA_CONST   14   /* uZCopiaInv : register(c14), 1/ancho, 1/alto */
+/* Lo llama GXD3D_SetNieblaZ (gx_d3d9.cpp): la mitad del pixel shader.  Usa
+ * la copia de Z de arriba y la curva de 256x1 (ARGB: color de niebla y alfa
+ * por indice) en su propio sampler, fuera de los de GX (0-2) y de la Z (3). */
+void gxd3d_tev_nieblaz(u8 on);
+#define GXD3D_NIEBLAZ_SAMPLER 4   /* uNieblaZ : register(s4)                 */
+/* uNieblaZPar : register(c20) = (nearz, 261632 / (farz - nearz), umbral del
+ * lejano, palabra de borrado del Z): el paso del Z del EFB al del N64, el
+ * mismo de DepthCopy.cpp (_dcBuildLut).  OJO: la sombra de constantes de
+ * d3dq.cpp (SOMBRA_PSC) tiene que llegar hasta c20. */
+#define GXD3D_NIEBLAZ_CONST   20
 /* GXD3D_SetRuido (entradas GXD3D_CC_RUIDO / GXD3D_CA_RUIDO): su constante,
  * uRuido : register(c15) = (semilla, 1/escX, 1/escY, 0).  No es TEVC_TOTAL + n:
  * TEVC_MARCA ya vive justo detras (c13) y c14 es de la Z. */

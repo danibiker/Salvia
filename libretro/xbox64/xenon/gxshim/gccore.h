@@ -893,6 +893,18 @@ unsigned int GXD3D_ZEscrituras(void);
  * la anterior.  El plugin pone el test del device en ALWAYS y quita el offset
  * de poligono.  Vacia el lote pendiente al cambiar. */
 void GXD3D_SetDecalN64(u8 on);
+/* ★ EXTENSION DEL SHIM, NO ES GX.  [Beetle Adventure Racing] La niebla por Z
+ * de GLideN64 (texturedRectShadowMap / ShadowMapShader): mientras esta
+ * puesta, cada pixel sale del color de `color` con alfa = `alfa[i]`, donde i
+ * es el indice de 8 bits del Z del N64 que hay en ESE pixel (la copia de Z,
+ * rehecha si el Z cambio, pasada al formato del N64 como DepthCopy.cpp: el
+ * rango `nearz`..`farz` del viewport a 0..261632, y solo en el valor del
+ * borrado del Z la palabra de borrado `borrado`).  `alfa` son las 256 entradas de la TLUT >> 8.  El
+ * plugin pone el blend SRCALPHA/INVSRCALPHA.  Vacia el lote pendiente.
+ * Devuelve 0 si no se pudo (sin la textura de la curva): entonces el dibujo
+ * es el normal. */
+int  GXD3D_SetNieblaZ(u8 on, const u8 *alfa, GXColor color,
+                      f32 nearz, f32 farz, u16 borrado);
 /* ★ EXTENSION DEL SHIM, NO ES GX.  La copia del color a la RDRAM de GLideN64
  * (copyToRDRAM), sin esperar a la GPU: Pide resuelve el rect del EFB y
  * apunta adonde va (`dest`, en la RDRAM, `n64w` x `n64h` en RGBA5551; `dir`

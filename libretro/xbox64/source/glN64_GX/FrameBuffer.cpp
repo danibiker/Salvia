@@ -945,6 +945,58 @@ void FrameBuffer_RenderBuffer( u32 address )
 			u1 = (float)current->texture->width / (float)current->texture->realWidth;
 			v1 = (float)current->texture->height / (float)current->texture->realHeight;
 
+			/* [Xbox360] [Beetle Adventure Racing, transicion entre menus] El
+			 * juego deja DOS color buffers seguidos en la RDRAM y va moviendo
+			 * el VI_ORIGIN de uno al otro: la pantalla es el final del primero
+			 * y, debajo, el principio del segundo.  Wii64 pintaba siempre el
+			 * buffer entero desde su fila 0.  GLideN64 FrameBufferList::
+			 * renderBuffer (FrameBuffer.cpp:1508-1550 y 1637-1668; buffers
+			 * encadenados 21d64691, deteccion b18ae00b): fila de origen srcY0
+			 * por la distancia del origen al inicio del buffer; si la ultima
+			 * fila barrida cae en OTRO buffer, se pinta el primero desde srcY0
+			 * arriba y el siguiente, filas 0..srcY0, debajo.  Sin siguiente
+			 * buffer queda como estaba (de la fila 0). */
+			FrameBuffer *siguiente = NULL;
+			u32 srcY0 = 0, srcAlto = 0;
+			{
+				const u32 desplaz = ((address - current->startAddress) << 1) >> current->size;
+				const u32 zancada = (current->width << current->size) >> 1;
+
+				srcY0 = (current->width != 0) ? desplaz / current->width : 0;
+				if (desplaz != 0 && current->width == desplaz * 2)
+					srcY0 = 1;
+				srcAlto = VI.height;
+				if (srcAlto > current->height) srcAlto = current->height;
+
+				if (srcY0 > 0 && srcAlto > 0 && zancada != 0)
+				{
+					siguiente = FrameBuffer_FindBuffer( address + zancada * (srcAlto - 1) - 1 );
+					if (siguiente == current || (siguiente != NULL && siguiente->texture == NULL))
+						siguiente = NULL;
+				}
+			}
+			float yTex0 = 0.0f, yTex1 = (float)current->texture->height;
+			float v0 = 0.0f;
+			if (siguiente != NULL)
+			{
+				yTex0 = (float)srcY0 * current->scaleY;
+				yTex1 = (float)srcAlto * current->scaleY;
+				if (yTex1 > (float)current->texture->height) yTex1 = (float)current->texture->height;
+				if (yTex0 >= yTex1)
+					siguiente = NULL;
+				else
+				{
+					v0 = yTex0 / (float)current->texture->realHeight;
+					v1 = yTex1 / (float)current->texture->realHeight;
+				}
+			}
+			if (siguiente == NULL)
+			{
+				yTex0 = 0.0f;
+				yTex1 = (float)current->texture->height;
+			}
+			const float altoParte1 = yTex1 - yTex0;
+
 //			glDrawBuffer( GL_FRONT );
 
 			//set vertex description here
@@ -965,14 +1017,37 @@ void FrameBuffer_RenderBuffer( u32 address )
 			gln64_marcaluz = 0;
 			GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
 				GX_Position2f32( (f32) OGL.GXorigX, (f32) OGL.GXorigY );
-				GX_TexCoord2f32( 0.0f, 0.0f );
+				GX_TexCoord2f32( 0.0f, v0 );
 				GX_Position2f32( (f32) OGL.GXorigX + current->texture->width, (f32) OGL.GXorigY );
-				GX_TexCoord2f32( u1, 0.0f );
-				GX_Position2f32( (f32) OGL.GXorigX + current->texture->width, (f32) OGL.GXorigY + current->texture->height );
+				GX_TexCoord2f32( u1, v0 );
+				GX_Position2f32( (f32) OGL.GXorigX + current->texture->width, (f32) OGL.GXorigY + altoParte1 );
 				GX_TexCoord2f32( u1, v1 );
-				GX_Position2f32( (f32) OGL.GXorigX, (f32) OGL.GXorigY + current->texture->height );
+				GX_Position2f32( (f32) OGL.GXorigX, (f32) OGL.GXorigY + altoParte1 );
 				GX_TexCoord2f32( 0.0f, v1 );
 			GX_End();
+			/* [Xbox360] La segunda parte: el principio del buffer siguiente,
+			 * srcY0 filas, justo debajo de la primera (GLideN64 1637-1668). */
+			if (siguiente != NULL)
+			{
+				float nyTex1 = (float)srcY0 * siguiente->scaleY;
+				if (nyTex1 > (float)siguiente->texture->height) nyTex1 = (float)siguiente->texture->height;
+				const float nu1 = (float)siguiente->texture->width / (float)siguiente->texture->realWidth;
+				const float nv1 = nyTex1 / (float)siguiente->texture->realHeight;
+				const float y0 = (f32) OGL.GXorigY + altoParte1;
+				const float y1 = y0 + (float)srcY0 * current->scaleY;
+
+				TextureCache_ActivateTexture( 0, siguiente->texture );
+				GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+					GX_Position2f32( (f32) OGL.GXorigX, y0 );
+					GX_TexCoord2f32( 0.0f, 0.0f );
+					GX_Position2f32( (f32) OGL.GXorigX + siguiente->texture->width, y0 );
+					GX_TexCoord2f32( nu1, 0.0f );
+					GX_Position2f32( (f32) OGL.GXorigX + siguiente->texture->width, y1 );
+					GX_TexCoord2f32( nu1, nv1 );
+					GX_Position2f32( (f32) OGL.GXorigX, y1 );
+					GX_TexCoord2f32( 0.0f, nv1 );
+				GX_End();
+			}
 			gln64_marcaluz = marcaGuardada;
 
 //			glDrawBuffer( GL_BACK );
@@ -983,6 +1058,10 @@ void FrameBuffer_RenderBuffer( u32 address )
 
 			current->changed = FALSE;
 
+#ifdef __GX__
+			if (siguiente != NULL)
+				FrameBuffer_MoveToTop( siguiente );
+#endif // __GX__
 			FrameBuffer_MoveToTop( current );
 #ifndef __GX__
 			gSP.changed |= CHANGED_TEXTURE | CHANGED_VIEWPORT;

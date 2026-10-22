@@ -123,7 +123,8 @@ struct GXD3DTevKey
     u8 zClamp;                   /* GXD3D_SetDepthClamp */
     u8 rtz;                      /* GXD3D_SetRenderToDepth: 0, 1 o 2 */
     u8 decN64;                   /* GXD3D_SetDecalN64 */
-    u8 atlas;                    /* GXD3D_SetLodAtlas, solo con LOD_FRACTION;
+    u8 nieblaZ;                  /* GXD3D_SetNieblaZ */
+    u8 atlas;                   /* GXD3D_SetLodAtlas, solo con LOD_FRACTION;
                                   * 2 = el de RESPALDO mientras el de atlas se
                                   * compila (ver TEV_ASYNC) */
 };
@@ -746,6 +747,7 @@ static void gxd3d_build_key(GXD3DTevKey *k)
     k->zClamp     = g_gxTev.zClamp;
     k->rtz        = g_gxTev.rtz;
     k->decN64     = g_gxTev.decN64;
+    k->nieblaZ    = g_gxTev.nieblaZ;
     /* El atlas solo cambia el codigo de los shaders que leen LOD_FRACTION: en
      * los demas no entra en la clave, para no duplicarlos. */
     if (s_atlasOn)
@@ -1111,12 +1113,21 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
     /* GXD3D_SetRenderToDepth modo 2 y GXD3D_SetDecalN64: la copia de Z y su
      * tamano.  Solo en estos shaders, para no tocar el preambulo de los
      * demas. */
-    if (k->rtz >= 2 || k->decN64)
+    if (k->rtz >= 2 || k->decN64 || k->nieblaZ)
     {
         _snprintf(line, sizeof(line),
                   "sampler2D uZCopia : register(s%d);\n"
                   "float4 uZCopiaInv : register(c%d);\n",
                   GXD3D_ZCOPIA_SAMPLER, GXD3D_ZCOPIA_CONST);
+        line[sizeof(line) - 1] = 0;
+        EMIT(line);
+    }
+    /* GXD3D_SetNieblaZ: la curva de la niebla, 256x1, y el paso al Z del N64. */
+    if (k->nieblaZ)
+    {
+        _snprintf(line, sizeof(line), "sampler2D uNieblaZ : register(s%d);\n"
+                                      "float4 uNieblaZPar : register(c%d);\n",
+                  GXD3D_NIEBLAZ_SAMPLER, GXD3D_NIEBLAZ_CONST);
         line[sizeof(line) - 1] = 0;
         EMIT(line);
     }
@@ -1196,7 +1207,7 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
     /* La firma: con salida de profundidad o sin ella, y con VPOS si se lee la
      * copia de Z o hay ruido. */
     {
-        const int conVpos = (k->rtz >= 2 || k->decN64 || usaRuido) ? 1 : 0;
+        const int conVpos = (k->rtz >= 2 || k->decN64 || k->nieblaZ || usaRuido) ? 1 : 0;
         const int conProf = (k->ztOp == GX_ZT_REPLACE || k->zClamp || k->rtz) ? 1 : 0;
         if (conProf)
             EMIT("struct PS_OUT { float4 c : COLOR; float d : DEPTH; };\n");
@@ -1616,6 +1627,49 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
      *
      * `floor(vpos) + 0.5` y no `vpos + 0.5`: no depende de si VPOS llega con
      * el medio pixel sumado o sin el, y la copia se muestrea en POINT. */
+
+    /* ★ [Beetle Adventure Racing, la niebla] GXD3D_SetNieblaZ: el
+     * ShadowMapFragmentShader de GLideN64 (glsl_SpecialShadersFactory.cpp:
+     * 87-131), sin N64DepthCompare:
+     *
+     *     iZ = bufZ > 0.999 ? 262143 : int(floor(bufZ * 262143.0));
+     *     iN64z = zlut[iZ];  n64z = clamp(iN64z / 65532.0, 0, 1);
+     *     index = min(255, int(n64z * 255.0));
+     *     fragColor = vec4(uFogColor.rgb, float(tlut[index] >> 8) / 255.0);
+     *
+     * ★ UNA DIFERENCIA, Y ES A PROPOSITO: el Z de 18 bits NO es `bufZ *
+     * 262143`.  En GLideN64 el Z del GPU ya es el del N64 normalizado; aqui
+     * el del EFB va referido al viewport (gSP.viewport.nearz/farz), y el paso
+     * que ya funciona es el de DepthCopy.cpp (_dcBuildLut, el de los soles de
+     * 1080 y Episode I Racer): iZ = (z - nearz) * 261632 / (farz - nearz),
+     * entre 0 y 261632, y SOLO el valor del borrado (z24 FFFFFE) sale como la
+     * palabra de borrado del Z (uNieblaZPar = near, escala, umbral, borrado;
+     * ver GXD3D_SetNieblaZ: el cubo de 256 de DepthCopy volvia cielo, sin
+     * niebla, el fondo del escenario, log 34).
+     * La zlut (DepthBuffer.cpp:353-367; DepthCopy.cpp _dcEncode, la misma) se
+     * calcula aqui: exponente = unos seguidos desde el bit 17 (tope 7),
+     * mantisa = (iZ >> (6 - min(6, exponente))) & 0x7FF, y el valor
+     * ((exp << 11) | mant) << 2.  Los unos seguidos se cuentan contra los
+     * siete umbrales 2^18 - 2^(18-k): un valor tiene k unos delante si y solo
+     * si pasa el umbral k, y los umbrales crecen, asi que basta sumar los que
+     * pasa.  Las divisiones por potencias de dos con +0.5, para que un exp2
+     * con error no baje un entero.  La Z, en `.g` como el decal (D24S8 =
+     * 24_8 + OOGR).  La curva (ARGB = color de niebla y TLUT >> 8) la sube y
+     * la liga gx_d3d9.cpp, un texel por indice.  Sustituye a todo lo de
+     * arriba: es el color del pixel, como el shader de GLideN64. */
+    if (k->nieblaZ)
+        EMIT("  {\n"
+             "    float zNz = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+             "    float iZ = clamp(floor((zNz - uNieblaZPar.x) * uNieblaZPar.y), 0.0, 261632.0);\n"
+             "    float eNz = step(131072.0, iZ) + step(196608.0, iZ) + step(229376.0, iZ)\n"
+             "              + step(245760.0, iZ) + step(253952.0, iZ) + step(258048.0, iZ)\n"
+             "              + step(260096.0, iZ);\n"
+             "    float qNz = floor((iZ + 0.5) / exp2(6.0 - min(6.0, eNz)));\n"
+             "    float mNz = qNz - 2048.0 * floor((qNz + 0.5) / 2048.0);\n"
+             "    float wNz = (zNz >= uNieblaZPar.z) ? uNieblaZPar.w : (eNz * 2048.0 + mNz) * 4.0;\n"
+             "    float iNz = min(255.0, floor(saturate(wNz / 65532.0) * 255.0));\n"
+             "    outc = tex2D(uNieblaZ, float2((iNz + 0.5) / 256.0, 0.5));\n"
+             "  }\n");
 
     /* ★★ [ISS64, sombras] EL MODO DECAL DEL N64, COMO GLideN64 CON
      * N64DepthCompare (ShaderN64DepthCompare, glsl_CombinerProgramBuilder
@@ -2358,6 +2412,14 @@ void gxd3d_tev_decn64(u8 on)
     on = on ? 1 : 0;
     if (g_gxTev.decN64 == on) return;
     g_gxTev.decN64 = on;
+    s_dirty = 1;     /* solo la clave */
+}
+
+void gxd3d_tev_nieblaz(u8 on)
+{
+    on = on ? 1 : 0;
+    if (g_gxTev.nieblaZ == on) return;
+    g_gxTev.nieblaZ = on;
     s_dirty = 1;     /* solo la clave */
 }
 

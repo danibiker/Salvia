@@ -691,6 +691,16 @@ static void _RSP_SetGameHacks()
 	         strstr( nombreIni, "MARIO STORY" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyToRDRAM | hack_paperMarioSubscreen |
 		                                  hack_texrectPaletteMod;
+	/* [Xbox360] [Beetle Adventure Racing, la niebla] El otro texrect especial
+	 * de GLideN64 (GraphicsDrawer::_setSpecialTexrect, 18437d82, hoy con
+	 * 10b68176): FOUND("BEETLE") || FOUND("HSV") || FOUND("DUCK DODGERS") ||
+	 * FOUND("DAFFY DUCK") -> texturedRectShadowMap, con el nombre en
+	 * mayusculas como alli.  Ver _gDPTexrectNieblaZ en gDP.cpp. */
+	else if (strstr( nombreIni, "BEETLE" ) != NULL ||
+	         strstr( nombreIni, "HSV" ) != NULL ||
+	         strstr( nombreIni, "DUCK DODGERS" ) != NULL ||
+	         strstr( nombreIni, "DAFFY DUCK" ) != NULL)
+		config.generalEmulation.hacks |= hack_texrectShadowMap;
 
 	/* ★ [Xbox360] OJO AL TOCAR ESTA CADENA: casa por NOMBRE INTERNO de la
 	 * cabecera de la ROM y es `else if`, asi que el PRIMER `strstr` que

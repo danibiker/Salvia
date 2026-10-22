@@ -2502,6 +2502,17 @@ static u8  s_decN64  = 0;
 static int s_zCambio = 1;
 static unsigned int s_stDec = 0;
 
+/* ★ [Beetle Adventure Racing] La niebla por Z (GXD3D_SetNieblaZ): lee la
+ * MISMA copia de Z, al dia como el decal, y la curva de 256x1 en ARGB
+ * (color de niebla y alfa por indice del Z del N64).  Dos texturas para la
+ * curva, alternas: si cambia, la nueva se sube en la otra y la que pueda
+ * estar leyendo todavia la GPU no se toca. */
+static u8  s_nieblaZ = 0;
+static IDirect3DTexture9 *s_nzCurva[2] = { NULL, NULL };
+static int s_nzActual = -1;              /* la curva vigente, -1 = ninguna */
+static u32 s_nzDatos[256];
+static float s_nzPar[4];                 /* uNieblaZPar (GXD3D_NIEBLAZ_CONST) */
+
 static void gxd3d_hiz_aplica(void)
 {
     const int off = (g_gxTev.zClamp || s_rtzModo || s_hizSucio) ? 1 : 0;
@@ -2728,6 +2739,87 @@ void GXD3D_SetDecalN64(u8 on)
     gxd3d_tev_decn64(on);
 }
 
+int GXD3D_SetNieblaZ(u8 on, const u8 *alfa, GXColor color,
+                     f32 nearz, f32 farz, u16 borrado)
+{
+    on = (on && alfa) ? 1 : 0;
+    if (!on)
+    {
+        if (!s_nieblaZ)
+            return 0;
+        gxd3d_flush_pending();   /* el texrect de la niebla, con su modo */
+        s_nieblaZ = 0;
+        gxd3d_tev_nieblaz(0);
+        return 0;
+    }
+
+    gxd3d_flush_pending();       /* lo pendiente se dibuja con su modo */
+    {
+        const u32 rgb = ((u32)color.r << 16) | ((u32)color.g << 8) | (u32)color.b;
+        u32 curva[256];
+        int i, cambia = (s_nzActual < 0) ? 1 : 0;
+        for (i = 0; i < 256; i++)
+        {
+            curva[i] = ((u32)alfa[i] << 24) | rgb;
+            if (curva[i] != s_nzDatos[i])
+                cambia = 1;
+        }
+        if (cambia)
+        {
+            const int k = (s_nzActual + 1) & 1;   /* -1 -> 0 */
+            /* Lineal: la sube LockRect, como las texturas de GX_LoadTexObj
+             * (reference_xbox360_lockrect_no_tilea). */
+            if (!s_nzCurva[k] &&
+                FAILED(g_pd3dDevice->CreateTexture(256, 1, 1, 0, D3DFMT_LIN_A8R8G8B8,
+                                                   D3DPOOL_DEFAULT, &s_nzCurva[k], NULL)))
+            {
+                s_nzCurva[k] = NULL;
+                if (s_nieblaZ)
+                {
+                    s_nieblaZ = 0;
+                    gxd3d_tev_nieblaz(0);
+                }
+                return 0;
+            }
+            memcpy(s_nzDatos, curva, sizeof(s_nzDatos));
+            /* La orden copia los texels al pool: `s_nzDatos` se puede volver
+             * a escribir en cuanto vuelva. */
+#if D3D_GRABADOR
+            g_pd3dDevice->SubeTextura(s_nzCurva[k], s_nzDatos, 256, 1, 256, GX_CLAMP);
+#else
+            gxd3d_consumidor_sube_tex(s_nzCurva[k], s_nzDatos, 256, 1, 256, GX_CLAMP);
+#endif
+            s_nzActual = k;
+        }
+    }
+    /* El paso del Z del EFB al del N64, el de DepthCopy.cpp (_dcBuildLut):
+     * (z - nearz) * 261632 / (farz - nearz).
+     * ★★ [log 34] Y LA PALABRA DE BORRADO SOLO PARA EL VALOR DEL BORRADO, NO
+     * PARA EL CUBO DE 256 z24 DE DepthCopy.  La curva de la carrera vale FA
+     * en el indice 247 (el tope de la geometria, 261632) y 00 en el 255 (el
+     * de FFFC, el cielo: sin niebla).  Con el cubo, la geometria del fondo
+     * del escenario -- que en perspectiva cae en las ultimas z24 -- salia
+     * como cielo: alfa 0, sin niebla, con un corte a distancia fija (el
+     * "cubo" que vio el usuario, "solo en ocasiones").  En el N64 la
+     * geometria no pasa de 0x3FE00 y nunca se confunde con el borrado.  El
+     * borrado del shim es Clear(Z = 1.0) y el relleno de OGL_DrawDepthFill
+     * escribe 0xFFFFFF/0x1000000: los dos quedan en z24 FFFFFE (medido en
+     * la copia por CPU, `raw esq=FFFFFE00`), asi que el umbral va entre
+     * FFFFFD y FFFFFE, sea cual sea farz.  (GLideN64 manda al 255 todo
+     * bufZ > 0.999, peor aun: el blog de 2014 ya veia "polygons on the
+     * left" mal sin saber por que.) */
+    {
+        const f32 rango = (farz != nearz) ? (farz - nearz) : 1.0f;
+        s_nzPar[0] = nearz;
+        s_nzPar[1] = 261632.0f / rango;
+        s_nzPar[2] = (float)((16777214.0 - 0.5) / 16777215.0);
+        s_nzPar[3] = (float)borrado;
+    }
+    s_nieblaZ = 1;
+    gxd3d_tev_nieblaz(1);
+    return 1;
+}
+
 /* Al ARRANCAR cada lote, despues de ligar su estado: la copia de Z al dia
  * para un lote decal, y la cuenta de si este lote cambia el Z.  El lote
  * anterior ya esta vaciado, asi que el Resolve va detras de el en la cola. */
@@ -2741,6 +2833,23 @@ static void gxd3d_zcopia_lote(void)
 #if XBOX64_TRAZAS
         s_stDec++;
 #endif
+    }
+    /* [Beetle] La niebla por Z: la copia al dia, como el decal, y la curva en
+     * su sampler.  Se reafirma en cada lote, como la copia: el sampler 4 no
+     * tiene espejo y nadie mas lo toca. */
+    if (s_nieblaZ && s_nzActual >= 0)
+    {
+        const DWORD s = GXD3D_NIEBLAZ_SAMPLER;
+        if (s_zCambio || !s_zcTex)
+            gxd3d_zcopia();
+        gxd3d_zcopia_liga();
+        g_pd3dDevice->SetTexture(s, (D3DBaseTexture *)s_nzCurva[s_nzActual]);
+        g_pd3dDevice->SetSamplerState(s, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+        g_pd3dDevice->SetSamplerState(s, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        g_pd3dDevice->SetSamplerState(s, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+        g_pd3dDevice->SetSamplerState(s, D3DSAMP_ADDRESSU,  D3DTADDRESS_CLAMP);
+        g_pd3dDevice->SetSamplerState(s, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
+        g_pd3dDevice->SetPixelShaderConstantF(GXD3D_NIEBLAZ_CONST, s_nzPar, 1);
     }
     /* [Mario Golf] El modo 3: el Z guardado que eligio GXD3D_UsaZGuardada. */
     if (s_rtzModo == 3 && s_zgActual >= 0)
@@ -2774,6 +2883,22 @@ static void gxd3d_rtz_shutdown(void)
     s_decN64   = 0;
     s_zCambio  = 1;
     gxd3d_tev_decn64(0);
+    /* [Beetle] La niebla por Z: el sampler desligado antes de soltar la
+     * curva, o el device la muestrearia ya liberada. */
+    s_nieblaZ = 0;
+    gxd3d_tev_nieblaz(0);
+    g_pd3dDevice->SetTexture(GXD3D_NIEBLAZ_SAMPLER, NULL);
+    {
+        int i;
+        for (i = 0; i < 2; i++)
+        {
+            if (s_nzCurva[i])
+                d3dq_soltar((D3DResource *)s_nzCurva[i]);
+            s_nzCurva[i] = NULL;
+        }
+        s_nzActual = -1;
+        memset(s_nzDatos, 0, sizeof(s_nzDatos));
+    }
     {
         int i;
         for (i = 0; i < GXD3D_ZG_MAX; i++)
