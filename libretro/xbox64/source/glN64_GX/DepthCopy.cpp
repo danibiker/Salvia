@@ -186,7 +186,9 @@ BOOL DepthCopy_Active()
 	// of EFB lines for any vertical scale (238 N64 lines in 480, 2.017) and a height
 	// that is not a multiple of 4 (see "LA COPIA DE PROFUNDIDAD" in xenon/gx_d3d9.cpp).
 	// At exactly 2x (OoT, Majora, DK64) it is the box filter as before.
-	if (OGL.GXscaleX != 2.0f || OGL.GXscaleY < 1.0f)
+	// [Xbox360] [Excitebike 64] Nor across: VI 512 in an EFB 640 wide (1.25) takes the
+	// nearest EFB pixel to each N64 pixel's centre (gxd3d_zt_prepara in the shim).
+	if (OGL.GXscaleX < 1.0f || OGL.GXscaleY < 1.0f)
 		return FALSE;
 
 	if (VI.width == 0 || VI.height == 0 || (VI.width & 15) != 0)
@@ -288,7 +290,9 @@ void DepthCopy_EndDList()
 
 	// [Xbox360] [1080] The frame's real height in the EFB: 2x for 240 lines, 480 for 238.
 	const u32 srcHeight = (u32)((f32)height * OGL.GXscaleY + 0.5f);
-	GX_SetTexCopySrc( OGL.GXorigX, OGL.GXorigY, width << 1, srcHeight );
+	// [Xbox360] [Excitebike 64] And its real width: 2x, or 640 for 512 (1.25).
+	const u32 srcWidth = (u32)((f32)width * OGL.GXscaleX + 0.5f);
+	GX_SetTexCopySrc( OGL.GXorigX, OGL.GXorigY, srcWidth, srcHeight );
 	GX_SetTexCopyDst( width, height, GX_TF_Z16, GX_TRUE );
 	GX_SetCopyFilter( GX_FALSE, NULL, GX_FALSE, NULL );
 	GX_CopyTex( dcBuf, GX_FALSE );

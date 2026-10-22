@@ -678,6 +678,17 @@ static void _RSP_SetGameHacks()
 	 * Expansion Pak) no se activaria. */
 	else if (strstr( nombreIni, "EP1 RACER" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyDepthToRDRAM;
+	/* [Xbox360] [Excitebike 64, 2026-10-23] Las luces del circuito se veian a
+	 * traves del terreno: el mismo caso que 1080 y Episode I Racer, el juego
+	 * mira en el Z de la RDRAM si estan tapadas.  GLideN64 no tiene entrada
+	 * porque copia el Z a la RDRAM por defecto (Config.cpp:
+	 * copyDepthToRDRAM = cdSoftwareRender); aqui solo por juego.  Sin la del
+	 * color.  "EXCITEBIKE" cubre el nombre interno con o sin el " 64"
+	 * (comprobar en `[GLN64] rom interna=`).  Que se copia de verdad lo dice
+	 * [ZCOPIA] (pedidas/entregadas); en alta resolucion DepthCopy_Active no
+	 * se activaria (ver la nota de arriba). */
+	else if (strstr( nombreIni, "EXCITEBIKE" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyDepthToRDRAM;
 	/* [Xbox360] [Paper Mario / Mario Story] GLideN64.custom.ini [PAPER%20MARIO]
 	 * y [MARIO%20STORY]: copyToRDRAM=1 (0ad54a88).  Y lo que GLideN64 pone en
 	 * su RSP.cpp para los mismos nombres y que solo actua sobre esa copia:

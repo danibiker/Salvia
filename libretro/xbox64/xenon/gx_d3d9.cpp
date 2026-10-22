@@ -5411,6 +5411,54 @@ static unsigned long long gxd3d_reloj(void)
 }
 #endif
 
+/* ★ [Excitebike 64, 2026-10-23] LA ESCALA HORIZONTAL LIBRE.  VI de 512 en un
+ * EFB de 640 (escala 1,25): no hay caja de 2x2 que valga, y una direccion
+ * tileada por pixel cuesta ~9 ms por copia (log 26).  Se toma la muestra mas
+ * cercana al CENTRO de cada pixel del N64 (en vertical, como el par de 1080)
+ * y su direccion sale de dos tablas:
+ *
+ *     XGAddress2DTiledOffset(sx, sy) = fila[y] + col[(sy >> 3) & 1][x]
+ *     fila[y] = XG(0, sy),   col[b][x] = XG(sx, 8b) - XG(0, 8b)
+ *
+ * Exacto, de la formula de xgraphics.h:536-560 con 4 bytes por texel: en
+ * `Offset` x solo pone los bits {2,3,5} y la fila {4,6,7,8} (Micro mezcla
+ * (x & 7) << 2 con (y & 6) << 4, bits distintos), y `Macro` es multiplo de
+ * 512, asi que se suma sin acarreos y el barajado final es lineal; la fila
+ * solo entra en la parte de x por `((y & 8) >> 2) + (x >> 3)`, de ahi las dos
+ * tablas por el bit 3.  Una vez por tamano (sw/sh/dw/dh).  Solo el productor
+ * (gxd3d_entrega_z). */
+#define GXD3D_ZT_MAXW 1280u
+#define GXD3D_ZT_MAXH 1024u
+static u32 s_ztCol[2][GXD3D_ZT_MAXW];
+static u32 s_ztFila[GXD3D_ZT_MAXH];
+static u8  s_ztFilaB[GXD3D_ZT_MAXH];
+static unsigned int s_ztSw = 0, s_ztSh = 0, s_ztDw = 0, s_ztDh = 0;
+
+static void gxd3d_zt_prepara(unsigned int sw, unsigned int sh, unsigned int dw, unsigned int dh)
+{
+    unsigned int x, y, b;
+
+    if (sw == s_ztSw && sh == s_ztSh && dw == s_ztDw && dh == s_ztDh)
+        return;
+    s_ztSw = sw;  s_ztSh = sh;  s_ztDw = dw;  s_ztDh = dh;
+
+    for (y = 0; y < dh; y++)
+    {
+        const unsigned int sy = ((2u * y + 1u) * sh) / (2u * dh);
+        s_ztFila[y]  = XGAddress2DTiledOffset(0, sy, sw, 4);
+        s_ztFilaB[y] = (u8)((sy >> 3) & 1u);
+    }
+    for (b = 0; b < 2u; b++)
+    {
+        const u32 cero = XGAddress2DTiledOffset(0, 8u * b, sw, 4);
+        for (x = 0; x < dw; x++)
+        {
+            const unsigned int sx = ((2u * x + 1u) * sw) / (2u * dw);
+            s_ztCol[b][x] = XGAddress2DTiledOffset(sx, 8u * b, sw, 4) - cero;
+        }
+    }
+}
+
 /* Productor: convierte el hueco `h` (ya terminado) a `dest` en formato GX. */
 static void gxd3d_convierte_z(GXD3DZHueco *h, u16 *out, unsigned int dw, unsigned int dh)
 {
@@ -5448,7 +5496,9 @@ static void gxd3d_convierte_z(GXD3DZHueco *h, u16 *out, unsigned int dw, unsigne
      *   - `x >> 3` (el macro y el `& 3` del entrelazado) es el mismo en
      *     todo el grupo.
      * Cada pixel de salida `i` del grupo es el 2x2 de los texels 2i y 2i+1:
-     * desplazamientos `kA[i]` = {0,2,8,10}, mas +1, +4 y +5. */
+     * desplazamientos `kA[i]` = {0,2,8,10}, mas +1, +4 y +5.
+     * Solo con el doble exacto en horizontal; si no, las tablas de abajo. */
+    if (sw == 2u * dw)
     {
         static const unsigned int kA[4] = { 0u, 2u, 8u, 10u };
         const unsigned int grupos = dw >> 2;   /* dw es multiplo de 4 */
@@ -5484,6 +5534,30 @@ static void gxd3d_convierte_z(GXD3DZHueco *h, u16 *out, unsigned int dw, unsigne
             }
         }
     }
+    else
+    {
+        /* [Excitebike 64] Escala horizontal libre: la muestra mas cercana al
+         * centro, por las tablas de gxd3d_zt_prepara.  El mismo formato de
+         * salida (bloques de 4x4, z24 >> 8 con los bytes cambiados). */
+        const unsigned int grupos = dw >> 2;   /* dw es multiplo de 4 */
+        gxd3d_zt_prepara(sw, sh, dw, dh);
+        for (y = 0; y < dh; y++)
+        {
+            u16 *fila = out + (((y >> 2) * grupos) << 4) + ((y & 3u) << 2);
+            const u32 *t0 = t + s_ztFila[y];
+            const u32 *col = s_ztCol[s_ztFilaB[y]];
+            for (x = 0; x < dw; x++)
+            {
+                const u32 z = t0[col[x]] >> 8;
+#if XBOX64_TRAZAS
+                if (z < zmin) zmin = z;
+                if (z > zmax) zmax = z;
+#endif
+                fila[((x >> 2) << 4) + (x & 3u)] =
+                    (u16)((((z >> 8) & 0xFFu) << 8) | ((z >> 16) & 0xFFu));
+            }
+        }
+    }
 
 #if XBOX64_TRAZAS
     s_stZMin = (zmin < s_stZMin) ? zmin : s_stZMin;
@@ -5497,9 +5571,12 @@ static void gxd3d_copia_z(void *dest, u16 sl, u16 st, u16 sw, u16 sh, u16 dw, u1
     D3DRECT r;
 
     /* [1080] El alto ya no tiene que ser multiplo de 4 ni la mitad exacta:
-     * ver la nota de arriba.  `sh >= 2` para el par de filas. */
+     * ver la nota de arriba.  `sh >= 2` para el par de filas.
+     * [Excitebike 64] Ni el ancho el doble exacto: sin el, las tablas de
+     * gxd3d_zt_prepara, que tienen su tope. */
     if (!dest || !dw || !dh || (dw & 3u) ||
-        sw != (u16)(dw * 2u) || sh < 2u || sh < dh)
+        sw < dw || sh < 2u || sh < dh ||
+        (sw != (u16)(dw * 2u) && (dw > GXD3D_ZT_MAXW || dh > GXD3D_ZT_MAXH)))
     {
 #if XBOX64_TRAZAS
         s_stZMal++;
@@ -5604,7 +5681,10 @@ static void gxd3d_entrega_z(void)
         return;
     }
     __lwsync();   /* la fence antes que los texels */
-    if (mejor->w == (u16)(s_zDw * 2u) && mejor->h >= 2u && mejor->h >= s_zDh)
+    /* [Excitebike 64] Lo mismo que admite gxd3d_copia_z: el doble exacto en
+     * horizontal, o cualquier ancho >= el de destino dentro de las tablas. */
+    if (mejor->w >= s_zDw && mejor->h >= 2u && mejor->h >= s_zDh &&
+        (mejor->w == (u16)(s_zDw * 2u) || (s_zDw <= GXD3D_ZT_MAXW && s_zDh <= GXD3D_ZT_MAXH)))
     {
         gxd3d_convierte_z(mejor, (u16 *)s_zDest, s_zDw, s_zDh);
 #if XBOX64_TRAZAS
