@@ -62,6 +62,7 @@ void         SDL_XBOX_SetVSync(int enable);
 /* Sin Reset del device.  No-op en Windows: D3D9 de escritorio no tiene
  * D3DRS_PRESENTINTERVAL.  Ver el comentario en win_d3d9.cpp. */
 void         SDL_XBOX_SetPresentInterval(int enable);
+void         SDL_XBOX_SetAdaptiveVSync(int enable);
 /* Refresco real del panel en Hz, 0 si no se conoce.  En Windows viene de
  * D3DDISPLAYMODE y es un entero, asi que 59,94 sale como 60. */
 float        SDL_XBOX_GetRefreshRate(void);

@@ -486,6 +486,13 @@ extern DECLSPEC void SDL_XBOX_SetVSync(int enabled);
    llamarse cada frame. */
 extern DECLSPEC void SDL_XBOX_SetPresentInterval(int enabled);
 
+/* Sincronizacion "Video adaptativo" (1) o "Video" (0): con 1, un Present que
+   llega tarde se muestra al momento (D3DRS_PRESENTIMMEDIATETHRESHOLD a 80, con
+   tearing en ese frame) en vez de esperar al vblank siguiente; con 0, el valor
+   de fabrica del device.  Render state sin Reset, como la de arriba.  La
+   llama Sync::limit_fps al cambiar de modo. */
+extern DECLSPEC void SDL_XBOX_SetAdaptiveVSync(int enabled);
+
 /* Specify the main xbox resolution. w<=0 || h<=0 => "Auto": usa la resolucion
    del dashboard via XGetVideoMode, capada a 1280x720. */
 extern void SDL_XBOX_SetScreenResolution(int w, int h);

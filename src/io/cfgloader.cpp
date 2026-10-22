@@ -105,7 +105,8 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::syncMode].desc = "#Video Synchronization mode"
 									"\n#SYNC_TO_AUDIO	0"
 									"\n#SYNC_TO_VIDEO	1"
-									"\n#SYNC_NONE		2";
+									"\n#SYNC_NONE		2"
+									"\n#SYNC_TO_VIDEO_ADAPT	3";
 
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
 	configMain[cfg::libretrosystem].desc = "#Directory where the libretro bios are stored";
@@ -1162,7 +1163,8 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		"\n#AUTO           -1"
 		"\n#SYNC_TO_AUDIO	0"
 		"\n#SYNC_TO_VIDEO   1"
-		"\n#SYNC_NONE       2", &ConfigEmu::syncMode}
+		"\n#SYNC_NONE       2"
+		"\n#SYNC_TO_VIDEO_ADAPT 3", &ConfigEmu::syncMode}
     };
 
 	//The override list, has the option "auto", which is represented as -1. That's why we subtract 1

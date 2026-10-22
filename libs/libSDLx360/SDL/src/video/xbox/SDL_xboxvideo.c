@@ -294,6 +294,11 @@ LPDIRECT3DPIXELSHADER9 HLSLBackground_getAlphaFixShader(void)
 static CRITICAL_SECTION g_xboxFlipCS;
 static int              g_xboxFlipCSInit = 0;
 
+/* D3DRS_PRESENTIMMEDIATETHRESHOLD de fabrica, leido al crear el device: lo que
+ * deja la sincronizacion "Video".  Ver SDL_XBOX_SetAdaptiveVSync. */
+static DWORD            g_umbralInmediatoFabrica = 0;
+static int              g_umbralInmediatoLeido   = 0;
+
 /* --- Reloj de presentacion por HARDWARE ------------------------------------
  *
  * POR QUE EXISTE.  Todo el pacing del frontend inferia el reloj de la pantalla
@@ -787,10 +792,19 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
          *
          * 80 y no otro numero: por debajo se empieza a rasgar en frames que aun
          * llegaban, y por encima de ~90 el margen que queda es menor que la
-         * propia latencia de la llamada y deja de actuar. */
+         * propia latencia de la llamada y deja de actuar.
+         *
+         * ★ YA NO SE PONE AQUI PARA TODOS: solo con la sincronizacion "Video
+         * adaptativo" (SDL_XBOX_SetAdaptiveVSync, desde Sync::limit_fps).  Puesto
+         * siempre rasgaba cores que van sobrados (Gambatte, Genesis Plus GX): con
+         * el pacer por vblanks, el present despues de cada vblank saltado sale
+         * "tarde".  Aqui se lee el valor de fabrica, que es el que tenia el
+         * device antes de 9f9f64bc y el que deja "Video". */
         IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTINTERVAL,
             D3DPRESENT_INTERVAL_ONE);
-        IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTIMMEDIATETHRESHOLD, 80);
+        IDirect3DDevice9_GetRenderState(D3D_Device, D3DRS_PRESENTIMMEDIATETHRESHOLD,
+            &g_umbralInmediatoFabrica);
+        g_umbralInmediatoLeido = 1;
 
         HLSLBackground_init(D3D_Device);
     }
@@ -1313,6 +1327,23 @@ void SDL_XBOX_SetPresentInterval(int enabled)
 
 	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTINTERVAL,
 		enabled ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE);
+
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
+}
+
+/* "Video adaptativo" (1) o "Video" normal (0): D3DRS_PRESENTIMMEDIATETHRESHOLD a
+ * 80 (ver XBOX_VideoInit: un Present que llega tarde se muestra ya, con
+ * tearing, en vez de esperar al vblank siguiente) o al valor de fabrica que
+ * se leyo al crear el device.  Mismo render state sin Reset y misma seccion
+ * critica que SDL_XBOX_SetPresentInterval.  No toca el intervalo. */
+void SDL_XBOX_SetAdaptiveVSync(int enabled)
+{
+	if (!D3D_Device || !g_umbralInmediatoLeido) return;
+
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_PRESENTIMMEDIATETHRESHOLD,
+		enabled ? 80 : g_umbralInmediatoFabrica);
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }

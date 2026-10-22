@@ -1008,6 +1008,14 @@ void SDL_XBOX_SetPresentInterval(int enable)
     (void)enable;
 }
 
+/* "Video adaptativo" (D3DRS_PRESENTIMMEDIATETHRESHOLD en Xbox 360): D3D9 de
+ * escritorio no tiene ese render state.  En Windows los dos modos de video
+ * van igual (limitador por reloj de CPU: no hay pacer por vblanks). */
+void SDL_XBOX_SetAdaptiveVSync(int enable)
+{
+    (void)enable;
+}
+
 /* Tasa de refresco real del panel, en Hz.  0 = desconocida.
  *
  * `D3DDISPLAYMODE::RefreshRate` es un UINT, asi que aqui 59,94 se reporta como

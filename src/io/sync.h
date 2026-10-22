@@ -329,6 +329,13 @@ public:
     unsigned int vblAnchor;
     unsigned int vblFrame;
 
+    /* Modo de sync del frame anterior (-1 = ninguno aun).  Al cambiar se
+     * re-anclan los dos planificadores y se pone el present inmediato del
+     * "Video adaptativo" (SDL_XBOX_SetAdaptiveVSync): solo en
+     * SYNC_TO_VIDEO_ADAPT.  "Video" (SYNC_TO_VIDEO) es el de antes de
+     * 9f9f64bc: limitador por reloj de CPU y vsync sin present inmediato. */
+    int    syncTypeAnt;
+
     bool   vblPacerActivo();   // hay reloj de presentacion Y ratio utilizable
     double vblPorFrame();      // refresco del panel / fps del core
 

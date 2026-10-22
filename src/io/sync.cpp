@@ -83,6 +83,7 @@ Sync::Sync(int syncMode){
 	vblMissPrev     = 0;
 	vblAnchor       = 0;      /* 0 = el pacer de vblanks aun sin anclar */
 	vblFrame        = 0;
+	syncTypeAnt     = -1;     /* el primer limit_fps aplica el modo */
 	paceMask        = PACE_NADA;
 	flipLast        = 0.0;
 	vsyncLogLast    = 0.0;
@@ -810,7 +811,17 @@ double Sync::limit_fps(double& nextFrameTime, int syncType, GameTicks &gameTicks
 	gameTicks.dt = (float)(currentTime - gameTicks.lastTime);
 	gameTicks.lastTime = currentTime;
 
-	if (syncType != SYNC_TO_VIDEO){
+	/* Cambio de modo (menu, override por core al cargar, avance rapido, que
+	 * fuerza SYNC_TO_VIDEO y luego restaura): los dos planificadores se
+	 * re-anclan, y el present inmediato del "Video adaptativo" solo queda
+	 * puesto en ese modo.  Un render state, sin Reset del device. */
+	if (syncType != syncTypeAnt) {
+		syncTypeAnt = syncType;
+		SDL_XBOX_SetAdaptiveVSync(syncType == SYNC_TO_VIDEO_ADAPT ? 1 : 0);
+		reset_pace(currentTime);
+	}
+
+	if (syncType != SYNC_TO_VIDEO && syncType != SYNC_TO_VIDEO_ADAPT){
 		// Sin limitador: mantenemos el planificador pegado al presente para que
 		// al volver a SYNC_TO_VIDEO no haya un salto ni una racha de frames sin
 		// pacing recuperando una deuda inventada.
@@ -840,8 +851,14 @@ double Sync::limit_fps(double& nextFrameTime, int syncType, GameTicks &gameTicks
 	 * del mismo hilo que corre el core.
 	 *
 	 * El camino de reloj de CPU de mas abajo se conserva intacto como respaldo:
-	 * es el que corre en Windows, donde `pc_vblanks()` devuelve 0. */
-	if (vblPacerActivo())
+	 * es el que corre en Windows, donde `pc_vblanks()` devuelve 0.
+	 *
+	 * ★ SOLO EN "VIDEO ADAPTATIVO" (SYNC_TO_VIDEO_ADAPT).  Con el umbral de
+	 * present inmediato, un core por debajo de 60 (Gambatte ~59,73, Genesis
+	 * Plus GX ~59,92) salta un vblank cada pocos cientos de frames y el present
+	 * de despues sale rasgado.  "Video" (SYNC_TO_VIDEO) vuelve a ser el de
+	 * antes de 9f9f64bc: el camino de reloj de CPU de abajo. */
+	if (syncType == SYNC_TO_VIDEO_ADAPT && vblPacerActivo())
 	{
 		const unsigned int vblAhora = pc_vblanks();
 		const double       r        = vblPorFrame();
