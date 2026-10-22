@@ -520,6 +520,8 @@ extern "C" volatile unsigned int gxd3d_dbg_texfree = 0;
  * monton, asi que las dos vias quedan separadas en el log. */
 extern "C" volatile unsigned int gxd3d_dbg_initobj = 0;
 extern "C" volatile unsigned int gxd3d_dbg_texinval = 0;
+/* [Cruis'n USA] Las lapidas del registro de texturas: ver gxd3d_tex_compacta. */
+static unsigned int s_texLapidas = 0;
 
 /* ★ Entradas VIVAS del registro de texturas resueltas que el LRU ha tirado.
  * Cada una es una textura de framebuffer que a partir de ese momento se
@@ -3992,8 +3994,24 @@ static u32 gxd3d_tex_bytes(int w, int h, u8 fmt)
  * lineal de todo el array en cada `GX_LoadTexObj`, o sea ~12.000 veces por
  * segundo.  A 2048 eso seria 8 veces peor que el problema que arregla.  Por
  * eso ahora hay una tabla hash de direccionamiento abierto sobre el puntero
- * a los texels, que es unico por textura viva. */
-#define GXD3D_TEX_MAX   2048
+ * a los texels, que es unico por textura viva.
+ *
+ * ★★ [Cruis'n USA, 2a fase, logs (8), 2026-10-21] 4096, Y LAS LAPIDAS SE
+ * LIMPIAN.  Medido con [GLN64TF]: la cache del plugin llega a su techo,
+ * `nodos=2133` (GX_MAX_TEXTURES), con 300-900 texturas nuevas por segundo.
+ * Dos fallos de este registro, que se suman:
+ *   1. Con 2048 entradas y el desalojo al 75 % (1536 vivas), el registro
+ *      tiraba texturas que el plugin seguia teniendo en su cache: cada uso
+ *      volvia a convertirla (texconv ~520/s con 380 cargas/s) y cada alta
+ *      hacia el barrido de 2048 buscando la mas antigua.
+ *   2. Cada baja deja una LAPIDA y nunca se limpiaban (solo al reiniciar):
+ *      con tanta rotacion no quedaba ningun hueco virgen, y cada busqueda
+ *      que falla -- cada textura nueva, cada `__lwp_heap_free` -- recorria
+ *      las 2048.  `tcupd` propio: 5,4-6,1 ms por VI (1,2 en la 1a fase).
+ * Ahora 4096 (el 75 % son 3072, por encima del techo del plugin) y, si
+ * vivas + lapidas pasan del 75 %, se reconstruye la tabla sin lapidas
+ * (gxd3d_tex_compacta), que es O(4096) de vez en cuando. */
+#define GXD3D_TEX_MAX   4096
 #define GXD3D_TEX_MASK  (GXD3D_TEX_MAX - 1)
 
 struct GXD3DTexEntry
@@ -4040,12 +4058,38 @@ static GXD3DTexEntry *gxd3d_tex_find(void *data, u16 w, u16 h, u8 fmt)
     return NULL;
 }
 
+/* [Cruis'n USA] La tabla otra vez sin lapidas: las vivas, cada una en su
+ * cadena de sondeo desde cero.  Solo la toca el hilo que dibuja (el gancho
+ * de liberacion, GX_LoadTexObj), y nadie guarda punteros a entradas entre
+ * llamadas, asi que se puede mover todo. */
+static GXD3DTexEntry s_texTmp[GXD3D_TEX_MAX];
+static void gxd3d_tex_compacta(void)
+{
+    int k, n = 0;
+    for (k = 0; k < GXD3D_TEX_MAX; k++)
+        if (s_texReg[k].tex)
+            s_texTmp[n++] = s_texReg[k];
+    memset(s_texReg, 0, sizeof(s_texReg));
+    for (k = 0; k < n; k++)
+    {
+        unsigned int i = gxd3d_tex_hash(s_texTmp[k].data);
+        while (s_texReg[i].tex)
+            i = (i + 1) & GXD3D_TEX_MASK;
+        s_texReg[i] = s_texTmp[k];
+    }
+    s_texLapidas = 0;
+}
+
 /* Hueco para una entrada nueva.  Si la tabla se llena demasiado, desaloja la
  * mas antigua para que el sondeo no degenere. */
 static GXD3DTexEntry *gxd3d_tex_slot(void *data)
 {
     unsigned int i;
     int probes;
+
+    /* [Cruis'n USA] Con demasiadas lapidas, fuera: ver GXD3D_TEX_MAX. */
+    if (s_texLapidas && ((unsigned int)s_texCount + s_texLapidas) * 4u >= GXD3D_TEX_MAX * 3u)
+        gxd3d_tex_compacta();
 
     /* ★ Por encima del 75% de ocupacion el sondeo lineal se degrada mucho.
      * Se hace sitio desalojando la MAS ANTIGUA, que es lo que hacia el LRU
@@ -4066,6 +4110,7 @@ static GXD3DTexEntry *gxd3d_tex_slot(void *data)
             d3dq_soltar((D3DResource *)s_texReg[lru].tex);
             s_texReg[lru].tex = NULL;      /* queda lapida: data != NULL */
             s_texCount--;
+            s_texLapidas++;
         }
     }
 
@@ -4073,7 +4118,13 @@ static GXD3DTexEntry *gxd3d_tex_slot(void *data)
     for (probes = 0; probes < GXD3D_TEX_MAX; probes++)
     {
         GXD3DTexEntry *e = &s_texReg[i];
-        if (!e->tex) { s_texCount++; return e; }   /* hueco virgen o lapida */
+        if (!e->tex)                               /* hueco virgen o lapida */
+        {
+            if (e->data && s_texLapidas)
+                s_texLapidas--;                    /* se reusa una lapida */
+            s_texCount++;
+            return e;
+        }
         i = (i + 1) & GXD3D_TEX_MASK;
     }
     return &s_texReg[gxd3d_tex_hash(data)];   /* no deberia pasar */
@@ -4177,6 +4228,7 @@ static void gxd3d_tex_olvida(void *ptr)
                 d3dq_soltar((D3DResource *)e->tex);
                 e->tex = NULL;                      /* lapida */
                 s_texCount--;
+                s_texLapidas++;
 #if XBOX64_TRAZAS
                 gxd3d_dbg_texfree++;
 #endif
@@ -4198,6 +4250,7 @@ static void gxd3d_tex_reset(void)
     }
     s_texSerial = 0;
     s_texCount  = 0;
+    s_texLapidas = 0;
 }
 
 /* ★ D3D acolcha el pitch de las texturas `LIN_` a 256 bytes, y EL SAMPLER LEE
@@ -4567,6 +4620,7 @@ void GX_LoadTexObj(GXTexObj *obj, u8 mapid)
             d3dq_soltar((D3DResource *)hit->tex);
             hit->tex = NULL;
             s_texCount--;
+            s_texLapidas++;
             hit = NULL;
         }
 
@@ -6356,6 +6410,7 @@ int gxd3d_init(void)
     s_rttVivas = 0;          /* va con el memset o la cuenta se descuadra */
     memset(s_texReg, 0, sizeof(s_texReg));
     s_texSerial = 0;
+    s_texLapidas = 0;
     gxd3d_state_invalidate();
     guMtx44Identity(s_proj);
     guMtx44Identity(s_modelview);

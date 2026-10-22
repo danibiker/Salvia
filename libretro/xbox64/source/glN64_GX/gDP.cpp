@@ -1856,25 +1856,23 @@ static inline u8 _gDPFillByte( u32 fill, u32 address )
 	return (u8)(fill >> ((3 - (address & 3)) << 3));
 }
 
-/* [Xbox360] ★ [Star Fox 64, ruido en el borde de arriba que A VECES vuelve]
- * LO QUE EL PLUGIN ESCRIBE EN LA RDRAM TAMBIEN VA A LA REAL.  Con
- * xbox64_lista_sp = foto el `RDRAM` del plugin apunta a una copia que se
- * vuelve a sacar de la real al empezar CADA lista (xbox/hilo_lista.cpp,
- * s_foto): lo escrito en la copia se pierde en la lista siguiente y el juego
- * no lo ve nunca.  MEDIDO (Logs Salvia (4)): el borrado de arranque
- * 0,0-320,720 paso por _gDPFillRDRAM y aun asi [RDRAM-GX] de 0038F800 seguia
- * con 4D494F30 (MIO0) al reponer el buffer.  Sin foto son la misma y no se
- * copia nada.  Como _gDPArtifactEscribe y _gDPCopiaColorARDRAM.  Lo usan todas
- * las escrituras de GLideN64 de este fichero (fillRDRAM, copyWhiteToRDRAM,
- * texturedRectBGCopy, el blanco de fbCopyToRDRAM).  Usuario (2026-10-13):
- * Star Fox ya sale bien. */
+/* [Xbox360] ★★ [Cruis'n USA, fin de carrera en negro, logs (3)-(6),
+ * 2026-10-21] CON LA "FOTO", LO QUE ESCRIBE EL PLUGIN SE QUEDA EN LA FOTO.
+ * Con xbox64_lista_sp = foto el `RDRAM` del plugin apunta a una copia
+ * (xbox/hilo_lista.cpp, s_foto) y el DP_INT sale con la lista a medias
+ * (`dpantes`).  Hasta aqui estas escrituras (fillRDRAM, copyWhiteToRDRAM,
+ * texturedRectBGCopy, el artefacto de PD, la paleta de Paper Mario, el color
+ * a RDRAM) se copiaban TAMBIEN a la real -- se anadio por Star Fox 64, que
+ * entonces iba en foto (Logs Salvia (4) del 2026-10-13) --.  Pero llegaban
+ * TARDE: el juego, con su DP ya recibido, reutilizaba esa memoria (Cruis'n
+ * carga ahi la carrera siguiente) y el relleno del plugin caia encima.  La
+ * lista siguiente leia basura (imagenes de color 007CFFFC w=4093, 0000000D
+ * w=289...), 6 VI/s y pantalla negra.  MEDIDO: con el DP esperando a la lista
+ * no hay negro (logs (5)), y tampoco sin copiar nada a la real con el DP
+ * adelantado (logs (6)), que es lo que se queda: el juego no ve nada de lo
+ * que el plugin escribe durante una lista con foto.  Sin foto, RDRAM es la
+ * real y todo se ve como siempre. */
 extern "C" unsigned char *const rdramb;
-
-static void _gDPReflejaRDRAMReal( u32 dst, u32 numBytes )
-{
-	if (rdramb != RDRAM)
-		memcpy( &rdramb[dst], &RDRAM[dst], numBytes );
-}
 
 static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 {
@@ -1889,7 +1887,6 @@ static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 		else
 			for (u32 a = dst; a < end; a++)
 				RDRAM[a] = _gDPFillByte( fill, a );
-		_gDPReflejaRDRAMReal( dst, numBytes );
 		return;
 	}
 
@@ -1930,7 +1927,6 @@ static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 		for (u32 a = wgEnd; a < end; a++)
 			RDRAM[a] = _gDPFillByte( fill, a );
 	}
-	_gDPReflejaRDRAMReal( dst, numBytes );
 }
 
 // GLideN64's texturedRectBGCopy(). Yoshi's Story draws some backgrounds as a texrect
@@ -2049,21 +2045,14 @@ static u16 _gDPEncodeN64Depth( f32 ndc01 )
 	return (u16)((exponent << 13) | ((mantissa & 0x7FF) << 2));
 }
 
-/* [Xbox360] ★ [Perfect Dark, coronas con xbox64_lista_sp = foto: solo salian
- * en algunas posiciones] LO QUE LEE LA CPU VA A LA RDRAM REAL.  Con la "foto"
- * el `RDRAM` del plugin apunta a una copia que solo lee la lista (ver
- * xbox/hilo_lista.cpp y _gDPCopiaColorARDRAM, que ya escribe en `rdramb`), y
- * lo escrito ahi no lo ve el juego.  Se escribe en las dos: la foto, por si
- * la lista lo vuelve a leer, y la real.  Sin foto son la misma. */
-extern "C" unsigned char *const rdramb;
-
+/* [Xbox360] [Perfect Dark, coronas] La Z que lee la CPU.  Con la "foto" se
+ * queda en la copia, como todo lo que escribe el plugin (ver _gDPWriteRDRAM,
+ * Cruis'n USA): Perfect Dark necesita "en el acto" o "activado", no "foto". */
 static void _gDPArtifactEscribe( u32 address, u16 value )
 {
 	if ((address + 1) >= RDRAMSize)
 		return;
 	*(u16*)&RDRAM[address] = value;
-	if (rdramb != RDRAM)
-		*(u16*)&rdramb[address] = value;
 }
 
 static u16 _gDPPeekDepth( u16 x, u16 y )
@@ -2233,9 +2222,10 @@ static void _gDPResolveArtifactDepths()
  * su gDP.cpp:753; PaletteTexture.cpp:91 la deshace al leer), asi que su bit 8
  * es el bit 0 del valor del N64, el de alfa del 5551.  Aqui la TMEM lleva el
  * valor tal cual: con 0x100 se miraba un bit de VERDE (Paper Mario: guantes
- * de Peach sin luz, mancha roja en la mano de Mario).  Se escribe tambien
- * en la RDRAM real (_gDPArtifactEscribe), por la foto de la lista.  Solo en las ordenes de
- * texrect, como su `_params.texrectCmd`.  TRUE = no se dibuja. */
+ * de Peach sin luz, mancha roja en la mano de Mario).  Escribe con
+ * _gDPArtifactEscribe (con "foto" se queda en la copia, ver _gDPWriteRDRAM).
+ * Solo en las ordenes de texrect, como su `_params.texrectCmd`.  TRUE = no se
+ * dibuja. */
 static BOOL _gDPTexrectPaletteMod( f32 lrx, f32 lry )
 {
 	if ((config.generalEmulation.hacks & hack_texrectPaletteMod) == 0)
@@ -2250,8 +2240,6 @@ static BOOL _gDPTexrectPaletteMod( f32 lrx, f32 lry )
 			if (0x14D500 + 4096 - 1 <= RDRAMSize)
 			{
 				memcpy( &RDRAM[0x400], &RDRAM[0x14D500], 4096 );
-				if (rdramb != RDRAM)
-					memcpy( &rdramb[0x400], &rdramb[0x14D500], 4096 );
 			}
 			return TRUE;
 		}
@@ -2843,8 +2831,7 @@ static void _gDPCopyWhiteToRDRAM()
 #ifdef __GX__
 /* [Xbox360] La RDRAM REAL del emulador (gc_memory/memory.h).  El `RDRAM` del
  * plugin apunta a la foto mientras dura una lista con "foto" (Cruis'n, ver
- * xbox/hilo_lista.cpp), y lo escrito ahi se perderia. */
-extern "C" unsigned char *const rdramb;
+ * xbox/hilo_lista.cpp); distinta de `rdramb` = hay foto. */
 
 /* [Xbox360] ★★ [Mario Kart 64 TV, puzzle de Banjo-Kazooie] EL COLOR BUFFER A
  * LA RDRAM, como GLideN64 en su gDPFullSync (gDP.cpp:1091-1095):
@@ -2893,6 +2880,10 @@ static void _gDPCopiaColorARDRAM()
 	const u32 w = (u32)((f32)n64w * OGL.GXscaleX + 0.5f);
 	const u32 h = (u32)((f32)n64h * OGL.GXscaleY + 0.5f);
 	if (w == 0 || h == 0)
+		return;
+	/* [Cruis'n USA] Con foto, tampoco el color: llegaria a la real despues del
+	 * DP (ver _gDPWriteRDRAM). */
+	if (rdramb != RDRAM)
 		return;
 
 	// [Paper Mario] GLideN64 1f4d04f4: el ajuste del azul en esta copia.
