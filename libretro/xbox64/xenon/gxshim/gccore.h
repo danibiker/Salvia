@@ -815,7 +815,10 @@ void GXD3D_SetMonoAlfaFija(u8 on);
  *     CLR_IN * A_FOG + CLR_FOG * (1 - A_FOG)
  * que los factores de mezcla no pueden expresar (lleva un termino constante):
  * se aplica al final del pixel shader, como hace GLideN64 sin
- * `enableLegacyBlending`.  `fog` = color de niebla, con A_FOG en `.a`. */
+ * `enableLegacyBlending`.  `fog` = color de niebla, con A_FOG en `.a`.
+ * Con `.a` = 0 sale `fog` tal cual (blender sin FORCE_BL cuyo primer mux es
+ * el color de mezcla o el de niebla).  `on` = 2 [F-Zero X]:
+ * CLR_FOG * A_SHADE + CLR_IN * (1 - A), el peso es el alfa del vertice. */
 void GXD3D_SetBlenderNiebla(u8 on, GXColor fog);
 /* ★ EXTENSION DEL SHIM, NO ES GX.  La niebla de GX_SetFog con el peso
  * invertido: `lerp(color, niebla, 1 - f)` en vez de `lerp(color, niebla, f)`,

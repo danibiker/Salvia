@@ -1574,7 +1574,12 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
     /* El blender del N64 `CLR_IN * A_FOG + CLR_FOG * (1 - A_FOG)` (ver
      * GXD3D_SetBlenderNiebla en gccore.h).  Detras del alpha compare, que en
      * la N64 va antes que el blender; el alfa no lo toca. */
-    if (k->blFog)
+    /* ★ [F-Zero X] Modo 2: `CLR_FOG * A_SHADE + CLR_IN * (1 - A)`, con el peso
+     * en el ALFA DEL VERTICE (`rasc.a`, sin pasar por el combinador): donde
+     * F3DFLX2 deja el reflejo de los vehiculos.  Ver OGL_UpdateStates. */
+    if (k->blFog == 2)
+        EMIT("  outc.rgb = lerp(outc.rgb, uBlFog.rgb, saturate(rasc.a));\n");
+    else if (k->blFog)
         EMIT("  outc.rgb = lerp(uBlFog.rgb, outc.rgb, uBlFog.a);\n");
 
     /* ★ Los dos visores, DESPUES de la niebla: `ff` solo existe si el bloque
@@ -2425,7 +2430,7 @@ void gxd3d_tev_nieblaz(u8 on)
 
 void GXD3D_SetBlenderNiebla(u8 on, GXColor fog)
 {
-    on = on ? 1 : 0;
+    if (on > 2) on = 1;   /* 2 = [F-Zero X] el peso es el alfa del vertice */
     if (g_gxTev.blFog != on)
     {
         g_gxTev.blFog = on;

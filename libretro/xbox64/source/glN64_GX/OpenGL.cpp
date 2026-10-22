@@ -1158,6 +1158,10 @@ void OGL_UpdateStates()
 #else // !__GX__
 	static u8 GXblenddstfactor, GXblendsrcfactor, GXblendmode;
 	static u8 GXblendFog = 0;
+	/* [Xbox360] [F-Zero X] Que color pone el termino del blender del shim cuando
+	 * GXblendFog no lo pide (0): 2 = el color de mezcla, 3 = el de niebla, los
+	 * dos con peso 0 (el color tal cual: blender sin FORCE_BL). */
+	static u8 GXblendFogSrc = 0;
 
 	if ((gDP.changed & CHANGED_RENDERMODE) || (gDP.changed & CHANGED_CYCLETYPE))
 	{
@@ -1184,6 +1188,7 @@ void OGL_UpdateStates()
 		 * arriba describen.  Los factores de GX siguen siendo ONE/ZERO; el
 		 * termino de niebla lo pone el shim al final del pixel shader. */
 		GXblendFog = 0;
+		GXblendFogSrc = 0;
 
 		/* [Xbox360] ★★ [ISS64, silueta de la sombra en verde] BLENDER FORZADO
 		 * QUE SOLO DEJA LA MEMORIA: INVISIBLE, como el camino por defecto de
@@ -1389,14 +1394,35 @@ void OGL_UpdateStates()
 		 * escritura entera se perdia y los iconos usaban el modo anterior. */
 		else if ((gDP.otherMode.forceBlender == 0) && (gDP.otherMode.cycleType < G_CYC_COPY))
 		{
-			bool useMemColor = false;
-			if (gDP.otherMode.cycleType == G_CYC_1CYCLE) {
-				if (gDP.otherMode.c1_m1a == 1)
-					useMemColor = true;
-			} else if (gDP.otherMode.cycleType == G_CYC_2CYCLE) {
-				if (gDP.otherMode.c2_m1a == 1)
-					useMemColor = true;
-			}
+			/* [Xbox360] ★ [F-Zero X, el borde del modo ataque] Y EL PRIMER MUX
+			 * PUEDE SER EL COLOR DE MEZCLA O EL DE NIEBLA, no solo la memoria o
+			 * la entrada.  GLideN64 d4dbe7c0 "Correct blending when FORCE_BL flag
+			 * is off" (#639; blog 2017-09-11 "F-Zero fixes"): sin FORCE_BL el
+			 * blender no se salta, su salida es el primer argumento,
+			 * `clampedColor.rgb = muxPM[uBlendMux1[0]].rgb` (ShaderBlender1/2),
+			 * y el borde lo pinta con el BLEND COLOR (rojo), ignorando el
+			 * combinador.  muxPM = {entrada, memoria, color de mezcla, niebla}.
+			 * ★ [log 39] En CICLO DOBLE el primer ciclo se mezcla SIEMPRE
+			 * (GLideN64 UBlendMode2Cycle: `forceBlend1 = 1`; angrylion calcula
+			 * la ecuacion del ciclo 0 sin mirar blend_en) y solo el segundo
+			 * obedece a FORCE_BL: su primer mux 0 es el RESULTADO MEZCLADO del
+			 * primer ciclo (`muxPM[0] = srcColor1`), no el primer argumento de
+			 * este.  Es el caso de los coches de F-Zero X en carrera (H 00182C30,
+			 * L C8000230): tomar la P del primer ciclo los dejaba del color de
+			 * la niebla, rosas.  El color de mezcla o de niebla lo pone
+			 * el shim en el pixel con el termino del blender (GXD3D_SetBlenderNiebla,
+			 * peso 0: el color tal cual); el alfa sigue siendo el del combinador. */
+			/* Los muxes de los bits crudos, como OGL_GX_NieblaDelBlender:
+			 * m1a de GBL_c1 = bits 15-14 de L >> 16, el de GBL_c2 = 13-12. */
+			const u32 blMux = gDP.otherMode.l >> 16;
+			const u32 c1m1a = (blMux >> 14) & 3;
+			const u32 c2m1a = (blMux >> 12) & 3;
+			/* En ciclo doble, c2_m1a == 0 = la mezcla del primer ciclo, que aqui
+			 * es la entrada (con el termino de niebla de abajo si lo pide). */
+			const u32 primero = (gDP.otherMode.cycleType == G_CYC_2CYCLE) ? c2m1a : c1m1a;
+			if (primero == 2 || primero == 3)
+				GXblendFogSrc = (u8)primero;
+			bool useMemColor = (primero == 1) ? true : false;
 			if (useMemColor) {
 				GXblendmode = GX_BM_BLEND;
 				GXblendsrcfactor = GX_BL_ZERO;
@@ -1442,11 +1468,48 @@ void OGL_UpdateStates()
 	 * cambie el modo; el shim solo ensucia si algo cambia de verdad. */
 	{
 		GXColor fogBl;
+		u8 modoBl = GXblendFog;
 		fogBl.r = GXcastf32u8(gDP.fogColor.r);
 		fogBl.g = GXcastf32u8(gDP.fogColor.g);
 		fogBl.b = GXcastf32u8(gDP.fogColor.b);
 		fogBl.a = GXcastf32u8(gDP.fogColor.a);
-		GXD3D_SetBlenderNiebla( GXblendFog, fogBl );
+		/* [Xbox360] [F-Zero X] Blender sin FORCE_BL cuyo primer mux es el color
+		 * de mezcla (2) o el de niebla (3): ese color tal cual (peso 0).  Ver
+		 * GXblendFogSrc. */
+		if (modoBl == 0 && GXblendFogSrc != 0)
+		{
+			if (GXblendFogSrc == 2)
+			{
+				fogBl.r = GXcastf32u8(gDP.blendColor.r);
+				fogBl.g = GXcastf32u8(gDP.blendColor.g);
+				fogBl.b = GXcastf32u8(gDP.blendColor.b);
+			}
+			fogBl.a = 0;
+			modoBl = 1;
+		}
+		/* [Xbox360] ★ [F-Zero X, los reflejos de los vehiculos] "Reflections
+		 * on vehicles in F-Zero are not reflections but fog!" (blog de GLideN64,
+		 * 2017-09-11).  F3DFLX2 deja el reflejo en el ALFA DEL VERTICE (la tabla
+		 * de la DMAIO, ver gSPProcessVertex; GLideN64 47d718f2) y apaga el
+		 * calculo de la niebla, y el blender de ciclo 1 es
+		 * `CLR_FOG * A_SHADE + CLR_IN * (1 - A)`: mezcla el color de niebla con
+		 * el peso del reflejo.  GLideN64 lo saca porque emula el blender en el
+		 * shader; aqui la niebla del blender solo existia con G_FOG y pesaba con
+		 * el coeficiente propio (`fogc`), asi que sin G_FOG el reflejo se perdia.
+		 * Modo 2 del shim: lerp(color, niebla, alfa del vertice).  Solo con
+		 * F3DFLX2 y sin G_FOG (con G_FOG manda la niebla de siempre), como el
+		 * caso por microcodigo que GLideN64 tuvo antes (ef36b702). */
+		/* Con FORCE_BL, o en ciclo doble, donde el primer ciclo se mezcla
+		 * siempre ([log 39]: los coches en carrera, sin FORCE_BL). */
+		else if (modoBl == 0 && (gSP.geometryMode & G_FOG) == 0 &&
+		         GBI.current != NULL && GBI.current->type == F3DFLX2 &&
+		         (gDP.otherMode.forceBlender != 0 || gDP.otherMode.cycleType == G_CYC_2CYCLE) &&
+		         gDP.otherMode.cycleType < G_CYC_COPY &&
+		         ((gDP.otherMode.l >> 16) & 0xCCCCu) == 0xC800u)   // GBL_c1: FOG, A_SHADE, IN, 1-A
+		{
+			modoBl = 2;
+		}
+		GXD3D_SetBlenderNiebla( modoBl, fogBl );
 	}
 
 #ifdef GLN64_SDLOG

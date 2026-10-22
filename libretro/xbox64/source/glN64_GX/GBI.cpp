@@ -517,6 +517,9 @@ MicrocodeInfo *GBI_DetectMicrocode( u32 uc_start, u32 uc_dstart, u16 uc_dsize )
 				{
 					// F-Zero X's vehicle-rendering microcode
 					type = F3DFLX2;
+					// [Xbox360] GLideN64 7036aa0c "Enable no near clipping mode for
+					// F3DFLX2 ucode" (#1855): it has no near plane clipping.
+					current->NoN = TRUE;
 				}
 				else if (strncmp( &uc_str[14], "F3DZEX", 6 ) == 0)
 				{
