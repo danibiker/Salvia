@@ -424,7 +424,15 @@ const struct
 		{ // 8-bit
 			{	GXGetI8_IA8,			GX_TF_IA8,		2,		3,			4096 }, // RGBA as I
 			{	GetNone,				GX_TF_I4,		0,		3,			4096 }, // YUV
-			{	GXGetCI8RGBA_RGB5A3,	GX_TF_RGB5A3,	2,		3,			2048 }, // CI as I (FIXME)
+			/* [Xbox360] [Ogre Battle 64, siluetas de la colina al reves] CI de 8
+			 * bits SIN TLUT = intensidad (I = A = el indice), como GLideN64
+			 * (Textures.cpp imageFormat[G_TT_NONE][8-bit][CI]: GetI8, "CI without
+			 * palette", 4096 texels).  Wii64 lo pasaba por la paleta y el alfa
+			 * salia de ella: el combinador del juego (TEXEL0*PRIM, alfa TEXEL0)
+			 * pintaba negro lo que era transparente.  La fila de 4 bits sigue
+			 * como estaba: GLideN64 da ahi un valor constante sacado del numero
+			 * de paleta, y no hay ningun juego medido que lo use. */
+			{	GXGetI8_IA8,			GX_TF_IA8,		2,		3,			4096 }, // CI without palette = I
 			{	GXGetIA44_IA4,			GX_TF_IA4,		1,		3,			4096 }, // IA
 			{	GXGetI8_IA8,			GX_TF_IA8,		2,		3,			4096 }, // I
 		},

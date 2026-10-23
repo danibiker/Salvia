@@ -339,6 +339,32 @@ CachedCombiner *Combiner_Compile( u64 mux )
 		}
 	}
 
+	/* [Xbox360] ★ [Paper Mario, el logo: fondo negro y cuadrados blancos] EN UN
+	 * CICLO NO HAY TEXEL1: es TEXEL0, como GLideN64 (glsl_CombinerProgramBuilder
+	 * .cpp, compileCombiner: con cycleType != 2CYCLE, _correctFirstStageParams
+	 * sobre la etapa 0 del color y del alfa: TEXEL1 -> TEXEL0 y TEXEL1_ALPHA ->
+	 * TEXEL0_ALPHA).  glN64 leia la tesela siguiente.  El logo es 00FFA7FF:
+	 * FF4CFE7F en un ciclo: color = TEXEL0 (tiras de 200x2 en RGBA32), alfa =
+	 * TEXEL1_A * PRIM_A.  La tesela siguiente es una mascara de papel de 16x16
+	 * CI4 en espejo y con shift 3 (un texel cada 8x8 pixeles), con restos de la
+	 * TMEM (53 versiones distintas en el volcado del log 18): salia el fondo
+	 * negro de las tiras y los bloques blancos de la mascara.  Con TEXEL0_A el
+	 * alfa es el contorno del papel. */
+	if (numCycles == 1)
+	{
+		int *ent[8];
+		int k;
+		ent[0] = &cc[0].sa;  ent[1] = &cc[0].sb;  ent[2] = &cc[0].m;  ent[3] = &cc[0].a;
+		ent[4] = &ac[0].sa;  ent[5] = &ac[0].sb;  ent[6] = &ac[0].m;  ent[7] = &ac[0].a;
+		for (k = 0; k < 8; k++)
+		{
+			if (*ent[k] == TEXEL1)
+				*ent[k] = TEXEL0;
+			else if (*ent[k] == TEXEL1_ALPHA)
+				*ent[k] = TEXEL0_ALPHA;
+		}
+	}
+
 	for (int i = 0; i < numCycles; i++)
 	{
 		// Simplify each RDP combiner cycle into a combiner stage
@@ -564,6 +590,15 @@ DWORD64 Combiner_EncodeCombineMode( WORD saRGB0, WORD sbRGB0, WORD mRGB0, WORD a
 
 void Combiner_SelectCombine( u64 mux )
 {
+	/* [Xbox360] [Paper Mario, el logo] LA CLAVE DE LA CACHE LLEVA EL MODO DE
+	 * CICLO, como el CombinerKey de GLideN64 (mux + cycleType).  Combiner_Compile
+	 * compila distinto en dos ciclos (cruce de texturas del ciclo 1, fusion) que
+	 * en uno (TEXEL1 -> TEXEL0), y la cache solo miraba el mux: el mismo mux en
+	 * los dos modos se quedaba con el primero que se compilo.  El bit 56 cae en
+	 * `pad0` (los 8 bits altos de muxs0, que ningun campo usa). */
+	if (gDP.otherMode.cycleType == G_CYC_2CYCLE)
+		mux |= (u64)1 << 56;
+
 	CachedCombiner *current = combiner.root;
 	CachedCombiner *parent = current;
 
