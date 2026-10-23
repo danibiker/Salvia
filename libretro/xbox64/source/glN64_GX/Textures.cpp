@@ -2041,8 +2041,118 @@ u32 TextureCache_CalculateCRC( u32 t, u32 width, u32 height )
 	return crc;
 }
 
+#if defined(__GX__) && XBOX64_TRAZAS
+/* [Xbox360] ★ EL DETALLE DEL VOLCADO DE TEXTURAS (L3+R3), parte fija de la
+ * herramienta TEXBMP (xenon/gx_d3d9.cpp), solo con XBOX64_TRAZAS.  En el frame
+ * del volcado (gxd3d_tbmp_activo), una vez por textura y con el MISMO puntero
+ * que el nombre del BMP (`tex_NN_fF_WxH_dPUNTERO`):
+ *   [TEXPAR]   direccion, formato/tamano, WxH, TMEM, linea, paleta, crc, fb;
+ *   [TEXPAR2]  mascaras, clamp/mirror, tamanos (clamp, real, GX) y formato GX;
+ *   [TEXPAR3]  el tile con que se activa (TMEM, linea, rect, mascaras, shift,
+ *              cm, tipo de carga, imagen);
+ *   [TEXPAR4]  la ultima carga que la TMEM recuerda en esa posicion, la TLUT y
+ *              el CRC de la sub-paleta;
+ *   [TEXPAR5]  el estado de dibujo: combinador, othermode H/L, geometry mode,
+ *              PRIM y ENV;
+ * y tres .bin de 4 KB en el mismo directorio: tmem_ (la TMEM), img_ (RDRAM
+ * desde la imagen del ultimo load del tile) y dir_ (RDRAM desde la direccion
+ * de la textura de la cache), para reconstruir a mano RDRAM -> TMEM -> texels.
+ * Origen: Paper Mario, ventana negra fuera de la casa (2026-10-23): [TEXPAR5]
+ * enseno la TLUT que SetOtherMode_H dejaba puesta (ver gSPSetOtherMode_H). */
+extern "C" int  gxd3d_tbmp_activo(void);
+extern "C" const char *gxd3d_tbmp_dir(void);
+extern "C" void DebugOutputString( const char *s );
+
+/* Un .bin crudo en el directorio del volcado: `tmem_dPUNTERO.bin` (la TMEM,
+ * 4 KB), `img_dPUNTERO.bin` (4 KB de RDRAM desde la imagen del ultimo load
+ * del tile) y `dir_dPUNTERO.bin` (4 KB desde la direccion de la textura de la
+ * cache).  Con eso se reconstruye a mano RDRAM -> TMEM -> texels. */
+static void _texSondaBin( const char *pref, const void *tex, const void *datos, u32 bytes )
+{
+	const char *dir = gxd3d_tbmp_dir();
+	char ruta[192];
+	FILE *f;
+	if (dir == NULL || datos == NULL)
+		return;
+	sprintf( ruta, "%s%s_d%08X.bin", dir, pref, (u32)(size_t)tex );
+	f = fopen( ruta, "wb" );
+	if (f == NULL)
+		return;
+	fwrite( datos, 1, bytes, f );
+	fclose( f );
+}
+
+static const void *_texSondaRdram( u32 dir )
+{
+	return (dir != 0 && dir + 4096 <= RDRAMSize + 1) ? (const void*)&RDRAM[dir] : NULL;
+}
+static void _texSondaPar( u32 t, const CachedTexture *tx )
+{
+	static const void *s_vistas[256];
+	static u32 s_n = 0;
+	static int s_antes = 0;
+	const int activo = gxd3d_tbmp_activo();
+	char l[200];
+	u32 i;
+
+	if (!activo) { s_antes = 0; return; }
+	if (!s_antes) { s_n = 0; s_antes = 1; }   /* un volcado nuevo */
+	if (tx == NULL || tx->GXtexture == NULL) return;
+	for (i = 0; i < s_n; i++)
+		if (s_vistas[i] == tx->GXtexture) return;
+	if (s_n >= 256) return;
+	s_vistas[s_n++] = tx->GXtexture;
+
+	sprintf( l, "[TEXPAR] d%08X t%u dir=%08X fmt=%u siz=%u %ux%u tmem=%u line=%u pal=%u crc=%08X fb=%u",
+	         (u32)(size_t)tx->GXtexture, t, tx->address, tx->format, tx->size, tx->width, tx->height,
+	         tx->tMem, tx->line, tx->palette, tx->crc, tx->frameBufferTexture );
+	DebugOutputString( l );
+	sprintf( l, "[TEXPAR2] d%08X mask=%u,%u clamp=%u,%u mir=%u,%u clampWH=%ux%u real=%ux%u gx=%ux%u fmt%u",
+	         (u32)(size_t)tx->GXtexture, tx->maskS, tx->maskT, tx->clampS, tx->clampT,
+	         tx->mirrorS, tx->mirrorT, tx->clampWidth, tx->clampHeight,
+	         tx->realWidth, tx->realHeight, tx->GXrealWidth, tx->GXrealHeight, tx->GXtexfmt );
+	DebugOutputString( l );
+	{
+		const gDPTile *tl = gSP.textureTile[t];
+		if (tl != NULL)
+		{
+			sprintf( l, "[TEXPAR3] d%08X tile tmem=%u line=%u s%u,%u-%u,%u mask=%u,%u shift=%u,%u cm=%u,%u ld=%u img=%08X",
+			         (u32)(size_t)tx->GXtexture, tl->tmem, tl->line, tl->uls, tl->ult, tl->lrs, tl->lrt,
+			         tl->masks, tl->maskt, tl->shifts, tl->shiftt, tl->cms, tl->cmt,
+			         tl->loadType, tl->imageAddress );
+			DebugOutputString( l );
+			{
+				/* La ultima carga que la TMEM recuerda en esa posicion. */
+				const gDPLoadTileInfo &li = gDP.loadInfo[tl->tmem & 0x1FF];
+				sprintf( l, "[TEXPAR4] d%08X carga %ux%u texW=%u dir=%08X tipo=%u siz=%u | lut=%u palCRC=%08X",
+				         (u32)(size_t)tx->GXtexture, li.width, li.height, li.texWidth, li.texAddress,
+				         li.loadType, li.size, gDP.otherMode.textureLUT,
+				         gDP.paletteCRC16[tl->palette & 15] );
+				DebugOutputString( l );
+			}
+			/* El estado de dibujo con que se activa: combinador, othermode,
+			 * geometry mode y los colores PRIM/ENV (RGBA de 8 bits). */
+			sprintf( l, "[TEXPAR5] d%08X mux=%08X:%08X H=%08X L=%08X geo=%08X prim=%02X%02X%02X%02X env=%02X%02X%02X%02X",
+			         (u32)(size_t)tx->GXtexture, gDP.combine.muxs0, gDP.combine.muxs1,
+			         gDP.otherMode.h, gDP.otherMode.l, gSP.geometryMode,
+			         (u32)(gDP.primColor.r * 255.0f), (u32)(gDP.primColor.g * 255.0f),
+			         (u32)(gDP.primColor.b * 255.0f), (u32)(gDP.primColor.a * 255.0f),
+			         (u32)(gDP.envColor.r * 255.0f), (u32)(gDP.envColor.g * 255.0f),
+			         (u32)(gDP.envColor.b * 255.0f), (u32)(gDP.envColor.a * 255.0f) );
+			DebugOutputString( l );
+			_texSondaBin( "tmem", tx->GXtexture, TMEM, 4096 );
+			_texSondaBin( "img",  tx->GXtexture, _texSondaRdram( tl->imageAddress ), 4096 );
+			_texSondaBin( "dir",  tx->GXtexture, _texSondaRdram( tx->address ), 4096 );
+		}
+	}
+}
+#endif
+
 void TextureCache_ActivateTexture( u32 t, CachedTexture *texture )
 {
+#if defined(__GX__) && XBOX64_TRAZAS
+	_texSondaPar( t, texture );
+#endif
 #ifndef __GX__
 	// If multitexturing, set the appropriate texture
 	if (OGL.ARB_multitexture)

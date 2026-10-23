@@ -198,6 +198,8 @@ void gSPPerspNormalize( u16 scale );
 void gSPTexture( f32 sc, f32 tc, s32 level, s32 tile, s32 on );
 bool needReplaceTex1ByTex0();
 void gSPUpdateTextureTiles();
+// [Xbox360] GLideN64's gSPSetOtherMode_H: mask and data, always (see gSP.cpp).
+void gSPSetOtherMode_H( u32 length, u32 shift, u32 data );
 void gSPEndDisplayList();
 void gSPGeometryMode( u32 clear, u32 set );
 void gSPSetGeometryMode( u32 mode );

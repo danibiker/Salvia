@@ -27,6 +27,7 @@ extern Config config;
 #define hack_paperMarioSubscreen	(1<<5)  //[Xbox360] GLideN64 1f4d04f4 hack_paper_mario_subscreen: in the color copy to RDRAM, blue += 4 if 0 < b <= 0xFB. Paper Mario subscreen delay
 #define hack_rectDepthBufferCopyPD	(1<<8)  //Perfect Dark's depth buffer reads, which drive its light coronas
 #define hack_texrectPaletteMod		(1<<9)  //[Xbox360] GLideN64 texturedRectPaletteMod: Paper Mario "2D lighting" palette written to RDRAM by a 16x1 texrect, and its darkness texture at 0x400
+#define hack_viDosBuffers			(1<<12) //[Xbox360] VI origin inside a colour buffer with another one right after it: draw the end of the first and the start of the next (GLideN64 renderBuffer pNextBuffer). Beetle Adventure Racing menu transition
 #define hack_zeldaMMLente			(1<<11) //[Xbox360] GLideN64 hack_ZeldaMM, only its depth copy by S2DEX BG rects (5347689b): Lens of Truth depth in Zelda MM
 #define hack_texrectShadowMap		(1<<10) //[Xbox360] GLideN64 texturedRectShadowMap: a texrect that reads the depth image is drawn as fog colour with alpha = TLUT[N64 depth]. Beetle Adventure Racing fog
 #define hack_fbTextureOffset		(1<<23) //Offset Conker's shadow in CBFD and the Bob-ombs in Mario Tennis

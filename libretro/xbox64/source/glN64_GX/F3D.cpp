@@ -234,54 +234,11 @@ void F3D_Texture( u32 w0, u32 w1 )
 				_SHIFTR( w0, 0, 8 ) );
 }
 
+/* [Xbox360] ★★ Mascara siempre, como GLideN64 (uCodes/F3D.cpp:216): ver
+ * gSPSetOtherMode_H en gSP.cpp (Paper Mario, la TLUT que se quedaba puesta). */
 void F3D_SetOtherMode_H( u32 w0, u32 w1 )
 {
-	switch (_SHIFTR( w0, 8, 8 ))
-	{
-		case G_MDSFT_PIPELINE:
-			gDPPipelineMode( w1 >> G_MDSFT_PIPELINE );
-			break;
-		case G_MDSFT_CYCLETYPE:
-			gDPSetCycleType( w1 >> G_MDSFT_CYCLETYPE );
-			break;
-		case G_MDSFT_TEXTPERSP:
-			gDPSetTexturePersp( w1 >> G_MDSFT_TEXTPERSP );
-			break;
-		case G_MDSFT_TEXTDETAIL:
-			gDPSetTextureDetail( w1 >> G_MDSFT_TEXTDETAIL );
-			break;
-		case G_MDSFT_TEXTLOD:
-			gDPSetTextureLOD( w1 >> G_MDSFT_TEXTLOD );
-			break;
-		case G_MDSFT_TEXTLUT:
-			gDPSetTextureLUT( w1 >> G_MDSFT_TEXTLUT );
-			break;
-		case G_MDSFT_TEXTFILT:
-			gDPSetTextureFilter( w1 >> G_MDSFT_TEXTFILT );
-			break;
-		case G_MDSFT_TEXTCONV:
-			gDPSetTextureConvert( w1 >> G_MDSFT_TEXTCONV );
-			break;
-		case G_MDSFT_COMBKEY:
-			gDPSetCombineKey( w1 >> G_MDSFT_COMBKEY );
-			break;
-		case G_MDSFT_RGBDITHER:
-			gDPSetColorDither( w1 >> G_MDSFT_RGBDITHER );
-			break;
-		case G_MDSFT_ALPHADITHER:
-			gDPSetAlphaDither( w1 >> G_MDSFT_ALPHADITHER );
-			break;
-		default:
-			u32 shift = _SHIFTR( w0, 8, 8 );
-			u32 length = _SHIFTR( w0, 0, 8 );
-			u32 mask = ((1 << length) - 1) << shift;
-
-			gDP.otherMode.h &= ~mask;
-			gDP.otherMode.h |= w1 & mask;
-
-			gDP.changed |= CHANGED_CYCLETYPE;
-			break;
-	}
+	gSPSetOtherMode_H( _SHIFTR( w0, 0, 8 ), _SHIFTR( w0, 8, 8 ), w1 );
 }
 
 /* [Xbox360] ★★ Mascara siempre, como GLideN64 (uCodes/F3D.cpp:223 +

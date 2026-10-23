@@ -716,7 +716,14 @@ static void _RSP_SetGameHacks()
 	         strstr( nombreIni, "HSV" ) != NULL ||
 	         strstr( nombreIni, "DUCK DODGERS" ) != NULL ||
 	         strstr( nombreIni, "DAFFY DUCK" ) != NULL)
+	{
 		config.generalEmulation.hacks |= hack_texrectShadowMap;
+		/* [Xbox360] Y su transicion de menus con dos buffers: solo Beetle (el
+		 * juego del caso).  Ver FrameBuffer_RenderBuffer: sin el resto del
+		 * renderBuffer de GLideN64, en general hacia temblar DK64. */
+		if (strstr( nombreIni, "BEETLE" ) != NULL || strstr( nombreIni, "HSV" ) != NULL)
+			config.generalEmulation.hacks |= hack_viDosBuffers;
+	}
 
 	/* ★ [Xbox360] OJO AL TOCAR ESTA CADENA: casa por NOMBRE INTERNO de la
 	 * cabecera de la ROM y es `else if`, asi que el PRIMER `strstr` que

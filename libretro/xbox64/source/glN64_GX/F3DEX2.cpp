@@ -156,54 +156,14 @@ void F3DEX2_Texture( u32 w0, u32 w1 )
 				_SHIFTR( w0, 1, 7 ) );
 }
 
+/* [Xbox360] ★★ Mascara siempre, como GLideN64 (uCodes/F3DEX2.cpp:119): ver
+ * gSPSetOtherMode_H en gSP.cpp (Paper Mario, la TLUT que se quedaba puesta). */
 void F3DEX2_SetOtherMode_H( u32 w0, u32 w1 )
 {
-	switch (32 - _SHIFTR( w0, 8, 8 ) - (_SHIFTR( w0, 0, 8 ) + 1))
-	{
-		case G_MDSFT_PIPELINE:
-			gDPPipelineMode( w1 >> G_MDSFT_PIPELINE );
-			break;
-		case G_MDSFT_CYCLETYPE:
-			gDPSetCycleType( w1 >> G_MDSFT_CYCLETYPE );
-			break;
-		case G_MDSFT_TEXTPERSP:
-			gDPSetTexturePersp( w1 >> G_MDSFT_TEXTPERSP );
-			break;
-		case G_MDSFT_TEXTDETAIL:
-			gDPSetTextureDetail( w1 >> G_MDSFT_TEXTDETAIL );
-			break;
-		case G_MDSFT_TEXTLOD:
-			gDPSetTextureLOD( w1 >> G_MDSFT_TEXTLOD );
-			break;
-		case G_MDSFT_TEXTLUT:
-			gDPSetTextureLUT( w1 >> G_MDSFT_TEXTLUT );
-			break;
-		case G_MDSFT_TEXTFILT:
-			gDPSetTextureFilter( w1 >> G_MDSFT_TEXTFILT );
-			break;
-		case G_MDSFT_TEXTCONV:
-			gDPSetTextureConvert( w1 >> G_MDSFT_TEXTCONV );
-			break;
-		case G_MDSFT_COMBKEY:
-			gDPSetCombineKey( w1 >> G_MDSFT_COMBKEY );
-			break;
-		case G_MDSFT_RGBDITHER:
-			gDPSetColorDither( w1 >> G_MDSFT_RGBDITHER );
-			break;
-		case G_MDSFT_ALPHADITHER:
-			gDPSetAlphaDither( w1 >> G_MDSFT_ALPHADITHER );
-			break;
-		default:
-			u32 length = _SHIFTR( w0, 0, 8 ) + 1;
-			u32 shift = 32 - _SHIFTR( w0, 8, 8 ) - length;
-			u32 mask = ((1 << length) - 1) << shift;
+	const u32 length = _SHIFTR( w0, 0, 8 ) + 1;
+	const s32 shiftS = (s32)(32 - _SHIFTR( w0, 8, 8 ) - length);
 
-			gDP.otherMode.h &= ~mask;
-			gDP.otherMode.h |= w1 & mask;
-
-			gDP.changed |= CHANGED_CYCLETYPE;
-			break;
-	}
+	gSPSetOtherMode_H( length, (shiftS > 0) ? (u32)shiftS : 0, w1 );
 }
 
 /* [Xbox360] ★★ [Mario Tennis, menus opacos] MASCARA SIEMPRE, COMO GLideN64.

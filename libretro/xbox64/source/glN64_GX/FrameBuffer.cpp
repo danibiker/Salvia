@@ -968,7 +968,18 @@ void FrameBuffer_RenderBuffer( u32 address )
 				srcAlto = VI.height;
 				if (srcAlto > current->height) srcAlto = current->height;
 
-				if (srcY0 > 0 && srcAlto > 0 && zancada != 0)
+				/* ★ [DK64, la intro temblaba, 2026-10-23] SOLO CON
+				 * hack_viDosBuffers (Beetle).  Medido con [VIPART]: la intro de
+				 * DK64 (640x480 entrelazado) tiene el origen 2 filas dentro del
+				 * buffer en TODAS las pantallas, y solo en 15 de cada 60 habia
+				 * otro buffer pegado: esas se pintaban desde la fila 2 y las
+				 * demas desde la 0 -> la imagen saltaba 2 filas.  GLideN64 no
+				 * tiembla porque aplica SIEMPRE el desplazamiento, con su ajuste
+				 * de campos entrelazados (`!vi_lowerfield -> --srcY0`); eso no
+				 * esta portado, y sin ello el reparto solo es seguro donde se
+				 * midio. */
+				if ((config.generalEmulation.hacks & hack_viDosBuffers) != 0 &&
+				    srcY0 > 0 && srcAlto > 0 && zancada != 0)
 				{
 					siguiente = FrameBuffer_FindBuffer( address + zancada * (srcAlto - 1) - 1 );
 					if (siguiente == current || (siguiente != NULL && siguiente->texture == NULL))

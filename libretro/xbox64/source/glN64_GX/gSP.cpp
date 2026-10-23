@@ -2109,6 +2109,40 @@ void gSPUpdateTextureTiles()
 	                                             : &gDP.tiles[(base + 1) & 7];
 }
 
+/* [Xbox360] ★★ [Paper Mario, la ventana negra fuera de la casa y la textura
+ * de lo que cuelga del arbol] MASCARA SIEMPRE EN otherMode.h, COMO GLideN64
+ * (gSP.cpp gSPSetOtherMode_H, desde uCodes/F3D.cpp:216 y F3DEX2.cpp:119).
+ *
+ * F3D_SetOtherMode_H y F3DEX2_SetOtherMode_H repartian por el desplazamiento
+ * (`case G_MDSFT_TEXTFILT`, `case G_MDSFT_TEXTLOD`...), y el desplazamiento no
+ * dice CUANTOS bits se escriben: una escritura de varios campos que empieza
+ * en uno con nombre solo actualizaba ESE.  Es el mismo defecto que ya tuvo la
+ * mitad L (Mario Tennis, ver F3DEX2_SetOtherMode_L).  Medido con [TEXPAR5]
+ * (logs (1), 2026-10-23): la misma ventana (IA8 en 00292908) se dibuja fuera
+ * con H 0018ACC0 -- TLUT RGBA16 ENCENDIDA, se lee como indices de paleta: negra
+ * -- y dentro con H 00182CC0 (sin TLUT: bien).  La TLUT se quedaba puesta de un
+ * dibujo anterior.  Y LOD/DETAIL escritos juntos dejaban DETAIL viejo, que
+ * decide el tile de la textura 1 (needReplaceTex1ByTex0).
+ *
+ * Las banderas, las que ponian las funciones de cada campo: el ciclo
+ * CHANGED_CYCLETYPE (siempre, como el `default` de antes) y el LOD/DETAIL el
+ * recalculo de los tiles de textura con CHANGED_TEXTURE (gDPSetTextureLOD y
+ * gDPSetTextureDetail).  GLideN64 no marca nada por la TLUT; aqui tampoco. */
+void gSPSetOtherMode_H( u32 length, u32 shift, u32 data )
+{
+	const u32 mask = (u32)((((u64)1 << length) - 1) << shift);
+
+	gDP.otherMode.h = (gDP.otherMode.h & ~mask) | (data & mask);
+
+	gDP.changed |= CHANGED_CYCLETYPE;
+
+	if ((mask & ((3u << G_MDSFT_TEXTDETAIL) | (1u << G_MDSFT_TEXTLOD))) != 0)
+	{
+		gSPUpdateTextureTiles();
+		gSP.changed |= CHANGED_TEXTURE;
+	}
+}
+
 // From GLideN64 commit c28ea61b, "Fix for texture issues in Stunt Racer"
 bool needReplaceTex1ByTex0()
 {

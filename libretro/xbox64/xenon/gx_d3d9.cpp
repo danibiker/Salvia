@@ -313,6 +313,11 @@ extern "C" void gxd3d_texcache_habilitar(int on) { s_texCacheOn = on ? 1 : 0; }
 /* Volcado TEXBMP: herramienta de diagnostico, solo con trazas.  Sin ellas
  * `g_texbmpArm` existe (L3+R3 lo arma) pero nadie lo atiende. */
 #if XBOX64_TRAZAS
+/* Para que el plugin escriba, en el MISMO frame del volcado, el detalle de
+ * cada textura con el puntero que lleva el nombre del BMP ([TEXPAR*] y los
+ * .bin, glN64_GX/Textures.cpp _texSondaPar). */
+extern "C" int gxd3d_tbmp_activo(void) { return s_tbmpActivo; }
+
 static void tbmp_pon32(unsigned char *p, unsigned int v)
 {   /* BMP es LITTLE-ENDIAN y la consola BIG-ENDIAN: byte a byte, a mano. */
     p[0] = (unsigned char)( v        & 0xFF);
@@ -356,6 +361,10 @@ static const char *tbmp_dir(void)
                       "  Probadas: game:\\ devkit:\\ cache:\\ D:\\");
     return 0;
 }
+
+/* El mismo directorio para los .bin del detalle del volcado ([TEXPAR*] del
+ * plugin: TMEM y RDRAM de cada textura). */
+extern "C" const char *gxd3d_tbmp_dir(void) { return tbmp_dir(); }
 
 /* BMP de 32 bits TOP-DOWN (biHeight negativo), sin comprimir.  Cada pixel
  * sale al fichero como B,G,R,A. */
