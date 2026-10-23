@@ -251,7 +251,22 @@ void VI_UpdateScreen()
 	{
 		FrameBuffer *current = FrameBuffer_FindBuffer( *REG.VI_ORIGIN );
 
-		if ((*REG.VI_ORIGIN != VI.lastOrigin) || ((current) && current->changed))
+		/* [Xbox360] ★ [PGA European Tour, la barra de fuerza del golpe no se
+		 * ve] EL RDP HA PINTADO EN EL BUFFER QUE ESTA EN PANTALLA.  Durante el
+		 * golpe el juego no cambia de buffer: manda una lista por VI sobre el
+		 * que se ve (vi_origin=3A0280 fijo, 60 listas/s y 0 imagenes nuevas en
+		 * logs (5)) y el VI del N64, que lee la RDRAM en cada barrido, ensena la
+		 * barra.  glN64 solo presentaba al cambiar el origen o si SaveBuffer
+		 * habia marcado el buffer (al cambiar de color image), y aqui no pasa
+		 * ninguna de las dos: se repetia la imagen vieja.  GLideN64 presenta en
+		 * CADA VI (bufferSwapMode = bsOnVerticalInterrupt, su defecto,
+		 * Config.cpp; gonetz/GLideN64#325 es este medidor).  Aqui solo cuando
+		 * hay algo nuevo en el buffer que se ve: un juego con doble buffer pinta
+		 * en el otro y no cambia nada. */
+		const BOOL pintaEnPantalla = (current != NULL && gDP.colorImage.changed &&
+		                              gDP.colorImage.address == current->startAddress) ? TRUE : FALSE;
+
+		if ((*REG.VI_ORIGIN != VI.lastOrigin) || ((current) && current->changed) || pintaEnPantalla)
 		{
 			/* [Xbox360] [Dr. Mario 64] Lo que necesita VI_GX_copiaDesdeRDRAM,
 			 * tomado AQUI: RenderBuffer pone `changed` a FALSE, y SaveBuffer
