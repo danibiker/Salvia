@@ -2859,6 +2859,10 @@ static BOOL _useOnePieceBgCode( u32 address )
 #endif
 }
 
+/* [Zelda MM, Lente de la Verdad] Ver GLN64_LOT_* en gSP.h. */
+u32 gln64_lotModo  = GLN64_LOT_NADA;
+u32 gln64_lotFondo = 0;
+
 void gSPBgRect1Cyc( u32 bg )
 {
 	u32 address = RSP_SegmentToPhysical( bg );
@@ -2929,6 +2933,23 @@ void gSPBgRect1Cyc( u32 bg )
 	gDP.changed |= CHANGED_CYCLETYPE;
 	gSPTexture( 1.0f, 1.0f, 0, 0, TRUE );
 
+	/* [Xbox360] ★ [Zelda MM, Lente de la Verdad] GLideN64 5347689b,
+	 * BgRect1CycOnePiece: con hack_ZeldaMM y el fondo = el DEPTH IMAGE, el juego
+	 * copia el Z a otro buffer (el color image actual).  Alli es una pasada que
+	 * escribe ese Z en un depth buffer con la direccion del color image
+	 * (eBg1cyc, uRenderTarget 3); aqui hay un solo Z, y lo mismo es GUARDARLO
+	 * con esa direccion (GXD3D_GuardaZ, la maquinaria de Mario Golf), que es
+	 * lo que leera gSPBgRectCopy al devolverlo.  Despues el dibujo normal,
+	 * como alli, sin render to depth (su eCopyDone: gln64_lotModo). */
+	const BOOL lotGuarda = ((config.generalEmulation.hacks & hack_zeldaMMLente) != 0 &&
+	                        OGL.frameBufferTextures &&
+	                        gSP.bgImage.address == gDP.depthImageAddress) ? TRUE : FALSE;
+	if (lotGuarda)
+	{
+		GXD3D_GuardaZ( gDP.colorImage.address );
+		gln64_lotModo = GLN64_LOT_HECHO;
+	}
+
 	const f32 spanX[2][2] = { { frameX0, frameX1 }, { frameX1, frameX0 + frameW } };
 	const f32 spanY[2][2] = { { frameY0, frameY1 }, { frameY1, frameY0 + frameH } };
 	const f32 srcX[2] = { imageX, 0.0f };
@@ -2948,6 +2969,11 @@ void gSPBgRect1Cyc( u32 bg )
 			                     spanX[ix][1], spanY[iy][1],
 			                     0, srcX[ix], srcY[iy], scaleW, scaleH );
 		}
+	}
+	if (lotGuarda)
+	{
+		gln64_lotModo = GLN64_LOT_NADA;
+		gDP.changed |= CHANGED_RENDERMODE;
 	}
 
 /*	u32 line = (u32)(frameS1 - frameS0 + 1) << objScaleBg->imageSiz >> 4;
@@ -3034,8 +3060,35 @@ void gSPBgRectCopy( u32 bg )
 	
 	gSPTexture( 1.0f, 1.0f, 0, 0, TRUE );
 
+	/* [Xbox360] ★ [Zelda MM, Lente de la Verdad] GLideN64 5347689b,
+	 * BgRectCopyOnePiece: con hack_ZeldaMM, un fondo que NO es el depth image
+	 * pero tiene depth buffer (aqui: un Z guardado con su direccion, el que dejo
+	 * gSPBgRect1Cyc) DEVUELVE ese Z: una pasada que lo escribe pixel a pixel
+	 * solo donde el Z actual vale 0 (eBgCopy, uRenderTarget 4; aqui render to
+	 * depth modo 4, ver OGL_UpdateStates), y despues el dibujo normal sin
+	 * render to depth (eCopyDone). */
+	const BOOL lotDevuelve = ((config.generalEmulation.hacks & hack_zeldaMMLente) != 0 &&
+	                          OGL.frameBufferTextures &&
+	                          gSP.bgImage.address != gDP.depthImageAddress &&
+	                          GXD3D_UsaZGuardada( gSP.bgImage.address )) ? TRUE : FALSE;
+	if (lotDevuelve)
+	{
+		gln64_lotModo = GLN64_LOT_DEVUELVE;
+		gln64_lotFondo = gSP.bgImage.address;
+		gDP.changed |= CHANGED_RENDERMODE;
+		gDPTextureRectangle( frameX, frameY, frameX + frameW - 1, frameY + frameH - 1, 0, imageX, imageY, 4, 1 );
+		gln64_lotModo = GLN64_LOT_HECHO;
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
+
 	gDPTextureRectangle( frameX, frameY, frameX + frameW - 1, frameY + frameH - 1, 0, imageX, imageY, 4, 1 );
-	
+
+	if (lotDevuelve)
+	{
+		gln64_lotModo = GLN64_LOT_NADA;
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
+
 	if (gDP.textureMode == TEXTUREMODE_FRAMEBUFFER_BG)
 	{
 		gDP.textureMode = TEXTUREMODE_NORMAL;

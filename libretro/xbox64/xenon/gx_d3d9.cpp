@@ -2709,7 +2709,8 @@ int GXD3D_UsaZGuardada(u32 dir)
 
 void GXD3D_SetRenderToDepth(u8 modo)
 {
-    if (modo > 3) modo = 3;   /* 3 = copiar el Z guardado (GXD3D_UsaZGuardada) */
+    if (modo > 4) modo = 4;   /* 3 = copiar el Z guardado (GXD3D_UsaZGuardada);
+                               * 4 = [Zelda MM] idem solo donde el Z actual es 0 */
     /* El modo 2 sin copia valida tambien entra: el plugin pudo invalidarla
      * sin pasar por otro modo. */
     if (modo == s_rtzModo && !(modo == 2 && !s_zcValida))
@@ -2851,10 +2852,26 @@ static void gxd3d_zcopia_lote(void)
         g_pd3dDevice->SetSamplerState(s, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
         g_pd3dDevice->SetPixelShaderConstantF(GXD3D_NIEBLAZ_CONST, s_nzPar, 1);
     }
-    /* [Mario Golf] El modo 3: el Z guardado que eligio GXD3D_UsaZGuardada. */
-    if (s_rtzModo == 3 && s_zgActual >= 0)
+    /* [Mario Golf] El modo 3: el Z guardado que eligio GXD3D_UsaZGuardada.
+     * [Zelda MM, Lente de la Verdad] El modo 4 tambien, y ademas una copia del
+     * Z ACTUAL en GXD3D_ZACTUAL_SAMPLER (resuelta aqui, antes de que este
+     * lote escriba nada): el shader descarta donde vale mas de 0.  Mismo
+     * tamano que la guardada (las dos son del render target), asi que vale
+     * la constante uZCopiaInv que pone gxd3d_zcopia_liga_tex. */
+    if ((s_rtzModo == 3 || s_rtzModo == 4) && s_zgActual >= 0)
     {
         const GXD3DZGuardada *e = &s_zg[s_zgActual];
+        if (s_rtzModo == 4)
+        {
+            const DWORD s = GXD3D_ZACTUAL_SAMPLER;
+            gxd3d_zcopia();
+            g_pd3dDevice->SetTexture(s, (D3DBaseTexture *)s_zcTex);
+            g_pd3dDevice->SetSamplerState(s, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            g_pd3dDevice->SetSamplerState(s, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            g_pd3dDevice->SetSamplerState(s, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+            g_pd3dDevice->SetSamplerState(s, D3DSAMP_ADDRESSU,  D3DTADDRESS_CLAMP);
+            g_pd3dDevice->SetSamplerState(s, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
+        }
         gxd3d_zcopia_liga_tex(e->tex, e->w, e->h);
 #if XBOX64_TRAZAS
         s_stZgLotes++;
@@ -2870,6 +2887,8 @@ static void gxd3d_zcopia_lote(void)
 /* gxd3d_shutdown: la copia se suelta y el modo vuelve a 0. */
 static void gxd3d_rtz_shutdown(void)
 {
+    /* [Zelda MM] El modo 4 deja la copia del Z ligada en el sampler 5. */
+    g_pd3dDevice->SetTexture(GXD3D_ZACTUAL_SAMPLER, NULL);
     if (s_zcTex)
     {
         d3dq_soltar((D3DResource *)s_zcTex);

@@ -1551,7 +1551,26 @@ void OGL_UpdateStates()
 	 * Va AL FINAL y fuerza CHANGED_RENDERMODE (como setDepthCopyParameters):
 	 * el siguiente dibujo vuelve a pasar por aqui y, si ya no es el depth
 	 * image, recompone el modo de Z normal de arriba. */
-	if (gDP.colorImage.address == gDP.depthImageAddress && gln64_zCopiaDesde != 0)
+	/* [Xbox360] ★ [Zelda MM, Lente de la Verdad] GLideN64 5347689b
+	 * (GraphicsDrawer::_updateStates, m_depthCopyMode): la pasada eBgCopy de
+	 * gSPBgRectCopy escribe el Z guardado del fondo (gln64_lotFondo) solo donde
+	 * el Z actual vale 0 -- render to depth modo 4 --, en ALWAYS con escritura
+	 * y SIN color (el dibujo normal de despues lo pinta); y en esa pasada normal
+	 * (eCopyDone) no hay render to depth aunque el color image sea el depth
+	 * image.  El Z guardado se vuelve a elegir aqui: lo que se haya dibujado
+	 * entre medias pudo elegir otro (Mario Golf, _gDPCopiaDeZGuardada). */
+	if (gln64_lotModo == GLN64_LOT_DEVUELVE && GXD3D_UsaZGuardada( gln64_lotFondo ))
+	{
+		GXD3D_SetRenderToDepth( 4 );
+		GXD3D_SetDecalN64( 0 );
+		GX_SetZMode( GX_ENABLE, GX_ALWAYS, GX_TRUE );
+		GX_SetColorUpdate( GX_DISABLE );
+		GX_SetAlphaUpdate( GX_DISABLE );
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
+	else if (gln64_lotModo != GLN64_LOT_NADA)
+		GXD3D_SetRenderToDepth( 0 );
+	else if (gDP.colorImage.address == gDP.depthImageAddress && gln64_zCopiaDesde != 0)
 	{
 		/* [Xbox360] ★★ [Mario Golf] Modo 3: el texrect copia al Z un Z guardado
 		 * (GLideN64 7dca7f8f; ver _gDPCopiaDeZGuardada en gDP.cpp).  En COPY,

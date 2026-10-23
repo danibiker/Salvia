@@ -212,6 +212,16 @@ void gSPObjLoadTxSprite( u32 txsp );
 void gSPObjLoadTxRectR( u32 txsp );
 void gSPBgRect1Cyc( u32 bg );
 void gSPBgRectCopy( u32 bg );
+
+// [Xbox360] [Zelda MM, Lente de la Verdad] GLideN64's BgDepthCopyMode (5347689b),
+// set by gSPBgRect1Cyc / gSPBgRectCopy around their draws and read by
+// OGL_UpdateStates: DEVUELVE = eBgCopy (render to depth mode 4 with the saved Z of
+// gln64_lotFondo), HECHO = eCopyDone (the normal draw, no render to depth).
+#define GLN64_LOT_NADA		0
+#define GLN64_LOT_DEVUELVE	1
+#define GLN64_LOT_HECHO		2
+extern u32 gln64_lotModo;
+extern u32 gln64_lotFondo;
 void gSPObjMatrix( u32 mtx );
 void gSPObjSubMatrix( u32 mtx );
 void gSPSetDMAOffsets( u32 mtxoffset, u32 vtxoffset );

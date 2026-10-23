@@ -1093,9 +1093,13 @@ static BOOL _gDPCheckForFrameBufferTextureCuerpo( u32 address, u32 width, u32 by
 	 * trozos de la escena --; sin ella, 0.  Las que caen en una fila por
 	 * casualidad las para la copia unica de la RDRAM (FrameBuffer.cpp,
 	 * _fbCopiaRdram). */
+	/* [Xbox360] Wii64 2e1c6fb "fix BK pause screen size calc": en una carga
+	 * por tile el ancho de la fila es el de la imagen de textura, no el del
+	 * tile ("Banjo Kazooie pause screen needs gDP.textureImage.width"). */
+	const u32 rowWidth = (loadType == LOADTYPE_TILE) ? gDP.textureImage.width : width;
 	if (!imagenEsElBuffer &&
 	    address > buffer->startAddress && bufferStride != 0 &&
-	    (u32)abs( (s32)buffer->width - (s32)width ) > 1 &&
+	    (u32)abs( (s32)buffer->width - (s32)rowWidth ) > 1 &&
 	    ((address - buffer->startAddress) % bufferStride) != 0)
 	{
 		return FALSE;
@@ -2887,9 +2891,13 @@ static void _gDPCopyWhiteToRDRAM()
 	if (numBytes == 0 || (gDP.colorImage.address + numBytes) > RDRAMSize)
 		return;
 
-	_gDPWriteRDRAM( gDP.colorImage.address, NULL, 0xFFFFFFFF, numBytes );
+	/* [Xbox360] Wii64 2e1c6fb "Fix pictobox after depth changes": la nota
+	 * ANTES de escribir el blanco ("Do this after to not break pictograph in
+	 * ZeldaMM"): DepthCopy_NoteDepthImageWritten puede volcar ahi el borrado
+	 * pendiente del Z, y el blanco tiene que quedar encima. */
 	if (gDP.colorImage.address == gDP.depthImageAddress)
 		DepthCopy_NoteDepthImageWritten();
+	_gDPWriteRDRAM( gDP.colorImage.address, NULL, 0xFFFFFFFF, numBytes );
 
 	FrameBuffer_RestampMarkers( gDP.colorImage.address, gDP.colorImage.address + numBytes - 1 );
 }

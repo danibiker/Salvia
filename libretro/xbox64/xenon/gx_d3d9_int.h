@@ -126,6 +126,9 @@ void gxd3d_tev_decn64(u8 on);
  * por indice) en su propio sampler, fuera de los de GX (0-2) y de la Z (3). */
 void gxd3d_tev_nieblaz(u8 on);
 #define GXD3D_NIEBLAZ_SAMPLER 4   /* uNieblaZ : register(s4)                 */
+/* [Zelda MM] Modo 4 de GXD3D_SetRenderToDepth: la copia del Z ACTUAL, junto
+ * a la guardada (uZCopia), para descartar donde el actual es > 0. */
+#define GXD3D_ZACTUAL_SAMPLER 5   /* uZActual : register(s5)                 */
 /* uNieblaZPar : register(c20) = (nearz, 261632 / (farz - nearz), umbral del
  * lejano, palabra de borrado del Z): el paso del Z del EFB al del N64, el
  * mismo de DepthCopy.cpp (_dcBuildLut).  OJO: la sombra de constantes de

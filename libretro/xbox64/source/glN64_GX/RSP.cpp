@@ -592,8 +592,13 @@ static void _RSP_SetGameHacks()
 		if (strstr( RSP.romname, "CONKER BFD" ) != NULL)
 			config.generalEmulation.hacks |= hack_texrectCopyToItself;
 	}
+	/* [Xbox360] [Zelda MM, Lente de la Verdad] Y hack_zeldaMMLente: la copia del
+	 * Z por los rectangulos de fondo de S2DEX de GLideN64 5347689b, que alli va
+	 * con hack_ZeldaMM (su RSP.cpp lo pone con el mismo `strstr("MASK")`).
+	 * Ver gSPBgRect1Cyc / gSPBgRectCopy en gSP.cpp. */
 	else if (strstr( RSP.romname, "MASK" ) != NULL) // ZELDA MAJORA'S MASK
-		config.generalEmulation.hacks |= hack_fbCopyToRDRAM | hack_copyDepthToRDRAM;
+		config.generalEmulation.hacks |= hack_fbCopyToRDRAM | hack_copyDepthToRDRAM |
+		                                  hack_zeldaMMLente;
 	else if (strstr( RSP.romname, "DONKEY KONG 64" ) != NULL ||
 	         strstr( RSP.romname, "D K DISPLAY" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyDepthToRDRAM;

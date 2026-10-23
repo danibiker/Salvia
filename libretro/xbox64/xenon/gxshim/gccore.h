@@ -874,7 +874,9 @@ void GXD3D_SetDepthClamp(u8 on);
  * el pixel se descarta si su propia z no es menor que la de una COPIA del Z
  * buffer, que el shim hace en el primer dibujo del modo 2 tras
  * GXD3D_InvalidaCopiaZ.  El plugin pone ademas el test del device en ALWAYS
- * con escritura.  Vacia el lote pendiente al cambiar. */
+ * con escritura.  Vacia el lote pendiente al cambiar.  3 [Mario Golf] = el
+ * Z guardado de GXD3D_UsaZGuardada, pixel a pixel; 4 [Zelda MM, Lente de la
+ * Verdad] = lo mismo solo donde el Z actual vale 0 (GLideN64 5347689b). */
 void GXD3D_SetRenderToDepth(u8 modo);
 /* La copia de Z de GXD3D_SetRenderToDepth deja de valer (el plugin la tira
  * al cambiar de color image, como GLideN64 al volver a enganchar el depth

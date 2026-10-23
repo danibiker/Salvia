@@ -1122,6 +1122,14 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
         line[sizeof(line) - 1] = 0;
         EMIT(line);
     }
+    /* [Zelda MM] GXD3D_SetRenderToDepth modo 4: la copia del Z actual. */
+    if (k->rtz == 4)
+    {
+        _snprintf(line, sizeof(line), "sampler2D uZActual : register(s%d);\n",
+                  GXD3D_ZACTUAL_SAMPLER);
+        line[sizeof(line) - 1] = 0;
+        EMIT(line);
+    }
     /* GXD3D_SetNieblaZ: la curva de la niebla, 256x1, y el paso al Z del N64. */
     if (k->nieblaZ)
     {
@@ -1729,7 +1737,18 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
          * (GLideN64 7dca7f8f: el texrect lee la textura de PROFUNDIDAD del
          * buffer de origen y fragDepth = fragColor.r).  La Z, en `.g` como en
          * el modo 2 (D24S8 = 24_8 + OOGR, ya medido en Pilotwings). */
-        if (k->rtz == 3)
+        /* ★ [Zelda MM, Lente de la Verdad] Modo 4: el `uRenderTarget 4` de
+         * GLideN64 5347689b (glsl_CombinerProgramBuilderCommon.cpp, ZeldaMM):
+         *     if (texelFetch(uDepthTex, coord).r > 0.0) discard;
+         *     fragDepth = fragColor.r;
+         * con uDepthTex = copia del Z actual y el color = el Z del fondo: el
+         * Z guardado vuelve solo donde el actual vale 0. */
+        if (k->rtz == 4)
+            EMIT("  clip((tex2D(uZActual, (floor(vpos) + 0.5) * uZCopiaInv.xy).g > 0.0) ? -1.0 : 1.0);\n"
+                 "  o.c = outc;\n"
+                 "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+                 "  return o;\n}\n");
+        else if (k->rtz == 3)
             EMIT("  o.c = outc;\n"
                  "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
                  "  return o;\n}\n");
@@ -2406,7 +2425,7 @@ void gxd3d_tev_zclamp(u8 on)
 
 void gxd3d_tev_rtz(u8 modo)
 {
-    if (modo > 3) modo = 3;
+    if (modo > 4) modo = 4;
     if (g_gxTev.rtz == modo) return;
     g_gxTev.rtz = modo;
     s_dirty = 1;     /* solo la clave */
