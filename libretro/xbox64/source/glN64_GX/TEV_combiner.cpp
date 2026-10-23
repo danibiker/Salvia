@@ -323,7 +323,33 @@ TEVCombiner *Compile_TEV_combine( Combiner *color, Combiner *alpha, u8 signoColo
 //	jA = 0;
 //	jC = 0;
 
-	for (int i = 0; i < alpha->numStages; i++)
+	/* [Xbox360] ★ [Ridge Racer 64, faros] Si el color del segundo ciclo lee
+	 * COMBINED_ALPHA (APREV), el alfa del primer ciclo tiene que acabar justo
+	 * antes de que empiece ese color, y el del segundo no puede haber escrito
+	 * aun.  Aqui se compilaba todo el alfa y luego todo el color, y solo se
+	 * igualaba el total al final: con un ciclo 0 de alfa mas corto que el de
+	 * color, APREV ya seria el alfa del ciclo 1.  En ese caso se compila ciclo
+	 * a ciclo y, tras el 0, se rellena el mas corto con etapas de paso
+	 * (SetAlphaTEVskip / SetColorTEVskip).  Sin COMBINED_ALPHA ahi, el orden y
+	 * el resultado son los de siempre.  Ver la nota en Combiner_Compile. */
+	BOOL alinearCiclos = FALSE;
+	if (color->numStages == 2 && alpha->numStages == 2)
+	{
+		for (int j = 0; j < color->stage[1].numOps; j++)
+			if (color->stage[1].op[j].param1 == COMBINED_ALPHA ||
+			    (color->stage[1].op[j].op == INTER &&
+			     (color->stage[1].op[j].param2 == COMBINED_ALPHA ||
+			      color->stage[1].op[j].param3 == COMBINED_ALPHA)))
+				alinearCiclos = TRUE;
+	}
+
+	for (int ciclo = 0; ciclo < (alinearCiclos ? 2 : 1); ciclo++)
+	{
+	const int ini = alinearCiclos ? ciclo : 0;
+	const int finA = alinearCiclos ? ciclo + 1 : alpha->numStages;
+	const int finC = alinearCiclos ? ciclo + 1 : color->numStages;
+
+	for (int i = ini; i < finA; i++)
 	{
 		for (int j = 0; j < alpha->stage[i].numOps; j++)
 		{
@@ -506,7 +532,7 @@ TEVCombiner *Compile_TEV_combine( Combiner *color, Combiner *alpha, u8 signoColo
 		}
 	}
 
-	for (int i = 0; i < color->numStages; i++)
+	for (int i = ini; i < finC; i++)
 	{
 		for (int j = 0; j < color->stage[i].numOps; j++)
 		{
@@ -764,6 +790,22 @@ TEVCombiner *Compile_TEV_combine( Combiner *color, Combiner *alpha, u8 signoColo
 			}
 		}
 	}
+
+	/* [Ridge Racer 64] Tras el ciclo 0, los dos a la par: ver alinearCiclos. */
+	if (alinearCiclos && ciclo == 0)
+	{
+		while (currStageA < currStageC)
+		{
+			SetAlphaTEVskip(currStageA);
+			currStageA++;
+		}
+		while (currStageC < currStageA)
+		{
+			SetColorTEVskip(currStageC);
+			currStageC++;
+		}
+	}
+	}	// ciclo
 
 	// Increment currStageA and currStageC until we have the same number of Alpha/Color TEV stages.
 	while(currStageA < currStageC)

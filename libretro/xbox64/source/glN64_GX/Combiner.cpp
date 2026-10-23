@@ -386,12 +386,37 @@ CachedCombiner *Combiner_Compile( u64 mux )
 	}
 #endif // __GX__
 
+	/* [Xbox360] ★ [Ridge Racer 64, faros: un rectangulo del color PRIM] EL
+	 * COLOR DEL SEGUNDO CICLO PUEDE LEER EL ALFA DEL PRIMERO (COMBINED_ALPHA).
+	 * Los faros son 0040B467:F0FFFE3E en dos ciclos:
+	 *     ciclo 0: color = SHADE*TEXEL0,  alfa = PRIM_A*TEXEL1_A
+	 *     ciclo 1: color = (PRIM - COMBINED)*COMBINED_ALPHA + COMBINED,  alfa = 1
+	 * con PRIM_A = 0: sale la textura.  La fusion de glN64 veia que el alfa del
+	 * ciclo 1 (ONE) no usa COMBINED y TIRABA el del ciclo 0; el color, una
+	 * interpolacion, se quedaba en dos etapas y su COMBINED_ALPHA (APREV en el
+	 * TEV) valia 1: el rectangulo entero del color PRIM, rojo B30000 detras y
+	 * blanco FEFEFE delante.  Medido con el volcado de texturas (log 17): las
+	 * texturas de los faros estan bien.  Con COMBINED_ALPHA en el color del
+	 * ciclo 1 no se fusiona ninguno de los dos (la fusion del color tampoco
+	 * sabe de COMBINED_ALPHA), y Compile_TEV_combine alinea los ciclos.  Sin
+	 * COMBINED_ALPHA ahi, todo sigue al bit como estaba. */
+	BOOL leeAlfaCiclo0 = FALSE;
+	if (numCycles == 2)
+	{
+		for (int j = 0; j < color.stage[1].numOps; j++)
+			if (color.stage[1].op[j].param1 == COMBINED_ALPHA ||
+			    (color.stage[1].op[j].op == INTER &&
+			     (color.stage[1].op[j].param2 == COMBINED_ALPHA ||
+			      color.stage[1].op[j].param3 == COMBINED_ALPHA)))
+				leeAlfaCiclo0 = TRUE;
+	}
+
 	if (numCycles == 2)
 	{
 		// Attempt to merge the two stages into one
-		if (!signoColor)
+		if (!signoColor && !leeAlfaCiclo0)
 			Combiner_MergeStages( &color );
-		if (!signoAlpha)
+		if (!signoAlpha && !leeAlfaCiclo0)
 			Combiner_MergeStages( &alpha );
 	}
 
