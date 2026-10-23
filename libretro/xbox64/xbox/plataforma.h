@@ -167,6 +167,16 @@ unsigned xbox64_vueltas_y_limpia(void);
  * del invitado.  Si min y max estan clavados y juntos, es un bucle. */
 void     xbox64_pc_rango(unsigned *min, unsigned *max);
 
+/* Herramienta fija: vuelca los hilos de libultra ([HILOS]) buscandolos en la
+ * RDRAM.  Solo existe con XBOX64_TRAZAS (este fichero no incluye
+ * xenon64_diag.h: quien la llame, dentro de su `#if`); ver plataforma.c. */
+void     xbox64_hilos_volcado(void);
+/* Parte del mismo volcado: los ultimos 16 DMA del PI hacia la RDRAM
+ * (gc_memory/dma.c) y las ultimas 12 tareas del RSP (gc_memory/memory.c,
+ * do_SP_task).  Solo con XBOX64_TRAZAS; los llama xbox64_hilos_volcado. */
+void     xbox64_pidma_volcado(void);
+void     xbox64_sptask_volcado(void);
+
 /* [log 39] Una linea con el estado de la CPU emulada y de las interrupciones
  * (PC, Count, proxima interrupcion, Status, Cause, MI, SP, DP).  La llama el
  * vigia de esperas largas desde HW1 mientras el emulador corre: lectura sin

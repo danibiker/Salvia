@@ -212,6 +212,34 @@ inline u32 GXGetRGBA8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 	return (u32) color;
 }
 
+/* [Xbox360] ★ [Resident Evil 2] UNA TEXTURA DE PROFUNDIDAD: LA PALABRA DE Z DEL
+ * N64 ENTERA.  GLideN64 5e51b386 (hack_LoadDepthTextures, _loadDepthTexture):
+ * lo que se dibuja sobre el depth image se carga como R16F con el texel crudo
+ * (`_pDest[i] / 65535.0f`) y el shader lo escribe como profundidad.  Aqui en
+ * RGBA8: A = FF, R = byte alto, G = byte bajo, B = 0 (las dos mitades de GX,
+ * como GXGetRGBA8888_RGBA8: palette 0 = AARR, 1 = GGBB), y el render to depth
+ * modo 5 la decodifica (gx_d3d9_tev.cpp).  El alfa a FF para que ningun alpha
+ * compare tire las Z cercanas, que tienen el byte alto a 0. */
+inline u32 GXGetRE2Z_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
+{
+	const u16 z = ((u16*)src)[x^i];
+	return (palette & 1) ? /* GGBB */ (u32)((z & 0x00FF) << 8) : /* AARR */ (u32)(0xFF00 | (z >> 8));
+}
+
+/* Si la textura que se carga es una de esas: hack_RE2, el color image es el
+ * depth image y el texel es de 16 bits (GLideN64 no mira el tamano, pero su
+ * _loadDepthTexture lee el destino como u16). */
+static BOOL _texZRE2( u32 size )
+{
+	return ((config.generalEmulation.hacks & hack_RE2) != 0 &&
+	        gDP.colorImage.address == gDP.depthImageAddress &&
+	        size == G_IM_SIZ_16b) ? TRUE : FALSE;
+}
+
+/* Lo que se mezcla en el crc de una textura de Z de RE2: la misma imagen
+ * cargada como color no puede servir para la Z, ni al reves. */
+#define TEXZ_RE2_CRC	0x52453245u	/* "RE2E" */
+
 inline u32 GetCI4IA_RGBA4444( u64 *src, u16 x, u16 i, u8 palette )
 {
 	u8 color4B;
@@ -1233,6 +1261,14 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 		texInfo->GXtexfmt = imageFormat[G_TT_NONE][texInfo->size][texInfo->format].GXtexfmt;
 		GXsize = imageFormat[G_TT_NONE][texInfo->size][texInfo->format].GXsize;
 	}
+	/* [Xbox360] [Resident Evil 2] El fondo que se dibuja sobre el depth image:
+	 * la Z del N64 tal cual.  Ver GXGetRE2Z_RGBA8. */
+	if (_texZRE2( texInfo->size ))
+	{
+		GetTexel = GXGetRE2Z_RGBA8;
+		texInfo->GXtexfmt = GX_TF_RGBA8;
+		GXsize = 4;
+	}
 
 	//If realWidth or realHeight do not match the GX texture block size, then specify a compatible blocksize
 	int blockWidth = (GXsize == 1) ? 8 : 4;
@@ -1241,7 +1277,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	{
 		texInfo->GXrealWidth = texInfo->realWidth + blockWidth - (texInfo->realWidth % blockWidth);
 //		sprintf(txtbuffer,"texture:GXrealWidth = %d, realWidth = %d",texInfo->GXrealWidth,texInfo->realWidth);
-//		DEBUG_print(txtbuffer,DBG_TXINFO1); 
+//		DEBUG_print(txtbuffer,DBG_TXINFO1);
 	}
 	else
 		texInfo->GXrealWidth = texInfo->realWidth;
@@ -1249,7 +1285,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	{
 		texInfo->GXrealHeight = texInfo->realHeight + blockHeight - (texInfo->realHeight % blockHeight);
 //		sprintf(txtbuffer,"texture:GXrealHeight = %d, realHeight = %d",texInfo->GXrealHeight,texInfo->realHeight);
-//		DEBUG_print(txtbuffer,DBG_TXINFO1); 
+//		DEBUG_print(txtbuffer,DBG_TXINFO1);
 	}
 	else
 		texInfo->GXrealHeight = texInfo->realHeight;
@@ -1545,6 +1581,15 @@ void TextureCache_Load( CachedTexture *texInfo )
 	GetTexel = imageFormat[gDP.otherMode.textureLUT][texInfo->size][texInfo->format].GetGX;
 	texInfo->GXtexfmt = imageFormat[gDP.otherMode.textureLUT][texInfo->size][texInfo->format].GXtexfmt;
 	GXsize = imageFormat[gDP.otherMode.textureLUT][texInfo->size][texInfo->format].GXsize;
+	/* [Xbox360] [Resident Evil 2] Lo que se dibuja sobre el depth image: la Z
+	 * del N64 tal cual (GLideN64 TextureCache::_load, hack_LoadDepthTextures).
+	 * Ver GXGetRE2Z_RGBA8. */
+	if (_texZRE2( texInfo->size ))
+	{
+		GetTexel = GXGetRE2Z_RGBA8;
+		texInfo->GXtexfmt = GX_TF_RGBA8;
+		GXsize = 4;
+	}
 
 	//If realWidth or realHeight do not match the GX texture block size, then specify a compatible blocksize
 	int blockWidth = (GXsize == 1) ? 8 : 4;
@@ -2283,6 +2328,10 @@ void TextureCache_UpdateBackground()
 		else if (gSP.bgImage.size == G_IM_SIZ_8b)
 			crc = Hash_Calculate( crc, &TMEM[0x100], 2048 );
 	}
+	/* [Xbox360] [Resident Evil 2] Una textura de Z es otra entrada: ver
+	 * GXGetRE2Z_RGBA8. */
+	if (_texZRE2( gSP.bgImage.size ))
+		crc ^= TEXZ_RE2_CRC;
 
 	/* [Xbox360] Por el cubo del crc, igual que `TextureCache_Update`.  Ver
 	 * TEXCACHE_INDICE en Textures.h. */
@@ -2945,6 +2994,10 @@ void TextureCache_Update( u32 t )
 			crc = Hash_Calculate( crc, &nivAtlas, sizeof(u32) );
 		}
 	}
+	/* [Xbox360] [Resident Evil 2] Una textura de Z es otra entrada: ver
+	 * GXGetRE2Z_RGBA8. */
+	if (_texZRE2( gSP.textureTile[t]->size ))
+		crc ^= TEXZ_RE2_CRC;
 
 //	if (!TextureCache_Verify())
 //		current = cache.top;

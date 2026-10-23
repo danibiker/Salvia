@@ -121,7 +121,7 @@ struct GXD3DTevKey
     u8 blFog;                    /* GXD3D_SetBlenderNiebla */
     u8 fogInv;                   /* GXD3D_SetNieblaInversa */
     u8 zClamp;                   /* GXD3D_SetDepthClamp */
-    u8 rtz;                      /* GXD3D_SetRenderToDepth: 0, 1 o 2 */
+    u8 rtz;                      /* GXD3D_SetRenderToDepth: 0 a 5 */
     u8 decN64;                   /* GXD3D_SetDecalN64 */
     u8 nieblaZ;                  /* GXD3D_SetNieblaZ */
     u8 atlas;                   /* GXD3D_SetLodAtlas, solo con LOD_FRACTION;
@@ -1113,7 +1113,7 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
     /* GXD3D_SetRenderToDepth modo 2 y GXD3D_SetDecalN64: la copia de Z y su
      * tamano.  Solo en estos shaders, para no tocar el preambulo de los
      * demas. */
-    if (k->rtz >= 2 || k->decN64 || k->nieblaZ)
+    if ((k->rtz >= 2 && k->rtz <= 4) || k->decN64 || k->nieblaZ)
     {
         _snprintf(line, sizeof(line),
                   "sampler2D uZCopia : register(s%d);\n"
@@ -1136,6 +1136,16 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
         _snprintf(line, sizeof(line), "sampler2D uNieblaZ : register(s%d);\n"
                                       "float4 uNieblaZPar : register(c%d);\n",
                   GXD3D_NIEBLAZ_SAMPLER, GXD3D_NIEBLAZ_CONST);
+        line[sizeof(line) - 1] = 0;
+        EMIT(line);
+    }
+    /* [Resident Evil 2] GXD3D_SetRenderToDepth modo 5: el paso del Z del N64 al
+     * del EFB.  Comparte registro con uNieblaZPar (Beetle): los dos no van
+     * nunca en el mismo shader (ver el final). */
+    else if (k->rtz == 5)
+    {
+        _snprintf(line, sizeof(line), "float4 uRe2Z : register(c%d);\n",
+                  GXD3D_RE2Z_CONST);
         line[sizeof(line) - 1] = 0;
         EMIT(line);
     }
@@ -1215,7 +1225,7 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
     /* La firma: con salida de profundidad o sin ella, y con VPOS si se lee la
      * copia de Z o hay ruido. */
     {
-        const int conVpos = (k->rtz >= 2 || k->decN64 || k->nieblaZ || usaRuido) ? 1 : 0;
+        const int conVpos = ((k->rtz >= 2 && k->rtz <= 4) || k->decN64 || k->nieblaZ || usaRuido) ? 1 : 0;
         const int conProf = (k->ztOp == GX_ZT_REPLACE || k->zClamp || k->rtz) ? 1 : 0;
         if (conProf)
             EMIT("struct PS_OUT { float4 c : COLOR; float d : DEPTH; };\n");
@@ -1751,6 +1761,30 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
         else if (k->rtz == 3)
             EMIT("  o.c = outc;\n"
                  "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+                 "  return o;\n}\n");
+        /* ★ [Resident Evil 2] Modo 5: la profundidad es la PALABRA DE Z DEL N64
+         * del texel (GLideN64 5e51b386: textura de Z con el texel crudo,
+         * `fragDepth = fragColor.r`).  La trae GXGetRE2Z_RGBA8 (glN64_GX/
+         * Textures.cpp): R = byte alto, G = byte bajo.  Alli la geometria
+         * escribe su Z YA en palabras del N64 (writeDepth con la zlut); aqui la
+         * geometria se queda como esta y es la palabra la que pasa al Z del
+         * EFB, con la inversa del paso de DepthCopy.cpp (_dcBuildLut):
+         *     z18 = (mantisa << max(6 - exp, 0)) + 2^18 - 2^(18 - exp)
+         *     (la tabla de descompresion del RDP: 0, 20000, 30000 ... 3F800)
+         *     z = nearz + z18 * (farz - nearz) / 261632
+         * uRe2Z = (nearz, (farz - nearz) / 261632).  Las dos comparaciones dan lo
+         * mismo: las dos funciones crecen.  Con la niebla por Z en el mismo
+         * shader (no pasa: es solo de Beetle) se queda en el modo 1. */
+        else if (k->rtz == 5 && !k->nieblaZ)
+            EMIT("  {\n"
+                 "    float zHi = floor(outc.r * 255.0 + 0.5);\n"
+                 "    float zLo = floor(outc.g * 255.0 + 0.5);\n"
+                 "    float zE  = floor(zHi / 32.0);\n"
+                 "    float zM  = floor((zHi * 256.0 + zLo - zE * 8192.0) / 4.0);\n"
+                 "    float z18 = zM * exp2(max(6.0 - zE, 0.0)) + 262144.0 - exp2(18.0 - zE);\n"
+                 "    o.c = outc;\n"
+                 "    o.d = saturate(uRe2Z.x + z18 * uRe2Z.y);\n"
+                 "  }\n"
                  "  return o;\n}\n");
         else
             EMIT("  o.c = outc;\n  o.d = saturate(outc.r);\n  return o;\n}\n");
@@ -2425,7 +2459,7 @@ void gxd3d_tev_zclamp(u8 on)
 
 void gxd3d_tev_rtz(u8 modo)
 {
-    if (modo > 4) modo = 4;
+    if (modo > 5) modo = 5;
     if (g_gxTev.rtz == modo) return;
     g_gxTev.rtz = modo;
     s_dirty = 1;     /* solo la clave */

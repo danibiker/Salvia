@@ -691,6 +691,26 @@ static int OGL_GX_NieblaDelBlender()
 }
 #endif // __GX__
 
+/* [Xbox360] [Resident Evil 2] La esquina inferior derecha de la tijera.
+ * GLideN64 5e51b386, GraphicsDrawer::updateScissor:
+ *     if (u32(SX1) == 512 && (config.generalEmulation.hacks & hack_RE2) != 0) {
+ *         SX1 = f32(*REG.VI_WIDTH);
+ *         SY1 *= 512.0f / SX1;
+ *     }
+ * Los buffers de 512 de ancho son del ancho del VI con mas filas (ver
+ * _gSPFondoRE2 en gSP.cpp).  Solo en las tijeras de GX, como alli en la de GL:
+ * gDP.scissor no se toca. */
+static void _oglTijeraLR( f32 *lrx, f32 *lry )
+{
+	*lrx = gDP.scissor.lrx;
+	*lry = gDP.scissor.lry;
+	if ((config.generalEmulation.hacks & hack_RE2) != 0 && (u32)*lrx == 512 && *REG.VI_WIDTH != 0)
+	{
+		*lrx = (f32)*REG.VI_WIDTH;
+		*lry *= 512.0f / *lrx;
+	}
+}
+
 void OGL_UpdateStates()
 {
 	GLN64_PROF_SCOPE(updst);   /* [Xbox360] sonda temporal, xenon/gln64_prof.h */
@@ -929,10 +949,12 @@ void OGL_UpdateStates()
 #else // !__GX__
 	if (gDP.changed & CHANGED_SCISSOR)
 	{
+		f32 tijX, tijY;
+		_oglTijeraLR( &tijX, &tijY );
 		float ulx = max(OGL.GXorigX + gDP.scissor.ulx * OGL.GXscaleX, 0);
 		float uly = max(OGL.GXorigY + gDP.scissor.uly * OGL.GXscaleY, 0);
-		float lrx = max(OGL.GXorigX + min(gDP.scissor.lrx * OGL.GXscaleX,OGL.GXwidth), 0);
-		float lry = max(OGL.GXorigY + min(gDP.scissor.lry * OGL.GXscaleY,OGL.GXheight), 0);
+		float lrx = max(OGL.GXorigX + min(tijX * OGL.GXscaleX,OGL.GXwidth), 0);
+		float lry = max(OGL.GXorigY + min(tijY * OGL.GXscaleY,OGL.GXheight), 0);
 		GX_SetScissor((u32) ulx,(u32) uly,(u32) (lrx - ulx),(u32) (lry - uly));
 	}
 #endif // __GX__
@@ -1578,6 +1600,29 @@ void OGL_UpdateStates()
 		 * escritura y SIN color: es una copia de profundidad, y en el EFB unico
 		 * el color de la tira caeria encima de la imagen. */
 		GXD3D_SetRenderToDepth( 3 );
+		GXD3D_SetDecalN64( 0 );
+		GX_SetZMode( GX_ENABLE, GX_ALWAYS, GX_TRUE );
+		GX_SetColorUpdate( GX_DISABLE );
+		GX_SetAlphaUpdate( GX_DISABLE );
+		gDP.changed |= CHANGED_RENDERMODE;
+	}
+	/* [Xbox360] ★ [Resident Evil 2] LOS FONDOS DE PROFUNDIDAD.  El juego pinta
+	 * el Z pre-renderizado de cada sala con el color image = depth image, y en
+	 * GLideN64 (5e51b386, hack_LoadDepthTextures) esa textura es la Z cruda y
+	 * su render to depth la escribe (fragDepth = fragColor.r), en COPY tambien.
+	 * Modo 5: la palabra del texel (GXGetRE2Z_RGBA8) pasada al Z del EFB con
+	 * el rango del viewport, el mismo de DepthCopy.cpp.  Sin color, como el
+	 * modo 3: en el EFB unico caeria encima de la imagen.  Con Z_CMP en 1/2
+	 * ciclos sigue el modo 2 de abajo (GLideN64 alli: uRenderTarget 2). */
+	else if ((config.generalEmulation.hacks & hack_RE2) != 0 &&
+	         gDP.colorImage.address == gDP.depthImageAddress &&
+	         (gDP.otherMode.cycleType == G_CYC_COPY ||
+	          (gDP.otherMode.cycleType <= G_CYC_2CYCLE &&
+	           !(gDP.otherMode.depthCompare != 0 &&
+	             ((gSP.geometryMode & G_ZBUFFER) || gDP.otherMode.depthSource == G_ZS_PRIM)))))
+	{
+		GXD3D_SetProfundidadRE2( gSP.viewport.nearz, gSP.viewport.farz );
+		GXD3D_SetRenderToDepth( 5 );
 		GXD3D_SetDecalN64( 0 );
 		GX_SetZMode( GX_ENABLE, GX_ALWAYS, GX_TRUE );
 		GX_SetColorUpdate( GX_DISABLE );
@@ -2281,10 +2326,12 @@ void OGL_DrawScreenSpaceTriangles( SPVertex *vertices, u32 count, BOOL textured 
 	}
 
 	// The same scissor as ZSortBOSS_DrawScreenSpaceTriangle, with std::max/min spelled out.
+	f32 tijX, tijY;
+	_oglTijeraLR( &tijX, &tijY );	// [Xbox360] [Resident Evil 2]
 	float ulx1 = OGL.GXorigX + gDP.scissor.ulx * OGL.GXscaleX;
 	float uly1 = OGL.GXorigY + gDP.scissor.uly * OGL.GXscaleY;
-	float lrx1 = gDP.scissor.lrx * OGL.GXscaleX;
-	float lry1 = gDP.scissor.lry * OGL.GXscaleY;
+	float lrx1 = tijX * OGL.GXscaleX;
+	float lry1 = tijY * OGL.GXscaleY;
 	if (lrx1 > (float)OGL.GXwidth)  lrx1 = (float)OGL.GXwidth;
 	if (lry1 > (float)OGL.GXheight) lry1 = (float)OGL.GXheight;
 	lrx1 += OGL.GXorigX;
@@ -2469,10 +2516,12 @@ void OGL_DrawRect( int ulx, int uly, int lrx, int lry, float *color )
 	 * un estado del RDP.  Misma cuenta que OGL_UpdateStates. */
 	if (gDP.scissor.lrx > gDP.scissor.ulx && gDP.scissor.lry > gDP.scissor.uly)
 	{
+		f32 tijX, tijY;
+		_oglTijeraLR( &tijX, &tijY );	// [Xbox360] [Resident Evil 2]
 		float ulx1 = max(OGL.GXorigX + gDP.scissor.ulx * OGL.GXscaleX, 0);
 		float uly1 = max(OGL.GXorigY + gDP.scissor.uly * OGL.GXscaleY, 0);
-		float lrx1 = max(OGL.GXorigX + min(gDP.scissor.lrx * OGL.GXscaleX,OGL.GXwidth), 0);
-		float lry1 = max(OGL.GXorigY + min(gDP.scissor.lry * OGL.GXscaleY,OGL.GXheight), 0);
+		float lrx1 = max(OGL.GXorigX + min(tijX * OGL.GXscaleX,OGL.GXwidth), 0);
+		float lry1 = max(OGL.GXorigY + min(tijY * OGL.GXscaleY,OGL.GXheight), 0);
 		GX_SetScissor((u32) ulx1,(u32) uly1,(u32) (lrx1 - ulx1),(u32) (lry1 - uly1));
 	}
 	else
@@ -2698,10 +2747,12 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 	glViewport( 0, OGL.heightOffset, OGL.width, OGL.height );
 #else // !__GX__
 	//Note: Scissoring may need to be reworked here
+	f32 tijX, tijY;
+	_oglTijeraLR( &tijX, &tijY );	// [Xbox360] [Resident Evil 2]
 	float ulx1 = max(OGL.GXorigX + gDP.scissor.ulx * OGL.GXscaleX, 0);
 	float uly1 = max(OGL.GXorigY + gDP.scissor.uly * OGL.GXscaleY, 0);
-	float lrx1 = max(OGL.GXorigX + min(gDP.scissor.lrx * OGL.GXscaleX,OGL.GXwidth), 0);
-	float lry1 = max(OGL.GXorigY + min(gDP.scissor.lry * OGL.GXscaleY,OGL.GXheight), 0);
+	float lrx1 = max(OGL.GXorigX + min(tijX * OGL.GXscaleX,OGL.GXwidth), 0);
+	float lry1 = max(OGL.GXorigY + min(tijY * OGL.GXscaleY,OGL.GXheight), 0);
 	GX_SetScissor((u32) ulx1,(u32) uly1,(u32) (lrx1 - ulx1),(u32) (lry1 - uly1));
 	GX_SetCullMode (GX_CULL_NONE);
 	Mtx44 GXprojection;

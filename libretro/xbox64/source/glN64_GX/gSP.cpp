@@ -1508,8 +1508,168 @@ void gSPSetVertexColorBase( u32 base )
 #endif
 }
 
+/* [Xbox360] ★★ [Wipeout 64, creditos y menus en negro] EL MICROCODIGO
+ * SPRITE2D.  glN64 nunca lo implemento (esta funcion estaba vacia y
+ * F3D_Sprite2D_Base ni la llamaba), y Wipeout dibuja con el todo lo 2D: el log
+ * daba ~220 listas/s con vtx=0 rect=0 ldtile=0.  Peor que no dibujar: las
+ * ordenes que siguen a G_SPRITE2D_BASE, 0xBE (scale/flip) y 0xBD (draw), en
+ * F3D son G_CULLDL y G_POPMTX, y la de dibujar sacaba una matriz de la pila.
+ *
+ * Portado de GLideN64 (gSP.cpp, gSPSprite2DBase y _loadSpriteImage; 7d237650
+ * y 8a03982e): carga la TLUT si la hay, la imagen como fondo (gSP.bgImage,
+ * como los BG de S2DEX), y consume ella misma las 0xBE/0xBD que siguen.
+ * Alli cada sprite es un quad en pantalla (drawScreenSpaceTriangle); aqui va
+ * por gDPTextureRectangle con la textura en modo fondo, el camino de los BG
+ * de una pieza, con el volteo como paso negativo.  En COPY ese camino fuerza
+ * dsdx = 1 y suma 1 al borde: se le quita antes, y en COPY no hay escala ni
+ * volteo (los quads de GLideN64 si los tendrian).
+ *
+ * La estructura en el orden del N64 (uSprite_t de libultra: SourceImagePointer,
+ * TlutPointer, Stride, SubImageWidth, SubImageHeight, SourceImageType,
+ * SourceImageBitSize, SourceImageOffsetS, SourceImageOffsetT).  La de GLideN64
+ * es la misma vista desde su RDRAM little-endian con las palabras cambiadas. */
+struct uSprite
+{
+	u32 imagePtr;
+	u32 tlutPtr;
+#ifdef _BIG_ENDIAN
+	s16 stride;
+	s16 imageW;
+	s16 imageH;
+	s8  imageFmt;
+	s8  imageSiz;
+	s16 imageX;
+	s16 imageY;
+#else
+	s16 imageW;
+	s16 stride;
+	s8  imageSiz;
+	s8  imageFmt;
+	s16 imageH;
+	s16 imageY;
+	s16 imageX;
+#endif
+	s8  dummy[4];
+};	/* 24 bytes */
+
 void gSPSprite2DBase( u32 base )
 {
+	/* GLideN64 hace assert(RSP.nextCmd == 0xBE).  Aqui, si no sigue ninguna
+	 * de las dos, no se toca la lista. */
+	if (RSP.nextCmd != 0xBE && RSP.nextCmd != 0xBD)
+		return;
+
+	const u32 address = RSP_SegmentToPhysical( base );
+	if (address + sizeof(uSprite) > RDRAMSize + 1)
+		return;
+	const uSprite *sprite = (const uSprite*)&RDRAM[address];
+
+	if (sprite->tlutPtr != 0)
+	{
+		gDPSetTextureImage( G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, sprite->tlutPtr );
+		gDPSetTile( G_IM_FMT_RGBA, G_IM_SIZ_16b, 0, 256, 7, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, 0, 0, 0, 0 );
+		gDPLoadTLUT( 7, 0, 0, 1020, 0 );
+
+		if (sprite->imageFmt != G_IM_FMT_RGBA)
+			gDP.otherMode.textureLUT = G_TT_RGBA16;
+		else
+			gDP.otherMode.textureLUT = G_TT_NONE;
+	}
+	else
+		gDP.otherMode.textureLUT = G_TT_NONE;
+
+	/* _loadSpriteImage de GLideN64. */
+	gSP.bgImage.address = RSP_SegmentToPhysical( sprite->imagePtr );
+	gSP.bgImage.width = sprite->stride;
+	gSP.bgImage.height = sprite->imageY + sprite->imageH;
+	gSP.bgImage.format = sprite->imageFmt;
+	gSP.bgImage.size = sprite->imageSiz;
+	gSP.bgImage.palette = 0;
+	gSP.bgImage.imageX = sprite->imageX;
+	gSP.bgImage.imageY = sprite->imageY;
+	gDP.textureMode = TEXTUREMODE_BGIMAGE;
+	if (OGL.frameBufferTextures)
+	{
+		FrameBuffer *buffer = FrameBuffer_FindBuffer( gSP.bgImage.address );
+		if (buffer != NULL && buffer->size == gSP.bgImage.size && FrameBuffer_IsValid( buffer ))
+		{
+			gDP.tiles[0].frameBufferAddress = buffer->startAddress;
+			gDP.textureMode = TEXTUREMODE_FRAMEBUFFER_BG;
+		}
+	}
+	gDP.changed |= CHANGED_TILE | CHANGED_TMEM;
+
+	gSPTexture( 1.0f, 1.0f, 0, 0, TRUE );
+	gDP.otherMode.texturePersp = 1;
+
+	/* El texrect resta el `fuls`/`fult` de la tesela 0, que el sprite no
+	 * configura (en GLideN64 la textura de fondo no lo usa): a 0 mientras dura. */
+	const f32 fulsOrg = gDP.tiles[0].fuls;
+	const f32 fultOrg = gDP.tiles[0].fult;
+	gDP.tiles[0].fuls = 0.0f;
+	gDP.tiles[0].fult = 0.0f;
+
+	f32 scaleX = 1.0f, scaleY = 1.0f;
+	u32 flipX = 0, flipY = 0;
+	do
+	{
+		const u32 w0 = *(u32*)&RDRAM[RSP.PC[RSP.PCi]];
+		const u32 w1 = *(u32*)&RDRAM[RSP.PC[RSP.PCi] + 4];
+		RSP.cmd = _SHIFTR( w0, 24, 8 );
+
+		RSP.PC[RSP.PCi] += 8;
+		RSP.nextCmd = _SHIFTR( *(u32*)&RDRAM[RSP.PC[RSP.PCi]], 24, 8 );
+
+		if (RSP.cmd == 0xBE)	// gSPSprite2DScaleFlip
+		{
+			scaleX = _FIXED2FLOAT( _SHIFTR( w1, 16, 16 ), 10 );
+			scaleY = _FIXED2FLOAT( _SHIFTR( w1,  0, 16 ), 10 );
+			flipX = _SHIFTR( w0, 8, 8 );
+			flipY = _SHIFTR( w0, 0, 8 );
+			continue;
+		}
+
+		// gSPSprite2DDraw
+		if (sprite->stride <= 0 || scaleX == 0.0f || scaleY == 0.0f)
+			continue;
+
+		const f32 frameX = _FIXED2FLOAT( (s16)_SHIFTR( w1, 16, 16 ), 2 );
+		const f32 frameY = _FIXED2FLOAT( (s16)_SHIFTR( w1,  0, 16 ), 2 );
+		const f32 frameW = sprite->imageW / scaleX;
+		const f32 frameH = sprite->imageH / scaleY;
+
+		/* El paso por pixel y el texel del primer pixel; volteado, el primero
+		 * es el ultimo de la imagen y el paso va hacia atras. */
+		f32 dsdx = scaleX, dtdy = scaleY;
+		f32 s = sprite->imageX, t = sprite->imageY;
+		if (flipX != 0)
+		{
+			s = sprite->imageX + sprite->imageW - scaleX;
+			dsdx = -scaleX;
+		}
+		if (flipY != 0)
+		{
+			t = sprite->imageY + sprite->imageH - scaleY;
+			dtdy = -scaleY;
+		}
+
+		f32 lrx = frameX + frameW;
+		f32 lry = frameY + frameH;
+		if (gDP.otherMode.cycleType == G_CYC_COPY)
+		{
+			lrx -= 1.0f;
+			lry -= 1.0f;
+		}
+		gDPTextureRectangle( frameX, frameY, lrx, lry, 0, s, t, dsdx, dtdy );
+	} while (RSP.nextCmd == 0xBD || RSP.nextCmd == 0xBE);
+
+	gDP.tiles[0].fuls = fulsOrg;
+	gDP.tiles[0].fult = fultOrg;
+	if (gDP.textureMode == TEXTUREMODE_FRAMEBUFFER_BG)
+	{
+		gDP.textureMode = TEXTUREMODE_NORMAL;
+		gDP.changed |= CHANGED_TILE;
+	}
 }
 
 void gSPCopyVertex( SPVertex *dest, SPVertex *src )
@@ -1947,6 +2107,18 @@ void gSPModifyVertex( u32 vtx, u32 where, u32 val )
 				{
 					const f32 sx = _FIXED2FLOAT( (s16)_SHIFTR( val, 16, 16 ), 2 );
 					const f32 sy = _FIXED2FLOAT( (s16)_SHIFTR( val,  0, 16 ), 2 );
+					/* [Xbox360] [Resident Evil 2] GLideN64 5e51b386 y 022b3756 (su
+					 * rama hack_ModifyVertexXyInShader, que RE2 lleva):
+					 *     if (vtx0.w == 0.0f || gDP.otherMode.depthSource == G_ZS_PRIM)
+					 *         vtx0.w = 1.0f;
+					 * Con w = 0 el vertice colapsaba en el centro (x = ndc * 0).  Con
+					 * w = 1 no se recorta en ninguno de los dos caminos de
+					 * OGL_DrawTriangles: combW da z = -0,5 (dentro con w >= 0,5) y el
+					 * otro sujeta z a [-1, 1].  Con PRIM la profundidad es la del
+					 * Z-texture.  Solo con hack_RE2. */
+					if ((config.generalEmulation.hacks & hack_RE2) != 0 &&
+					    (gSP.vertices[vtx].w == 0.0f || gDP.otherMode.depthSource == G_ZS_PRIM))
+						gSP.vertices[vtx].w = 1.0f;
 					const f32 w  = gSP.vertices[vtx].w;
 
 					gSP.vertices[vtx].x = (sx - gSP.viewport.vtrans[0]) / vsx * w;
@@ -2878,8 +3050,33 @@ static BOOL _bgSourceIsFrameBuffer( u32 address, FrameBuffer **found )
 	return TRUE;
 }
 
+/* [Xbox360] ★ [Resident Evil 2] LOS FONDOS DE 512 DE ANCHO.  GLideN64 5e51b386
+ * ("Make Resident Evil 2 playable"; blog 2017-04, "Resident Evil 2"): el juego
+ * declara sus fondos con imageW = 512, pero los datos estan en filas del ancho
+ * del VI (VI_WIDTH), los mismos bytes en mas filas.  Leidos con 512 salia ruido.
+ * GLideN64 (_loadBGImage y ObjCoordinates, uCodes/S2DEX.cpp:481-490 y :851-854):
+ *     bgImage.width = VI_WIDTH;  bgImage.height = imageH * 512 / VI_WIDTH;
+ *     imageW = frameW = VI_WIDTH;  imageH, frameH *= 512 / VI_WIDTH;
+ *     scaleW = scaleH = 1;
+ * y _useOnePieceBgCode devuelve siempre TRUE con hack_RE2.  VI_WIDTH = 0 no
+ * entra (GLideN64 dividiria por cero). */
+static BOOL _gSPFondoRE2( u32 imageW )
+{
+	return ((config.generalEmulation.hacks & hack_RE2) != 0 && imageW == 512 &&
+	        *REG.VI_WIDTH != 0) ? TRUE : FALSE;
+}
+
+static void _gSPFondoRE2Imagen( u32 imageH )
+{
+	gSP.bgImage.width = *REG.VI_WIDTH;
+	gSP.bgImage.height = (imageH * 512) / gSP.bgImage.width;
+}
+
 static BOOL _useOnePieceBgCode( u32 address )
 {
+	/* [Xbox360] [Resident Evil 2] Ver _gSPFondoRE2. */
+	if ((config.generalEmulation.hacks & hack_RE2) != 0)
+		return TRUE;
 #ifdef S2DEX_FORCE_ONE_PIECE_BG
 	return TRUE;
 #else
@@ -2915,6 +3112,9 @@ void gSPBgRect1Cyc( u32 bg )
 	gSP.bgImage.format = objScaleBg->imageFmt;
 	gSP.bgImage.size = objScaleBg->imageSiz;
 	gSP.bgImage.palette = objScaleBg->imagePal;
+	const BOOL fondoRE2 = _gSPFondoRE2( objScaleBg->imageW >> 2 );
+	if (fondoRE2)
+		_gSPFondoRE2Imagen( objScaleBg->imageH >> 2 );
 	FrameBuffer *bgBuffer = NULL;
 
 	if (_bgSourceIsFrameBuffer( address, &bgBuffer ) && bgBuffer != NULL)
@@ -2951,6 +3151,19 @@ void gSPBgRect1Cyc( u32 bg )
 	// Clamp before converting so this can't divide by zero
 	f32 scaleW = _FIXED2FLOAT( max( objScaleBg->scaleW, (u16)1 ), 10 );
 	f32 scaleH = _FIXED2FLOAT( max( objScaleBg->scaleH, (u16)1 ), 10 );
+
+	/* [Xbox360] [Resident Evil 2] Ver _gSPFondoRE2. */
+	if (fondoRE2)
+	{
+		const f32 ancho = (f32)*REG.VI_WIDTH;
+		const f32 escala = imageW / ancho;
+		imageW = ancho;
+		frameW = ancho;
+		imageH *= escala;
+		frameH *= escala;
+		scaleW = 1.0f;
+		scaleH = 1.0f;
+	}
 
 	f32 frameX0 = frameX;
 	f32 frameY0 = frameY;
@@ -3063,6 +3276,9 @@ void gSPBgRectCopy( u32 bg )
 	gSP.bgImage.format = objBg->imageFmt;
 	gSP.bgImage.size = objBg->imageSiz;
 	gSP.bgImage.palette = objBg->imagePal;
+	const BOOL fondoRE2 = _gSPFondoRE2( objBg->imageW >> 2 );
+	if (fondoRE2)
+		_gSPFondoRE2Imagen( objBg->imageH >> 2 );
 	FrameBuffer *bgBuffer = NULL;
 
 	if (_bgSourceIsFrameBuffer( address, &bgBuffer ) && bgBuffer != NULL)
@@ -3091,7 +3307,14 @@ void gSPBgRectCopy( u32 bg )
 	s16 frameY = objBg->frameY / 4;
 	u16 frameW = objBg->frameW >> 2;
 	u16 frameH = objBg->frameH >> 2;
-	
+	/* [Xbox360] [Resident Evil 2] Ver _gSPFondoRE2: GLideN64 pasa por el mismo
+	 * ObjCoordinates en el COPY. */
+	if (fondoRE2)
+	{
+		frameH = (u16)(((u32)frameH * 512) / *REG.VI_WIDTH);
+		frameW = (u16)*REG.VI_WIDTH;
+	}
+
 	gSPTexture( 1.0f, 1.0f, 0, 0, TRUE );
 
 	/* [Xbox360] ★ [Zelda MM, Lente de la Verdad] GLideN64 5347689b,

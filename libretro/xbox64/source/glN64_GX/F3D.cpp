@@ -127,8 +127,10 @@ void F3D_Reserved3( u32 w0, u32 w1 )
 
 void F3D_Sprite2D_Base( u32 w0, u32 w1 )
 {
-	//gSPSprite2DBase( w1 );
-	RSP.PC[RSP.PCi] += 8;
+	/* [Xbox360] [Wipeout 64] Como GLideN64 (uCodes/F3D.cpp): gSPSprite2DBase
+	 * consume ella misma las 0xBE/0xBD que siguen.  glN64 la tenia comentada y
+	 * se saltaba solo la siguiente orden. */
+	gSPSprite2DBase( w1 );
 }
 
 void F3D_Tri1( u32 w0, u32 w1 )

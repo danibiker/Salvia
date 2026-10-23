@@ -61,6 +61,46 @@
 #endif
 static unsigned char *const sram = (unsigned char*)(SRAM_LO);
 
+#include "../xenon64_diag.h"   /* XBOX64_TRAZAS */
+#if XBOX64_TRAZAS
+/* Parte de la herramienta fija [HILOS] (xbox/plataforma.c): los ultimos 16
+ * DMA del PI hacia la RDRAM tal como los pidio el juego (registros) y lo que
+ * se copio de verdad, para compararlos con los OSIoMesg pendientes.  `via`:
+ * 0 cartucho, 1 fuera de rango (no copia), 2 SRAM/FlashRAM, 3 otra region. */
+#include "../../xbox/plataforma.h"   /* xbox64_log_line */
+#define PIR_N 16
+static unsigned s_pirCart[PIR_N], s_pirDram[PIR_N], s_pirLen[PIR_N], s_pirCop[PIR_N];
+static unsigned s_pirVia[PIR_N], s_pirCount[PIR_N], s_pirN = 0;
+
+static void pir_nota(unsigned via, unsigned copiado)
+{
+	const unsigned k = s_pirN++ % PIR_N;
+	s_pirCart[k]  = (unsigned)pi_register.pi_cart_addr_reg;
+	s_pirDram[k]  = (unsigned)pi_register.pi_dram_addr_reg;
+	s_pirLen[k]   = (unsigned)pi_register.pi_wr_len_reg;
+	s_pirCop[k]   = copiado;
+	s_pirVia[k]   = via;
+	s_pirCount[k] = (unsigned)Count;
+}
+
+void xbox64_pidma_volcado(void)
+{
+	char l[128];
+	unsigned i, n = (s_pirN < PIR_N) ? s_pirN : PIR_N;
+	_snprintf(l, sizeof(l), "[PIDMA] ultimos %u de %u (cart dram len_reg copiado via count):", n, s_pirN);
+	l[sizeof(l) - 1] = 0;
+	xbox64_log_line(l);
+	for (i = 0; i < n; i++)
+	{
+		const unsigned k = (s_pirN - n + i) % PIR_N;
+		_snprintf(l, sizeof(l), "[PIDMA]   %08X -> %08X len=%06X cop=%06X via=%u cnt=%08X",
+		          s_pirCart[k], s_pirDram[k], s_pirLen[k], s_pirCop[k], s_pirVia[k], s_pirCount[k]);
+		l[sizeof(l) - 1] = 0;
+		xbox64_log_line(l);
+	}
+}
+#endif
+
 bool sramWritten = false;
 
 int loadSram(fileBrowser_file* savepath)
@@ -220,10 +260,16 @@ void dma_pi_write()
 		{
 		}
 		// Stops Paper Mario from reading beyond cart region
-		else if (pi_register.pi_cart_addr_reg >= 0x1fc00000) 
+		else if (pi_register.pi_cart_addr_reg >= 0x1fc00000)
 		{
 		}
 
+#if XBOX64_TRAZAS
+		if (pi_register.pi_cart_addr_reg >= 0x08000000 && pi_register.pi_cart_addr_reg < 0x08010000)
+			pir_nota(2, (unsigned)(pi_register.pi_wr_len_reg & 0xFFFFFE) + 2u);
+		else
+			pir_nota(3, 0);
+#endif
 		pi_register.read_pi_status_reg |= 1;
 		update_count();
 		add_interupt_event(PI_INT, /*pi_register.pi_wr_len_reg*/0x1000);
@@ -247,6 +293,9 @@ void dma_pi_write()
 
 	if(i>rom_length || pi_register.pi_dram_addr_reg > MEMMASK)
 	{
+#if XBOX64_TRAZAS
+		pir_nota(1, 0);
+#endif
 		pi_register.read_pi_status_reg |= 3;
 		PI_ADVANCE_ADDR(req_length);
 		update_count();
@@ -261,6 +310,9 @@ void dma_pi_write()
 	*/
 	ROMCache_read(((unsigned char*)rdram + ((unsigned int)(pi_register.pi_dram_addr_reg)^S8)),
 				  i, dma_length);
+#if XBOX64_TRAZAS
+	pir_nota(0, (unsigned)dma_length);
+#endif
 
 // Dynarec, invalidate any code we wrote over.
 	if(!interpcore)

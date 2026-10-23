@@ -951,6 +951,215 @@ void xbox64_pc_rango(unsigned *min, unsigned *max)
 	s_pc_max = 0;
 }
 
+#if XBOX64_TRAZAS
+/* ★ HERRAMIENTA FIJA (con trazas): LOS HILOS DE libultra.  Para cuando un
+ * juego deja de mandar listas con el audio y el VI sanos (nacio con Resident
+ * Evil 2: dlist=0, dp=0, pi=0) y hay que saber que espera.  Busca en la RDRAM
+ * las OSThread encadenadas por `tlnext` y vuelca cada una: estado (1 parado,
+ * 2 listo, 4 corriendo, 8 esperando), flags (2 = FAULT), prioridad, pc y ra
+ * de su contexto, y la cola en la que espera con sus mensajes (validCount /
+ * msgCount).  Disposicion (reference_n64_bucle_ocioso_no_es_cuelgue): next
+ * +0x00, priority +0x04, queue +0x08, tlnext +0x0C, state +0x10, flags +0x12,
+ * id +0x14, contexto en +0x20 (31 u64: sp +0xF4, ra +0x104; sr/pc/cause/
+ * badvaddr en +0x118/+0x11C/+0x120/+0x124).  Sin direcciones fijas: se
+ * buscan candidatas con todo plausible y se queda la cadena mas larga. */
+#define HL_MEMW   (0x800000u / 4u)
+#define HL_MAXC   32u
+
+static unsigned hl_w(unsigned dir)          /* palabra N64 en una direccion KSEG0 */
+{
+	const unsigned f = dir & 0x7FFFFFu;
+	return (f / 4u < HL_MEMW) ? (unsigned)rdram[f / 4u] : 0u;
+}
+
+static unsigned hl_h(unsigned dir)          /* media palabra */
+{
+	const unsigned w = hl_w(dir & ~3u);
+	return (dir & 2u) ? (w & 0xFFFFu) : (w >> 16);
+}
+
+static int hl_puntero(unsigned p)           /* 0 o KSEG0 dentro de 8 MB, alineado a 8 */
+{
+	return p == 0u || ((p & 0xFF800007u) == 0x80000000u);
+}
+
+static int hl_es_hilo(unsigned t)
+{
+	const unsigned st = hl_h(t + 0x10u), fl = hl_h(t + 0x12u);
+	const unsigned pri = hl_w(t + 0x04u), pc = hl_w(t + 0x11Cu);
+	if ((t & 0xFF800007u) != 0x80000000u || (t & 0x7FFFFFu) + 0x128u > 0x800000u)
+		return 0;
+	if (st != 1u && st != 2u && st != 4u && st != 8u) return 0;
+	if (fl > 3u || pri > 255u || hl_w(t + 0x14u) > 0xFFFFu) return 0;
+	if (!hl_puntero(hl_w(t)) || !hl_puntero(hl_w(t + 0x0Cu))) return 0;
+	if (hl_w(t + 0x08u) != 0u && (hl_w(t + 0x08u) & 0xFF800003u) != 0x80000000u) return 0;
+	if ((pc & 0xFF800003u) != 0x80000000u) return 0;
+	return 1;
+}
+
+/* [log 10] ★ La lista de libultra NO acaba en 0: acaba en `__osThreadTail`,
+ * un hilo falso {next = NULL, priority = -1}.  Pidiendo un 0 al final la
+ * cadena salia de 1 con 14 candidatas. */
+static int hl_es_cola_final(unsigned t)
+{
+	return t == 0u || ((t & 0xFF800003u) == 0x80000000u && hl_w(t + 0x04u) == 0xFFFFFFFFu);
+}
+
+static unsigned hl_cadena(unsigned t)       /* longitud de la cadena por tlnext */
+{
+	unsigned n = 0;
+	while (t && n < HL_MAXC && hl_es_hilo(t)) { n++; t = hl_w(t + 0x0Cu); }
+	return hl_es_cola_final(t) ? n : 0u;
+}
+
+static void hl_vuelca_uno(unsigned t, char *l, unsigned tam);
+
+void xbox64_hilos_volcado(void)
+{
+	unsigned o, mejor = 0, mejorN = 0, t, n, cand = 0;
+	char l[160];
+
+	for (o = 0; o + 0x128u <= 0x800000u; o += 8u)
+	{
+		const unsigned d = 0x80000000u | o;
+		unsigned c;
+		if (!hl_es_hilo(d))
+			continue;
+		cand++;
+		c = hl_cadena(d);
+		if (c > mejorN) { mejorN = c; mejor = d; }
+	}
+	_snprintf(l, sizeof(l), "[HILOS] candidatas=%u cadena=%u desde %08X | pc=%08X",
+	          cand, mejorN, mejor, (unsigned)r4300.pc);
+	l[sizeof(l) - 1] = 0;
+	xbox64_log_line(l);
+
+	for (t = mejor, n = 0; t && n < mejorN; n++, t = hl_w(t + 0x0Cu))
+		hl_vuelca_uno(t, l, sizeof(l));
+
+	/* Si la cadena no salio, todas las candidatas (como mucho 24): mejor
+	 * ver de mas que quedarse otra vez sin datos. */
+	if (mejorN < 3u)
+	{
+		n = 0;
+		for (o = 0; o + 0x128u <= 0x800000u && n < 24u; o += 8u)
+		{
+			const unsigned d = 0x80000000u | o;
+			if (d == mejor || !hl_es_hilo(d))
+				continue;
+			hl_vuelca_uno(d, l, sizeof(l));
+			n++;
+		}
+	}
+
+	/* [log 11] QUIEN DEBERIA ESCRIBIR EN CADA COLA.  Para cada hilo que espera
+	 * en la cadena: la cola por dentro (mtqueue, fullqueue, validCount, first,
+	 * msgCount, msg) y las palabras de la RDRAM que la apuntan, con su vecina
+	 * de detras.  Una de ellas sera la tabla de eventos de libultra
+	 * (__osEventStateTab: 15 pares {cola, mensaje}, el VI en el indice 7 y el
+	 * PI en el 8), el planificador o el OSIoMesg de un DMA. */
+	for (t = mejor, n = 0; t && n < mejorN; n++, t = hl_w(t + 0x0Cu))
+	{
+		const unsigned q = hl_w(t + 0x08u);
+		unsigned r = 0;
+		if (hl_h(t + 0x10u) != 8u || !q)
+			continue;
+		_snprintf(l, sizeof(l), "[HILOS] cola %08X (hilo %08X): %08X %08X %u %u %u %08X",
+		          q, t, hl_w(q), hl_w(q + 4u), hl_w(q + 8u), hl_w(q + 12u),
+		          hl_w(q + 16u), hl_w(q + 20u));
+		l[sizeof(l) - 1] = 0;
+		xbox64_log_line(l);
+		/* Una linea por referencia (el embudo del log corta a 127): la
+		 * direccion y las palabras de -8 a +8 a su alrededor. */
+		for (o = 8u; o < 0x800000u - 8u && r < 8u; o += 4u)
+		{
+			const unsigned d = 0x80000000u | o;
+			if (hl_w(d) != q || d == t + 0x08u)
+				continue;
+			_snprintf(l, sizeof(l), "[HILOS]   ref %08X: %08X %08X [%08X] %08X %08X %08X %08X",
+			          d, hl_w(d - 8u), hl_w(d - 4u), hl_w(d), hl_w(d + 4u), hl_w(d + 8u),
+			          hl_w(d + 12u), hl_w(d + 16u));
+			l[sizeof(l) - 1] = 0;
+			xbox64_log_line(l);
+			r++;
+		}
+	}
+
+	/* La tabla de eventos: el gestor del VI (prioridad 254, el que libultra
+	 * crea con osCreateViManager) registra SU cola en el indice 7.  Se busca
+	 * esa cola en la RDRAM y se vuelcan los 15 pares desde el indice 0
+	 * (colas; los mensajes no hacen falta para saber quien es quien). */
+	for (t = mejor, n = 0; t && n < mejorN; n++, t = hl_w(t + 0x0Cu))
+	{
+		const unsigned q = hl_w(t + 0x08u);
+		unsigned vistos = 0;   /* C89: declarada al principio del bloque */
+		if (hl_w(t + 0x04u) != 254u || !q)
+			continue;
+		for (o = 0x38u; o < 0x800000u - 0x40u && vistos < 3u; o += 4u)
+		{
+			const unsigned d = 0x80000000u | o, base = d - 0x38u;
+			unsigned k, p;
+			if (hl_w(d) != q || d == t + 0x08u)
+				continue;
+			vistos++;
+			p = (unsigned)_snprintf(l, sizeof(l), "[HILOS] eventos? %08X 0-7:", base);
+			for (k = 0; k < 8u && p < sizeof(l); k++)
+				p += (unsigned)_snprintf(l + p, sizeof(l) - p, " %08X", hl_w(base + 8u * k));
+			l[sizeof(l) - 1] = 0;
+			xbox64_log_line(l);
+			p = (unsigned)_snprintf(l, sizeof(l), "[HILOS] eventos? %08X 8-14:", base);
+			for (k = 8; k < 15u && p < sizeof(l); k++)
+				p += (unsigned)_snprintf(l + p, sizeof(l) - p, " %08X", hl_w(base + 8u * k));
+			l[sizeof(l) - 1] = 0;
+			xbox64_log_line(l);
+		}
+		break;
+	}
+
+	/* [log 12] Los ultimos DMA del PI, para cruzarlos con los OSIoMesg que
+	 * salen arriba en `ref` (hdr 000B0000, cola, dram, dev, size). */
+	xbox64_pidma_volcado();
+	xbox64_sptask_volcado();
+
+	/* Y el estado de las interrupciones en ese momento (MI intr/mask, SP, DP). */
+	xbox64_traza_cpu();
+}
+
+static void hl_vuelca_uno(unsigned t, char *l, unsigned tam)
+{
+	const unsigned q = hl_w(t + 0x08u);
+	_snprintf(l, tam,
+	          "[HILOS] %08X id=%u pri=%u st=%u fl=%u pc=%08X ra=%08X sp=%08X cola=%08X v=%u/%u",
+	          t, hl_w(t + 0x14u), hl_w(t + 0x04u), hl_h(t + 0x10u), hl_h(t + 0x12u),
+	          hl_w(t + 0x11Cu), hl_w(t + 0x104u), hl_w(t + 0xF4u), q,
+	          q ? hl_w(q + 0x08u) : 0u, q ? hl_w(q + 0x10u) : 0u);
+	l[tam - 1] = 0;
+	xbox64_log_line(l);
+	/* Los que esperan: su pila, donde esta la direccion de vuelta del
+	 * codigo del JUEGO que llamo a osRecvMesg (el ra de arriba es de
+	 * dentro de libultra).  Ojo: `cola` apunta al campo de la cola en el
+	 * que espera, +0 si es al recibir (v = validCount/msgCount) y +4 si
+	 * es al enviar (entonces v sale desplazado). */
+	if (hl_h(t + 0x10u) == 8u)
+	{
+		const unsigned sp = hl_w(t + 0xF4u);
+		unsigned k, p;
+		unsigned fila;
+		/* [log 11] Tres filas de 10: la vuelta al codigo del juego que llamo
+		 * puede estar mas abajo que el marco de osRecvMesg. */
+		for (fila = 0; fila < 3u; fila++)
+		{
+			p = (unsigned)_snprintf(l, tam, "[HILOS]   pila %08X:", sp + 0x10u + 40u * fila);
+			for (k = 0; k < 10u && p < tam; k++)
+				p += (unsigned)_snprintf(l + p, tam - p, " %08X",
+				                         hl_w(sp + 0x10u + 40u * fila + 4u * k));
+			l[tam - 1] = 0;
+			xbox64_log_line(l);
+		}
+	}
+}
+#endif
+
 int xbox64_quiere_apagar(void)
 {
 	return s_apagar;

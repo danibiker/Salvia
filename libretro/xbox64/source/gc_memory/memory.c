@@ -635,12 +635,48 @@ volatile unsigned int xbox64_rsp_gfx_max = 0;       /* ver plataforma.h */
 volatile unsigned int xbox64_rsp_aud_tb = 0, xbox64_rsp_aud_n = 0;
 volatile unsigned int xbox64_rsp_otr_tb = 0, xbox64_rsp_otr_n = 0;
 
+#if XBOX64_TRAZAS
+/* [Resident Evil 2, log 12] Las ultimas 12 tareas del RSP: tipo (DMEM 0xFC0),
+ * flags (0xFC4), ucode (0xFD0), data_ptr (0xFF0), Count, y el estado del SP
+ * al volver (sp_status & 3: 3 = halt|broke, terminada).  El hilo principal
+ * de RE2 recibe los eventos de SP y DP: si espera el final de una tarea que
+ * no se hizo, sale aqui.  Lo vuelca xbox64_hilos_volcado ([HILOS]). */
+void xbox64_log_line(const char *linea);   /* xbox/plataforma.h */
+#define SPR_N 12
+static unsigned s_sprTipo[SPR_N], s_sprFlags[SPR_N], s_sprUcode[SPR_N], s_sprData[SPR_N];
+static unsigned s_sprCount[SPR_N], s_sprFin[SPR_N], s_sprN = 0;
+
+void xbox64_sptask_volcado(void)
+{
+	char l[128];
+	unsigned i, n = (s_sprN < SPR_N) ? s_sprN : SPR_N;
+	_snprintf(l, sizeof(l), "[SPTASK] ultimas %u de %u (tipo flags ucode data count fin):", n, s_sprN);
+	l[sizeof(l) - 1] = 0;
+	xbox64_log_line(l);
+	for (i = 0; i < n; i++)
+	{
+		const unsigned k = (s_sprN - n + i) % SPR_N;
+		_snprintf(l, sizeof(l), "[SPTASK]   tipo=%u flags=%08X ucode=%08X data=%08X cnt=%08X fin=%u",
+		          s_sprTipo[k], s_sprFlags[k], s_sprUcode[k], s_sprData[k], s_sprCount[k], s_sprFin[k]);
+		l[sizeof(l) - 1] = 0;
+		xbox64_log_line(l);
+	}
+}
+#endif
+
 void do_SP_task()
 {
 	int save_pc = rsp_register.rsp_pc & ~0xFFF;
 	unsigned long sp_delay_time;
 #if XBOX64_TRAZAS
 	unsigned long long tRsp;   /* solo para [RSPT]/[UTIL] */
+	const unsigned sprK = s_sprN++ % SPR_N;
+	s_sprTipo[sprK]  = (unsigned)SP_DMEM[0xFC0/4];
+	s_sprFlags[sprK] = (unsigned)SP_DMEM[0xFC4/4];
+	s_sprUcode[sprK] = (unsigned)SP_DMEM[0xFD0/4];
+	s_sprData[sprK]  = (unsigned)SP_DMEM[0xFF0/4];
+	s_sprCount[sprK] = (unsigned)Count;
+	s_sprFin[sprK]   = 9;   /* 9 = no se llego al final de do_SP_task */
 #endif
 
 	/* [Xbox360] [log 35] La tarea grafica que CEDIMOS (ver update_SP),
@@ -826,6 +862,9 @@ void do_SP_task()
         sp_delay_time = 0;
     }
 
+#if XBOX64_TRAZAS
+	s_sprFin[sprK] = (unsigned)(sp_register.sp_status_reg & 0x3);
+#endif
 	sp_register.sp_task_pending = 0;
 	interrupt_unsafe_state &= ~INTR_UNSAFE_RSP;
 

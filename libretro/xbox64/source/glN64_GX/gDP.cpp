@@ -516,6 +516,16 @@ static f32 *_gDPFillColorActual( void )
 
 void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 {
+	/* [Xbox360] [Resident Evil 2] GLideN64 5e51b386, FrameBufferList::saveBuffer:
+	 *     if (_width == 512 && (config.generalEmulation.hacks & hack_RE2) != 0)
+	 *         _width = *REG.VI_WIDTH;
+	 * El juego declara sus buffers con 512 de ancho y los usa con el del VI (ver
+	 * _gSPFondoRE2 en gSP.cpp).  Alli es el ancho del buffer; aqui el buffer es
+	 * gDP.colorImage (FrameBuffer_SaveBuffer/RestoreBuffer, la escala del EFB de
+	 * gln64_cimg_escala), asi que se cambia a la entrada. */
+	if ((config.generalEmulation.hacks & hack_RE2) != 0 && width == 512 && *REG.VI_WIDTH != 0)
+		width = *REG.VI_WIDTH;
+
 #ifdef __GX__
 	/* [Xbox360] ★ [Pilotwings] Fuera del dibujo sobre el depth image
 	 * (GXD3D_SetRenderToDepth, ver el final de OGL_UpdateStates) ANTES de

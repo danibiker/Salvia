@@ -91,7 +91,9 @@ struct GXD3DTevState
 
     /* GXD3D_SetRenderToDepth (gccore.h): 0 normal, 1 profundidad = rojo del
      * color, 2 ademas descarta si la z propia no pasa contra la copia de Z,
-     * 3 [Mario Golf] profundidad = un Z guardado, pixel a pixel. */
+     * 3 [Mario Golf] profundidad = un Z guardado, pixel a pixel, 4 [Zelda MM]
+     * idem solo donde el Z actual es 0, 5 [Resident Evil 2] profundidad = la
+     * palabra de Z del N64 del texel (R alto, G bajo) pasada al Z del EFB. */
     u8  rtz;
 
     /* GXD3D_SetDecalN64 (gccore.h): el decal del N64 por shader contra la
@@ -134,6 +136,11 @@ void gxd3d_tev_nieblaz(u8 on);
  * mismo de DepthCopy.cpp (_dcBuildLut).  OJO: la sombra de constantes de
  * d3dq.cpp (SOMBRA_PSC) tiene que llegar hasta c20. */
 #define GXD3D_NIEBLAZ_CONST   20
+/* [Resident Evil 2] Modo 5 de GXD3D_SetRenderToDepth: uRe2Z : register(c20) =
+ * (nearz, (farz - nearz) / 261632, 0, 0), la palabra de Z del N64 al Z del
+ * EFB.  El MISMO registro que uNieblaZPar: el shader no lleva nunca los dos
+ * (gx_d3d9_tev.cpp) y cada lote pone el suyo (gxd3d_zcopia_lote). */
+#define GXD3D_RE2Z_CONST      20
 /* GXD3D_SetRuido (entradas GXD3D_CC_RUIDO / GXD3D_CA_RUIDO): su constante,
  * uRuido : register(c15) = (semilla, 1/escX, 1/escY, 0).  No es TEVC_TOTAL + n:
  * TEVC_MARCA ya vive justo detras (c13) y c14 es de la Z. */

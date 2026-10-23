@@ -834,6 +834,28 @@ static void resumen_por_segundo(void)
             gln64_dbg_modvtx_xy = gln64_dbg_modvtx_z = gln64_dbg_wcull = 0;
             gln64_dbg_fbrdram = gln64_dbg_fbrdram_px = 0;
 
+            /* ★ HERRAMIENTA FIJA (con trazas): LOS HILOS DEL JUEGO CUANDO DEJA DE
+             * MANDAR LISTAS.  Tras haber mandado alguna, el TERCER segundo
+             * seguido sin tareas graficas, y otra vez cada 20 s mientras siga
+             * asi: los OSThread de libultra con su cola, quien la apunta, la
+             * tabla de eventos, los ultimos DMA del PI y las ultimas tareas del
+             * RSP.  Ver xbox64_hilos_volcado (xbox/plataforma.c).  Nacio con
+             * Resident Evil 2 (logs 10-14). */
+            {
+                static unsigned s_hlConGfx = 0, s_hlSinGfx = 0;
+                if (xbox64_rsp_gfx_n != 0)
+                {
+                    s_hlConGfx = 1;
+                    s_hlSinGfx = 0;
+                }
+                else if (s_hlConGfx)
+                {
+                    s_hlSinGfx++;
+                    if (s_hlSinGfx == 3 || (s_hlSinGfx > 3 && (s_hlSinGfx - 3) % 20 == 0))
+                        xbox64_hilos_volcado();
+                }
+            }
+
             gln64_prof_informe(nf);
             gxd3d_zcopia_informe();
 #if XBOX64_PASO0

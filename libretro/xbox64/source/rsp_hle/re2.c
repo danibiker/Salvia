@@ -70,10 +70,24 @@ void resize_bilinear_task(struct hle_t* hle)
             index = y_index + xr;
             addr = src_addr + (index * 3);
 
-            dram_load_u8(hle, (uint8_t*)&a, addr, 3);
-            dram_load_u8(hle, (uint8_t*)&b, (addr + 3), 3);
-            dram_load_u8(hle, (uint8_t*)&c, (addr + (320 * 3)), 3);
-            dram_load_u8(hle, (uint8_t*)&d, (addr + (320 * 3) + 3), 3);
+            /* [Xbox360] [Resident Evil 2] Upstream carga los 3 bytes de
+             * cada pixel encima de un `int` (`dram_load_u8(&a, addr, 3)`):
+             * en little-endian quedan en los bits 0-23 (primer byte = azul) y
+             * el cuarto es basura que las mascaras tiran.  En big-endian
+             * caian en los bits 8-31: `a & 0xff` era la basura y los otros
+             * dos colores salian cambiados.  Se monta el valor de little-
+             * endian a mano, que da lo mismo en los dos. */
+            {
+                uint8_t p[3];
+                dram_load_u8(hle, p, addr, 3);
+                a = p[0] | (p[1] << 8) | (p[2] << 16);
+                dram_load_u8(hle, p, (addr + 3), 3);
+                b = p[0] | (p[1] << 8) | (p[2] << 16);
+                dram_load_u8(hle, p, (addr + (320 * 3)), 3);
+                c = p[0] | (p[1] << 8) | (p[2] << 16);
+                dram_load_u8(hle, p, (addr + (320 * 3) + 3), 3);
+                d = p[0] | (p[1] << 8) | (p[2] << 16);
+            }
 
             blue = (int)(((a&0xff)*one_min_x_diff*one_min_y_diff + (b&0xff)*x_diff*one_min_y_diff +
                           (c&0xff)*y_diff*one_min_x_diff         + (d&0xff)*x_diff*y_diff) >> 32);

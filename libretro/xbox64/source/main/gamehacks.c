@@ -256,11 +256,22 @@ void GameSpecificHackSetup() {
 	 * [Fighting Force 64, log 44] Este SI lo trae la referencia:
 	 * mupen64plus.ini le pone `CountPerOp=1` en (E) y (U).  Con 2 el juego iba
 	 * a 3-10 img/s con 60 VI/s y la mitad del frame libre: cada VI le daba la
-	 * mitad de instrucciones. */
+	 * mitad de instrucciones.
+	 *
+	 * [Resident Evil 2, logs 9-13] Tambien lo trae la referencia: mupen64plus.ini
+	 * `CountPerOp=1` en las cuatro (J, E, U 1.0 y U 1.1).  Con 2, a 60 VI/s y
+	 * con la imagen ya bien, el juego se quedaba en negro tras la intro: la
+	 * sonda [HILOS] dio todos los hilos esperando con normalidad (planificador,
+	 * VI, PI, cargador) sin ningun fallo y sin nadie que lanzara trabajo nuevo,
+	 * la huella de Conker. */
 	if((curCRC[0] == 0x30C7AC50 && curCRC[1] == 0x7704072D) ||   // Conker's Bad Fur Day (U)
 	   (curCRC[0] == 0x373F5889 && curCRC[1] == 0x9A6CA80A) ||   // Conker's Bad Fur Day (E)
 	   (curCRC[0] == 0x66CF0FFE && curCRC[1] == 0xAD697F9C) ||   // Fighting Force 64 (E)
-	   (curCRC[0] == 0x32EFC7CB && curCRC[1] == 0xC3EA3F20))     // Fighting Force 64 (U)
+	   (curCRC[0] == 0x32EFC7CB && curCRC[1] == 0xC3EA3F20) ||   // Fighting Force 64 (U)
+	   (curCRC[0] == 0x7EAE2488 && curCRC[1] == 0x9D40A35A) ||   // Biohazard 2 (J)
+	   (curCRC[0] == 0x9B500E8E && curCRC[1] == 0xE90550B3) ||   // Resident Evil 2 (E)
+	   (curCRC[0] == 0x2F493DD0 && curCRC[1] == 0x2E64DFD9) ||   // Resident Evil 2 (U) (V1.0)
+	   (curCRC[0] == 0xAA18B1A5 && curCRC[1] == 0x07DB6AEB))     // Resident Evil 2 (U) (V1.1)
 		xbox64_db_count_per_op(COUNT_PER_OP_1);
 	else
 		xbox64_db_count_per_op(0);

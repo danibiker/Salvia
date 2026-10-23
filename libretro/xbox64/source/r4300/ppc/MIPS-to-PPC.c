@@ -914,12 +914,38 @@ static int NI_COP(MIPS_instr mips, int _){
 	return CONVERT_ERROR;
 }
 
+/* [Xbox360] ★★ [Resident Evil 2, 10 VI/s] EL SALTO A SI MISMO SOLO ES "OCIOSO"
+ * CON UN NOP EN EL HUECO.
+ *
+ * Wii64 (y not64) mandan al interprete TODO salto a si mismo (J, BEQ r,r y
+ * REGIMM con desplazamiento -1) para que se salte el tiempo hasta la siguiente
+ * interrupcion.  Pero el interprete solo se lo salta si el hueco de retardo es
+ * un NOP (pure_interp.c, `probe_nop(pc+4)`, como mupen64plus); si no, ejecuta
+ * UNA vuelta y vuelve.  Con el dynarec eso es una ida y vuelta al despachador
+ * por vuelta.  MEDIDO (logs 8, sondas [DYNAD]/[DYNAI]): el hilo ocioso de RE2
+ * en 80000518 pasaba 1.780.000 veces/s por decodeNInterpret, el ~45% de la CPU,
+ * y el juego iba a 10 VI/s.
+ *
+ * Con otra instruccion en el hueco el interprete no se salta nada, asi que
+ * compilar el bucle hace lo MISMO dentro del codigo generado: el hueco y el
+ * salto, contando ciclos, hasta que vence la interrupcion (GEN_BGELR).  El
+ * caso del NOP sigue igual.  `peek_next_src` solo si el hueco esta en la
+ * misma pagina (CANT_COMPILE_DELAY va antes).  A 0 vuelve lo de Wii64.
+ * Resultado (log 9): RE2 de 10 a 60 VI/s; su hueco era 64840001 (addiu). */
+#define XBOX64_OCIOSO_SOLO_CON_NOP 1
+#if XBOX64_OCIOSO_SOLO_CON_NOP
+#define OCIOSO_HUECO_NOP() (peek_next_src() == 0)
+#else
+#define OCIOSO_HUECO_NOP() 1
+#endif
+
 // -- Primary Opcodes --
 
 static int J(MIPS_instr mips){
 	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
 
-	if(naddr == get_src_pc() || CANT_COMPILE_DELAY()){
+	if(CANT_COMPILE_DELAY() ||
+	   (naddr == get_src_pc() && OCIOSO_HUECO_NOP())){
 		// J_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;
@@ -1036,9 +1062,9 @@ static int JAL(MIPS_instr mips){
 
 static int BEQ(MIPS_instr mips){
 
-	if((MIPS_GET_IMMED(mips) == 0xffff &&
-	    MIPS_GET_RA(mips) == MIPS_GET_RB(mips)) ||
-	   CANT_COMPILE_DELAY()){
+	if(CANT_COMPILE_DELAY() ||
+	   (MIPS_GET_IMMED(mips) == 0xffff &&
+	    MIPS_GET_RA(mips) == MIPS_GET_RB(mips) && OCIOSO_HUECO_NOP())){
 		// BEQ_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;
@@ -3578,7 +3604,8 @@ static int REGIMM(MIPS_instr mips){
 	int likely = which & 2;
 	int link   = which & 16;
 
-	if(MIPS_GET_IMMED(mips) == 0xffff || CANT_COMPILE_DELAY()){
+	if(CANT_COMPILE_DELAY() ||
+	   (MIPS_GET_IMMED(mips) == 0xffff && OCIOSO_HUECO_NOP())){
 		// REGIMM_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;

@@ -724,6 +724,16 @@ static void _RSP_SetGameHacks()
 		if (strstr( nombreIni, "BEETLE" ) != NULL || strstr( nombreIni, "HSV" ) != NULL)
 			config.generalEmulation.hacks |= hack_viDosBuffers;
 	}
+	/* [Xbox360] [Resident Evil 2] GLideN64 RSP.cpp (5e51b386): "Resident Evil
+	 * II" / "BioHazard II" -> hack_RE2 | hack_ModifyVertexXyInShader |
+	 * hack_LoadDepthTextures; aqui todo va en hack_RE2.  Y GLideN64.custom.ini
+	 * (dff219f2) [RESIDENT%20EVIL%20II] / [BioHazard%20II]: copyFromRDRAM=1
+	 * ("necessary for end game credits"), copyToRDRAM=0 y copyDepthToRDRAM=0,
+	 * que aqui ya son lo que hay.  Por nombre en mayusculas, que cubre las dos
+	 * formas. */
+	else if (strstr( nombreIni, "RESIDENT EVIL II" ) != NULL ||
+	         strstr( nombreIni, "BIOHAZARD II" ) != NULL)
+		config.generalEmulation.hacks |= hack_RE2 | hack_copyFromRDRAM;
 
 	/* ★ [Xbox360] OJO AL TOCAR ESTA CADENA: casa por NOMBRE INTERNO de la
 	 * cabecera de la ROM y es `else if`, asi que el PRIMER `strstr` que

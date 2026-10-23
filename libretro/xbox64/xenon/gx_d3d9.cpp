@@ -2716,10 +2716,26 @@ int GXD3D_UsaZGuardada(u32 dir)
     return 0;
 }
 
+/* [Resident Evil 2] uRe2Z del modo 5 (GXD3D_RE2Z_CONST): ver
+ * GXD3D_SetProfundidadRE2 en gccore.h. */
+static float s_re2Par[4] = { 0.0f, 1.0f / 261632.0f, 0.0f, 0.0f };
+
+void GXD3D_SetProfundidadRE2(f32 nearz, f32 farz)
+{
+    const float esc = (farz - nearz) / 261632.0f;
+    if (s_re2Par[0] == nearz && s_re2Par[1] == esc)
+        return;
+    if (s_rtzModo == 5)
+        gxd3d_flush_pending();   /* lo pendiente, con los suyos */
+    s_re2Par[0] = nearz;
+    s_re2Par[1] = esc;
+}
+
 void GXD3D_SetRenderToDepth(u8 modo)
 {
-    if (modo > 4) modo = 4;   /* 3 = copiar el Z guardado (GXD3D_UsaZGuardada);
-                               * 4 = [Zelda MM] idem solo donde el Z actual es 0 */
+    if (modo > 5) modo = 5;   /* 3 = copiar el Z guardado (GXD3D_UsaZGuardada);
+                               * 4 = [Zelda MM] idem solo donde el Z actual es 0;
+                               * 5 = [Resident Evil 2] la palabra de Z del texel */
     /* El modo 2 sin copia valida tambien entra: el plugin pudo invalidarla
      * sin pasar por otro modo. */
     if (modo == s_rtzModo && !(modo == 2 && !s_zcValida))
@@ -2886,6 +2902,10 @@ static void gxd3d_zcopia_lote(void)
         s_stZgLotes++;
 #endif
     }
+    /* [Resident Evil 2] El modo 5: su constante, en cada lote como la de la
+     * niebla (comparten registro; ver GXD3D_RE2Z_CONST). */
+    if (s_rtzModo == 5)
+        g_pd3dDevice->SetPixelShaderConstantF(GXD3D_RE2Z_CONST, s_re2Par, 1);
     if (s_rs.zEnable == D3DZB_TRUE && s_rs.zWrite)
     {
         s_zCambio = 1;

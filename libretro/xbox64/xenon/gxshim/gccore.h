@@ -876,8 +876,16 @@ void GXD3D_SetDepthClamp(u8 on);
  * GXD3D_InvalidaCopiaZ.  El plugin pone ademas el test del device en ALWAYS
  * con escritura.  Vacia el lote pendiente al cambiar.  3 [Mario Golf] = el
  * Z guardado de GXD3D_UsaZGuardada, pixel a pixel; 4 [Zelda MM, Lente de la
- * Verdad] = lo mismo solo donde el Z actual vale 0 (GLideN64 5347689b). */
+ * Verdad] = lo mismo solo donde el Z actual vale 0 (GLideN64 5347689b).
+ * 5 [Resident Evil 2] = la profundidad es la palabra de Z del N64 del texel
+ * (R = byte alto, G = byte bajo; ver GXGetRE2Z_RGBA8 en glN64_GX/Textures.cpp)
+ * pasada al Z del EFB con el rango de GXD3D_SetProfundidadRE2. */
 void GXD3D_SetRenderToDepth(u8 modo);
+/* ★ EXTENSION DEL SHIM, NO ES GX.  [Resident Evil 2] El rango del modo 5 de
+ * GXD3D_SetRenderToDepth: el Z de 18 bits del N64, 0..261632, va a
+ * `nearz`..`farz`, la inversa del paso de DepthCopy.cpp.  Vacia el lote
+ * pendiente si cambia en el modo 5. */
+void GXD3D_SetProfundidadRE2(f32 nearz, f32 farz);
 /* La copia de Z de GXD3D_SetRenderToDepth deja de valer (el plugin la tira
  * al cambiar de color image, como GLideN64 al volver a enganchar el depth
  * buffer: `m_copied = false`). */

@@ -29,6 +29,7 @@ extern Config config;
 #define hack_texrectPaletteMod		(1<<9)  //[Xbox360] GLideN64 texturedRectPaletteMod: Paper Mario "2D lighting" palette written to RDRAM by a 16x1 texrect, and its darkness texture at 0x400
 #define hack_viDosBuffers			(1<<12) //[Xbox360] VI origin inside a colour buffer with another one right after it: draw the end of the first and the start of the next (GLideN64 renderBuffer pNextBuffer). Beetle Adventure Racing menu transition
 #define hack_zeldaMMLente			(1<<11) //[Xbox360] GLideN64 hack_ZeldaMM, only its depth copy by S2DEX BG rects (5347689b): Lens of Truth depth in Zelda MM
+#define hack_RE2					(1<<13) //[Xbox360] GLideN64 hack_RE2 (5e51b386, 022b3756): 512-wide BG images and buffers at VI width, ModifyVertex w = 1, depth textures, N64 depth words. Resident Evil 2
 #define hack_texrectShadowMap		(1<<10) //[Xbox360] GLideN64 texturedRectShadowMap: a texrect that reads the depth image is drawn as fog colour with alpha = TLUT[N64 depth]. Beetle Adventure Racing fog
 #define hack_fbTextureOffset		(1<<23) //Offset Conker's shadow in CBFD and the Bob-ombs in Mario Tennis
 #define hack_fbCopyToRDRAM			(1<<24) //Write the EFB back to RDRAM for real. Majora's Mask pictograph
