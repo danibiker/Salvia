@@ -681,23 +681,37 @@ void gSPViewport( u32 v )
 		return;
 	}
 
+	/* [Xbox360] ★ [Duke Nukem 64, objetos y enemigos a traves de las paredes
+	 * DE LEJOS] LA Z DEL VIEWPORT SIN EL `+ FIXED2FLOATRECIP10` DE glN64, COMO
+	 * GLideN64 (gSP.cpp:267/271).  Con el 0x1FF de libultra la suma llevaba el
+	 * Z de la geometria a 0.5*(z_ndc+1) -- hasta 1.0 -- en vez del
+	 * 0.499*(z_ndc+1) del N64 -- hasta 0.998 --, mientras la Z del primitivo
+	 * (gDPSetPrimDepth, z/32768) va en las unidades del N64: toda la geometria
+	 * salia ~0.002 MAS LEJOS que los sprites.  De cerca la separacion en Z
+	 * entre el sprite y la pared es mayor y se tapaban; de lejos la
+	 * perspectiva la encoge por debajo de 0.002 y el sprite ganaba.  MEDIDO
+	 * (logs (6)-(8), sondas ya retiradas): estado de Z correcto en el shim y,
+	 * leyendo la copia de Z en el shader, el sprite delante.  Todo lo que
+	 * pasa el Z del EFB al del N64 lo hace con nearz/farz (DepthCopy.cpp, la
+	 * niebla por Z, el modo 5 de RE2, los rellenos de profundidad), asi que
+	 * sigue cuadrando: la geometria del N64 no pasa de 0x3FE00 = farz. */
 #ifndef _BIG_ENDIAN
 	gSP.viewport.vscale[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  2], 2 );
 	gSP.viewport.vscale[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address     ], 2 );
-	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  6], 10 ) + FIXED2FLOATRECIP10;
+	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  6], 10 );
 	gSP.viewport.vscale[3] = *(s16*)&RDRAM[address +  4];
 	gSP.viewport.vtrans[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 10], 2 );
 	gSP.viewport.vtrans[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  8], 2 );
-	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 14], 10 ) + FIXED2FLOATRECIP10;
+	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 14], 10 );
 	gSP.viewport.vtrans[3] = *(s16*)&RDRAM[address + 12];
 #else // !_BIG_ENDIAN -> This is to correct for big endian
 	gSP.viewport.vscale[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address     ], 2 );
 	gSP.viewport.vscale[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  2], 2 );
-	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  4], 10 ) + FIXED2FLOATRECIP10;
+	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  4], 10 );
 	gSP.viewport.vscale[3] = *(s16*)&RDRAM[address +  6];
 	gSP.viewport.vtrans[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  8], 2 );
 	gSP.viewport.vtrans[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 10], 2 );
-	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 12], 10 ) + FIXED2FLOATRECIP10;
+	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 12], 10 );
 	gSP.viewport.vtrans[3] = *(s16*)&RDRAM[address + 14];
 #endif // _BIG_ENDIAN
 
