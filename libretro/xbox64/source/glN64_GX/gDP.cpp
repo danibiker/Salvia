@@ -1787,7 +1787,22 @@ void gDPFillRectangle( s32 ulx, s32 uly, s32 lrx, s32 lry )
 			 * 4D494F30...) y al cargarse el buffer de la RDRAM salian en el
 			 * marco, que el juego no vuelve a pintar (scissor 8,8-312,232): ruido
 			 * en un buffer de cada tres, parpadeando con negro. */
-			if ((config.generalEmulation.hacks & hack_copyFromRDRAM) == 0)
+			/* [Xbox360] ★★ [Banjo-Kazooie, piezas del puzzle NEGRAS, 2026-10-24]
+			 * PERO NO SOBRE EL BUFFER QUE RECIBE LA COPIA DEL COLOR.  En GLideN64
+			 * (copyToRDRAM=1, ctSync) este relleno tambien cae en la RDRAM, pero su
+			 * copia del fullsync lo tapa con el frame entero antes del DP.  La nuestra
+			 * (_gDPCopiaColorARDRAM) llega 1 frame tarde: Banjo borra cada frame
+			 * 0,0-292,216 con 0001 ([FILL-GX] "borra COLOR"), el borrado machacaba la
+			 * copia anterior del mismo buffer, y al pulsar START la CPU sacaba las
+			 * piezas de una pantalla de 0001 (volcado: filas enteras de 0x0001).
+			 * Sin el borrado, la RDRAM del buffer guarda la ultima copia entregada:
+			 * la escena de 2 frames antes.  Mismas condiciones que la copia. */
+			const BOOL bufferDeCopia =
+				((config.generalEmulation.hacks & hack_copyToRDRAM) != 0 &&
+				 gDP.colorImage.size == G_IM_SIZ_16b &&
+				 gDP.colorImage.width == VI.width &&
+				 gDP.colorImage.address != gDP.depthImageAddress) ? TRUE : FALSE;
+			if ((config.generalEmulation.hacks & hack_copyFromRDRAM) == 0 && !bufferDeCopia)
 				_gDPFillRDRAM( ulx, uly, lrx, lry );
 			/* [Xbox360] ★★ [Rally Challenge 2000: cielo y segundos del HUD con
 			 * estela, y el reflejo de la luna trasera tambien arriba a la
@@ -2972,6 +2987,17 @@ static void _gDPCopiaColorARDRAM()
 
 	// [Paper Mario] GLideN64 1f4d04f4: el ajuste del azul en esta copia.
 	GXD3D_ColorARDRAMAzulPM( (config.generalEmulation.hacks & hack_paperMarioSubscreen) != 0 ? 1 : 0 );
+	/* [Xbox360] ★ [Banjo-Kazooie] GLideN64 ctSync: la de ESTE frame, esperando
+	 * a la GPU (ver GXD3D_CopiaColorARDRAMSincrona).  Si no llega a tiempo
+	 * queda pedida como la de siempre. */
+	if ((config.generalEmulation.hacks & hack_copyToRDRAMSync) != 0)
+	{
+		if (GXD3D_CopiaColorARDRAMSincrona( (u16*)&rdramb[dirCI], dirCI, (u16)x, (u16)y,
+		                                    (u16)w, (u16)h, (u16)n64w, (u16)n64h, &bytes ) &&
+		    bytes != 0)
+			FrameBuffer_RestampMarkers( dirCI, dirCI + bytes - 1 );   // escritura nuestra
+		return;
+	}
 	GXD3D_PideColorARDRAM( (u16*)&rdramb[dirCI], dirCI, (u16)x, (u16)y, (u16)w, (u16)h,
 	                       (u16)n64w, (u16)n64h );
 }

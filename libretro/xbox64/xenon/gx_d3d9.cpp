@@ -5406,6 +5406,22 @@ static volatile u32 s_stZMal = 0, s_stZSinMem = 0;
 static volatile u32 s_stZRawEsq = 0, s_stZRawCen = 0;
 static volatile u32 s_stZMin = 0xFFFFFFFFu, s_stZMax = 0;
 
+/* ★ [Banjo-Kazooie, 2026-10-24] INTERRUPTOR DE LA COPIA DEL COLOR SINCRONA
+ * (GLideN64 ctSync).  A 0 desaparece todo su codigo y
+ * GXD3D_CopiaColorARDRAMSincrona se queda en pedir la copia de siempre (1-3
+ * frames tarde).  Ver "LA COPIA DEL COLOR SINCRONA", tras
+ * GXD3D_EntregaColorARDRAM.  Para quitarla del todo: este bloque, el `if` de
+ * gxd3d_consumidor_marca_z, esa funcion, su linea en [CCOPIA], su
+ * declaracion en gccore.h y hack_copyToRDRAMSync (Config.h, RSP.cpp, gDP.cpp). */
+#define GXD3D_CCOPIA_SINC    1
+#define GXD3D_CCOPIA_SINC_MS 100u   /* tope de espera; pasado, la de siempre */
+#if GXD3D_CCOPIA_SINC
+/* Huecos de color cuya fence el consumidor espera EN EL ACTO al marcarla.  Lo
+ * pone el productor antes de encolar la marca (la barrera de d3dq_mete). */
+static volatile u8 s_cSincHueco[GXD3D_HUECOS];
+static HANDLE      s_cSincEv = NULL;   /* el consumidor avisa: hueco listo */
+#endif
+
 /* Consumidor: la fence de la copia `seq`, recien resuelta en el hueco `k`. */
 void gxd3d_consumidor_marca_z(IDirect3DDevice9 *dev, unsigned int k, unsigned int seq)
 {
@@ -5413,6 +5429,19 @@ void gxd3d_consumidor_marca_z(IDirect3DDevice9 *dev, unsigned int k, unsigned in
     {
         s_zHueco[k].fence    = dev->InsertFence();
         s_zHueco[k].fenceSeq = seq;
+#if GXD3D_CCOPIA_SINC
+        /* La copia sincrona: el productor esta parado esperandola.  Aqui
+         * mismo, sin esperar al SWAP (que no llegara: el productor no lo
+         * manda hasta que se le suelte). */
+        if (s_cSincHueco[k])
+        {
+            dev->BlockOnFence(s_zHueco[k].fence);
+            __lwsync();
+            s_zHueco[k].lista = seq;
+            if (s_cSincEv)
+                SetEvent(s_cSincEv);
+        }
+#endif
 #if XBOX64_TRAZAS
         if (k < GXD3D_Z_HUECOS)
             s_stZMarcas++;
@@ -5887,6 +5916,9 @@ void GXD3D_PideColorARDRAM(u16 *dest, u32 dir, u16 x, u16 y, u16 w, u16 h,
     }
 }
 
+static int gxd3d_entrega_color_hueco(GXD3DZHueco *mejor, unsigned int iMejor,
+                                     u32 *dir, u32 *bytes);
+
 int GXD3D_EntregaColorARDRAM(u32 *dir, u32 *bytes)
 {
     GXD3DZHueco *mejor = NULL;
@@ -5915,6 +5947,15 @@ int GXD3D_EntregaColorARDRAM(u32 *dir, u32 *bytes)
 #endif
         return 0;
     }
+    return gxd3d_entrega_color_hueco(mejor, iMejor, dir, bytes);
+}
+
+/* La copia del hueco `mejor` (su fence ya paso) a la RDRAM, en la direccion
+ * de SU buffer.  La usan la entrega de siempre y la sincrona de Banjo
+ * (GXD3D_CopiaColorARDRAMSincrona). */
+static int gxd3d_entrega_color_hueco(GXD3DZHueco *mejor, unsigned int iMejor,
+                                     u32 *dir, u32 *bytes)
+{
     __lwsync();   /* la fence antes que los texels */
 
     {
@@ -6012,6 +6053,95 @@ int GXD3D_EntregaColorARDRAM(u32 *dir, u32 *bytes)
         *bytes = (u32)ci->n64w * ci->n64h * 2u;
     }
     return 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* ★ LA COPIA DEL COLOR SINCRONA (GLideN64 ctSync, Banjo-Kazooie)       */
+/* ------------------------------------------------------------------ */
+/* [Banjo-Kazooie, 2026-10-24] GLideN64 e8a5e829 "Fix Banjo-Kazooie puzzle
+ * transitions": [BANJO-KAZOOIE] copyToRDRAM=1 = ctSync, no el doble buffer de
+ * su defecto.  Tras la carga (2 s sin listas) el juego pinta UN frame de la
+ * escena nueva y la CPU lo lee de la RDRAM nada mas recibir el DP para hacer
+ * las piezas: la copia de 1-3 frames tarde le daba lo de antes de la carga, y
+ * las piezas se montaban negras.
+ *
+ * Igual que la de siempre (mismo hueco, misma marca), pero el productor se
+ * queda esperando a que el consumidor (`retro_run`) ejecute el resolve y su
+ * marca; la marca, con `s_cSincHueco`, espera a la GPU en el acto
+ * (gxd3d_consumidor_marca_z).  Luego se convierte aqui mismo, en el buffer de
+ * ESTE frame, antes del DP_INT.  Coste: el emulador no puede ir frames por
+ * delante de la presentacion.  Si en GXD3D_CCOPIA_SINC_MS no llega, se vuelve
+ * sin ella: queda pedida y la entrega de siempre la escribe despues.
+ * Devuelve 1 con los bytes escritos (en `dir`), 0 si no se escribio nada.
+ * Medido (logs (4)): en partida 30 img/s y ~11 ms de espera por copia. */
+
+/* ★ [logs (2), 2026-10-24] SIN COLCHON DE FRAMES.  Con el de siempre
+ * (HILO_MAX_SWAP 2) el emulador llega al fullsync con 3 frames sin presentar,
+ * y la espera era la de presentarlos: 49 ms por copia, 15 img/s.  Con esto a
+ * 1, xbox/hilo_emu.cpp usa HILO_MAX_SWAP_CCOPIA (0): el emulador no empieza un
+ * VI hasta que se presento el anterior, asi que `retro_run` ya esta
+ * dentro del frame cuando llega la copia y la espera es la de la GPU.  Lo
+ * pone la primera copia sincrona; lo quita el cierre de la partida. */
+#if GXD3D_CCOPIA_SINC
+static volatile int s_cSincUsada = 0;
+#endif
+
+int gxd3d_ccopia_sinc_activa(void)
+{
+#if GXD3D_CCOPIA_SINC
+    return s_cSincUsada;
+#else
+    return 0;
+#endif
+}
+
+int GXD3D_CopiaColorARDRAMSincrona(u16 *dest, u32 dir, u16 x, u16 y, u16 w, u16 h,
+                                   u16 n64w, u16 n64h, u32 *bytes)
+{
+#if GXD3D_CCOPIA_SINC
+    const unsigned int i = s_cSeq % GXD3D_C_HUECOS;   /* el que usara la peticion */
+    const unsigned int k = GXD3D_Z_HUECOS + i;
+    const u32 antes = s_cSeq;
+    GXD3DZHueco *hu = &s_zHueco[k];
+    u32 seq, dirHecha = 0;
+    DWORD t0;
+
+    if (!s_cSincEv)
+        s_cSincEv = CreateEvent(NULL, FALSE, FALSE, NULL);
+    s_cSincUsada = 1;
+    s_cSincHueco[k] = 1;
+    __lwsync();
+#endif
+
+    GXD3D_PideColorARDRAM(dest, dir, x, y, w, h, n64w, n64h);
+
+#if GXD3D_CCOPIA_SINC
+    if (s_cSeq == antes)
+        return 0;   /* no se pidio (rect fuera, sin memoria...) */
+    seq = s_cSeq;
+#if D3D_GRABADOR >= 2
+    /* Sin hilo, el consumidor es este mismo hilo: como d3dq_sincrona. */
+    if (!g_d3dqVivo)
+        d3dq_drena();
+#endif
+    t0 = GetTickCount();
+    while (hu->lista != seq)
+    {
+        if (GetTickCount() - t0 > GXD3D_CCOPIA_SINC_MS)
+            return 0;
+        if (s_cSincEv)
+            WaitForSingleObject(s_cSincEv, 2);
+        else
+            Sleep(1);
+        __lwsync();
+    }
+    if (hu->pedida != seq)
+        return 0;   /* no deberia: el hueco ya es de otra peticion */
+    return gxd3d_entrega_color_hueco(hu, i, &dirHecha, bytes);
+#else
+    (void)bytes;
+    return 0;
+#endif
 }
 
 #if XBOX64_TRAZAS   /* informes [CCOPIA]/[ZCOPIA]/[PEEKZ]: solo con trazas */
@@ -6751,6 +6881,11 @@ void gxd3d_shutdown(void)
     /* [Mario Kart 64, Banjo] Idem con la copia del color: lo que quede en los
      * huecos no se escribe en la RDRAM de la partida siguiente. */
     s_cEntregada = s_cSeq;
+#if GXD3D_CCOPIA_SINC
+    /* Y la partida siguiente empieza sin copias sincronas. */
+    memset((void *)s_cSincHueco, 0, sizeof(s_cSincHueco));
+    s_cSincUsada = 0;
+#endif
     /* La copia de Z del dibujo sobre el depth image (ya fuera del sampler 3:
      * el bucle de SetTexture(NULL) de arriba la saco). */
     gxd3d_rtz_shutdown();

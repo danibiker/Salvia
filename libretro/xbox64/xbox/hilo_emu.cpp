@@ -39,6 +39,14 @@ extern "C" {
  * lag (libretro_core_options.h:181). */
 #define HILO_MAX_SWAP  2
 
+/* [Banjo-Kazooie, logs (2) 2026-10-24] Con la copia del color SINCRONA
+ * (gxd3d_ccopia_sinc_activa) el colchon es lo que esperaba cada copia: 3
+ * frames sin presentar = 49 ms por copia, 15 img/s.  Sin colchon el emulador
+ * no empieza un VI hasta que se presento el anterior, y `retro_run` esta
+ * consumiendo ESE frame cuando la lista pide la copia.  Para quitarlo: esta
+ * linea y el `maxSwap` del ritmo. */
+#define HILO_MAX_SWAP_CCOPIA  0
+
 /* ★ 1 MB de pila.  La emulacion corria hasta ahora en el hilo principal de
  * Salvia, que tiene 512 KB (`StackCommitSize` 524288, Salvia.vcxproj); los
  * dos plugins, el dynarec y el interprete van por aqui.  El doble, para no
@@ -317,12 +325,14 @@ static DWORD WINAPI hilo_proc(LPVOID)
              * sin presentar, esperar a que `retro_run` consuma uno.  Es lo
              * UNICO que frena al emulador: el VI no, igual que en mupen
              * (`retro_return` es un no-op en el modo con hilo). */
-            if (s_swaps > HILO_MAX_SWAP)
+            const LONG maxSwap = gxd3d_ccopia_sinc_activa() ? HILO_MAX_SWAP_CCOPIA
+                                                            : HILO_MAX_SWAP;
+            if (s_swaps > maxSwap)
             {
 #if XBOX64_TRAZAS
                 const unsigned long long tr = __mftb();
 #endif
-                while (s_swaps > HILO_MAX_SWAP && s_quiereCorrer && !s_salir)
+                while (s_swaps > maxSwap && s_quiereCorrer && !s_salir)
                 {
                     if (s_pausa)
                         punto_seguro();

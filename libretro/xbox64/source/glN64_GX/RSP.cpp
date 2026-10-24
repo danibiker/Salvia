@@ -636,9 +636,14 @@ static void _RSP_SetGameHacks()
 	 * GLideN64.custom.ini [MARIOKART64] copyToRDRAM=2 y [BANJO-KAZOOIE]
 	 * copyToRDRAM=1 (e8a5e829): la CPU lee el color buffer de la RDRAM.  Ver
 	 * _gDPCopiaColorARDRAM (gDP.cpp). */
-	else if (strstr( nombreIni, "MARIOKART64" ) != NULL ||
-	         strstr( nombreIni, "BANJO-KAZOOIE" ) != NULL)
+	else if (strstr( nombreIni, "MARIOKART64" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyToRDRAM;
+	/* [Xbox360] ★ [Banjo-Kazooie, piezas negras al montarse tras la carga,
+	 * 2026-10-24] copyToRDRAM=1 es ctSync, no el doble buffer: la copia espera
+	 * a la GPU (hack_copyToRDRAMSync, ver GXD3D_CopiaColorARDRAMSincrona).
+	 * Para volver a la de 1-3 frames tarde basta con quitar ese bit. */
+	else if (strstr( nombreIni, "BANJO-KAZOOIE" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyToRDRAM | hack_copyToRDRAMSync;
 	/* [Xbox360] ★ [Mario Golf, la transicion entre golpes: el frame anterior
 	 * que se retira salia NEGRO] LA COPIA DEL COLOR A LA RDRAM.  GLideN64
 	 * d06befb4: "CPU copies color frame buffer for replays into depth buffer

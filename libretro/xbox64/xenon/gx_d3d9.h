@@ -81,6 +81,12 @@ extern volatile unsigned int gxsh_conv_tb;
  * el wrapper no incluye la cabecera interna. */
 extern volatile unsigned int gxd3d_dbg_texconv;
 
+/* [Banjo-Kazooie] 1 = esta partida usa la copia del color SINCRONA
+ * (GXD3D_CopiaColorARDRAMSincrona): el emulador no debe ir frames por delante
+ * de lo presentado (xbox/hilo_emu.cpp, el ritmo).  0 siempre con el
+ * interruptor GXD3D_CCOPIA_SINC a 0. */
+int gxd3d_ccopia_sinc_activa(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -930,6 +930,13 @@ int  GXD3D_EntregaColorARDRAM(u32 *dir, u32 *bytes);
 /* [Paper Mario] GLideN64 1f4d04f4 (hack_paper_mario_subscreen): en la
  * conversion de esa copia, azul += 4 si 0 < azul <= 0xFB.  1 = activo. */
 void GXD3D_ColorARDRAMAzulPM(int activo);
+/* [Banjo-Kazooie] La copia del color SINCRONA (GLideN64 ctSync): pide como
+ * GXD3D_PideColorARDRAM y espera a la GPU; devuelve 1 con los bytes escritos
+ * en `dest` (de ESTE frame), o 0 si no llego a tiempo (entonces queda pedida
+ * y la escribe la entrega de siempre).  Interruptor GXD3D_CCOPIA_SINC en
+ * xenon/gx_d3d9.cpp. */
+int  GXD3D_CopiaColorARDRAMSincrona(u16 *dest, u32 dir, u16 x, u16 y, u16 w, u16 h,
+                                    u16 n64w, u16 n64h, u32 *bytes);
 
 /* -- texturas -------------------------------------------------------------- */
 /* [Xbox360] Los texels de `data` han cambiado: el proximo GX_LoadTexObj con

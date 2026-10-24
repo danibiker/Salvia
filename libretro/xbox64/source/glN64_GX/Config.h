@@ -39,6 +39,7 @@ extern Config config;
 #define hack_doNotResetOtherModeL	(1<<15) //Don't reset othermode.l at frame swap (RSP_ReiniciaOtherMode). Quake
 #define hack_copyFromRDRAM			(1<<28) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\copyFromRDRAM=1: at VI, draw what the CPU wrote into the RDRAM color buffer over the frame (with alpha), then zero it. Dr. Mario 64 pills
 #define hack_copyToRDRAM			(1<<29) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\copyToRDRAM: write the main color buffer to RDRAM at full sync, 1-3 frames late (no GPU wait). Mario Kart 64 TV, Banjo-Kazooie puzzle, Castlevania menu lens
+#define hack_copyToRDRAMSync		(1<<30) //[Xbox360] GLideN64 copyToRDRAM=1 (ctSync), with hack_copyToRDRAM: the copy waits for the GPU and lands in THIS frame's buffer before the DP. Banjo-Kazooie puzzle assembling after a load (e8a5e829)
 #define hack_n64DepthCompareDec		(1<<27) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\N64DepthCompare=1, only its "decal" mode (ZMODE_DEC) in the shader against a depth copy. ISS64 player shadows
 
 void Config_LoadConfig();
