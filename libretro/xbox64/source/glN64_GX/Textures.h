@@ -54,6 +54,11 @@ struct CachedTexture
 	u32		maskS, maskT;
 	u32		clampS, clampT;
 	u32		mirrorS, mirrorT;
+	/* [Xbox360] [Worms Armageddon] 1 = el espejo de ese eje lo hace la GPU
+	 * (GX_MIRROR) sobre una textura del tamano de la mascara, como GLideN64
+	 * con GL_MIRRORED_REPEAT; 0 = horneado en la textura (doble de ancho/alto).
+	 * Ver TextureCache_Update. */
+	u8		GXespejoS, GXespejoT;
 	u32		line;
 	u32		size;
 	u32		format;

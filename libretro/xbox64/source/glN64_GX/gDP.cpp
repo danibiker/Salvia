@@ -1549,6 +1549,24 @@ void gDPBufferChanged( f32 maxY )
 
 	gDP.colorImage.changed = TRUE;
 	gDP.colorImage.height = MAX( gDP.colorImage.height, (u32)maxY );
+	/* [Xbox360] ★★ [Worms Armageddon, a los ~3,5 min en la misma pantalla:
+	 * corrupciones y 13 img/s, logs (5) 2026-10-24] EL ALTO SE ACOTA AL
+	 * SCISSOR, como GLideN64 (FrameBufferList::setBufferChanged,
+	 * FrameBuffer.cpp:662-663).  glN64 solo hacia el MAX: un dibujo con `lry`
+	 * enorme -- o negativo, que en (u32) sale 0x80000000 -- dejaba el alto del
+	 * color image por las nubes, SaveBuffer rehacia el buffer con ese alto, y
+	 * _fbCopiaRdram lo recorta al final de la RDRAM: cada buffer principal pasaba
+	 * a cubrir megas.  MEDIDO: desde ese segundo cada FILLRECT costaba 13 ms en
+	 * _gDPFillRDRAM (la copia de RDRAM de los dos buffers, desde
+	 * FrameBuffer_RestampMarkers) en vez de 0,8, y cada LoadTile ~640 us en vez
+	 * de 3,5 (FrameBuffer_IsValid comparando esa copia); las texturas que viven
+	 * en esa memoria se servian como textura de framebuffer.  Confirmado con
+	 * [FBALTO] (logs (6), sonda retirada): llegaban maxY = -1, -2, -3, o sea
+	 * alto 4294967295 -> 240 con el scissor en 240.  Con el scissor
+	 * aun sin poner (0 hasta el primer SetScissor, ver OGL_DrawRect) no se
+	 * acota: dejaria el alto a 0. */
+	if (gDP.scissor.lry > 0.0f && gDP.colorImage.height > (u32)gDP.scissor.lry)
+		gDP.colorImage.height = (u32)gDP.scissor.lry;
 }
 
 void gDPSetScissor( u32 mode, f32 ulx, f32 uly, f32 lrx, f32 lry )

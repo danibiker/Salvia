@@ -2240,9 +2240,11 @@ void TextureCache_ActivateTexture( u32 t, CachedTexture *texture )
 				texture->clampS ? GX_CLAMP : GX_REPEAT, 
 				texture->clampT ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
 		else
-			GX_InitTexObj(&texture->GXtex, texture->GXtexture, (u16) texture->realWidth, (u16) texture->realHeight, texture->GXtexfmt, 
-				texture->clampS ? GX_CLAMP : GX_REPEAT, 
-				texture->clampT ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
+			/* [Xbox360] [Worms Armageddon] Espejo por la GPU: ver GXespejoS en
+			 * TextureCache_Update. */
+			GX_InitTexObj(&texture->GXtex, texture->GXtexture, (u16) texture->realWidth, (u16) texture->realHeight, texture->GXtexfmt,
+				texture->clampS ? GX_CLAMP : (texture->GXespejoS ? GX_MIRROR : GX_REPEAT),
+				texture->clampT ? GX_CLAMP : (texture->GXespejoT ? GX_MIRROR : GX_REPEAT), GX_FALSE);
 		/* [Xbox360] [Conker, sombra pixelada] UNA TEXTURA DE FRAMEBUFFER SE FILTRA
 		 * COMO PIDA EL JUEGO, COMO EN GLideN64.
 		 *
@@ -3138,8 +3140,38 @@ void TextureCache_Update( u32 t )
 	else
 		cache.current[t]->realHeight = pow2( height );*/
 
+	/* [Xbox360] ★★ [Worms Armageddon, la camara a 14 img/s, logs (3)-(4)
+	 * 2026-10-24] EL ESPEJO LO HACE LA GPU, COMO EN GLideN64.  glN64 lo hornea:
+	 * la textura mide el DOBLE de la mascara en cada eje con espejo y los texels
+	 * se copian reflejados (mirrorSBit/mirrorTBit en TextureCache_Load).  El
+	 * fondo de Worms (S2DEX BG_1CYC por tiras) son tiras de 330x6 en CI8 con
+	 * mascara 9,3 y espejo en los dos ejes: [TEXPAR2] `mir=1,1 real=1024x16`,
+	 * 16384 texels para dibujar ~2000.  Al mover la camara cada tira es una
+	 * textura nueva (680/s): 7,3 ms/VI en tcload + 8,0 ms/VI en la conversion
+	 * del shim, 44 MB/s.  GLideN64 la crea del tamano de la mascara y pone
+	 * GL_MIRRORED_REPEAT; aqui GX_MIRROR (D3DTADDRESS_MIRROR en el shim).
+	 * ★ El modo lo ponen DOS sitios: TextureCache_ActivateTexture y el
+	 * GX_InitTexObj de los texrect (OpenGL.cpp); sin el segundo, las tiras del
+	 * retrato del lobo de Killer Instinct (s 212..256) salian rotas.
+	 * Con mascara, espejo y sin clamp la mitad reflejada horneada es la primera
+	 * mitad al reves (la coordenada solo se enmascara y se refleja; el clamp de
+	 * S ya se quito por Killer Instinct), asi que la GPU da lo mismo con la
+	 * cuarta parte de texels en una textura de dos ejes.  Fuera: ZSortBOSS
+	 * (mirrorFix, su propio recorte), el atlas de LOD, los mipmaps y 2xSaI,
+	 * que construyen la textura a su manera. */
+	const BOOL espejoGPU = (!mirrorFix && nivAtlas == 0 && !cache.enable2xSaI &&
+	                        !((gDP.otherMode.textureLOD == G_TL_LOD) &&
+	                          (gDP.otherMode.textureDetail == G_TD_DETAIL) &&
+	                          (gSP.texture.level > 1))) ? TRUE : FALSE;
+	cache.current[t]->GXespejoS = (espejoGPU && !cache.current[t]->clampS &&
+	                               cache.current[t]->mirrorS && cache.current[t]->maskS != 0) ? 1 : 0;
+	cache.current[t]->GXespejoT = (espejoGPU && !cache.current[t]->clampT &&
+	                               cache.current[t]->mirrorT && cache.current[t]->maskT != 0) ? 1 : 0;
+
 	if (cache.current[t]->clampS)
 		cache.current[t]->realWidth = pow2( clampWidth );
+	else if (cache.current[t]->GXespejoS)
+		cache.current[t]->realWidth = maskWidth;
 	else if (cache.current[t]->mirrorS && (!mirrorFix || (maskWidth <= 128)))
 		cache.current[t]->realWidth = maskWidth << 1;
 	else
@@ -3147,6 +3179,8 @@ void TextureCache_Update( u32 t )
 
 	if (cache.current[t]->clampT)
 		cache.current[t]->realHeight = pow2( clampHeight );
+	else if (cache.current[t]->GXespejoT)
+		cache.current[t]->realHeight = maskHeight;
 	else if (cache.current[t]->mirrorT && (!mirrorFix || (maskHeight <= 128)))
 		cache.current[t]->realHeight = maskHeight << 1;
 	else

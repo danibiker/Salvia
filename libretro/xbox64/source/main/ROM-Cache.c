@@ -56,6 +56,20 @@
 #define ROMCACHE_SIZE (64*1024*1024)   /* el cartucho mas grande de N64 */
 #define LOAD_SIZE     (64*1024)        /* trozo de lectura, como HW_DOL  */
 static char* ROMBase = NULL;
+/* [Xbox360] LO QUE CAE FUERA DE LA ROM SE LEE COMO CEROS, como mupen64plus
+ * (cart_rom.c, read_cart_rom: `addr < rom_size` o 0).  ROMCache_pointer
+ * devolvia ROMBase + desplazamiento sin mirar el tamanyo, y fast_mem_access
+ * acepta cualquier fisica desde 0x10000000: compilar (o leer) mas alla del
+ * final del cartucho era leer fuera del malloc.  Se sospecho de esto por la
+ * excepcion de Worms Armageddon (2026-10-24) y NO era la causa -- la sonda no
+ * salto nunca: era el desborde de code_buffer, ver ppc/Recompile.c --, pero se
+ * deja por ser lo de la referencia y no costar nada dentro de la ROM.  Fuera de la
+ * ROM se da una pagina de ceros (0 = NOP, lo que ve mupen); `+ 16` para la
+ * lectura de 8 bytes del final de la pagina.  Y la reserva lleva una pagina
+ * mas a cero, para la pagina del final si la ROM no acaba en 4 KB (el dynarec
+ * lee la pagina de 4 KB entera).  La DMA ya se recorta en dma.c. */
+#define ROM_RELLENO   0x1000u
+static char s_romCeros[0x1000 + 16];
 #elif defined(HW_RVL)
 #include "../gc_memory/MEM2.h"
 #include "../vm/wii_vm.h"
@@ -118,6 +132,8 @@ void ROMCache_deinit(){
 
 void* ROMCache_pointer(u32 rom_offset){
 #ifdef _XBOX
+	if (rom_offset >= ROMSize)
+		return s_romCeros + (rom_offset & 0xFFFu);
 	return ROMBase + rom_offset;
 #endif
 #ifdef HW_RVL
@@ -257,9 +273,11 @@ int ROMCache_load(fileBrowser_file* file){
 			return ROM_CACHE_ERROR_READ;
 
 		if (ROMBase) { free(ROMBase); ROMBase = NULL; }
-		ROMBase = (char*)malloc(ROMSize);
+		/* [Worms Armageddon] La pagina de despues, a cero: ver ROM_RELLENO. */
+		ROMBase = (char*)malloc(((ROMSize + 0xFFFu) & ~0xFFFu) + ROM_RELLENO);
 		if (!ROMBase)
 			return ROM_CACHE_ERROR_READ;
+		memset(ROMBase + ROMSize, 0, (((ROMSize + 0xFFFu) & ~0xFFFu) + ROM_RELLENO) - ROMSize);
 
 		romFile_seekFile(&ROMFile, 0, FILE_BROWSER_SEEK_SET);
 

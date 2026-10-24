@@ -55,8 +55,25 @@ static unsigned int current_jump;
 static PowerPC_instr** code_addr;
 static unsigned char isJmpDst[1024];
 
-static PowerPC_instr code_buffer[1024*32];
+/* [Xbox360] ★★ [Worms Armageddon, excepcion al empezar un entrenamiento,
+ * logs 2026-10-24] EL BUFER DE LA CONVERSION SE DESBORDABA.  Wii64 lo tiene
+ * de 32K instrucciones y sin vigilar, y asi le basta; pero aqui cada acceso a
+ * memoria emite ademas el TLB en linea (partes 1, 2 y 4, XBOX64_TLB_EN_LINEA en
+ * MIPS-to-PPC.c), con su volcado, la llamada a dyna_mem y la recarga: decenas
+ * de instrucciones por acceso.  La funcion de 0x8005B000 son 1020
+ * instrucciones MIPS con ~450 accesos, y `set_next_dst` siguio escribiendo
+ * detras de `code_buffer`, encima de las estaticas de este fichero.  MEDIDO
+ * con la sonda SEH: `src`=38A00001 (`li r5,1`) y `addr_last`=48000034 (`b`),
+ * y el `isJmpDst[src - mips_code]` del bucle de conversion leyo 0x728B8EB8.
+ * Ahora 128K instrucciones (512 KB; 128 por instruccion MIPS) y set_next_dst
+ * ya no escribe fuera: si aun asi se llenase, se apunta en `xb_desborde`.
+ * Medido con la funcion de 0x8005B000: 35735 instrucciones, 2787 saltos. */
+#define XB_CODE_BUFFER_INSTR (1024*128)
+static PowerPC_instr code_buffer[XB_CODE_BUFFER_INSTR];
 static PowerPC_instr* code_addr_buffer[1024];
+/* 1 = esta conversion se salio de code_buffer o de jump_table (y se dejo de
+ * escribir fuera).  El codigo de esa funcion no vale; ver recompile_block. */
+static int xb_desborde = 0;
 
 PowerPC_func* current_func;
 static struct func_list {
@@ -97,7 +114,15 @@ int has_next_src(void){ return (src_last-src) > 0; }
  int is_j_dst(int i){ return isJmpDst[i + ((get_src_pc()&0xfff)>>2)]; }
 // Returns the MIPS PC
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
-void set_next_dst(PowerPC_instr i){ *(ppc_dst++) = i; ++code_length; }
+/* [Xbox360] [Worms Armageddon] Nunca fuera de code_buffer: ver
+ * XB_CODE_BUFFER_INSTR.  Solo se emite durante la conversion, a code_buffer. */
+void set_next_dst(PowerPC_instr i){
+	if(ppc_dst >= code_buffer && ppc_dst < code_buffer + XB_CODE_BUFFER_INSTR)
+		*ppc_dst = i;
+	else
+		xb_desborde = 1;
+	++ppc_dst; ++code_length;
+}
 // Adjusts the code_addr for the current instruction to account for flushes
 void reset_code_addr(void){ if(src<=src_last) code_addr[src-1-src_first] = ppc_dst; }
 // Same, but for multiple swallowed source instructions.
@@ -115,6 +140,9 @@ static inline short extractLower16(void* address){
 
 
 int add_jump(int old_jump, int is_j, int is_call){
+	/* [Xbox360] [Worms Armageddon] Tampoco fuera de jump_table: con la tabla
+	 * llena se reusa la ultima entrada y la funcion queda marcada. */
+	if(current_jump >= MAX_JUMPS){ xb_desborde = 1; current_jump = MAX_JUMPS - 1; }
 	int id = current_jump;
 	jump_node* jump = &jump_table[current_jump++];
 	jump->old_jump  = old_jump;
@@ -127,6 +155,7 @@ int add_jump(int old_jump, int is_j, int is_call){
 }
 
 int add_jump_special(int is_j){
+	if(current_jump >= MAX_JUMPS){ xb_desborde = 1; current_jump = MAX_JUMPS - 1; }   /* idem */
 	int id = current_jump;
 	jump_node* jump = &jump_table[current_jump++];
 	jump->new_jump  = 0;     // This should be filled in when known
@@ -247,6 +276,7 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
 	addr_first = ppc_block->start_address + (addr&0xfff);
 	code_addr = NULL; // Just to make sure this isn't used here
+	xb_desborde = 0;   /* [Worms Armageddon] ver XB_CODE_BUFFER_INSTR */
 
 	int need_pad = pass0(ppc_block); // Sets src_last, addr_last
 
@@ -310,6 +340,11 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 #ifdef LAZY_GEN_CALLS
 	end_block();
 #endif
+	/* [Xbox360] [Worms Armageddon] Si aun asi se lleno (ver
+	 * XB_CODE_BUFFER_INSTR), no se copia mas de lo que hay en el bufer.  Esa
+	 * funcion queda mal, pero ya no pisa nada de este fichero. */
+	if(code_length > XB_CODE_BUFFER_INSTR)
+		code_length = XB_CODE_BUFFER_INSTR;
 	// Allocate the func buffers and copy the code
 	if(!func->code){
 		// We aren't recompiling from a hole
@@ -359,6 +394,10 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 		                          (jump_table[i].dst_instr - code_buffer);
 
 	// Here we recompute jumps and branches
+	/* [Xbox360] [Worms Armageddon] Con desborde, los saltos apuntados detras
+	 * del codigo copiado caerian fuera de func->code: no se parchea ninguno. */
+	if(xb_desborde)
+		current_jump = 0;
 	pass2(ppc_block);
 
 	// Since this is a fresh block of code,

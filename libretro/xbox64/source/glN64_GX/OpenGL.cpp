@@ -2967,11 +2967,18 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 				(cache.current[0]->clampS || OGL.GXforceClampS0) ? GX_CLAMP : GX_REPEAT, 
 				(cache.current[0]->clampT || OGL.GXforceClampT0) ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
 		else
-			GX_InitTexObj(&cache.current[0]->GXtex, cache.current[0]->GXtexture, (u16) cache.current[0]->realWidth, 
-				(u16) cache.current[0]->realHeight, cache.current[0]->GXtexfmt, 
-				(cache.current[0]->clampS || OGL.GXforceClampS0) ? GX_CLAMP : GX_REPEAT, 
-				(cache.current[0]->clampT || OGL.GXforceClampT0) ? GX_CLAMP : GX_REPEAT, 
-				(cache.current[0]->max_level > 0) ? GX_TRUE : GX_FALSE); 
+			/* [Xbox360] ★ [Killer Instinct, retrato del lobo en tiras rotas,
+			 * 2026-10-24] El espejo por la GPU (GXespejoS/T, ver
+			 * TextureCache_Update) TAMBIEN aqui: esta llamada rehace el objeto de
+			 * los texrect y ponia GX_REPEAT, y una textura del tamano de la
+			 * mascara se repetia SIN reflejar.  Las tiras de KI muestrean s
+			 * 212..256 (segunda mitad del periodo de 128) y salian de la mitad
+			 * equivocada; las de Worms no salen de la primera y no se veia. */
+			GX_InitTexObj(&cache.current[0]->GXtex, cache.current[0]->GXtexture, (u16) cache.current[0]->realWidth,
+				(u16) cache.current[0]->realHeight, cache.current[0]->GXtexfmt,
+				(cache.current[0]->clampS || OGL.GXforceClampS0) ? GX_CLAMP : (cache.current[0]->GXespejoS ? GX_MIRROR : GX_REPEAT),
+				(cache.current[0]->clampT || OGL.GXforceClampT0) ? GX_CLAMP : (cache.current[0]->GXespejoT ? GX_MIRROR : GX_REPEAT),
+				(cache.current[0]->max_level > 0) ? GX_TRUE : GX_FALSE);
 		if (cache.current[0]->frameBufferTexture || OGL.GXuseMinMagNearest)
 			GX_InitTexObjLOD(&cache.current[0]->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
 		else if (cache.current[0]->max_level > 0)
@@ -2991,11 +2998,12 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 				(cache.current[1]->clampS || OGL.GXforceClampS1) ? GX_CLAMP : GX_REPEAT, 
 				(cache.current[1]->clampT || OGL.GXforceClampT1) ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
 		else
-			GX_InitTexObj(&cache.current[1]->GXtex, cache.current[1]->GXtexture, (u16) cache.current[1]->realWidth, 
-				(u16) cache.current[1]->realHeight, cache.current[1]->GXtexfmt, 
-				(cache.current[1]->clampS || OGL.GXforceClampS1) ? GX_CLAMP : GX_REPEAT, 
-				(cache.current[1]->clampT || OGL.GXforceClampT1) ? GX_CLAMP : GX_REPEAT, 
-				(cache.current[1]->max_level > 0) ? GX_TRUE : GX_FALSE); 
+			/* [Xbox360] [Killer Instinct] Espejo por la GPU: ver la unidad 0. */
+			GX_InitTexObj(&cache.current[1]->GXtex, cache.current[1]->GXtexture, (u16) cache.current[1]->realWidth,
+				(u16) cache.current[1]->realHeight, cache.current[1]->GXtexfmt,
+				(cache.current[1]->clampS || OGL.GXforceClampS1) ? GX_CLAMP : (cache.current[1]->GXespejoS ? GX_MIRROR : GX_REPEAT),
+				(cache.current[1]->clampT || OGL.GXforceClampT1) ? GX_CLAMP : (cache.current[1]->GXespejoT ? GX_MIRROR : GX_REPEAT),
+				(cache.current[1]->max_level > 0) ? GX_TRUE : GX_FALSE);
 		if (cache.current[1]->frameBufferTexture || OGL.GXuseMinMagNearest)
 			GX_InitTexObjLOD(&cache.current[1]->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
 		else if (cache.current[1]->max_level > 0)
