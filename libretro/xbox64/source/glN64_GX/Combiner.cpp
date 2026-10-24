@@ -290,6 +290,26 @@ CachedCombiner *Combiner_Compile( u64 mux )
 	ac[1].m  = mAExpanded[combine.mA1];
 	ac[1].a  = aAExpanded[combine.aA1];
 
+	/* [Xbox360] ★★ [Mario Tennis, las estrellitas del golpe salian como lineas
+	 * finas] EN UN CICLO SE USAN LAS ECUACIONES DEL SEGUNDO CICLO, como el RDP y
+	 * GLideN64 (Combiner.cpp:230-231, "1 cycle mode uses combiner equations from
+	 * 2nd cycle").  glN64 usaba las del PRIMERO.  Casi todos los juegos ponen
+	 * los dos iguales y no se nota; la estrella de Mario Tennis (0030FE61:
+	 * FFFFFFFB, tex CI8 32x32 en espejo) tiene color PRIM*TEXEL0 en los dos y
+	 * ALFA 0 en el primero y PRIM_A en el segundo.  Se pinta en el depth image
+	 * 00000400, usado de mascara, y el rect de pantalla que la saca (00157EC0:
+	 * F1FFF278, omL 0F0A4345) lleva alpha compare por umbral contra ese alfa:
+	 * con el 0 del primer ciclo la estrella se descartaba casi entera y solo
+	 * quedaban restos en lineas.  MEDIDO (logs (1)-(5) del 2026-10-24, sondas
+	 * ya retiradas): geometria, st, shift x2 y espejo de los tres pasos bien.
+	 * Va antes del cruce y de la correccion TEXEL1 -> TEXEL0 de abajo, que
+	 * se aplican sobre la etapa 0 = la ecuacion que de verdad se usa. */
+	if (gDP.otherMode.cycleType != G_CYC_2CYCLE)
+	{
+		cc[0] = cc[1];
+		ac[0] = ac[1];
+	}
+
 	/* [Xbox360] ★★ [Mario Tennis, estela de la bola] EN EL SEGUNDO CICLO LAS
 	 * TEXTURAS VAN CRUZADAS, como en la consola y como GLideN64
 	 * (glsl_CombinerProgramBuilder.cpp:118-140, `correctSecondStageParam`, que

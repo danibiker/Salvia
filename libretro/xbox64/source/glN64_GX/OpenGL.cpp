@@ -1669,6 +1669,30 @@ void OGL_UpdateStates()
 static BOOL s_gxZClamp = FALSE;
 #endif // __GX__
 
+/* [Xbox360] ★ [Mario Tennis, marcador: la franja de abajo corrida a la
+ * izquierda y tapando "LUIGI"] LAS TEXTURAS DE FRAMEBUFFER, CON EL MISMO
+ * MEDIO TEXEL QUE LAS NORMALES, en los triangulos.  glN64 centra las texturas
+ * normales con `offsetS/T = 0.5` (TextureCache_Update) -- el N64 muestrea en
+ * la esquina del texel y la GPU en el centro -- y a las de framebuffer se lo
+ * olvido: su offset es solo el origen de la carga (FrameBuffer_ActivateBuffer
+ * Texture), medio texel corrido.  GLideN64 no lleva ese medio texel en ningun
+ * caso (su motor de texturas del shader imita el muestreo del N64) y resta 1
+ * a las de framebuffer con hack_fbTextureOffset (Conker y Mario Tennis, sus
+ * #519 y #2112).  Con esto la diferencia entre una textura normal y una de
+ * framebuffer queda en la de GLideN64: el -1 del hack, nada mas.
+ * MEDIDO por el usuario (2026-10-24) con una opcion temporal de tres valores:
+ * el marcador es un panel 3D en tiras de su aux 0013BA50, las de arriba
+ * servidas del framebuffer y la de abajo (filas 36-46, fuera de lo dibujado)
+ * de la RDRAM; sin el medio texel se desfasaban 1.5 texels.  Con +0.5 queda
+ * aceptable (1 texel, como GLideN64); +0.5 y sin el -1 lo cuadraba del todo
+ * pero rompia la sombra de las bob-ombs (linea negra) y el borde del
+ * marcador derecho.  Solo triangulos: los texrects de framebuffer van en
+ * punto y sus copias 1:1 ya caen en el centro. */
+static f32 _oglFbCentroExtra( const CachedTexture *c )
+{
+	return (c != NULL && c->frameBufferTexture) ? 0.5f : 0.0f;
+}
+
 void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade )
 {
 	GLN64_PROF_SCOPE(addtri);  /* [Xbox360] sonda temporal, xenon/gln64_prof.h */
@@ -1885,19 +1909,21 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade
 		             ? (f32)fmod( t->fuls, 1 << t->masks ) : t->fuls;
 		const f32 ft = (c->frameBufferTexture && t->maskt)
 		             ? (f32)fmod( t->fult, 1 << t->maskt ) : t->fult;
+		const f32 extra = _oglFbCentroExtra( c );
 		uvA0s = c->shiftScaleS * texPerspScaleS * c->scaleS;
-		uvB0s = (c->offsetS - fs) * c->scaleS;
+		uvB0s = (c->offsetS + extra - fs) * c->scaleS;
 		uvA0t = c->shiftScaleT * texPerspScaleT * c->scaleT;
-		uvB0t = (c->offsetT - ft) * c->scaleT;
+		uvB0t = (c->offsetT + extra - ft) * c->scaleT;
 	}
 	if (combiner.usesT1)
 	{
 		const CachedTexture *c = cache.current[1];
 		const gDPTile       *t = gSP.textureTile[1];
+		const f32 extra = _oglFbCentroExtra( c );
 		uvA1s = c->shiftScaleS * texPerspScaleS * c->scaleS;
-		uvB1s = (c->offsetS - t->fuls) * c->scaleS;
+		uvB1s = (c->offsetS + extra - t->fuls) * c->scaleS;
 		uvA1t = c->shiftScaleT * texPerspScaleT * c->scaleT;
-		uvB1t = (c->offsetT - t->fult) * c->scaleT;
+		uvB1t = (c->offsetT + extra - t->fult) * c->scaleT;
 	}
 
 	for (int i = 0; i < 3; i++)

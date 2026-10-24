@@ -118,9 +118,47 @@ static void _fbUpdateEndAddress( FrameBuffer *buffer )
 	buffer->endAddress = (end < RDRAMSize) ? end : (RDRAMSize - 1);
 }
 
+/* [Xbox360] ★ [Mario Tennis, "GAME MARIO" con una tira de escenario encima,
+ * solo al acabar el primer juego] EL ANCHO DEL VI DE GLideN64 PARA DECIDIR SI
+ * UN BUFFER ES AUXILIAR.  GLideN64 (VI_UpdateSize, VI.cpp:58-69) toma
+ * `VI.width = *REG.VI_WIDTH` -- la zancada del registro, dividida en
+ * entrelazado si pasa de 640 --, y FrameBuffer::isAuxiliary compara con eso.
+ * glN64 calcula VI.width con H_START y la escala X (el ancho VISIBLE): en
+ * Mario Tennis 388 con buffers de 384.  Asi sus buffers de 384 contaban como
+ * AUXILIARES, que solo se validan por la huella de las 4 primeras palabras, y
+ * no como principales, que guardan su RDRAM entera (_fbCopiaRdram).  El
+ * buffer abandonado 00238040 (w=384) seguia "valido" con el texto del
+ * letrero cargado en mitad de su memoria por la CPU, y la tira de 128x16 que
+ * cae en una fila exacta (0023DF40 + 2*0x800 = +37 filas) se servia como
+ * textura de framebuffer: un trozo de escena.  MEDIDO con un censo de
+ * dibujos (logs (6) del 2026-10-24: `1 de 7 servidas como FB`; ya
+ * retirado).  Solo para
+ * esta decision: VI.width se queda como esta (escala, viewport...). */
+static u32 _fbAnchoVIReferencia()
+{
+	u32 ancho;
+	if (REG.VI_WIDTH == NULL || (*REG.VI_WIDTH & 0xFFF) == 0)
+		return VI.width;
+	ancho = *REG.VI_WIDTH & 0xFFF;
+	if (REG.VI_STATUS != NULL && (*REG.VI_STATUS & 0x40) != 0)
+	{
+		f32 lleno = 640.0f;
+		if (REG.VI_X_SCALE != NULL && (*REG.VI_X_SCALE % 512) == 0)
+			lleno *= (f32)(*REG.VI_X_SCALE & 0xFFF) / 1024.0f;
+		if ((f32)ancho > lleno && lleno > 0.0f)
+		{
+			const u32 esc = (u32)((f32)ancho / lleno + 0.5f);
+			if (esc > 1)
+				ancho /= esc;
+		}
+	}
+	return ancho;
+}
+
 static BOOL _fbIsAuxiliary( const FrameBuffer *buffer )
 {
-	return (buffer->width != VI.width || buffer->size < G_IM_SIZ_16b) ? TRUE : FALSE;
+	const u32 anchoVI = _fbAnchoVIReferencia();
+	return (buffer->width != anchoVI || buffer->size < G_IM_SIZ_16b) ? TRUE : FALSE;
 }
 
 // [Xbox360] GLideN64's m_RdramCopy.clear()
