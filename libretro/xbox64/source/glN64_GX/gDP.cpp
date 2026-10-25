@@ -1127,10 +1127,35 @@ static BOOL _gDPCheckForFrameBufferTextureCuerpo( u32 address, u32 width, u32 by
 
 	if (!FrameBuffer_IsValid( buffer ))
 	{
-		if (buffer->startAddress != gDP.colorImage.address)
-			FrameBuffer_Remove( buffer );
+		/* [Xbox360] ★ [Mario Tennis, letras de la repeticion negras/verdes y
+		 * TRIPLES, 2026-10-25] NO ES DE GLideN64 (hack_fbImagenPropia, solo
+		 * Mario Tennis).  El RDP pinta el panel "GAME, SET & MATCH" en el buffer
+		 * 00238040 (384x224) y luego lo lee en tiras como textura; entre medias
+		 * la CPU escribe texto de 128 de ancho (8 bits) en 0023A040, DENTRO de
+		 * la RDRAM de ese buffer.  MEDIDO con [FBCARGA]/[FB238] + .map (logs
+		 * (6), sondas retiradas): la validacion daba 2724 palabras distintas
+		 * (tope 430), la 1a en 0023DD4C, y aqui se quitaba el buffer; las
+		 * tiras salian de la RDRAM = texto de 128 leido como imagen de 384:
+		 * triple y con colores rotos.
+		 * GLideN64 hace lo mismo (isValid + removeBuffer) -- probablemente su
+		 * #606 "black/green letters in replay" --.  Con el hack, la carga que lee
+		 * el buffer COMO SU PROPIA IMAGEN (misma direccion de inicio, ancho y
+		 * tamano) se sirve del framebuffer aunque la RDRAM ya no cuadre.  Las
+		 * cargas del texto de la CPU (otra imagen, 128 de ancho) siguen
+		 * rechazandose arriba (alineacion / filtro de tile). */
+		const BOOL imagenPropia =
+			((config.generalEmulation.hacks & hack_fbImagenPropia) != 0 &&
+			 gDP.textureImage.address == buffer->startAddress &&
+			 gDP.textureImage.width == buffer->width &&
+			 gDP.textureImage.size == buffer->size) ? TRUE : FALSE;
 
-		return FALSE;
+		if (!imagenPropia)
+		{
+			if (buffer->startAddress != gDP.colorImage.address)
+				FrameBuffer_Remove( buffer );
+
+			return FALSE;
+		}
 	}
 
 	FrameBuffer_RefreshCurrent( buffer );
@@ -1215,6 +1240,18 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 	gDP.loadTile = &gDP.tiles[tile];
 	gDP.loadTile->imageAddress = gDP.textureImage.address;	// [Xbox360] GLideN64 gDP.cpp:500
 
+	/* [Xbox360] ★★ [Mario Tennis, cuelgue del segundo partido, 2026-10-25]
+	 * COORDENADAS AL REVES = NO HAY CARGA, como GLideN64 773e9538
+	 * (gDP.cpp:500-503, "skip tile load if tile coordinates are incorrect",
+	 * FIFA 98).  Al acabar un partido el juego carga de sus framebuffers
+	 * (003D6000, 003AC000, 00382000) tiles con la t NEGATIVA en 10 bits (ult
+	 * ~1022, lrt pequena): alto = lrt - ult + 1 salia negativo, 4294966280 en
+	 * u32.  MEDIDO (logs (1), sonda retirada): 8 cargas de ~4700 filas hasta el
+	 * final de la RDRAM, que llenaban la TMEM de basura.  No eran las letras
+	 * de la repeticion (esas: hack_fbImagenPropia). */
+	if (gDP.loadTile->lrs < gDP.loadTile->uls || gDP.loadTile->lrt < gDP.loadTile->ult)
+		return;
+
 	if (gDP.loadTile->line == 0)
 		return;
 
@@ -1234,7 +1271,7 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 	address = gDP.textureImage.address + gDP.loadTile->ult * gDP.textureImage.bpl + (gDP.loadTile->uls << gDP.textureImage.size >> 1);
 	dest = &TMEM[gDP.loadTile->tmem];
 	bpl = line << 3;
-	height = gDP.loadTile->lrt - gDP.loadTile->ult + 1;
+	height = (gDP.loadTile->lrt - gDP.loadTile->ult + 1) & 0x03FF;	// [Xbox360] GLideN64 gDP.cpp:506
 	src = &RDRAM[address];
 
 	// Record what this load actually put at this TMEM address
@@ -1275,9 +1312,21 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 		return;
 
 	/* [Xbox360] La TMEM se envuelve (ver _gDPCopiaTMEMEnvuelta); solo el rango
-	 * de RDRAM descarta la carga. */
+	 * de RDRAM descarta la carga.
+	 *
+	 * ★★ [Mario Tennis, cuelgue en el segundo partido, 2026-10-25] EL RANGO
+	 * FILA A FILA, COMO GLideN64 (gDP.cpp:568-583).  Aqui se comprobaba
+	 * `address + height * bpl`, con `bpl` = los bytes que se COPIAN por fila,
+	 * pero el origen avanza por la fila de la IMAGEN (gDP.textureImage.bpl):
+	 * con una imagen mas ancha que el tile la ultima fila cae mucho mas alla de
+	 * lo comprobado.  MEDIDO (logs.txt + Salvia.map): memcpy leyendo RDRAM +
+	 * 0x80FD1A, 64 KB pasado el final; el hilo de la lista atrapo la excepcion,
+	 * la lista se quedo sin DP y el juego esperandolo para siempre (imagen
+	 * congelada, la musica seguia).  Ahora: fuera solo si la primera fila ya
+	 * empieza fuera; las filas se cortan al llegar al final y la ultima se
+	 * copia a medias. */
 	const BOOL envuelve = (((gDP.loadTile->tmem << 3) + bpl * height) > 4096) ? TRUE : FALSE;
-	if (((address + height * bpl) > RDRAMSize)
+	if ((address >= RDRAMSize)
 #ifndef _BIG_ENDIAN
 		|| envuelve // Stay within TMEM
 #endif // _BIG_ENDIAN
@@ -1291,31 +1340,37 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 		return;
 	}
 
+	/* La fila que empieza en `fila` y sus bytes dentro de la RDRAM (ver arriba). */
+	u32 fila = address;
 	if (!envuelve)
 	{
-		for (y = 0; y < height; y++)
+		for (y = 0; y < height && fila < RDRAMSize; y++)
 		{
+			const u32 n = (fila + bpl > RDRAMSize) ? (RDRAMSize - fila) : bpl;
 #ifndef _BIG_ENDIAN
-			UnswapCopy( src, dest, bpl );
+			UnswapCopy( src, dest, n );
 #else // !_BIG_ENDIAN
-			memcpy( dest, src, bpl );
+			memcpy( dest, src, n );
 #endif // _BIG_ENDIAN
 			if (y & 1) Interleave( dest, line );
 
 			src += gDP.textureImage.bpl;
+			fila += gDP.textureImage.bpl;
 	 		dest += line;
 		}
 	}
 	else
 	{
 		u32 tq = gDP.loadTile->tmem;
-		for (y = 0; y < height; y++)
+		for (y = 0; y < height && fila < RDRAMSize; y++)
 		{
-			_gDPCopiaTMEMEnvuelta( tq, src, bpl );
+			const u32 n = (fila + bpl > RDRAMSize) ? (RDRAMSize - fila) : bpl;
+			_gDPCopiaTMEMEnvuelta( tq, src, n );
 			if (y & 1)
 				_gDPInterleaveEnvuelto( tq, line, (gDP.loadTile->size == G_IM_SIZ_32b) ? TRUE : FALSE );
 
 			src += gDP.textureImage.bpl;
+			fila += gDP.textureImage.bpl;
 			tq += line;
 		}
 	}

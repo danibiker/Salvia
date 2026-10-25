@@ -284,6 +284,45 @@ static void foto_vi(unsigned long *v)
  * muere, el emulador se queda esperando en su valla para siempre, sin traza.
  * Se cuenta y se publica el codigo de la primera en `[LISTA2]`: un `excep`
  * distinto de 0 es un fallo del plugin, no algo que se pueda ignorar. */
+#if XBOX64_TRAZAS
+/* xenon/gln64_config.cpp: el comando GBI y las direcciones de ese momento. */
+extern "C" void gln64_contexto_excepcion(unsigned int dir, char *buf, int n);
+
+/* ★ [Mario Tennis, cuelgue en el segundo partido, 2026-10-25] LA PRIMERA
+ * EXCEPCION, CON SU LLAMADOR.  Solo con el codigo, el log decia `excep=1 (cod
+ * C0000005)` y la direccion de la instruccion salia en el "First-chance" del
+ * depurador: `memcpy`, que no dice quien la llamo.  En una funcion hoja como
+ * memcpy el LR sigue siendo la vuelta al llamador, asi que `lr` + el .map de
+ * la misma build da la funcion del plugin.  `dir` es la direccion leida o
+ * escrita (ExceptionInformation[1] en un acceso).  CONTEXT del XDK: Iar y Lr
+ * (winnt.h:1427-1428). */
+static LONG hl_filtro_excepcion(EXCEPTION_POINTERS *ep)
+{
+    if (s_stExcep == 0 && ep != NULL && ep->ExceptionRecord != NULL)
+    {
+        const EXCEPTION_RECORD *er = ep->ExceptionRecord;
+        const unsigned int dir = (er->NumberParameters >= 2)
+                                 ? (unsigned int)er->ExceptionInformation[1] : 0u;
+        char l[160];
+
+        s_stExcepCod = (unsigned int)er->ExceptionCode;
+        _snprintf(l, sizeof(l), "[LISTA] EXCEPCION cod=%08X pc=%08X lr=%08X dir=%08X (%s)",
+                  (unsigned int)er->ExceptionCode, (unsigned int)er->ExceptionAddress,
+                  (ep->ContextRecord != NULL) ? (unsigned int)ep->ContextRecord->Lr : 0u, dir,
+                  (er->NumberParameters >= 1 && er->ExceptionInformation[0] != 0) ? "escritura"
+                                                                                : "lectura");
+        l[sizeof(l) - 1] = 0;
+        xbox64_log_line(l);
+        if (xbox64_gfx_plugin_activo() == XBOX64_GFX_GLN64)
+        {
+            gln64_contexto_excepcion(dir, l, (int)sizeof(l));
+            xbox64_log_line(l);
+        }
+    }
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
 static void ejecutar_plugin(int que)
 {
     __try
@@ -291,8 +330,7 @@ static void ejecutar_plugin(int que)
         xbox64_gfx_real(que);
     }
 #if XBOX64_TRAZAS
-    __except ((s_stExcep == 0 ? (s_stExcepCod = GetExceptionCode()) : 0),
-              EXCEPTION_EXECUTE_HANDLER)
+    __except (hl_filtro_excepcion(GetExceptionInformation()))
     {
         s_stExcep = s_stExcep + 1;
     }

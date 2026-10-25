@@ -238,6 +238,23 @@ extern "C" unsigned int gln64_gbi_unknown_get(unsigned int op)
 	return s_gbiUnk[op & 0xFF];
 }
 
+#if XBOX64_TRAZAS
+/* [Mario Tennis, cuelgue en el segundo partido, 2026-10-25] Para la sonda de
+ * excepcion del hilo de la lista (xbox/hilo_lista.cpp, hl_filtro_excepcion):
+ * el comando GBI en curso, la imagen de textura y el fondo de ese momento, y
+ * a cuanto del inicio de la RDRAM cae la direccion que fallo. */
+extern "C" void gln64_contexto_excepcion(unsigned int dir, char *buf, int n)
+{
+	if (buf == NULL || n <= 0)
+		return;
+	_snprintf( buf, n, "[LISTA]   GBI cmd=%02X pc=%08X pci=%u | tex=%08X w=%u siz=%u | bg=%08X | dir-rdram=%08X",
+	           RSP.cmd & 0xFF, RSP.PC[RSP.PCi % 18], RSP.PCi, gDP.textureImage.address,
+	           gDP.textureImage.width, gDP.textureImage.size, gSP.bgImage.address,
+	           dir - (unsigned int)RDRAM );
+	buf[n - 1] = 0;
+}
+#endif
+
 /* Las direcciones de depth image DISTINTAS que ha visto el juego, para poder
  * leer el reparto de buffers en vez de deducirlo. */
 extern "C" void gln64_zi_get(unsigned int *a0, unsigned int *a1)

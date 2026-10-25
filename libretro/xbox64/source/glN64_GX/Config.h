@@ -41,6 +41,7 @@ extern Config config;
 #define hack_copyToRDRAM			(1<<29) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\copyToRDRAM: write the main color buffer to RDRAM at full sync, 1-3 frames late (no GPU wait). Mario Kart 64 TV, Banjo-Kazooie puzzle, Castlevania menu lens
 #define hack_copyToRDRAMSync		(1<<30) //[Xbox360] GLideN64 copyToRDRAM=1 (ctSync), with hack_copyToRDRAM: the copy waits for the GPU and lands in THIS frame's buffer before the DP. Banjo-Kazooie puzzle assembling after a load (e8a5e829)
 #define hack_n64DepthCompareDec		(1<<27) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\N64DepthCompare=1, only its "decal" mode (ZMODE_DEC) in the shader against a depth copy. ISS64 player shadows
+#define hack_fbImagenPropia			(1<<16) //[Xbox360] NOT in GLideN64: a load that reads a frame buffer AS ITS OWN IMAGE (same start, width and size) is served from it even if the RDRAM under it no longer matches. Mario Tennis replay panel (the CPU writes text into that RDRAM)
 
 void Config_LoadConfig();
 void Config_DoConfig();

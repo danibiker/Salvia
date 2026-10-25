@@ -761,7 +761,13 @@ void FrameBuffer_RefreshCurrent( FrameBuffer *buffer )
 	 * referencia para la estela de la bola de Mario Tennis (log 12): no cambio
 	 * nada en pantalla -- en ese momento la puerta solo se habia saltado 4
 	 * copias -- y costo rendimiento visible (2705 copias, 2381 de ellas
-	 * repetidas en el mismo frame).  Se queda la de Wii64. */
+	 * repetidas en el mismo frame).  Se queda la de Wii64.
+	 * ★ Repetido el 2026-10-25 (logs (4)) con el cruce TEXEL0/1 ya arreglado,
+	 * copiando solo si habia dibujos desde la copia anterior: la estela de la
+	 * pelota igual y bajadas de rendimiento.  Descartado otra vez.  Y una
+	 * tercera (logs (8)) mirando las rayitas azuladas tras la estela: siguieron
+	 * igual.  Son la esquina del marcador en la mascara (el depth image 0400
+	 * usado como color), que con un solo EFB no conserva lo de antes. */
 	if (buffer->startAddress != gDP.colorImage.address || buffer->refreshedFrame == FB_frame)
 		return;
 
