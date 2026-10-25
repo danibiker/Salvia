@@ -142,6 +142,12 @@ static unsigned char s_sPSCOk[SOMBRA_PSC];
 
 static D3DVIEWPORT9 s_sVp;  static int s_sVpOk = 0;
 static RECT         s_sSc;  static int s_sScOk = 0;
+/* [Mario Tennis, hack_ziComoColor] 1 = el ultimo SetRenderTarget(0) fue el de
+ * la mascara (xenon64_video_rt_mascara).  `xenon64_video_frame_begin` liga el
+ * color del core a la fuerza en cada pasada; si el juego seguia en la mascara,
+ * el bind la vuelve a poner.  Se guarda como bandera y no como puntero: la
+ * superficie la rehace xenon64_video_init. */
+static int          s_sRtMasc = 0;
 
 void d3dq_sombra_reset(void)
 {
@@ -156,6 +162,7 @@ void d3dq_sombra_reset(void)
     memset(s_sPSCOk,  0, sizeof(s_sPSCOk));
     s_sVpOk = 0;
     s_sScOk = 0;
+    s_sRtMasc = 0;
 }
 
 static void sombra_rs(DWORD st, DWORD v)
@@ -308,6 +315,14 @@ void d3dq_bind(void)
 
     if (!dev) return;
 
+    /* [Mario Tennis] Primero el destino: el viewport y el recorte de abajo
+     * van despues, por si SetRenderTarget los deja al tamano del destino. */
+    if (s_sRtMasc && xenon64_video_rt_mascara())
+    {
+        dev->SetRenderTarget(0, (D3DSurface *)xenon64_video_rt_mascara());
+        n++;
+    }
+
     for (i = 0; i < s_sRsN; i++)
     {
         const unsigned int k = s_sRsLista[i];
@@ -384,6 +399,8 @@ unsigned int d3dq_desliga_texturas(void)
     }
     /* [log 33] Ya fuera de todos los samplers: las aplazadas se liberan. */
     aplazadas_suelta_todas();
+    /* [Mario Tennis] El siguiente juego empieza en el color del core. */
+    s_sRtMasc = 0;
     return n;
 }
 #endif /* D3D_GRABADOR */
@@ -839,6 +856,8 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
 
     case QOP_SetRenderTarget:
         dev->SetRenderTarget(c->w[0], (D3DSurface *)c->p[0]);
+        if (c->w[0] == 0)
+            s_sRtMasc = (c->p[0] != NULL && c->p[0] == xenon64_video_rt_mascara()) ? 1 : 0;
         break;
 
     case QOP_SetDepthStencilSurface:
@@ -987,7 +1006,21 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
         break;
 
     case QOP_Entrega:
-        xenon64_video_resolve();
+        /* [Mario Tennis, hack_ziComoColor] RED DE SEGURIDAD: la imagen que ve
+         * el frontend sale SIEMPRE del color del core.  El plugin ya sale de
+         * la mascara antes de presentar (VI_UpdateScreen; medido en logs
+         * (11): ninguna entrega con la mascara ligada); si alguna vez no lo
+         * hiciera, aqui no se entrega la mascara. */
+        if (s_sRtMasc && xenon64_video_rt_core())
+        {
+            dev->SetRenderTarget(0, (D3DSurface *)xenon64_video_rt_core());
+            xenon64_video_resolve();
+            dev->SetRenderTarget(0, (D3DSurface *)xenon64_video_rt_mascara());
+            if (s_sVpOk) dev->SetViewport(&s_sVp);
+            if (s_sScOk) dev->SetScissorRect(&s_sSc);
+        }
+        else
+            xenon64_video_resolve();
         break;
 
     /* [Wii64 443f68b] La copia de profundidad: ver gxd3d_consumidor_marca_z. */

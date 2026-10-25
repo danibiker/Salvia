@@ -8,7 +8,7 @@
 #include <vector>
 
 #define NUM_LOGS_TO_FLUSH 20
-#define MAX_MSG_BUFFER_LEN 128
+#define MAX_MSG_BUFFER_LEN 512
 
 enum {
     L_DEBUG = 0,

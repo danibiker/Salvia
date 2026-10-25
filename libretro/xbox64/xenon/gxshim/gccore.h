@@ -968,6 +968,10 @@ void GX_CopyTex(void *dest, u8 clear);
 void GX_CopyDisp(void *dest, u8 clear);
 /* [Xbox360] GX_CopyDisp que borra el color y CONSERVA el Z (ver gx_d3d9.cpp). */
 void GXD3D_CopyDispConservaZ(void *dest);
+/* [Xbox360] [Mario Tennis] Color de destino: 1 = la mascara (render target
+ * propio), 0 = el EFB.  -1 sin superficie, 1 = repintar la mascara (ver
+ * gx_d3d9.cpp). */
+int GXD3D_SetDestinoColor(int masc);
 void GX_PixModeSync(void);
 
 /* -- sincronizacion --------------------------------------------------------- */

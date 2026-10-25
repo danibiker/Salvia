@@ -594,9 +594,10 @@ static void _RSP_SetGameHacks()
 		/* [Xbox360] [Mario Tennis, letras de la repeticion, 2026-10-25] El
 		 * panel de la repeticion se sirve del framebuffer aunque la CPU haya
 		 * escrito en su RDRAM.  NO es de GLideN64.  Ver
-		 * _gDPCheckForFrameBufferTextureCuerpo (gDP.cpp). */
+		 * _gDPCheckForFrameBufferTextureCuerpo (gDP.cpp).  Y la mascara de la
+		 * estela en su propio render target: ver FrameBuffer_EntraMascara. */
 		if (strstr( RSP.romname, "MarioTennis" ) != NULL)
-			config.generalEmulation.hacks |= hack_fbImagenPropia;
+			config.generalEmulation.hacks |= hack_fbImagenPropia | hack_ziComoColor;
 	}
 	/* [Xbox360] [Zelda MM, Lente de la Verdad] Y hack_zeldaMMLente: la copia del
 	 * Z por los rectangulos de fondo de S2DEX de GLideN64 5347689b, que alli va

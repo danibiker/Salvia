@@ -2276,8 +2276,16 @@ static void gxd3d_state_afirmar(void)
  * y declara el espejo valido; ver la nota dentro de gxd3d_frame_begin. */
 static int s_primeraPasada = 1;
 
+/* [Mario Tennis, hack_ziComoColor] Pasadas del productor (una por SWAP) y la
+ * ultima en que se ligo la mascara: entre pasadas corre el frontend y la
+ * mascara se da por caducada.  Ver GXD3D_SetDestinoColor. */
+static unsigned int s_pasadaN    = 1;
+static unsigned int s_mascPasada = 0;
+
 void gxd3d_frame_begin(void)
 {
+    s_pasadaN++;
+
     /* ★ El volcado de texturas dura UN frame: se arma con L3+R3 desde
      * libretro_core.cpp y se consume aqui.  La lista de vistas se reinicia
      * para que cada disparo saque el juego de texturas de ESE frame. */
@@ -6294,6 +6302,47 @@ void GXD3D_CopyDispConservaZ(void *dest)
                         D3DCOLOR_ARGB(s_clearColor.a, s_clearColor.r,
                                       s_clearColor.g, s_clearColor.b),
                         1.0f, 0);
+}
+
+/* [Xbox360] ★ [Mario Tennis, rayitas tras la estela, 2026-10-25] LA MASCARA EN
+ * SU PROPIO RENDER TARGET, como GLideN64 (una superficie por buffer).  La
+ * mascara de la estela es el depth image usado como color (0400); con un solo
+ * EFB el buffer principal la pisaba y lo que el juego no repinta salia con la
+ * esquina del marcador.  Reponerla en cada entrada (logs (9)-(10)) costaba 25-29
+ * repintados por frame en los efectos.  Aqui solo se cambia el color de destino;
+ * el Z sigue siendo el del core (el juego tambien escribe Z con ci==zi).
+ *
+ * masc = 1 la mascara, 0 el color del core.  Devuelve -1 si no hay superficie
+ * (no cupo en la EDRAM: el plugin no cambia nada), 1 si la mascara puede no
+ * conservar su contenido (primera vez o ha habido un SWAP desde la ultima vez
+ * que se ligo: el plugin la repinta desde su textura) y 0 si no.  MEDIDO
+ * (logs (11), sonda retirada): hasta 1110 entradas/s y como mucho 31
+ * repintados/s; 29,9 img/s en los efectos. */
+int GXD3D_SetDestinoColor(int masc)
+{
+    void *rt = masc ? xenon64_video_rt_mascara() : xenon64_video_rt_core();
+    int caducada = 0;
+
+    if (rt == NULL)
+        return -1;
+
+    /* Lo encolado es del destino anterior. */
+    gxd3d_flush_pending();
+    g_pd3dDevice->SetRenderTarget(0, (D3DSurface *)rt);
+    /* SetRenderTarget puede dejar el viewport y el recorte al tamano del
+     * destino; el espejo del shim los daria por puestos. */
+    if (s_rs.valid && s_rs.viewport.Width != 0 && s_rs.viewport.Height != 0)
+        g_pd3dDevice->SetViewport(&s_rs.viewport);
+    if (s_rs.valid && s_rs.scissor.right > s_rs.scissor.left &&
+        s_rs.scissor.bottom > s_rs.scissor.top)
+        g_pd3dDevice->SetScissorRect(&s_rs.scissor);
+
+    if (masc)
+    {
+        caducada = (s_mascPasada != s_pasadaN) ? 1 : 0;
+        s_mascPasada = s_pasadaN;
+    }
+    return caducada;
 }
 
 void GX_PixModeSync(void) { }

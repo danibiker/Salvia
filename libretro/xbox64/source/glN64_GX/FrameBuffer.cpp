@@ -744,8 +744,23 @@ void FrameBuffer_RemoveBuffersOfWidth( u32 width )
 	}
 }
 
+#ifdef __GX__
+/* [Mario Tennis] 1 = se pinta en el render target de la mascara.  Ver
+ * FrameBuffer_EntraMascara. */
+static BOOL s_fbEnMascara = FALSE;
+#endif
+
 void FrameBuffer_Destroy()
 {
+#ifdef __GX__
+	/* [Mario Tennis] El siguiente juego, en el EFB.  Sin dibujar nada: al
+	 * cerrar la ROM no queda nada que pintar. */
+	if (s_fbEnMascara)
+	{
+		GXD3D_SetDestinoColor( 0 );
+		s_fbEnMascara = FALSE;
+	}
+#endif
 	fbUnderConstruction = NULL;
 	while (frameBuffer.bottom)
 		FrameBuffer_Remove( frameBuffer.bottom );
@@ -1251,6 +1266,60 @@ void FrameBuffer_RenderBuffer( u32 address )
 		current = current->lower;
 	}
 }
+
+#ifdef __GX__
+/* [Xbox360] ★ [Mario Tennis, rayitas azuladas tras la estela de la pelota,
+ * 2026-10-25] hack_ziComoColor: LA MASCARA EN SU PROPIO RENDER TARGET.  La
+ * estela y los destellos se componen con una mascara que el juego pinta en el
+ * DEPTH IMAGE usado como color (00000400).  En la N64 esa memoria conserva lo
+ * de antes; aqui, con un solo EFB, el buffer principal la pisaba (glN64 ni
+ * siquiera repone el depth image) y lo que el juego no repinta salia con la
+ * esquina del marcador: las rayitas.  GLideN64 tiene una superficie por
+ * buffer.  Reponerla en cada entrada lo arreglaba pero costaba 25-29
+ * repintados por frame en los efectos (logs (9)-(10)).  Ahora se pinta en un
+ * segundo color de la EDRAM (GXD3D_SetDestinoColor, xenon/gx_d3d9.cpp) que el
+ * principal no toca; solo se repinta desde su textura cuando el shim lo pide
+ * (la primera vez y tras cada SWAP).  El Z es el de siempre.  Solo si el
+ * framebuffer de la mascara ya existe con este ancho y tamano: la primera vez
+ * se pinta en el EFB como antes y SaveBuffer lo crea. */
+BOOL FrameBuffer_EntraMascara( u32 address, u16 size, u16 width )
+{
+	const FrameBuffer *zfb;
+	int r;
+
+	if ((config.generalEmulation.hacks & hack_ziComoColor) == 0 || s_fbEnMascara)
+		return s_fbEnMascara;
+	zfb = FrameBuffer_GetBuffer( address );
+	if (zfb == NULL || zfb->width != width || zfb->size != size)
+		return FALSE;
+
+	/* Lo pendiente es del buffer anterior. */
+	if (OGL.numTriangles)
+		OGL_DrawTriangles();
+	OGL_ApplyPendingClears();
+
+	r = GXD3D_SetDestinoColor( 1 );
+	if (r < 0)
+		return FALSE;   /* sin sitio en la EDRAM: como sin el hack */
+	s_fbEnMascara = TRUE;
+	if (r == 1)
+		FrameBuffer_RestoreBuffer( address, size, width );
+	return TRUE;
+}
+
+BOOL FrameBuffer_SaleMascara()
+{
+	if (!s_fbEnMascara)
+		return FALSE;
+	/* Lo pendiente es de la mascara. */
+	if (OGL.numTriangles)
+		OGL_DrawTriangles();
+	OGL_ApplyPendingClears();
+	GXD3D_SetDestinoColor( 0 );
+	s_fbEnMascara = FALSE;
+	return TRUE;
+}
+#endif // __GX__
 
 void FrameBuffer_RestoreBuffer( u32 address, u16 size, u16 width )
 {

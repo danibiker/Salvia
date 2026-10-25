@@ -50,6 +50,10 @@ static IDirect3DSurface9 *s_rt       = NULL;   /* render target del core   */
 static IDirect3DSurface9 *s_ds       = NULL;   /* depth-stencil del core   */
 static IDirect3DTexture9 *s_tex      = NULL;   /* la que ve el frontend    */
 static IDirect3DSurface9 *s_backbuf  = NULL;   /* back buffer del frontend */
+/* [Mario Tennis, hack_ziComoColor] Segundo color para la mascara de la estela
+ * (el depth image usado como color): detras del Z, para que el buffer
+ * principal no la pise.  NULL si no cabe en la EDRAM.  Ver GXD3D_SetDestinoColor. */
+static IDirect3DSurface9 *s_rtMasc   = NULL;
 
 static int s_w = 0, s_h = 0;
 
@@ -234,6 +238,28 @@ extern "C" int xenon64_video_init(int width, int height)
                 (unsigned int)(baseZ + colorTiles));
         vh_log(dbg);
 #endif
+
+        /* [Mario Tennis, hack_ziComoColor] La mascara, detras del Z, si cabe
+         * (a 720p: 1200..1439 de 2048; a 1080p no).  Sin ella, el plugin no
+         * cambia de destino y todo queda como antes.  Un fallo aqui no es
+         * fatal. */
+        if (baseColor != 0 && baseZ + 2 * colorTiles <= 2048)
+        {
+            HRESULT hrM;
+            memset(&sp, 0, sizeof(sp));
+            sp.Base = baseZ + colorTiles;
+            hrM = s_dev->CreateRenderTarget(width, height, D3DFMT_A8R8G8B8,
+                                            D3DMULTISAMPLE_NONE, 0, FALSE,
+                                            &s_rtMasc, &sp);
+            if (FAILED(hrM))
+                s_rtMasc = NULL;
+        }
+#if XBOX64_TRAZAS
+        sprintf(dbg, "[VH] EDRAM: mascara %s (base %u)",
+                s_rtMasc ? "creada" : "SIN SITIO, no se usa",
+                (unsigned int)(baseZ + colorTiles));
+        vh_log(dbg);
+#endif
     }
 #else
     hr = s_dev->CreateRenderTarget(width, height, D3DFMT_A8R8G8B8,
@@ -344,6 +370,7 @@ extern "C" void xenon64_video_shutdown(void)
 
     if (s_tex)     { s_tex->Release();     s_tex = NULL; }
     if (s_ds)      { s_ds->Release();      s_ds = NULL; }
+    if (s_rtMasc)  { s_rtMasc->Release();  s_rtMasc = NULL; }
     if (s_rt)      { s_rt->Release();      s_rt = NULL; }
     if (s_backbuf) { s_backbuf->Release(); s_backbuf = NULL; }
 
@@ -468,6 +495,8 @@ extern "C" int xenon64_video_resolve(void)
 }
 
 extern "C" void *xenon64_video_texture(void) { return (void *)s_tex; }
+extern "C" void *xenon64_video_rt_core(void)     { return (void *)s_rt; }
+extern "C" void *xenon64_video_rt_mascara(void)  { return (void *)s_rtMasc; }
 extern "C" int   xenon64_video_width(void)   { return s_w; }
 extern "C" int   xenon64_video_height(void)  { return s_h; }
 

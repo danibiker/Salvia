@@ -84,6 +84,10 @@ int  xenon64_video_resolve(void);
 
 /* Para el frontend: la textura y su tamano. */
 void        *xenon64_video_texture(void);
+/* El color del core y el de la mascara de Mario Tennis (hack_ziComoColor;
+ * NULL si no cupo en la EDRAM).  Ver GXD3D_SetDestinoColor. */
+void        *xenon64_video_rt_core(void);
+void        *xenon64_video_rt_mascara(void);
 int          xenon64_video_width(void);
 int          xenon64_video_height(void);
 

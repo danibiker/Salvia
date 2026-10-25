@@ -235,6 +235,10 @@ void VI_UpdateScreen()
 #else // !__GX__
 	if (renderCpuFramebuffer || (RSP.DList == 0))
 	{
+		/* [Xbox360] [Mario Tennis] Se presenta desde el EFB, no desde la
+		 * mascara (hack_ziComoColor, FrameBuffer_EntraMascara). */
+		const BOOL enMascara = FrameBuffer_SaleMascara();
+
 		//Only render N64 framebuffer in RDRAM and not EFB
 		VI_GX_cleanUp();
 		VI_GX_renderCpuFramebuffer();
@@ -246,6 +250,8 @@ void VI_UpdateScreen()
 		GX_CopyDisp(VI.xfb[VI.which_fb], GX_TRUE);
 		GX_SetDrawSync(VI.which_fb);
 		RSP_ReiniciaOtherMode();	// [Xbox360] una vez por frame, en el swap
+		if (enMascara)
+			FrameBuffer_EntraMascara( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width );
 	}
 	else if (OGL.frameBufferTextures)
 	{
@@ -282,6 +288,11 @@ void VI_UpdateScreen()
 				gDP.colorImage.changed = FALSE;
 			}
 
+			/* [Xbox360] [Mario Tennis] La imagen se compone y se presenta en
+			 * el EFB: si el juego estaba en la mascara (hack_ziComoColor), se
+			 * sale DESPUES de guardarla y se vuelve a ella al final. */
+			const BOOL enMascara = FrameBuffer_SaleMascara();
+
 			FrameBuffer_RenderBuffer( *REG.VI_ORIGIN );
 
 			//Draw DEBUG to screen
@@ -304,7 +315,10 @@ void VI_UpdateScreen()
 			RSP_ReiniciaOtherMode();	// [Xbox360] una vez por frame, en el swap
 
 			//Restore current EFB
-			FrameBuffer_RestoreBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width );
+			/* [Xbox360] [Mario Tennis] La mascara no se ha tocado: se vuelve a
+			 * su destino en vez de repintarla en el EFB. */
+			if (!enMascara || !FrameBuffer_EntraMascara( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width ))
+				FrameBuffer_RestoreBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width );
 
 			gDP.colorImage.changed = FALSE;
 			VI.lastOrigin = *REG.VI_ORIGIN;

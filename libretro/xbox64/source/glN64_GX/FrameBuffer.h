@@ -62,6 +62,11 @@ void FrameBuffer_SaveBuffer( u32 address, u16 size, u16 width, u16 height );
 void FrameBuffer_RenderBuffer( u32 address );
 void FrameBuffer_RestoreBuffer( u32 address, u16 size, u16 width );
 #ifdef __GX__
+// [Xbox360] hack_ziComoColor (Mario Tennis): el depth image como color se pinta
+// en su propio render target.  Entra devuelve TRUE si se cambio a el; Sale,
+// TRUE si estaba en el (y vuelve al EFB).
+BOOL FrameBuffer_EntraMascara( u32 address, u16 size, u16 width );
+BOOL FrameBuffer_SaleMascara();
 // [Xbox360] GLideN64 8b359761: un buffer nuevo empieza con su RDRAM.
 void FrameBuffer_GX_CargaNuevoDesdeRDRAM();
 // [Xbox360] [Paper Mario] La misma carga, APLAZADA al primer dibujo: la hace

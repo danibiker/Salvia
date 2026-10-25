@@ -586,8 +586,20 @@ void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 			if (gDP.colorImage.changed)
 				FrameBuffer_SaveBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width, gDP.colorImage.height );
 
+#ifdef __GX__
+			/* [Xbox360] [Mario Tennis] hack_ziComoColor: la mascara (el depth
+			 * image como color) va en su propio render target.  Se sale de el
+			 * DESPUES de guardarla (SaveBuffer resuelve del destino ligado) y
+			 * ANTES de reponer el siguiente buffer en el EFB.  Ver
+			 * FrameBuffer_EntraMascara. */
+			FrameBuffer_SaleMascara();
+#endif
 			if (address != gDP.depthImageAddress)
 				FrameBuffer_RestoreBuffer( address, size, width );
+#ifdef __GX__
+			else
+				FrameBuffer_EntraMascara( address, size, width );
+#endif
 
 			//OGL_ClearDepthBuffer();
 		}
