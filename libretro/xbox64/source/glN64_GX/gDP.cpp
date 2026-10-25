@@ -593,6 +593,9 @@ void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 		}
 
 		gDP.colorImage.changed = FALSE;
+		/* [Pokemon Stadium] El borrado era de la imagen anterior: ya lo recogio
+		 * su SaveBuffer.  Ver gDP.colorImage.cleared. */
+		gDP.colorImage.cleared = FALSE;
 
 		if (width == VI.width)
 			gDP.colorImage.height = VI.height;
@@ -1548,7 +1551,6 @@ void gDPBufferChanged( f32 maxY )
 		DepthCopy_NoteDepthImageWritten();
 
 	gDP.colorImage.changed = TRUE;
-	gDP.colorImage.height = MAX( gDP.colorImage.height, (u32)maxY );
 	/* [Xbox360] ★★ [Worms Armageddon, a los ~3,5 min en la misma pantalla:
 	 * corrupciones y 13 img/s, logs (5) 2026-10-24] EL ALTO SE ACOTA AL
 	 * SCISSOR, como GLideN64 (FrameBufferList::setBufferChanged,
@@ -1564,9 +1566,28 @@ void gDPBufferChanged( f32 maxY )
 	 * [FBALTO] (logs (6), sonda retirada): llegaban maxY = -1, -2, -3, o sea
 	 * alto 4294967295 -> 240 con el scissor en 240.  Con el scissor
 	 * aun sin poner (0 hasta el primer SetScissor, ver OGL_DrawRect) no se
-	 * acota: dejaria el alto a 0. */
-	if (gDP.scissor.lry > 0.0f && gDP.colorImage.height > (u32)gDP.scissor.lry)
-		gDP.colorImage.height = (u32)gDP.scissor.lry;
+	 * acota: dejaria el alto a 0.
+	 *
+	 * ★★ [Zelda OoT, lento tras cerrar el menu de pausa, 2026-10-25] SE
+	 * ACOTA EL DIBUJO, NO EL ALTO ACUMULADO.  Acotar gDP.colorImage.height
+	 * entero (como estaba) ENCOGIA los buffers principales por debajo del alto
+	 * del VI: aqui ese alto empieza en VI.height al poner un color image del
+	 * ancho del VI (gDPSetColorImage) y es lo que recibe SaveBuffer.  GLideN64
+	 * no los encoge nunca: su gDP.colorImage.height empieza en 0, y el alto
+	 * del BUFFER solo crece -- `m_height = max(m_height, min(alto, VI.height))`
+	 * en los principales, que nacen con VI.height (FrameBuffer::init), y
+	 * `max(m_height, alto)` en los auxiliares (FrameBuffer.cpp:664-668) --.
+	 * Aqui gDP.colorImage.height hace de m_height, asi que lo fiel es
+	 * max(alto, min(maxY, scissor)).  MEDIDO: sin ninguna cota Zelda iba bien
+	 * (y Worms no); con esta, la sonda [FBALTO] (logs (18), retirada) salia
+	 * justo ahi -- `003DA800 w=320: alto 240 > scissor 208` -- y el consumidor
+	 * D3D volvio a ~1,5 ms por frame (antes 5,2 de media, picos de 15,7). */
+	{
+		u32 altoDibujo = (u32)maxY;
+		if (gDP.scissor.lry > 0.0f && altoDibujo > (u32)gDP.scissor.lry)
+			altoDibujo = (u32)gDP.scissor.lry;
+		gDP.colorImage.height = MAX( gDP.colorImage.height, altoDibujo );
+	}
 }
 
 void gDPSetScissor( u32 mode, f32 ulx, f32 uly, f32 lrx, f32 lry )
@@ -1651,6 +1672,20 @@ static void _gDPFillRDRAM( s32 ulx, s32 uly, s32 lrx, s32 lry )
 			_gDPWriteRDRAM( start + (u32)(y - uly) * stride, NULL, gDP.fillColor.color, rowBytes );
 
 	FrameBuffer_RestampMarkers( start, start + (u32)(lry - uly - 1) * stride + rowBytes - 1 );
+
+	/* [Xbox360] [Pokemon Stadium] GLideN64 fillRDRAM ->
+	 * m_pCurrent->setBufferClearParams: el relleno queda apuntado en la imagen
+	 * de color (no en el depth image), con ulx/lrx en palabras de 32 bits como
+	 * alli.  FrameBuffer_SaveBuffer lo pasa al buffer si es auxiliar. */
+	if (gDP.colorImage.address != gDP.depthImageAddress)
+	{
+		gDP.colorImage.cleared    = TRUE;
+		gDP.colorImage.clearColor = gDP.fillColor.color;
+		gDP.colorImage.clearUlx   = ulx >> 1;
+		gDP.colorImage.clearUly   = uly;
+		gDP.colorImage.clearLrx   = lrx >> 1;
+		gDP.colorImage.clearLry   = lry;
+	}
 }
 
 /* [Xbox360] ★ La profundidad que escribe un relleno sobre el depth image: el
@@ -1857,6 +1892,19 @@ void gDPFillRectangle( s32 ulx, s32 uly, s32 lrx, s32 lry )
 #endif
 
 	OGL_DrawRect( ulx, uly, lrx, lry, (gDP.otherMode.cycleType == G_CYC_FILL) ? _gDPFillColorActual() : &gDP.blendColor.r );
+
+	/* [Xbox360] ★ [Pokemon Stadium] UN RELLENO EN MODO FILL SOBRE UN AUXILIAR
+	 * TAMBIEN VA A LA RDRAM, como en la consola (la RDP escribe la RDRAM) y en
+	 * GLideN64 (gDPFillRectangle -> fillRDRAM en todo relleno FILL, recortado al
+	 * scissor).  Hace falta para que el auxiliar quede BORRADO -- sin huella y
+	 * validado por su color (FrameBuffer_IsValid) -- y no se le machaquen sus
+	 * primeras palabras.  Solo auxiliares: los principales siguen con su copia
+	 * de la RDRAM y sus rellenos parciales como estaban. */
+	if (gDP.otherMode.cycleType == G_CYC_FILL && OGL.frameBufferTextures &&
+	    gDP.colorImage.address != gDP.depthImageAddress &&
+	    (config.generalEmulation.hacks & hack_copyFromRDRAM) == 0 &&
+	    FrameBuffer_EsAuxiliar( gDP.colorImage.width, gDP.colorImage.size ))
+		_gDPFillRDRAM( ulx, uly, lrx, lry );
 
 	if (depthBuffer.current) depthBuffer.current->cleared = FALSE;
 	if (gDP.otherMode.cycleType == G_CYC_FILL)

@@ -83,6 +83,33 @@ static u32 s_fbCargadoSize = 0;
  * asi que la copia se rehace aunque ya exista.  Ver la nota de la copia unica
  * en el cuerpo. */
 static void _fbCopiaRdram( FrameBuffer *buffer, BOOL forzar );
+static BOOL _fbIsAuxiliary( const FrameBuffer *buffer );
+
+// GLideN64 uses this, has it named fingerprint instead.
+static const u32 fbFingerprint[4] = { 2, 6, 4, 3 };
+
+/* [Xbox360] EN UN AUXILIAR SE REPONEN SOLO LAS PALABRAS DE LA HUELLA QUE
+ * NOSOTROS ACABAMOS DE PISAR.  _fbCopiaRdram, en un auxiliar, escribe la huella
+ * Y DETRAS EL 2 POR CIENTO DEL BUFFER A CERO (como GLideN64 copyRdram), y desde
+ * aqui se llamaba para cualquier buffer de la lista cuyo inicio cayera en una
+ * escritura nuestra (un relleno): esos ceros podian salirse del rango
+ * rellenado.  GLideN64 no repone huellas tras fillRDRAM (solo apunta el
+ * borrado).  Se sospecho de esto por Pokemon Stadium (2026-10-24) y NO era la
+ * causa -- la sonda que lo vigilaba no salto nunca; era la huella de
+ * SaveBuffer sobre un auxiliar borrado, ver _fbCopiaRdram --, pero se deja:
+ * nunca escribe fuera de lo que acabamos de escribir. */
+static void _fbReponeHuella( const FrameBuffer *buffer, u32 start, u32 end )
+{
+	u32 i;
+	if (!buffer->fingerprint)
+		return;
+	for (i = 0; i < 4; i++)
+	{
+		const u32 dir = buffer->startAddress + (i << 2);
+		if (dir >= start && dir + 3 <= end && dir + 3 < RDRAMSize)
+			*(u32*)&RDRAM[dir] = fbFingerprint[i];
+	}
+}
 
 // Re-stamp the fingerprint of every buffer starting in [start,end].
 // GLideN64 does this after copyWhiteToRDRAM().
@@ -92,7 +119,10 @@ void FrameBuffer_RestampMarkers( u32 start, u32 end )
 
 	while (current != NULL)
 	{
-		if (current->startAddress >= start && (current->startAddress + 3) <= end)
+		if (current->startAddress >= start && (current->startAddress + 3) <= end &&
+		    !current->isDepthBuffer && current->rdramCopy == NULL && _fbIsAuxiliary( current ))
+			_fbReponeHuella( current, start, end );   /* ver arriba */
+		else if (current->startAddress >= start && (current->startAddress + 3) <= end)
 			_fbCopiaRdram( current, TRUE );
 		// [Xbox360] A main buffer keeps a copy of ALL its RDRAM, not four words at
 		// its start, so any write of ours that overlaps it has to refresh the copy.
@@ -103,9 +133,6 @@ void FrameBuffer_RestampMarkers( u32 start, u32 end )
 		current = current->lower;
 	}
 }
-
-// GLideN64 uses this, has it named fingerprint instead.
-static const u32 fbFingerprint[4] = { 2, 6, 4, 3 };
 
 u32 FB_frame = 0;
 
@@ -159,6 +186,29 @@ static BOOL _fbIsAuxiliary( const FrameBuffer *buffer )
 {
 	const u32 anchoVI = _fbAnchoVIReferencia();
 	return (buffer->width != anchoVI || buffer->size < G_IM_SIZ_16b) ? TRUE : FALSE;
+}
+
+BOOL FrameBuffer_EsAuxiliar( u32 width, u32 size )
+{
+	return (width != _fbAnchoVIReferencia() || size < G_IM_SIZ_16b) ? TRUE : FALSE;
+}
+
+/* [Xbox360] [Pokemon Stadium] El borrado de la imagen de color que se guarda
+ * (GLideN64 m_pCurrent->setBufferClearParams en fillRDRAM) pasa al buffer, solo
+ * si es auxiliar: los principales siguen con su copia de la RDRAM.  Como en
+ * GLideN64, una vez borrado sigue borrado (m_cleared no se apaga al volver a
+ * pintar); los parametros son los del ultimo relleno. */
+static void _fbApuntaBorrado( FrameBuffer *buffer, u32 address )
+{
+	if (buffer == NULL || !gDP.colorImage.cleared || gDP.colorImage.address != address ||
+	    buffer->isDepthBuffer || !_fbIsAuxiliary( buffer ))
+		return;
+	buffer->cleared    = TRUE;
+	buffer->clearColor = gDP.colorImage.clearColor;
+	buffer->clearUlx   = gDP.colorImage.clearUlx;
+	buffer->clearUly   = gDP.colorImage.clearUly;
+	buffer->clearLrx   = gDP.colorImage.clearLrx;
+	buffer->clearLry   = gDP.colorImage.clearLry;
 }
 
 // [Xbox360] GLideN64's m_RdramCopy.clear()
@@ -254,6 +304,19 @@ static void _fbCopiaRdram( FrameBuffer *buffer, BOOL forzar )
 
 	_fbFreeRdramCopy( buffer );
 
+	/* [Xbox360] ★★ [Pokemon Stadium, segunda ronda del campeonato: dos
+	 * retratos de ruido y negro para siempre] UN AUXILIAR BORRADO NO SE MARCA,
+	 * como GLideN64 (saveBuffer solo llama a copyRdram si `!m_cleared`).  La
+	 * huella son 4 palabras y el 2 por ciento del buffer A CERO sobre su
+	 * inicio, y Stadium guarda alli punteros (una lista entre los buffers de los
+	 * retratos) en una zona que su relleno no toca: la RDP nunca escribe ahi.
+	 * MEDIDO con [FBPISA] (logs (9), sonda retirada): `aux 0028A540 128x96 ...
+	 * 4 punteros, el 1o en +0 = 802844E0` y `aux 002A26C0 ... = 8029C660`,
+	 * justo los dos retratos que salian de la direccion 0 antes del negro.  Un
+	 * auxiliar borrado se valida por su relleno (FrameBuffer_IsValid). */
+	if (buffer->cleared)
+		return;
+
 	const u32 twoPercent = (dataSize / 200 > 4) ? (dataSize / 200) : 4;
 	u32 *dst = (u32*)&RDRAM[buffer->startAddress];
 
@@ -286,6 +349,37 @@ BOOL FrameBuffer_IsValid( FrameBuffer *buffer )
 				++wrongPixels;
 
 		return (wrongPixels < buffer->rdramCopySize / 400) ? TRUE : FALSE;
+	}
+
+	/* [Xbox360] [Pokemon Stadium] GLideN64 isValid, la rama m_cleared: un
+	 * auxiliar borrado sigue valido mientras su RDRAM conserve el color del
+	 * relleno en el rect borrado (menos del 1% de palabras distintas).  Ver
+	 * _fbCopiaRdram. */
+	if (buffer->cleared)
+	{
+		const u32 testColor = buffer->clearColor & 0xFFFEFFFE;
+		const u32 stride = buffer->width << buffer->size >> 1;
+		const u32 ciWords = buffer->width >> (3 - buffer->size);
+		u32 lry = (u32)(buffer->clearLry > 0 ? buffer->clearLry : 0);
+		u32 wrongPixels = 0;
+
+		if (stride == 0 || ciWords == 0 || buffer->startAddress > RDRAMSize)
+			return FALSE;
+		if (buffer->startAddress + stride * lry > RDRAMSize + 1)
+			lry = (RDRAMSize + 1 - buffer->startAddress) / stride;
+		if (lry == 0)
+			return FALSE;
+
+		const u32 *dst = (const u32*)&RDRAM[buffer->startAddress] +
+		                 (u32)(buffer->clearUly > 0 ? buffer->clearUly : 0) * ciWords;
+		for (s32 y = buffer->clearUly; y < (s32)lry; y++)
+		{
+			for (s32 x = buffer->clearUlx; x < buffer->clearLrx; x++)
+				if ((dst[x] & 0xFFFEFFFE) != testColor)
+					++wrongPixels;
+			dst += ciWords;
+		}
+		return (wrongPixels < (buffer->endAddress - buffer->startAddress) / 400) ? TRUE : FALSE;
 	}
 
 	if (!buffer->fingerprint)
@@ -413,7 +507,17 @@ static BOOL _fbIsOverlapping( const FrameBuffer *b1, const FrameBuffer *b2 )
 		const u32 stride = b1->width << b1->size >> 1;
 		const u32 diff = b1->endAddress - b2->startAddress + 1;
 
-		if (stride != 0 && (diff % stride) == 0)
+		/* [Xbox360] ★ [Pokemon Stadium, retrato propio a medias, 2026-10-25]
+		 * MENOS DE 5 FILAS, como GLideN64 (`diff / stride < 5`); faltaba desde el
+		 * port.  Sin ella cualquier solape de filas enteras contaba como "se
+		 * pisan un poco" y FrameBuffer_RemoveIntersections RECORTABA el buffer
+		 * en vez de quitar el viejo: el retrato 0026C380 (128x96) se quedaba en
+		 * 8 filas porque el buffer viejo 0026CB80 (128x192, de la carga de la
+		 * partida) empezaba justo 0x800 bytes mas alla.  Las cargas de las filas
+		 * siguientes leian la RDRAM borrada.  MEDIDO con [FBGUARDA] (logs (16)):
+		 * 704 triangulos sin recorte, Z borrado, guardado una vez; los demas
+		 * retratos solapan sus viejos por media fila y si se quitaban. */
+		if (stride != 0 && (diff % stride) == 0 && (diff / stride) < 5)
 			return TRUE;
 	}
 
@@ -466,8 +570,22 @@ static FrameBuffer *_fbFindSubBuffer( u32 address, u16 size, u16 width )
 		{
 			const u32 diff = address - current->startAddress;
 
+			/* [Xbox360] ★ [Pokemon Stadium, retratos del rival desplazados en las
+			 * batallas siguientes, 2026-10-24] SOLO UN BUFFER DE ESTE FRAME, como
+			 * GLideN64 (isSubBuffer: `m_swapCount == getBuffersSwapCount()`, que
+			 * saveBuffer renueva en cada guardado).  Aqui eso es `VIcount == 0`
+			 * (FrameBuffer_MoveToTop lo pone a 0 al guardar; lo sube cada VI
+			 * presentado).  Sin ella, el retrato nuevo pintado unos bytes mas
+			 * alla del de la batalla anterior se guardaba en el buffer VIEJO, que
+			 * seguia empezando en la direccion antigua: MEDIDO en el volcado
+			 * (logs (11)), buffer 0028A5C0 con la textura cargada de 0028A640
+			 * (+0x80, 64 pixeles), 002905C0 / 00290680 (+0xC0)...  Ahora se quita
+			 * y se crea uno en la direccion exacta. */
 			if ((diff % stride) != 0 && (diff / stride) < 5)
-				return current;
+			{
+				if (current->texture != NULL && current->texture->VIcount == 0)
+					return current;
+			}
 		}
 
 		current = current->lower;
@@ -666,6 +784,7 @@ void FrameBuffer_RefreshCurrent( FrameBuffer *buffer )
 
 void FrameBuffer_SaveBuffer( u32 address, u16 size, u16 width, u16 height )
 {
+
 	// The EFB copy below has to see the game's clear, not what preceded it.
 	OGL_ApplyPendingClears();
 
@@ -718,6 +837,7 @@ void FrameBuffer_SaveBuffer( u32 address, u16 size, u16 width, u16 height )
 			current->isDepthBuffer = (address == gDP.depthImageAddress) ? TRUE : FALSE;
 			_fbUpdateEndAddress( current );
 			FrameBuffer_RemoveIntersections( current );
+			_fbApuntaBorrado( current, address );   /* [Pokemon Stadium] */
 			FrameBuffer_CopyRdram( current );
 
 			current->changed = TRUE;
@@ -883,6 +1003,7 @@ void FrameBuffer_SaveBuffer( u32 address, u16 size, u16 width, u16 height )
 	GX_SetCopyFilter(rmode->aa, rmode->sample_pattern, GX_TRUE, rmode->vfilter);
 #endif // __GX__
 
+	_fbApuntaBorrado( current, address );   /* [Pokemon Stadium] */
 	FrameBuffer_CopyRdram( current );
 
 	current->changed = TRUE;

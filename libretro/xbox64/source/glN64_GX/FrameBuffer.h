@@ -38,6 +38,13 @@ struct FrameBuffer
 	// FrameBuffer_ActivateBufferTexture().
 	u32 loadType;
 	u32 loadUls, loadUlt;
+	// [Xbox360] [Pokemon Stadium] GLideN64's m_cleared / m_clearParams, only for
+	// AUXILIARY buffers: cleared by a fill written to RDRAM, so no fingerprint is
+	// stamped over its start and validity is "the fill color is still there". See
+	// FrameBuffer_IsValid().
+	BOOL cleared;
+	u32 clearColor;
+	s32 clearUlx, clearUly, clearLrx, clearLry;
 };
 
 struct FrameBufferInfo
@@ -83,6 +90,9 @@ extern u32 FB_frame;
 // Restamp any buffer starting in [start,end] after deliberately rewriting RDRAM
 // underneath it (upstream does the same after copyWhiteToRDRAM()).
 void FrameBuffer_RestampMarkers( u32 start, u32 end );
+// [Xbox360] [Pokemon Stadium] TRUE if a colour image of this width and texel size
+// would be an AUXILIARY buffer (same rule as the buffers themselves).
+BOOL FrameBuffer_EsAuxiliar( u32 width, u32 size );
 // TRUE while this texture's buffer is being scanned out or rendered into. The
 // texture cache asks before its eviction of last resort takes a frame buffer.
 BOOL FrameBuffer_IsTextureLive( const CachedTexture *texture );

@@ -325,6 +325,12 @@ struct gDPInfo
 		u32 format, size, width, height, bpl;
 		u32 address, changed;
 		u32 depthImage;
+		/* [Xbox360] [Pokemon Stadium] GLideN64 setBufferClearParams: un relleno
+		 * en modo FILL escrito en la RDRAM de esta imagen (_gDPFillRDRAM), con su
+		 * color y su rect ya recortado al scissor (ulx/lrx en palabras de 32
+		 * bits, como fillRDRAM).  Lo recoge FrameBuffer_SaveBuffer. */
+		u32 cleared, clearColor;
+		s32 clearUlx, clearUly, clearLrx, clearLry;
 	} colorImage;
 
 	u32	depthImageAddress;
