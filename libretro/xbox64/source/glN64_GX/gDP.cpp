@@ -1079,7 +1079,31 @@ static BOOL _gDPCheckForFrameBufferTextureCuerpo( u32 address, u32 width, u32 by
 	    (u32)abs( (s32)buffer->width - (s32)width ) > 1 &&
 	    texEndAddress > (buffer->endAddress + (buffer->width << buffer->size >> 1)))
 	{
-		return FALSE;
+		/* [Xbox360] ★ [Bottom of the 9th, cara del jugador con basura,
+		 * 2026-10-26] NO ES DE GLideN64 (hack_fbAuxFilasDeMas, solo este juego).
+		 * El juego pinta la cara en un auxiliar de 48x48 (002CB720) y la lee con
+		 * un LoadBlock de las filas 9 a 50: 3 filas mas alla del alto pintado
+		 * (48, acotado al scissor).  MEDIDO con [FBRECHAZO] (logs (1), mot=2;
+		 * sonda retirada): este filtro la corta y sale de la RDRAM, que nadie
+		 * escribio.  La intro hace lo mismo con sus auxiliares de 328x232 (filas
+		 * 228-234, 2 de mas) y tambien sale mejor (usuario).  GLideN64
+		 * tiene el mismo filtro y el mismo alto y sale igual de mal (comprobado
+		 * por el usuario); angrylion la pinta bien, con una franja: esas 3 filas
+		 * son lo que hubiera en la RDRAM.  Aqui se sirve del buffer si empieza en
+		 * una fila de un AUXILIAR y no se pasa de 8 filas; las de mas repiten la
+		 * ultima (textura de framebuffer con clamp). */
+		const u32 zancadaAux = buffer->width << buffer->size >> 1;
+		const BOOL filasDeMas =
+			((config.generalEmulation.hacks & hack_fbAuxFilasDeMas) != 0 &&
+			 !buffer->isDepthBuffer && zancadaAux != 0 &&
+			 FrameBuffer_EsAuxiliar( buffer->width, buffer->size ) &&
+			 ((address - buffer->startAddress) % zancadaAux) == 0 &&
+			 texEndAddress <= buffer->endAddress + zancadaAux * 8) ? TRUE : FALSE;
+
+		if (!filasDeMas)
+		{
+			return FALSE;
+		}
 	}
 
 	const u32 bufferStride = buffer->width << buffer->size >> 1;

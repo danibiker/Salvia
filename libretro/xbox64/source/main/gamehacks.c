@@ -263,7 +263,12 @@ void GameSpecificHackSetup() {
 	 * con la imagen ya bien, el juego se quedaba en negro tras la intro: la
 	 * sonda [HILOS] dio todos los hilos esperando con normalidad (planificador,
 	 * VI, PI, cargador) sin ningun fallo y sin nadie que lanzara trabajo nuevo,
-	 * la huella de Conker. */
+	 * la huella de Conker.
+	 *
+	 * [Bottom of the 9th, 2026-10-26] Tambien de la referencia: mupen64plus.ini
+	 * `CountPerOp=1` en (U).  Con 2 la pantalla "LEAGUE A VS" tardaba ~20 s a
+	 * 0-2 listas/s con 60 VI/s, igual con Rice; [HILOS] dio el hilo principal
+	 * CORRIENDO (pri 10, pc 801B80B0), sin esperar ninguna cola. */
 	if((curCRC[0] == 0x30C7AC50 && curCRC[1] == 0x7704072D) ||   // Conker's Bad Fur Day (U)
 	   (curCRC[0] == 0x373F5889 && curCRC[1] == 0x9A6CA80A) ||   // Conker's Bad Fur Day (E)
 	   (curCRC[0] == 0x66CF0FFE && curCRC[1] == 0xAD697F9C) ||   // Fighting Force 64 (E)
@@ -271,7 +276,8 @@ void GameSpecificHackSetup() {
 	   (curCRC[0] == 0x7EAE2488 && curCRC[1] == 0x9D40A35A) ||   // Biohazard 2 (J)
 	   (curCRC[0] == 0x9B500E8E && curCRC[1] == 0xE90550B3) ||   // Resident Evil 2 (E)
 	   (curCRC[0] == 0x2F493DD0 && curCRC[1] == 0x2E64DFD9) ||   // Resident Evil 2 (U) (V1.0)
-	   (curCRC[0] == 0xAA18B1A5 && curCRC[1] == 0x07DB6AEB))     // Resident Evil 2 (U) (V1.1)
+	   (curCRC[0] == 0xAA18B1A5 && curCRC[1] == 0x07DB6AEB) ||   // Resident Evil 2 (U) (V1.1)
+	   (curCRC[0] == 0xD72FD14D && curCRC[1] == 0x1FED32C4))     // Bottom of the 9th (U)
 		xbox64_db_count_per_op(COUNT_PER_OP_1);
 	else
 		xbox64_db_count_per_op(0);
@@ -355,11 +361,20 @@ void GameSpecificHackSetup() {
 	 * va bien (comprobado por el usuario).  GLideN64 tambien lo trata por juego
 	 * en su ini.  Solo enciende si la opcion sigue en "desactivado", que es su
 	 * valor por defecto; ver xbox64_db_framebuffer en xbox/plataforma.c.  CRC
-	 * de mupen64plus.ini, volcados buenos. */
+	 * de mupen64plus.ini, volcados buenos.
+	 *
+	 * [All-Star Baseball '99, 2026-10-26] Sin framebuffer no sale el cursor de
+	 * bateo; con el si (comprobado por el usuario).
+	 * [Bottom of the 9th, 2026-10-26] La intro y el guante del receptor se
+	 * componen en buffers auxiliares (328x232 y 48x48); sin framebuffer la intro
+	 * sale en negro. */
 	if((curCRC[0] == 0x68D7A1DE && curCRC[1] == 0x0079834A) ||   // Jet Force Gemini (E) (M4)
 	   (curCRC[0] == 0x8A6009B6 && curCRC[1] == 0x94ACE150) ||   // Jet Force Gemini (U)
 	   (curCRC[0] == 0xDFD8AB47 && curCRC[1] == 0x3CDBEB89) ||   // Jet Force Gemini (U) (Kiosk Demo)
-	   (curCRC[0] == 0xF163A242 && curCRC[1] == 0xF2449B3B))     // Star Twins (J)
+	   (curCRC[0] == 0xF163A242 && curCRC[1] == 0xF2449B3B) ||   // Star Twins (J)
+	   (curCRC[0] == 0xD9EDD54D && curCRC[1] == 0x6BB8E274) ||   // All-Star Baseball '99 (E)
+	   (curCRC[0] == 0xC43E23A7 && curCRC[1] == 0x40B1681A) ||   // All-Star Baseball '99 (U)
+	   (curCRC[0] == 0xD72FD14D && curCRC[1] == 0x1FED32C4))     // Bottom of the 9th (U)
 		xbox64_db_framebuffer(1);
 	else
 		xbox64_db_framebuffer(0);

@@ -587,6 +587,12 @@ static void _RSP_SetGameHacks()
 	else if (strstr( RSP.romname, "TOP GEAR RALLY" ) != NULL &&
 	         strstr( RSP.romname, "TOP GEAR RALLY 2" ) == NULL)
 		config.generalEmulation.hacks |= hack_alfaAleatoria;
+	/* [Xbox360] [Bottom of the 9th, intro en negro, 2026-10-26] Como GLideN64
+	 * 74c0980d.  Ver OGL_DrawTexturedRect.  Y la cara del jugador, que lee su
+	 * auxiliar 3 filas mas alla de lo pintado (hack_fbAuxFilasDeMas, NO es de
+	 * GLideN64; ver _gDPCheckForFrameBufferTextureCuerpo). */
+	else if (strstr( RSP.romname, "Bottom of the 9th" ) != NULL)
+		config.generalEmulation.hacks |= hack_texrectShadeAlpha | hack_fbAuxFilasDeMas;
 	else if (strstr( RSP.romname, "CONKER BFD" ) != NULL ||
 	         strstr( RSP.romname, "MarioTennis" ) != NULL)
 	{

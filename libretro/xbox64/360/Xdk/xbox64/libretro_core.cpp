@@ -840,10 +840,14 @@ static void resumen_por_segundo(void)
              * asi: los OSThread de libultra con su cola, quien la apunta, la
              * tabla de eventos, los ultimos DMA del PI y las ultimas tareas del
              * RSP.  Ver xbox64_hilos_volcado (xbox/plataforma.c).  Nacio con
-             * Resident Evil 2 (logs 10-14). */
+             * Resident Evil 2 (logs 10-14).
+             * [Bottom of the 9th, 2026-10-26] "Sin listas" = 2 o menos por
+             * segundo: su pantalla "LEAGUE A VS" va a 1 lista/s durante ~20 s
+             * con el emulador al 39 por ciento y el audio sano, y con 0 exacto
+             * no saltaba nunca. */
             {
                 static unsigned s_hlConGfx = 0, s_hlSinGfx = 0;
-                if (xbox64_rsp_gfx_n != 0)
+                if (xbox64_rsp_gfx_n > 2)
                 {
                     s_hlConGfx = 1;
                     s_hlSinGfx = 0;

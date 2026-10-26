@@ -2769,6 +2769,27 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 		{ lrx, lry, gDP.otherMode.depthSource == G_ZS_PRIM ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f, { /*gDP.blendColor.r, gDP.blendColor.g, gDP.blendColor.b, gDP.blendColor.a*/0.0f, 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, lrs, lrt, lrs, lrt, 0.0f },
 	};
 
+	/* [Xbox360] ★ [Bottom of the 9th, la intro en negro y la reticula del
+	 * lanzador, 2026-10-26] hack_texrectShadeAlpha, el hack_texrect_shade_alpha
+	 * de GLideN64 (d506d613, 769e474e; activado para este juego en 74c0980d,
+	 * #1888 "no more intro and main title gfx"): si el combinador de alfa es SOLO
+	 * SHADE (mA0 = 0, aA0 = SHADE), el alfa de vertice del texrect vale 1.  El
+	 * juego compone la intro en buffers auxiliares (328 de ancho, logs (24)) con
+	 * texrects asi; con SHADE = 0 quedaban con alfa 0 y, usados como textura
+	 * con mezcla, invisibles.  En la consola un framebuffer de 16 bits guarda
+	 * la COBERTURA como alfa, no el alfa calculado: alli salen opacos.  GLideN64
+	 * lo quito en 2020 (9a69fe8e) cuando emulo la mezcla del N64 en el shader;
+	 * aqui no la hay.  Solo Bottom of the 9th (RSP.cpp).  Comprobado por el
+	 * usuario (intro y guante del receptor); sonda [TXSHADEA] retirada. */
+	if ((config.generalEmulation.hacks & hack_texrectShadeAlpha) != 0 &&
+	    gDP.otherMode.cycleType < G_CYC_COPY &&
+	    ((gDP.combine.muxs0 >> 9) & 7) == G_ACMUX_0 &&
+	    ((gDP.combine.muxs1 >> 9) & 7) == G_ACMUX_SHADE)
+	{
+		rect[0].color.a = 1.0f;
+		rect[1].color.a = 1.0f;
+	}
+
 	OGL_UpdateStates();
 
 #ifdef __GX__
