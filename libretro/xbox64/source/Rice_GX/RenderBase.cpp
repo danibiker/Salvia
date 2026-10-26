@@ -2446,6 +2446,24 @@ extern XMATRIX reverseY;
 static void UpdateGXCombW(Matrix &mtx)
 {
 	gGX.GXupdateMtx = true;
+
+	/* [Xbox360] ★ [Micro Machines 64 Turbo, la chaqueta del personaje que
+	 * aparece al animarse y desaparece quieto, 2026-10-26] UNA PROYECCION
+	 * ORTOGRAFICA NO TIENE combW, como en glN64 (gSP.cpp, _gSPUpdateCombW, con
+	 * la medida).  combW reconstruye la z como a*w + b; con la columna w de la
+	 * combinada CONSTANTE (m[0..2][3] = 0) no hay tal relacion y en aritmetica
+	 * exacta I[2][3] = 0.  Con la z casi aplastada de esa matriz (-0.000248) la
+	 * inversa deja I[2][3] = 8.8e-8 de redondeo, el `!= 0` de abajo la daba por
+	 * buena y combW[2][3] salia 5.6e6: profundidad disparatada en la GPU y la
+	 * chaqueta detras de todo, segun la pose.  Solo el caso EXACTO: ninguna
+	 * perspectiva cambia.  Confirmado por el usuario (sonda [COMBWORTO]
+	 * retirada). */
+	if (mtx.m[0][3] == 0.0f && mtx.m[1][3] == 0.0f && mtx.m[2][3] == 0.0f)
+	{
+		gGX.GXuseCombW = false;
+		return;
+	}
+
 	guMtx44Inverse(mtx.m, gGX.GXprojTemp);
 
 	if(gGX.GXprojTemp[2][3] != 0.0f)

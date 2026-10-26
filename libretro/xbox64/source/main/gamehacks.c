@@ -307,6 +307,10 @@ void GameSpecificHackSetup() {
 	 * al juego.  Earthworm Jim 3D (2026-10-16) sigue en "foto", a peticion
 	 * del usuario; los volcados [!].
 	 *
+	 * [Powerpuff Girls - Chemical X-Traction, 2026-10-26] "FOTO", a peticion
+	 * del usuario (geometria que falta al empezar la partida).  Solo hay (U)
+	 * en mupen64plus.ini.
+	 *
 	 * [Quake 64, Quake II, Rayman 2, Turok - Dinosaur Hunter, Turok 2,
 	 * Turok 3 y Donald Duck, 2026-10-16] "ACTIVADO", a peticion del usuario,
 	 * como Blast Corps.  CRC de mupen64plus.ini, los volcados [!].
@@ -322,7 +326,8 @@ void GameSpecificHackSetup() {
 	   (curCRC[0] == 0x5306CF45 && curCRC[1] == 0xCBC49250) ||   // Cruis'n USA (U) (V1.1)
 	   (curCRC[0] == 0xB3402554 && curCRC[1] == 0x7340C004) ||   // Cruis'n USA (U) (V1.2, Rev B)
 	   (curCRC[0] == 0x492B9DE8 && curCRC[1] == 0xC6CCC81C) ||   // Earthworm Jim 3D (E) (M6)
-	   (curCRC[0] == 0xDF574191 && curCRC[1] == 0x9EB5123D))     // Earthworm Jim 3D (U)
+	   (curCRC[0] == 0xDF574191 && curCRC[1] == 0x9EB5123D) ||   // Earthworm Jim 3D (U)
+	   (curCRC[0] == 0xFC74D475 && curCRC[1] == 0x9A0278AB))     // Powerpuff Girls, The - Chemical X-Traction (U)
 		hilo_lista_sp_db(2);
 	else if((curCRC[0] == 0x7C64E6DB && curCRC[1] == 0x55B924DB) ||   // Blast Corps (E) (M2)
 	        (curCRC[0] == 0x7C647C25 && curCRC[1] == 0xD9D901E6) ||   // Blast Corps (U) (V1.0)

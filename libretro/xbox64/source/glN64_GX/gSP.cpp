@@ -136,10 +136,37 @@ void gSPLoadUcodeEx( u32 uc_start, u32 uc_dstart, u16 uc_dsize )
 }
 
 #ifdef __GX__
+
 static void _gSPUpdateCombW()
 {
 	if (OGL.numTriangles)
 		OGL_DrawTriangles();
+
+	/* [Xbox360] ★ [Micro Machines 64 Turbo, la chaqueta del personaje que
+	 * aparece al animarse y desaparece quieto, 2026-10-26] UNA PROYECCION
+	 * ORTOGRAFICA NO TIENE combW.  combW reconstruye la z como a*w + b; con la
+	 * columna w de la combinada CONSTANTE (C[0..2][3] = 0) no hay tal relacion,
+	 * y en aritmetica exacta los dos tests de abajo lo rechazan: la inversa da
+	 * I[2][3] = 0 y las columnas C[k][3] = 0.  Pero con la z casi aplastada la
+	 * inversa no es exacta.  MEDIDO ([COMBWORTO], logs (17)): w = (0,0,0,1),
+	 * z = (0,0,-0.000248,0.675), I[2][3] = 8.8e-8 de redondeo -> la rama de la
+	 * inversa la aceptaba con combW[2][3] = 5.6e6 y la GPU calculaba una
+	 * profundidad disparatada: la chaqueta detras de todo.  Segun la pose el
+	 * redondeo pasaba o no ([CHAQ]: cw 0/1 alternando con la misma z/w).  Solo
+	 * para el caso EXACTO (la w no depende del vertice): ninguna perspectiva
+	 * cambia.  Sin combW va por el camino de la CPU, como cuando el test fallaba.
+	 * Confirmado (logs (18), sondas retiradas): rechazo ejecutado, cw=0 siempre
+	 * y la chaqueta visible quieta y animada. */
+	{
+		f32 (*Cw)[4] = gSP.matrix.combined;   /* solo se lee */
+		if (Cw[0][3] == 0.0f && Cw[1][3] == 0.0f && Cw[2][3] == 0.0f)
+		{
+			OGL.GXcombWok = false;
+			OGL.GXuseCombW = false;
+			OGL.GXupdateMtx = true;
+			return;
+		}
+	}
 
 	guMtx44Inverse( gSP.matrix.combined, OGL.GXprojTemp );
 

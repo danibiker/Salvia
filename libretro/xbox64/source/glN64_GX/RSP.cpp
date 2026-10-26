@@ -701,6 +701,16 @@ static void _RSP_SetGameHacks()
 	 * necesite. */
 	else if (strstr( nombreIni, "HEXEN" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyToRDRAM;
+	/* [Xbox360] [Micro Machines 64 Turbo, el tapete del billar que se oscurece
+	 * y el fondo de los menus en un color liso, 2026-10-26] La copia del color a
+	 * la RDRAM, que GLideN64 hace POR DEFECTO (Config.cpp: copyToRDRAM =
+	 * ctSync/ctDoubleBuffer; su ini no tiene entrada para este juego).  El juego
+	 * carga texturas desde su propio framebuffer (tex 4D558A87 desde 003DA800,
+	 * volcados de logs (19)) y en angrylion los menus llevan de fondo el
+	 * escenario: lee de la RDRAM lo que pinto.  La de 1-3 frames tarde; si no
+	 * basta, la sincrona (hack_copyToRDRAMSync, como Banjo). */
+	else if (strstr( nombreIni, "MICROMACHINES64TURBO" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyToRDRAM;
 	/* [Xbox360] ★ [1080 Snowboarding, 2026-10-22] GLideN64 d4dce42e/d4692426:
 	 * [1080%20SNOWBOARDING] copyToRDRAM=1 y copyDepthToRDRAM=1, "essential for
 	 * correct work" (hoy sin entrada: son los valores por defecto de GLideN64).
