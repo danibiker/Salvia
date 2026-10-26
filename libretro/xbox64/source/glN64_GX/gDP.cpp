@@ -2012,7 +2012,19 @@ void gDPFillRectangle( s32 ulx, s32 uly, s32 lrx, s32 lry )
 	                 gDP.depthImageAddress, 3 );
 #endif
 
-	OGL_DrawRect( ulx, uly, lrx, lry, (gDP.otherMode.cycleType == G_CYC_FILL) ? _gDPFillColorActual() : &gDP.blendColor.r );
+	/* [Xbox360] ★ [Command & Conquer, fondos VERDES en los menus, 2026-10-26]
+	 * FUERA DEL MODO FILL EL RECTANGULO VA CON COLOR 0, como GLideN64 desde
+	 * 1c72ef16 (`gDP.rectColor = gDPInfo::Color()`, hoy src/gDP.cpp:944-946):
+	 * un rectangulo del RDP no lleva coeficientes de sombreado, asi que SHADE
+	 * vale 0 y el color lo pone el combinador (PRIM, ENV...).  glN64 le daba el
+	 * BLEND COLOR, que entra por el color de vertice (= SHADE en el combinador).
+	 * Antes, f40ecc7a ("Fixed background in C&C") ya lo ponia a 0 con un
+	 * combinador solo SHADE.  MEDIDO ([FILL-GX], logs (4)): C&C borra a negro y
+	 * luego pinta 0,0-640,240 en 1 ciclo ("rect normal"), con el combinador
+	 * solo SHADE (00FFFFFF:FFFE793C) y blend 80FF80FF, el verde (sonda [RECT0],
+	 * logs (5), retirada).  Mario 64, Conker y Quake II de control: bien. */
+	f32 colorRectCero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	OGL_DrawRect( ulx, uly, lrx, lry, (gDP.otherMode.cycleType == G_CYC_FILL) ? _gDPFillColorActual() : colorRectCero );
 
 	/* [Xbox360] ★ [Pokemon Stadium] UN RELLENO EN MODO FILL SOBRE UN AUXILIAR
 	 * TAMBIEN VA A LA RDRAM, como en la consola (la RDP escribe la RDRAM) y en
