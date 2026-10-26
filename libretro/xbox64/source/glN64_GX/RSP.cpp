@@ -351,6 +351,16 @@ void RSP_ProcessDList()
 		/* [Xbox360] [Conker] Como GLideN64 (RSP.cpp:151): la luz avanzada de
 		 * F3DCBFD dura lo que la display list que la encendio. */
 		gSP.cbfd.advancedLighting = FALSE;
+		/* [Xbox360] El modo de geometria, como GLideN64 (RSP.cpp:141,
+		 * 3d74542d).  Ver gSPReiniciaGeometria. */
+		gSPReiniciaGeometria();
+		/* [Xbox360] [Chopper Attack] Y los vectores del lookat vuelven a (0,1,0)
+		 * y (1,0,0), como GLideN64 430798dd ("Fixes Super Mario 64 water bomb
+		 * texture has wrong orientation with HLE #2899").  Su lookatEnable no
+		 * esta en esa estructura y no se toca; aqui tampoco. */
+		memset( gSP.lookat.xyz, 0, sizeof( gSP.lookat.xyz ) );
+		gSP.lookat.xyz[0][1] = 1.0f;
+		gSP.lookat.xyz[1][0] = 1.0f;
 
 		/* [Xbox360] ★ [Virtual Pool 64, bolas y fondo "con zoom" segun la camara]
 		 * La perspectiva de textura SI se reinicia en cada lista, como GLideN64
@@ -835,6 +845,13 @@ void RSP_Init()
 	 * Force Gemini de control. */
 	gSP.texture.scales = 1.0f;
 	gSP.texture.scalet = 1.0f;
+	/* [Xbox360] [Chopper Attack] EL LOOKAT EMPIEZA ACTIVO, con (0,1,0) y
+	 * (1,0,0), como GLideN64 bd49fff7 ("Fixed G_TEXTURE_GEN doesn't work
+	 * correctly (HLE) #1232", hoy RSP_SetDefaultState).  Con el memset quedaba
+	 * desactivado y a cero.  Ver el texgen de gSPProcessVertex. */
+	gSP.lookat.xyz[0][1] = 1.0f;
+	gSP.lookat.xyz[1][0] = 1.0f;
+	gSP.lookat.enable = TRUE;
 	gDP.otherMode._u64 = 0;
 	gDP.m_subscreen = false;
 	gDP.m_fbCopyPending = 0;

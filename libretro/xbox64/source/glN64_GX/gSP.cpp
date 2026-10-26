@@ -74,12 +74,28 @@ f32 identityMatrix[4][4] =
 };
 
 
+/* [Xbox360] EL MODO DE GEOMETRIA SE REINICIA EN CADA DISPLAY LIST Y AL CARGAR
+ * UN MICROCODIGO, como GLideN64 (c57909e2 "Fixed culling issue in Triple Play
+ * 2000", 3d74542d "Fixed glitches in Dark Rift": hoy RSP.cpp:141 y
+ * gSP.cpp:142).  En la consola el microcodigo recarga su segmento de datos en
+ * cada tarea, y el modo de geometria vive ahi; glN64 lo conservaba de una lista
+ * a la siguiente.  Portado durante el caso de Chopper Attack, pero NO era su
+ * causa (sonda [GEOM0], logs (9), retirada: ningun modo heredado llevaba
+ * G_TEXTURE_GEN; la causa fue el texgen con lookat de gSPProcessVertex).  Se
+ * deja por ser lo de la referencia. */
+void gSPReiniciaGeometria()
+{
+	gSP.geometryMode = 0;
+	gSP.changed |= CHANGED_GEOMETRYMODE;
+}
+
 void gSPLoadUcodeEx( u32 uc_start, u32 uc_dstart, u16 uc_dsize )
 {
 	gSP.matrix.modelViewi = 0;
 	gSP.changed |= CHANGED_MATRIX;
 	gSP.status[0] = gSP.status[1] = gSP.status[2] = gSP.status[3] = 0;
 	gSP.objRendermode = 0;
+	gSPReiniciaGeometria();	// [Xbox360] como GLideN64 c57909e2; ver arriba
 
 	if ((((uc_start & 0x1FFFFFFF) + 4096) > RDRAMSize) || (((uc_dstart & 0x1FFFFFFF) + uc_dsize) > RDRAMSize))
 	{
@@ -372,6 +388,12 @@ void gSPProcessVertex( u32 v )
 
 	if (gSP.geometryMode & G_LIGHTING)
 	{
+		/* [Xbox360] [Chopper Attack] La normal del MODELO, sin transformar ni
+		 * normalizar, para el texgen con lookat (ver abajo).  Viene en s8. */
+		const f32 nModelo[3] = { gSP.vertices[v].nx * (1.0f / 128.0f),
+		                         gSP.vertices[v].ny * (1.0f / 128.0f),
+		                         gSP.vertices[v].nz * (1.0f / 128.0f) };
+
 		TransformVector( &gSP.vertices[v].nx, gSP.matrix.modelView[gSP.matrix.modelViewi] );
 #ifndef __GX__
 		Normalize( &gSP.vertices[v].nx );
@@ -512,14 +534,43 @@ void gSPProcessVertex( u32 v )
 			{
 				f32 x, y;
 
+				/* [Xbox360] ★ [Chopper Attack, cristales con grano fino, 2026-10-26]
+				 * EL TEXGEN CON LOOKAT COMO GLideN64 (gSP.cpp:1200-1202, con
+				 * gSPUpdateLookatVectors): el lookat se lleva al espacio del MODELO
+				 * (InverseTransformVectorNormalize: M por el vector, normalizado) y
+				 * se multiplica por la normal del modelo TAL CUAL, sin normalizar.
+				 * glN64 usaba la normal ya pasada al ojo y NORMALIZADA, asi que x e
+				 * y llegaban siempre a +-1.  Con una normal corta en el modelo (o un
+				 * modelview con escala) la referencia da un rango menor.  Chopper
+				 * Attack pide escala 0.5 (gSPTexture 0x8000) en sus cristales: con
+				 * x a +-1 eran 16 repeticiones de la textura de 32 ([TEXGEN], logs
+				 * (7)-(9)); angrylion y GLideN64 la pintan una vez.  MEDIDO
+				 * ([TEXGENL], logs (10), sondas retiradas): normales del modelo de
+				 * longitud 0.05-0.11, x e y de +-0.04; cristal y logo SETA bien
+				 * (usuario).  El juego no manda lookat: usa el de defecto.  Sin lookat
+				 * (rama de abajo) GLideN64 SI normaliza: se queda como estaba. */
 				if (gSP.lookat.enable)
 				{
-					x = gSP.vertices[v].nx * gSP.lookat.xyz[0][0] +
-						gSP.vertices[v].ny * gSP.lookat.xyz[0][1] +
-						gSP.vertices[v].nz * gSP.lookat.xyz[0][2];
-					y = gSP.vertices[v].nx * gSP.lookat.xyz[1][0] +
-						gSP.vertices[v].ny * gSP.lookat.xyz[1][1] +
-						gSP.vertices[v].nz * gSP.lookat.xyz[1][2];
+					f32 (*mv)[4] = gSP.matrix.modelView[gSP.matrix.modelViewi];
+					f32 il[2][3];
+					int k;
+					for (k = 0; k < 2; k++)
+					{
+						const f32 *L = gSP.lookat.xyz[k];
+						f32 len;
+						il[k][0] = mv[0][0] * L[0] + mv[0][1] * L[1] + mv[0][2] * L[2];
+						il[k][1] = mv[1][0] * L[0] + mv[1][1] * L[1] + mv[1][2] * L[2];
+						il[k][2] = mv[2][0] * L[0] + mv[2][1] * L[1] + mv[2][2] * L[2];
+						len = sqrtf( il[k][0] * il[k][0] + il[k][1] * il[k][1] + il[k][2] * il[k][2] );
+						if (len > 0.0f)
+						{
+							il[k][0] /= len;
+							il[k][1] /= len;
+							il[k][2] /= len;
+						}
+					}
+					x = nModelo[0] * il[0][0] + nModelo[1] * il[0][1] + nModelo[2] * il[0][2];
+					y = nModelo[0] * il[1][0] + nModelo[1] * il[1][1] + nModelo[2] * il[1][2];
 				}
 				else
 				{

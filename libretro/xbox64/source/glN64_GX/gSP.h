@@ -151,6 +151,7 @@ struct gSPInfo
 extern gSPInfo gSP;
 
 void gSPLoadUcodeEx( u32 uc_start, u32 uc_dstart, u16 uc_dsize );
+void gSPReiniciaGeometria();	// [Xbox360] geometryMode = 0 al empezar una lista o cargar un ucode, como GLideN64
 void gSPNoOp();
 void gSPMatrix( u32 matrix, u8 param );
 void gSPCombineMatrices( u32 mode );
