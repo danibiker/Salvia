@@ -1811,8 +1811,21 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade
 				tooNear++;
 		}
 
-		const BOOL useCombW =
-			(onNear == 3 || (behind == 0 && tooNear == 3)) ? FALSE : TRUE;
+		/* [Xbox360] ★ [Episode I Racer, tiras de la carroceria que no encajan
+		 * con la camara cercana, 2026-10-26] LOS TRES VERTICES POR DELANTE DEL
+		 * PLANO CERCANO TAMBIEN VAN EN combW, con la profundidad sujeta (abajo).
+		 * glN64 los mandaba por el camino sin combW (`tooNear == 3`): posiciones
+		 * divididas por w en la CPU y proyeccion ortografica identidad, o sea
+		 * w = 1 en la GPU y la textura interpolada SIN PERSPECTIVA.  En un
+		 * triangulo grande pegado a la camara la textura se tuerce y no encaja
+		 * con sus bordes; de lejos no se nota.  La Wii no tenia otra forma de no
+		 * recortarlos; aqui esta GXD3D_SetDepthClamp (el GL_DEPTH_CLAMP de
+		 * GLideN64, que dibuja asi TODO triangulo NoN).  MEDIDO: `nocombw`
+		 * 10.000-29.000 triangulos/s en carrera (logs (12)); Rice, sin NoN,
+		 * recorta justo esa parte del coche.  Confirmado (logs (13), sondas
+		 * [NONCERCA]/[CARRO] retiradas): triangulos con w 4-5 por delante del
+		 * cercano en combW, carroceria bien; MM, Conker y 1080 de control. */
+		const BOOL useCombW = (onNear == 3) ? FALSE : TRUE;
 		if (useCombW != OGL.GXuseCombW)
 		{
 			if (OGL.numTriangles)
