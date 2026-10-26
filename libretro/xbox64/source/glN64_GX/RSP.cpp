@@ -582,6 +582,11 @@ static void _RSP_SetGameHacks()
 		config.generalEmulation.hacks |= hack_rectDepthBufferCopyPD; // TODO check if this works here
 	else if (strstr( RSP.romname, "GOLDENEYE" ) != NULL)
 		config.generalEmulation.hacks |= hack_clearAloneDepthBuffer;
+	/* [Xbox360] [StarCraft 64, tiras fuera de sitio al empezar una mision con
+	 * el framebuffer, 2026-10-26] Como GLideN64 751fe2b3.  Ver
+	 * _gDPCheckForFrameBufferTextureCuerpo. */
+	else if (strstr( RSP.romname, "STARCRAFT 64" ) != NULL)
+		config.generalEmulation.hacks |= hack_StarCraftBackgrounds;
 	/* [Xbox360] [Top Gear Rally, el polvo de las ruedas, 2026-10-26] NO es de
 	 * GLideN64: imita lo que se ve en angrylion.  Ver OGL_DrawTexturedRect. */
 	else if (strstr( RSP.romname, "TOP GEAR RALLY" ) != NULL &&

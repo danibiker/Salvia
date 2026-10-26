@@ -1100,7 +1100,7 @@ void retro_get_system_info(struct retro_system_info *info)
      * espacio en el sistema de ficheros de la consola es pedir un fallo
      * que aparecera al guardar un estado, lejos de aqui. */
     info->library_name     = "xbox64";
-    info->library_version  = "0.1-fase1";
+    info->library_version  = "1.0.0";
     info->valid_extensions = "n64|v64|z64|bin|u1|ndd";
     /* ★★ LA ROM LA RESERVA Y LA LEE EL FRONTEND.
      *

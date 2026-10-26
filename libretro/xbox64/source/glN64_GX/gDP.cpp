@@ -1074,6 +1074,23 @@ static BOOL _gDPCheckForFrameBufferTextureCuerpo( u32 address, u32 width, u32 by
 		return FALSE;
 	}
 
+	/* [Xbox360] [StarCraft 64, tiras fuera de sitio por toda la pantalla al
+	 * empezar una mision, solo con framebuffer, 2026-10-26] GLideN64
+	 * hack_StarCraftBackgrounds (729bf94c, por juego desde 751fe2b3; mismo
+	 * sitio de CheckForFrameBufferTexture, src/gDP.cpp:401).  Su nota
+	 * (FrameBufferEmulationIssues.txt): el juego guarda la imagen de 8 bits del
+	 * fondo DENTRO de su framebuffer de 16 bits (0x00176540-0x0019BD3F, la
+	 * imagen en 0x00189140) y la pinta encima de ese mismo buffer; en la
+	 * consola funciona porque la lee por partes antes de pisarla.  Aqui se
+	 * tomaba por textura de framebuffer.  Con TLUT RGBA16 nunca lo es.
+	 * Comprobado por el usuario; sonda [STARFB] retirada (cortaba cargas de
+	 * 001AEBC0.. dentro del buffer 0019BFC0 320x240). */
+	if ((config.generalEmulation.hacks & hack_StarCraftBackgrounds) != 0 &&
+	    gDP.otherMode.textureLUT == G_TT_RGBA16)
+	{
+		return FALSE;
+	}
+
 	const u32 texEndAddress = address + bytes - 1;
 	if (address > buffer->startAddress &&
 	    (u32)abs( (s32)buffer->width - (s32)width ) > 1 &&
