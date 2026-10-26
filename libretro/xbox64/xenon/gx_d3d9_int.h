@@ -103,6 +103,10 @@ struct GXD3DTevState
     /* GXD3D_SetNieblaZ (gccore.h): la niebla por Z de Beetle Adventure
      * Racing, contra la copia de Z y la curva de GXD3D_NIEBLAZ_SAMPLER. */
     u8  nieblaZ;
+
+    /* GXD3D_SetAlfaAleatoria (gccore.h): la prueba de alfa contra un umbral
+     * ALEATORIO por pixel del N64 en vez de la de GX_SetAlphaCompare. */
+    u8  alfaAleat;
 };
 
 /* Lo llama GX_LoadTexObj: lo ligado en `mapid` es (1) o no es (0) una copia

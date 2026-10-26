@@ -582,6 +582,11 @@ static void _RSP_SetGameHacks()
 		config.generalEmulation.hacks |= hack_rectDepthBufferCopyPD; // TODO check if this works here
 	else if (strstr( RSP.romname, "GOLDENEYE" ) != NULL)
 		config.generalEmulation.hacks |= hack_clearAloneDepthBuffer;
+	/* [Xbox360] [Top Gear Rally, el polvo de las ruedas, 2026-10-26] NO es de
+	 * GLideN64: imita lo que se ve en angrylion.  Ver OGL_DrawTexturedRect. */
+	else if (strstr( RSP.romname, "TOP GEAR RALLY" ) != NULL &&
+	         strstr( RSP.romname, "TOP GEAR RALLY 2" ) == NULL)
+		config.generalEmulation.hacks |= hack_alfaAleatoria;
 	else if (strstr( RSP.romname, "CONKER BFD" ) != NULL ||
 	         strstr( RSP.romname, "MarioTennis" ) != NULL)
 	{

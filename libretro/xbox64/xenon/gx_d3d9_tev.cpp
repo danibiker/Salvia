@@ -127,6 +127,7 @@ struct GXD3DTevKey
     u8 atlas;                   /* GXD3D_SetLodAtlas, solo con LOD_FRACTION;
                                   * 2 = el de RESPALDO mientras el de atlas se
                                   * compila (ver TEV_ASYNC) */
+    u8 alfaAleat;                /* GXD3D_SetAlfaAleatoria */
 };
 
 struct GXD3DShaderEntry
@@ -748,6 +749,7 @@ static void gxd3d_build_key(GXD3DTevKey *k)
     k->rtz        = g_gxTev.rtz;
     k->decN64     = g_gxTev.decN64;
     k->nieblaZ    = g_gxTev.nieblaZ;
+    k->alfaAleat  = g_gxTev.alfaAleat;
     /* El atlas solo cambia el codigo de los shaders que leen LOD_FRACTION: en
      * los demas no entra en la clave, para no duplicarlos. */
     if (s_atlasOn)
@@ -1082,6 +1084,8 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
         for (e = 0; e < 4; e++)
             if (k->st[i].cin[e] == (u8)GXD3D_CC_RUIDO || k->st[i].ain[e] == (u8)GXD3D_CA_RUIDO)
                 usaRuido = 1;
+        if (k->alfaAleat)
+            usaRuido = 1;   /* GXD3D_SetAlfaAleatoria: el mismo hash y la misma constante */
         for (e = 0; e < 4; e++)
             if (k->st[i].cin[e] == (u8)GXD3D_CC_LODFRAC || k->st[i].ain[e] == (u8)GXD3D_CA_LODFRAC)
                 usaLod = 1;
@@ -1245,13 +1249,16 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
      * y :67), con snoise() = hash13 de (semilla, pixel del N64)
      * (glsl_CombinerProgramBuilderCommon.cpp:1011-1019).  Su `gl_FragCoord /
      * uScreenScale` es aqui `vpos * (1/esc)`. */
+    /* `ruidoU` = el mismo hash sin escalar, uniforme en [0,1): el umbral de
+     * GXD3D_SetAlfaAleatoria. */
     if (usaRuido)
-        EMIT("  float ruido;\n"
+        EMIT("  float ruido, ruidoU;\n"
              "  {\n"
              "    float2 rc = floor(vpos * uRuido.yz);\n"
              "    float3 p3 = frac(float3(uRuido.x, rc.x, rc.y) * 0.1031);\n"
              "    p3 += dot(p3, p3.zyx + 31.32);\n"
-             "    ruido = 0.5 + 0.5 * frac((p3.x + p3.y) * p3.z);\n"
+             "    ruidoU = frac((p3.x + p3.y) * p3.z);\n"
+             "    ruido = 0.5 + 0.5 * ruidoU;\n"
              "  }\n");
 
     /* [Xbox360] ★ LOD_FRACTION COMO GLideN64: la funcion mipmap() de
@@ -1499,7 +1506,14 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
      * ★ `clip()` mata el early-Z de Xenos, que es justo lo que GX pedia con
      * GX_SetZCompLoc(GX_FALSE).  O sea que el comportamiento sale por
      * construccion y no hace falta un render state equivalente. */
-    if (!(k->acComp0 == GX_ALWAYS && k->acComp1 == GX_ALWAYS))
+    /* [Xbox360] [Top Gear Rally, el polvo de las ruedas] GXD3D_SetAlfaAleatoria:
+     * en vez de la prueba de GX_SetAlphaCompare, la del RDP con umbral
+     * aleatorio (angrylion blender.c alpha_compare con dither_alpha_en:
+     * threshold = irand & 0xff, pasa si alfa >= threshold): el pixel queda con
+     * probabilidad (alfa*255 + 1) / 256, uno por pixel del N64 y frame. */
+    if (k->alfaAleat)
+        EMIT("  clip( floor(saturate(outc.a) * 255.0 + 0.5) - floor(ruidoU * 256.0) + 0.5 );\n");
+    else if (!(k->acComp0 == GX_ALWAYS && k->acComp1 == GX_ALWAYS))
     {
         const char *join;
         tev_cmp(k->acComp0, "outc.a", "uAcRef.x", cmp0, sizeof(cmp0));
@@ -2497,6 +2511,14 @@ void GXD3D_SetBlenderNiebla(u8 on, GXColor fog)
         g_gxTev.blFogColor = fog;
         s_constDirty = 1;
     }
+}
+
+void GXD3D_SetAlfaAleatoria(u8 on)
+{
+    on = on ? 1 : 0;
+    if (g_gxTev.alfaAleat == on) return;
+    g_gxTev.alfaAleat = on;
+    s_dirty = 1;     /* solo la clave; el ruido ya viaja en uRuido */
 }
 
 void GXD3D_SetNieblaInversa(u8 on)

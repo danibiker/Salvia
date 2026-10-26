@@ -874,6 +874,10 @@ void OGL_UpdateStates()
 		u8 GXalphaFunc, GXalphaRef;
 //		u8 GXZcompLoc = GX_FALSE; //do Z compare after texturing (GX_FALSE)
 		OGL.GXuseAlphaCompare = true;
+		/* [Xbox360] [Top Gear Rally] La prueba aleatoria la pone solo el texrect
+		 * del polvo (OGL_DrawTexturedRect, hack_alfaAleatoria) y dura ese
+		 * dibujo: cualquier otro vuelve a la de aqui. */
+		GXD3D_SetAlfaAleatoria( 0 );
 		/* [Xbox360] ★ [Mario Tennis, bob-ombs] Sin alpha test en FILL, como
 		 * GLideN64 (UAlphaTestInfo, glsl_CombinerProgramUniformFactoryCommon.cpp:
 		 * 445: `cycleType == G_CYC_FILL` -> uEnableAlphaTest 0).  Un relleno de
@@ -890,7 +894,18 @@ void OGL_UpdateStates()
 		{
 //			glEnable( GL_ALPHA_TEST );
 //			glAlphaFunc( (gDP.blendColor.a > 0.0f) ? GL_GEQUAL : GL_GREATER, gDP.blendColor.a );
-			GXalphaFunc = (gDP.blendColor.a > 0.0f) ? GX_GEQUAL : GX_GREATER;
+			/* [Xbox360] ★ [Top Gear Rally, los menus no se borran y dejan
+			 * estela, 2026-10-25] SIEMPRE "PASA SI ALFA >= UMBRAL", como la
+			 * consola (angrylion blender.c alpha_compare: comb_alpha >=
+			 * threshold) y GLideN64 (ShaderAlphaTest: `if (alphaValue <
+			 * alphaTestValue) discard`).  glN64 cambiaba a "MAYOR QUE" con el
+			 * umbral a 0, y eso tiraba todo lo de alfa 0.  MEDIDO ([RECT1C], sonda retirada,
+			 * logs (14)): el juego borra el menu y hace la cortinilla con
+			 * rellenos de 1 ciclo de color PRIM negro de alfa 0, blender 0F0A
+			 * (clr_in) y umbral con el blend color a 0: en la consola pasan y
+			 * borran; aqui se descartaban enteros y quedaba la estela (tambien
+			 * sin emulacion de framebuffer). */
+			GXalphaFunc = GX_GEQUAL;
 			GXalphaRef = GXcastf32u8(gDP.blendColor.a);
 		}
 		// Used in TEX_EDGE and similar render modes
@@ -2763,6 +2778,32 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 	// that means "no fog" regardless of what the scene left
 	// enabled and on GX we don't have per-vertex fog, so set to nothing here.
 	GX_SetFog(GX_FOG_NONE, 0.1f, 1.0f, 0.0f, 1.0f, GXCOL_BLACK);   /* [Xbox360] literal compuesto */
+
+	/* [Xbox360] ★ [Top Gear Rally, el polvo de las ruedas en cuadrados,
+	 * 2026-10-25] NO ES DE GLideN64: imita lo que se ve en angrylion
+	 * (hack_alfaAleatoria, solo Top Gear Rally, RSP.cpp).  El polvo son texrects
+	 * de 1 ciclo, color PRIM marron, alfa TEXEL0*PRIM (I8, 56 por ciento de alfa
+	 * 0), blender 0F0A sin FORCE_BL y umbral FIJO con el blend color a 0
+	 * (B9000002:00000001 y SetBlendColor alfa 0 justo antes): lo unico que lo
+	 * recorta es la prueba de alfa, que con umbral 0 deja pasar todo.  GLideN64
+	 * (todas las versiones probadas) saca el cuadrado; solo angrylion lo pinta
+	 * bien, como GRANOS sueltos y aleatorios, que es el aspecto de la prueba con
+	 * umbral ALEATORIO (con estos comandos su codigo daria tambien el cuadrado:
+	 * probablemente le llega otra cosa por el RSP de bajo nivel).  Descartados:
+	 * descartar el alfa 0 (> 0, el TexrectDrawer opcional de GLideN64) y
+	 * >= 1/255 (Rice): los dos dan un circulo solido, la bocanada es un disco
+	 * suave.  Aqui: umbral aleatorio por pixel del N64 y frame
+	 * (GXD3D_SetAlfaAleatoria), solo en este dibujo; OGL_UpdateStates lo apaga.
+	 * En los demas juegos el texrect sigue con el umbral normal, como GLideN64. */
+	if ((config.generalEmulation.hacks & hack_alfaAleatoria) != 0 &&
+	    gDP.otherMode.cycleType < G_CYC_COPY &&
+	    gDP.otherMode.alphaCompare == G_AC_THRESHOLD && !gDP.otherMode.alphaCvgSel &&
+	    gDP.otherMode.forceBlender == 0 && GXcastf32u8( gDP.blendColor.a ) == 0)
+	{
+		GXD3D_SetAlfaAleatoria( 1 );
+		OGL.GXuseAlphaCompare = true;
+		gDP.changed |= CHANGED_ALPHACOMPARE;   /* el siguiente dibujo la apaga (OGL_UpdateStates) */
+	}
 #endif // __GX__
 
 #ifndef __GX__

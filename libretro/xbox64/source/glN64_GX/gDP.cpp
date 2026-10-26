@@ -850,10 +850,23 @@ void gDPSetEnvColor( u32 r, u32 g, u32 b, u32 a )
 
 void gDPSetBlendColor( u32 r, u32 g, u32 b, u32 a )
 {
+	const f32 alfaAntes = gDP.blendColor.a;
+
 	gDP.blendColor.r = GXcastu8f32( r );
 	gDP.blendColor.g = GXcastu8f32( g );
 	gDP.blendColor.b = GXcastu8f32( b );
 	gDP.blendColor.a = GXcastu8f32( a );
+
+	/* [Xbox360] ★ [Top Gear Rally, polvo de las ruedas en cuadrados marrones,
+	 * 2026-10-25] EL UMBRAL DE ALFA ES EL ALFA DEL BLEND COLOR, Y SE REHACE AL
+	 * CAMBIARLO, como GLideN64 (gDPSetBlendColor marca CHANGED_BLENDCOLOR y
+	 * UAlphaTestInfo sube uAlphaTestValue = blendColor.a en cada dibujo).  glN64
+	 * no marcaba nada: el umbral solo se rehacia al cambiar el render mode y el
+	 * dibujo usaba el de antes.  Desde que el umbral 0 deja pasar el alfa 0
+	 * (OGL_UpdateStates, Top Gear Rally menus), un umbral viejo de 0 pinta
+	 * enteras las particulas que el juego recorta con un umbral nuevo. */
+	if (gDP.blendColor.a != alfaAntes)
+		gDP.changed |= CHANGED_ALPHACOMPARE;
 
 #ifdef DEBUG
 	DebugMsg( DEBUG_HIGH | DEBUG_HANDLED, "gDPSetBlendColor( %i, %i, %i, %i );\n",

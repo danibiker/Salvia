@@ -825,6 +825,11 @@ void GXD3D_SetBlenderNiebla(u8 on, GXColor fog);
  * para el blender del N64 `CLR_IN * A_SHADE + CLR_FOG * (1 - A_SHADE)`, donde
  * A_SHADE = 1 es SIN niebla (Nightmare Creatures, blender 0x0AF0). */
 void GXD3D_SetNieblaInversa(u8 on);
+/* ★ EXTENSION DEL SHIM, NO ES GX.  [Top Gear Rally] La prueba de alfa del RDP
+ * con UMBRAL ALEATORIO por pixel del N64 (pasa con probabilidad = alfa), en
+ * lugar de la de GX_SetAlphaCompare, mientras `on` = 1.  Usa el hash y la
+ * semilla de GXD3D_SetRuido. */
+void GXD3D_SetAlfaAleatoria(u8 on);
 /* ★ EXTENSION DEL SHIM, NO ES GX.  La entrada NOISE del combinador, como
  * GLideN64 (snoise(), glsl_CombinerProgramBuilderCommon.cpp:1004-1022): las
  * entradas GXD3D_CC_RUIDO / GXD3D_CA_RUIDO del TEV valen

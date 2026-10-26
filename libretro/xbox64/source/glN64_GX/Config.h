@@ -42,6 +42,7 @@ extern Config config;
 #define hack_copyToRDRAMSync		(1<<30) //[Xbox360] GLideN64 copyToRDRAM=1 (ctSync), with hack_copyToRDRAM: the copy waits for the GPU and lands in THIS frame's buffer before the DP. Banjo-Kazooie puzzle assembling after a load (e8a5e829)
 #define hack_n64DepthCompareDec		(1<<27) //[Xbox360] GLideN64.custom.ini frameBufferEmulation\N64DepthCompare=1, only its "decal" mode (ZMODE_DEC) in the shader against a depth copy. ISS64 player shadows
 #define hack_ziComoColor			(1<<17) //[Xbox360] The DEPTH IMAGE used as color image is drawn in its own render target (second EDRAM color surface), so the single EFB no longer overwrites it; GLideN64 keeps a surface per buffer. Mario Tennis ball trail mask (0400), which otherwise picks up the scoreboard corner
+#define hack_alfaAleatoria			(1<<18) //[Xbox360] NOT in GLideN64 (copies angrylion's LOOK, not the commands we get): a texrect with the threshold alpha compare at blend alpha 0 and no FORCE_BL uses a RANDOM threshold per N64 pixel (passes with probability = alpha). Top Gear Rally wheel dust, which angrylion shows as scattered grains
 #define hack_fbImagenPropia			(1<<16) //[Xbox360] NOT in GLideN64: a load that reads a frame buffer AS ITS OWN IMAGE (same start, width and size) is served from it even if the RDRAM under it no longer matches. Mario Tennis replay panel (the CPU writes text into that RDRAM)
 
 void Config_LoadConfig();

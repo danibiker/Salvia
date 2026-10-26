@@ -2613,22 +2613,104 @@ void TextureCache_InitAtlasTexObj( CachedTexture *texture )
 	GX_InitTexObjLOD(&texture->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
 }
 
+/* [Xbox360] ★ [Top Gear Rally: la arena de la cuneta invade media carretera A
+ * LO LEJOS y se va al acercarse; San Francisco Rush, algo parecido, 2026-10-26]
+ * LA MEDIDA DE CADA NIVEL, COMO GLideN64: la de su TILE (_calcTileSizes,
+ * src/Textures.cpp:859-947), nunca mayor que la del nivel anterior
+ * (_loadAccurate:1710-1713, `min`).  Aqui se tomaba la mitad del anterior
+ * (diferencia asumida al portar el atlas, ver arriba): si el juego define sus
+ * niveles con otras medidas, cada nivel se leia de la TMEM con un ancho que no
+ * es el suyo -- filas descuadradas o datos de otra textura -- y eso solo se ve
+ * de lejos, que es cuando el LOD escoge niveles >= 1.  Solo el camino que no
+ * es COPY (el atlas solo existe en 1/2 ciclos). */
+static void _atlasMedidaTile( u32 tileIdx, u32 *w, u32 *h )
+{
+	const gDPTile *tl = &gDP.tiles[tileIdx & 7];
+	const u32 tileW = ((tl->lrs - tl->uls) & 0x03FF) + 1;
+	const u32 tileH = ((tl->lrt - tl->ult) & 0x03FF) + 1;
+	const u32 tMemMask = (gDP.otherMode.textureLUT == G_TT_NONE) ? 0x1FF : 0xFF;
+	const gDPLoadTileInfo &info = gDP.loadInfo[tl->tmem & tMemMask];
+	const u32 masks = tl->originalMaskS, maskt = tl->originalMaskT;
+	u32 width, height;
+
+	if (info.loadType == LOADTYPE_TILE)
+	{
+		width = (info.width < info.texWidth) ? info.width : info.texWidth;
+		if (width == 0)
+			width = tileW;
+		if (info.size > tl->size)
+			width <<= info.size - tl->size;
+		height = info.height;
+		if (height == 0)
+			height = tileH;
+	}
+	else
+	{
+		const u32 maxTexels = imageFormat[gDP.otherMode.textureLUT][tl->size][tl->format].maxTexels;
+		const u32 maskW = (masks == 0) ? tileW : (1u << masks);
+		const u32 maskH = (maskt == 0) ? tileH : (1u << maskt);
+
+		if (tl->clamps)
+			width = (maskW < tileW) ? maskW : tileW;
+		else if (maskW * maskH <= maxTexels)
+			width = maskW;
+		else
+			width = tileW;
+
+		if (tl->clampt)
+			height = (maskH < tileH) ? maskH : tileH;
+		else if (maskW * maskH <= maxTexels)
+			height = maskH;
+		else
+			height = tileH;
+	}
+
+	*w = (info.loadType == LOADTYPE_TILE && tl->clamps && masks == 0) ? tileW : width;
+	*h = (info.loadType == LOADTYPE_TILE && tl->clampt && maskt == 0) ? tileH : height;
+	if (*w == 0) *w = 1;
+	if (*h == 0) *h = 1;
+}
+
 static BOOL TextureCache_LoadAtlas( CachedTexture *texInfo, u32 niveles )
 {
 	u32 dimW[8], dimH[8], offs[8];
+	u32 nW64[8], nH64[8];   /* medida N64 de cada nivel (sin potencia de 2) */
 	u32 total = 8, i, x, y;
+	/* [Xbox360] ★★ [Top Gear Rally, la MITAD DERECHA de la carretera
+	 * emborronada; San Francisco Rush 2049, una textura del centro que invade
+	 * la parte derecha, 2026-10-26] EL ESPEJO DEL NIVEL 0 EN TODOS LOS NIVELES.
+	 * Con espejo y sin clamp, el nivel 0 se guarda HORNEADO al doble de la
+	 * mascara (TextureCache_Update: realWidth = maskWidth << 1, mitad reflejada
+	 * copiada), y el shader (atlasNivel) envuelve sobre ese doble y escala al
+	 * nivel n: cada nivel tiene que estar horneado igual, al doble y con la
+	 * mitad reflejada.  GLideN64 aplica la envuelta y el espejo del TILE DEL
+	 * NIVEL 0 a todos los niveles (mipmap(), esquinas en el nivel 0); aqui cada
+	 * nivel se horneaba con el espejo de SU tile (si el juego no lo pone ahi,
+	 * la mitad derecha salia repetida en vez de reflejada) y, desde las medidas
+	 * del tile, sin doblar (la mitad derecha caia fuera y se quedaba en la
+	 * ultima columna). */
+	const u32 espS = (texInfo->mirrorS && !texInfo->clampS && texInfo->maskS != 0 &&
+	                  texInfo->realWidth >= (texInfo->width << 1)) ? 1u : 0u;
+	const u32 espT = (texInfo->mirrorT && !texInfo->clampT && texInfo->maskT != 0 &&
+	                  texInfo->realHeight >= (texInfo->height << 1)) ? 1u : 0u;
 
 	for (i = 0; i < niveles; i++)
 	{
 		if (i == 0)
 		{
+			nW64[0] = texInfo->width;
+			nH64[0] = texInfo->height;
 			dimW[0] = texInfo->realWidth;
 			dimH[0] = texInfo->realHeight;
 		}
 		else
 		{
-			dimW[i] = (dimW[i - 1] > 1) ? (dimW[i - 1] >> 1) : 1;
-			dimH[i] = (dimH[i - 1] > 1) ? (dimH[i - 1] >> 1) : 1;
+			u32 tw, th;
+			_atlasMedidaTile( gSP.texture.tile + 1 + i, &tw, &th );
+			nW64[i] = (tw < nW64[i - 1]) ? tw : nW64[i - 1];
+			nH64[i] = (th < nH64[i - 1]) ? th : nH64[i - 1];
+			dimW[i] = pow2( nW64[i] ) << espS;
+			dimH[i] = pow2( nH64[i] ) << espT;
 		}
 		offs[i] = total;
 		total += dimW[i] * dimH[i];
@@ -2643,7 +2725,6 @@ static BOOL TextureCache_LoadAtlas( CachedTexture *texInfo, u32 niveles )
 	memset( lin, 0, ATLAS_ANCHO * atlasH * 4 );
 
 	CachedTexture level;
-	u32 nW = texInfo->width, nH = texInfo->height;
 	for (i = 0; i < niveles; i++)
 	{
 		const gDPTile *tile = &gDP.tiles[(gSP.texture.tile + 1 + i) & 7];
@@ -2658,14 +2739,25 @@ static BOOL TextureCache_LoadAtlas( CachedTexture *texInfo, u32 niveles )
 		else
 		{
 			_TextureCache_DescribeMipLevel( &level, texInfo, gSP.texture.tile + 1 + i );
-			nW = (nW > 1) ? (nW >> 1) : 1;
-			nH = (nH > 1) ? (nH >> 1) : 1;
-			level.width  = nW;
-			level.height = nH;
+			level.width  = nW64[i];
+			level.height = nH64[i];
 			level.realWidth  = dimW[i];
 			level.realHeight = dimH[i];
-			level.clampWidth  = nW;
-			level.clampHeight = nH;
+			level.clampWidth  = nW64[i];
+			level.clampHeight = nH64[i];
+			/* El espejo horneado, con el del nivel 0 y en la mitad del nivel. */
+			if (espS)
+			{
+				level.mirrorS = 1;
+				level.clampS  = 0;
+				level.maskS   = _atlasLog2( dimW[i] >> 1 );
+			}
+			if (espT)
+			{
+				level.mirrorT = 1;
+				level.clampT  = 0;
+				level.maskT   = _atlasLog2( dimH[i] >> 1 );
+			}
 		}
 		level.atlasNiveles = 0;
 

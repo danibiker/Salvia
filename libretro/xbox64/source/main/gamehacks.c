@@ -303,7 +303,11 @@ void GameSpecificHackSetup() {
 	 *
 	 * [Quake 64, Quake II, Rayman 2, Turok - Dinosaur Hunter, Turok 2,
 	 * Turok 3 y Donald Duck, 2026-10-16] "ACTIVADO", a peticion del usuario,
-	 * como Blast Corps.  CRC de mupen64plus.ini, los volcados [!]. */
+	 * como Blast Corps.  CRC de mupen64plus.ini, los volcados [!].
+	 *
+	 * [Monster Truck Madness 64 y Armorines - Project S.W.A.R.M., 2026-10-26]
+	 * "ACTIVADO" tambien, a peticion del usuario.  CRC de mupen64plus.ini, los
+	 * volcados [!]. */
 	if((curCRC[0] == 0x503EA760 && curCRC[1] == 0xE1300E96) ||   // Cruis'n USA (E)
 	   (curCRC[0] == 0xFF2F2FB4 && curCRC[1] == 0xD161149A) ||   // Cruis'n USA (U) (V1.0)
 	   (curCRC[0] == 0x5306CF45 && curCRC[1] == 0xCBC49250) ||   // Cruis'n USA (U) (V1.1)
@@ -335,7 +339,12 @@ void GameSpecificHackSetup() {
 	        (curCRC[0] == 0x6A162FF2 && curCRC[1] == 0x2093704C) ||   // Turok 3 - Shadow of Oblivion (E)
 	        (curCRC[0] == 0x89A579F1 && curCRC[1] == 0x667E97EF) ||   // Turok 3 - Shadow of Oblivion (U)
 	        (curCRC[0] == 0xC16C421B && curCRC[1] == 0xA21580F7) ||   // Donald Duck - Goin' Quackers (U)
-	        (curCRC[0] == 0x3DF17480 && curCRC[1] == 0x193DED5A))     // Donald Duck - Quack Attack (E) (M5)
+	        (curCRC[0] == 0x3DF17480 && curCRC[1] == 0x193DED5A) ||   // Donald Duck - Quack Attack (E) (M5)
+	        (curCRC[0] == 0xD3D806FC && curCRC[1] == 0xB43AA2A8) ||   // Monster Truck Madness 64 (E) (M5)
+	        (curCRC[0] == 0xB19AD999 && curCRC[1] == 0x7E585118) ||   // Monster Truck Madness 64 (U)
+	        (curCRC[0] == 0x3CC77150 && curCRC[1] == 0x21CDB987) ||   // Armorines - Project S.W.A.R.M. (E)
+	        (curCRC[0] == 0xC0F6DB17 && curCRC[1] == 0x80E0D532) ||   // Armorines - Project S.W.A.R.M. (G)
+	        (curCRC[0] == 0x1FB5D932 && curCRC[1] == 0x3BA9481B))     // Armorines - Project S.W.A.R.M. (U)
 		hilo_lista_sp_db(1);
 	else
 		hilo_lista_sp_db(0);
