@@ -7,7 +7,8 @@
  *   - La textura del juego es DYNAMIC + DEFAULT y se sube por frame
  *     (1 memcpy) en lugar del zero-copy con lock permanente de Xenon.
  *   - Vertices con la regla del medio pixel de D3D9 PC (-0.5 en x/y).
- *   - Manejo basico de device-lost (reset de recursos DEFAULT).
+ *   - Manejo basico de device-lost (reset de recursos DEFAULT).  Con D3D9Ex
+ *     (Vista+) el device no se pierde y nada se recrea: ver g_d3dEx.
  *
  * Los shaders (HLSL ps_3_0) son identicos a los de Xbox.
  */
@@ -51,6 +52,16 @@ typedef struct { float x, y, z, rhw; float u, v; } VTX;
 /* ---- Estado del modulo ---- */
 static LPDIRECT3D9            g_d3d        = NULL;
 static LPDIRECT3DDEVICE9      g_dev        = NULL;
+/* [xbox64, 2026-10-27] Las mismas dos, vistas como D3D9Ex (Vista+), o NULL si
+ * el sistema no lo tiene y se va por el camino clasico.  Con un device Ex el
+ * device no se pierde al cambiar de pantalla o de modo y los recursos
+ * D3DPOOL_DEFAULT sobreviven, que es lo que necesita un core que dibuja en
+ * NUESTRO device (xbox64: render target, Z INTZ, vertex buffers, texturas...):
+ * con el device clasico el Reset falla mientras esos recursos sigan vivos y la
+ * imagen se queda congelada.  g_d3d/g_dev apuntan al MISMO objeto: un solo
+ * Release.  Ver WinD3D9_Init. */
+static IDirect3D9Ex*          g_d3dEx      = NULL;
+static IDirect3DDevice9Ex*    g_devEx      = NULL;
 static D3DPRESENT_PARAMETERS  g_pp;
 static int                    g_bbw = 0, g_bbh = 0;     /* backbuffer */
 
@@ -372,11 +383,19 @@ static LPDIRECT3DTEXTURE9 CreateLUT(const SalviaShaderLut* src)
 
     if (!src || !src->pixels || src->width <= 0 || src->height <= 0) return NULL;
 
-    if (FAILED(g_dev->CreateTexture(src->width, src->height, 1, 0, D3DFMT_A8R8G8B8,
-                                    D3DPOOL_MANAGED, &tex, NULL)) || !tex)
+    /* [xbox64] Con D3D9Ex no existe D3DPOOL_MANAGED (CreateTexture falla): ahi
+     * va DYNAMIC en DEFAULT, que con Ex tambien sobrevive a todo. */
+    if (g_devEx)
+    {
+        if (FAILED(g_dev->CreateTexture(src->width, src->height, 1, D3DUSAGE_DYNAMIC,
+                                        D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &tex, NULL)) || !tex)
+            return NULL;
+    }
+    else if (FAILED(g_dev->CreateTexture(src->width, src->height, 1, 0, D3DFMT_A8R8G8B8,
+                                         D3DPOOL_MANAGED, &tex, NULL)) || !tex)
         return NULL;
 
-    if (FAILED(tex->LockRect(0, &lr, NULL, 0))) { tex->Release(); return NULL; }
+    if (FAILED(tex->LockRect(0, &lr, NULL, g_devEx ? D3DLOCK_DISCARD : 0))) { tex->Release(); return NULL; }
     for (y = 0; y < src->height; y++)
         memcpy((unsigned char*)lr.pBits + y * lr.Pitch,
                src->pixels + (size_t)y * src->pitch, (size_t)src->width * 4);
@@ -1172,15 +1191,40 @@ static int RecreateDefaultResources(void)
     return 1;
 }
 
+/* [xbox64, 2026-10-27] El Reset del device Ex: ResetEx CONSERVA los recursos
+ * (los nuestros y los del core), asi que no se suelta ni se recrea nada.  Lo
+ * que si se pierde es el estado del device: el del quad lo repone
+ * SetupQuadState en cada Present, y el del core lo repone su propio bind al
+ * empezar cada pasada.  0 si no hay device Ex o el ResetEx falla. */
+static int ResetExConservando(void)
+{
+    if (!g_devEx) return 0;
+    if (FAILED(g_devEx->ResetEx(&g_pp, NULL))) {
+        OutputDebugStringA("WinD3D9: ResetEx fallo\n");
+        return 0;
+    }
+    if (g_game_tex) g_dev->SetTexture(0, g_game_tex);
+    if (g_vb) {
+        g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
+        g_dev->SetFVF(VTX_FVF);
+    }
+    XBOX_SelectEffect(g_current_effect);
+    g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
+    return 1;
+}
+
 /* Contrapartida de la version de Xbox 360, donde el intervalo de presentacion
  * es un render state (D3DRS_PRESENTINTERVAL) y se cambia sin Reset.
  *
  * En D3D9 de escritorio ese render state NO existe: el intervalo vive en los
- * present parameters y cambiarlo exige un Reset del device, que es justo lo que
- * hay que evitar (invalida los recursos D3DPOOL_DEFAULT que el core tiene en el
- * device compartido).  Asi que aqui es un no-op deliberado: la build de Windows
- * es de desarrollo y se queda con el vsync que pidio el usuario.  El vsync
- * adaptativo de Sync solo actua en la consola, que es donde el core no llega.
+ * present parameters y cambiarlo exige un Reset del device.  Con el device
+ * clasico ese Reset invalida los recursos D3DPOOL_DEFAULT que el core tiene en
+ * el device compartido; con el Ex (ResetExConservando) ya no, pero sigue
+ * siendo un Reset entero y el vsync adaptativo de Sync lo pediria a menudo.
+ * Asi que aqui sigue siendo un no-op deliberado: la build de Windows es de
+ * desarrollo y se queda con el vsync que pidio el usuario (SDL_XBOX_SetVSync).
+ * El vsync adaptativo de Sync solo actua en la consola, que es donde el core
+ * no llega.
  *
  * Si algun dia hace falta en Windows, la via seria una cadena de swap propia
  * (IDirect3DSwapChain9) o D3DPRESENT_DONOTWAIT en el Present, no un Reset. */
@@ -1253,6 +1297,14 @@ void SDL_XBOX_SetVSync(int enable)
 
     g_vsync = enable ? 1 : 0;
     g_pp.PresentationInterval = g_vsync ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
+
+    /* [xbox64] Con device Ex: ResetEx sin soltar nada (ver ResetExConservando).
+     * Lo de abajo es el camino del device clasico. */
+    if (g_devEx) {
+        ResetExConservando();
+        if (g_cs_init) LeaveCriticalSection(&g_cs);
+        return;
+    }
 
     /* Liberar recursos GPU del HLSL background ANTES del Reset.
      * m_vb y los pixel shaders son D3DPOOL_DEFAULT y se destruyen
@@ -1377,7 +1429,23 @@ void WinD3D9_Present(void)
     }
 
     hr = g_dev->Present(NULL, NULL, NULL, NULL);
-    if (hr == D3DERR_DEVICELOST)
+    if (g_devEx) {
+        /* [xbox64] Device Ex: S_PRESENT_OCCLUDED / S_PRESENT_MODE_CHANGED son
+         * exitos (ventana tapada, cambio de modo o de pantalla) y no hay que
+         * hacer nada.  Si aun asi llega un "perdido", ResetEx sin soltar
+         * recursos.  DEVICEREMOVED/HUNG (driver reiniciado, GPU quitada) exige
+         * recrear el device entero: no se hace, solo se avisa una vez. */
+        if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICENOTRESET)
+            ResetExConservando();
+        else if (hr == D3DERR_DEVICEREMOVED || hr == D3DERR_DEVICEHUNG) {
+            static int avisado = 0;
+            if (!avisado) {
+                avisado = 1;
+                OutputDebugStringA("WinD3D9: device Ex quitado o colgado (driver reiniciado?)\n");
+            }
+        }
+    }
+    else if (hr == D3DERR_DEVICELOST)
         HandleDeviceLost();
 
     if (g_cs_init) LeaveCriticalSection(&g_cs);
@@ -1394,7 +1462,21 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     if (g_dev) return 1; /* ya inicializado */
     if (!hwnd || bbw <= 0 || bbh <= 0) return 0;
 
-    g_d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    /* [xbox64, 2026-10-27] D3D9Ex si el sistema lo tiene (Vista+): ver g_d3dEx.
+     * Por GetProcAddress para no depender del simbolo al enlazar; sin el (XP)
+     * se sigue por Direct3DCreate9 y el device clasico de siempre. */
+    {
+        typedef HRESULT (WINAPI *PFN_Direct3DCreate9Ex)(UINT, IDirect3D9Ex **);
+        HMODULE hd3d9 = GetModuleHandleA("d3d9.dll");
+        PFN_Direct3DCreate9Ex crearEx = hd3d9
+            ? (PFN_Direct3DCreate9Ex)GetProcAddress(hd3d9, "Direct3DCreate9Ex") : NULL;
+        if (crearEx && SUCCEEDED(crearEx(D3D_SDK_VERSION, &g_d3dEx)) && g_d3dEx)
+            g_d3d = g_d3dEx;   /* el mismo objeto visto como IDirect3D9 */
+        else
+            g_d3dEx = NULL;
+    }
+    if (!g_d3d)
+        g_d3d = Direct3DCreate9(D3D_SDK_VERSION);
     if (!g_d3d) return 0;
 
     if (FAILED(g_d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dm)))
@@ -1403,7 +1485,7 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     if (SUCCEEDED(g_d3d->GetDeviceCaps(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &caps))) {
         if (caps.PixelShaderVersion < D3DPS_VERSION(3, 0)) {
             OutputDebugStringA("WinD3D9: GPU sin soporte ps_3_0\n");
-            g_d3d->Release(); g_d3d = NULL;
+            g_d3d->Release(); g_d3d = NULL; g_d3dEx = NULL;
             return 0;
         }
     }
@@ -1422,11 +1504,31 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     /* MULTITHREADED: el watcher thread (th_printLoading) puede llamar a
        WinD3D9_Present. FPU_PRESERVE: que D3D no cambie la FPU a precision
        simple y rompa el timing/matematicas del resto de Salvia. */
-    if (FAILED(g_d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
-            D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE,
-            &g_pp, &g_dev))) {
-        g_d3d->Release(); g_d3d = NULL;
-        return 0;
+    {
+        const DWORD flags = D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED |
+                            D3DCREATE_FPU_PRESERVE;
+
+        /* [xbox64] Device Ex (en ventana, sin modo de pantalla).  Si falla, se
+         * suelta el objeto Ex y se vuelve al camino clasico entero: un
+         * CreateDevice desde un IDirect3D9Ex tambien sigue las reglas de Ex
+         * (sin D3DPOOL_MANAGED), y lo de abajo las da por no puestas. */
+        if (g_d3dEx) {
+            if (SUCCEEDED(g_d3dEx->CreateDeviceEx(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
+                                                  flags, &g_pp, NULL, &g_devEx)) && g_devEx) {
+                g_dev = g_devEx;   /* el mismo objeto visto como IDirect3DDevice9 */
+                OutputDebugStringA("WinD3D9: device D3D9Ex\n");
+            } else {
+                g_devEx = NULL;
+                g_d3d->Release(); g_d3d = NULL; g_d3dEx = NULL;
+                g_d3d = Direct3DCreate9(D3D_SDK_VERSION);
+                if (!g_d3d) return 0;
+            }
+        }
+        if (!g_dev && FAILED(g_d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
+                                                 flags, &g_pp, &g_dev))) {
+            g_d3d->Release(); g_d3d = NULL;
+            return 0;
+        }
     }
 
     g_bbw = bbw; g_bbh = bbh;
@@ -1463,8 +1565,11 @@ void WinD3D9_Shutdown(void)
     g_hlslBkg.shutdown();
     if (g_vb) { g_vb->Release(); g_vb = NULL; }
     DestroyShaders();
+    /* g_devEx/g_d3dEx son los mismos objetos: un solo Release (ver g_d3dEx). */
     if (g_dev) { g_dev->Release(); g_dev = NULL; }
     if (g_d3d) { g_d3d->Release(); g_d3d = NULL; }
+    g_devEx = NULL;
+    g_d3dEx = NULL;
 
     if (g_cs_init) {
         LeaveCriticalSection(&g_cs);
