@@ -19,6 +19,8 @@
 #include "../source/gui/DEBUG.h"
 #include "../source/xenon64_diag.h"       /* XBOX64_TRAZAS */
 
+#include <math.h>                         /* sqrt: la zona muerta radial */
+
 /* Los IDs de libretro.  ★ NO se incluye libretro.h: es una cabecera de
  * C++ en este arbol (la usa el wrapper) y arrastra tipos que aqui no
  * hacen falta.  Son cuatro constantes estables del API -- el valor de
@@ -96,6 +98,101 @@ static int eje(unsigned puerto, unsigned indice, unsigned id)
 	return (int)escalado;
 }
 
+/* ====================================================================== */
+/* LA ZONA MUERTA DEL STICK                                               */
+/* ====================================================================== */
+/* [2026-10-27] El stick llegaba al juego tal cual, sin zona muerta: la que
+ * ajusta el menu de Salvia solo cuenta cuando un eje se convierte en BOTON
+ * (io/joystick.cpp), no en el valor analogico que reciben los cores.  Con el
+ * juego leyendo +-80 desde el primer milimetro, el principio del recorrido
+ * era demasiado sensible.
+ *
+ * Copiado de mupen64plus-next (emulate_game_controller_via_libretro.c,
+ * inputGetKeys_reuse, y su opcion astick-deadzone, 15 por defecto): zona
+ * RADIAL -- sobre la longitud del vector, no eje a eje, para que las
+ * diagonales no se peguen a los ejes -- y REESCALADA: pasada la zona, el
+ * recorrido que queda vuelve a ocupar 0..80, asi que los movimientos lentos
+ * siguen siendo posibles.  La referencia no acota a 80 (en diagonal llega a
+ * ~84 con zona); aqui tampoco, solo al rango del campo de 8 bits. */
+#define N64_STICK_MAX 32768.0   /* ASTICK_MAX de la referencia */
+
+static int s_zona = (15 * 32768) / 100;   /* en unidades de libretro */
+
+void xbox64_input_set_zona_muerta(int por_ciento)
+{
+	/* Hasta 90: con 100 el recorrido que queda seria 0 y se dividiria por 0
+	 * (la opcion solo llega a 30, pero el valor viene de fuera). */
+	if (por_ciento < 0)  por_ciento = 0;
+	if (por_ciento > 90) por_ciento = 90;
+	s_zona = (por_ciento * 32768) / 100;
+}
+
+/* [2026-10-27] LA CURVA DE RESPUESTA (peticion del usuario: con el recorrido
+ * lineal, en algunos juegos poco movimiento del stick ya los lleva al
+ * extremo).  Se aplica a `t`, la fraccion del recorrido que queda pasada la
+ * zona muerta (0 en su borde, 1 con el stick a fondo en un eje), y todas las
+ * curvas dan 1 en 1: a fondo se llega al mismo maximo.  Por encima de 1 (las
+ * diagonales, como en la referencia) sigue lineal desde ahi, para no
+ * disparar el exceso.  No es de mupen64plus-next: alli solo hay sensibilidad. */
+static int s_curva = 0;   /* 0 lineal, 1 t^1.5, 2 t^2, 3 t^3 */
+
+void xbox64_input_set_curva(int modo)
+{
+	s_curva = (modo < 0 || modo > 3) ? 0 : modo;
+}
+
+static double aplica_curva(double t)
+{
+	const double tc = (t > 1.0) ? 1.0 : t;
+	double c;
+	switch (s_curva)
+	{
+		case 1:  c = tc * sqrt(tc);  break;
+		case 2:  c = tc * tc;        break;
+		case 3:  c = tc * tc * tc;   break;
+		default: c = tc;             break;
+	}
+	return (t > 1.0) ? c * t : c;
+}
+
+static int redondea(double v)
+{
+	return (int)((v < 0.0) ? (v - 0.5) : (v + 0.5));
+}
+
+static void stick_izquierdo(unsigned puerto, int *x, int *y)
+{
+	const double ax = (double)xbox64_retro_input_state(puerto, RD_DEVICE_ANALOG,
+	                                                   RD_INDEX_LEFT, RD_ID_ANALOG_X);
+	const double ay = (double)xbox64_retro_input_state(puerto, RD_DEVICE_ANALOG,
+	                                                   RD_INDEX_LEFT, RD_ID_ANALOG_Y);
+	const double r  = sqrt(ax * ax + ay * ay);
+	double f;
+	int vx, vy;
+
+	if (r <= (double)s_zona || r <= 0.0)
+	{
+		*x = 0;
+		*y = 0;
+		return;
+	}
+	/* Radio reescalado (t: 0..1 pasada la zona), con la curva, llevado a
+	 * +-80 y repartido entre los dos ejes en la misma direccion (lo que la
+	 * referencia hace con cos/sin del angulo).  Con la curva lineal es la
+	 * formula de la referencia tal cual. */
+	f = aplica_curva((r - (double)s_zona) / (N64_STICK_MAX - (double)s_zona))
+	    * (double)N64_EJE_MAX / r;
+	vx = redondea(ax * f);
+	vy = redondea(ay * f);
+	/* Simetrico, +-127: la Y se niega despues y -128 no tiene opuesto en 8 bits. */
+	if (vx >  127) vx =  127;
+	if (vx < -127) vx = -127;
+	if (vy >  127) vy =  127;
+	if (vy < -127) vy = -127;
+	*x = vx;
+	*y = vy;
+}
+
 static void foto_de(unsigned puerto)
 {
 	BUTTONS b;
@@ -156,9 +253,14 @@ static void foto_de(unsigned puerto)
 	/* --- el stick --------------------------------------------------- */
 	/* ★ LA Y VA INVERTIDA.  En libretro el eje Y crece HACIA ABAJO; en el
 	 * mando de N64, `Y_AXIS` crece HACIA ARRIBA.  Sin el signo, el
-	 * personaje anda al reves y parece un problema del juego. */
-	b.X_AXIS =  eje(puerto, RD_INDEX_LEFT, RD_ID_ANALOG_X);
-	b.Y_AXIS = -eje(puerto, RD_INDEX_LEFT, RD_ID_ANALOG_Y);
+	 * personaje anda al reves y parece un problema del juego.
+	 * Con la zona muerta radial: ver "LA ZONA MUERTA DEL STICK". */
+	{
+		int sx, sy;
+		stick_izquierdo(puerto, &sx, &sy);
+		b.X_AXIS =  sx;
+		b.Y_AXIS = -sy;
+	}
 
 	/* --- los botones C ---------------------------------------------- */
 	/* ★ VAN EN EL STICK DERECHO, y solo ahi.

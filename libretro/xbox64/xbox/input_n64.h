@@ -24,6 +24,17 @@ void xbox64_input_set_device(unsigned puerto, unsigned device);
  * ultima pulsacion de la partida anterior. */
 void xbox64_input_reset(void);
 
+/* La zona muerta del stick izquierdo, en tanto por ciento del recorrido
+ * (opcion xbox64_astick_deadzone, 0..30, 15 por defecto).  Radial y
+ * reescalada, como mupen64plus-next.  Se aplica en la siguiente foto. */
+void xbox64_input_set_zona_muerta(int por_ciento);
+
+/* La curva de respuesta del stick izquierdo (opcion xbox64_astick_curva):
+ * 0 lineal, 1 suave (t^1.5), 2 mas suave (t^2), 3 muy suave (t^3).  Se
+ * aplica al recorrido que queda pasada la zona muerta; todas llegan al
+ * maximo con el stick a fondo.  Se aplica en la siguiente foto. */
+void xbox64_input_set_curva(int modo);
+
 /* --- lo unico que el plugin necesita del wrapper -------------------- */
 
 /* ★ LA DEFINE `libretro_core.cpp`, que es C++, y por eso la declaracion

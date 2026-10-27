@@ -1281,6 +1281,13 @@ static const struct retro_input_descriptor s_desc[] = {
 #define OPT_SAI     "xbox64_2xsai"
 #define OPT_CORE    "xbox64_cpu"
 #define OPT_PAK     "xbox64_pak"
+/* [2026-10-27] Zona muerta del stick izquierdo, en tanto por ciento, como la
+ * astick-deadzone de mupen64plus-next (mismos valores, 15 por defecto).  Ver
+ * "LA ZONA MUERTA DEL STICK" en xbox/input_n64.c.  Se aplica en caliente. */
+#define OPT_ZONA    "xbox64_astick_deadzone"
+/* [2026-10-27] Curva de respuesta del stick izquierdo (lineal por defecto).
+ * Ver "LA CURVA DE RESPUESTA" en xbox/input_n64.c.  Se aplica en caliente. */
+#define OPT_CURVA   "xbox64_astick_curva"
 #define OPT_AUDIO   "xbox64_audio"
 #define OPT_CPO     "xbox64_cpu_speed"
 /* ★ El renderizado con hilo, al estilo de mupen64plus-libretro-nx.  Desde la
@@ -1369,7 +1376,9 @@ static const struct retro_core_option_v2_category s_opts_cats_en[] = {
     { "video",       "Video",
       "Graphics plugin, framebuffer and texture filtering." },
     { "sistema",     "System",
-      "Emulated CPU, controller, sound and per-game patches." },
+      "Emulated CPU, sound and per-game patches." },
+    { "control",     "Controller",
+      "Controller accessory and analog stick response." },
     { "rendimiento", "Performance",
       "Graphics thread and parallel display list." },
     { "diagnostico", "Diagnostics",
@@ -1381,7 +1390,9 @@ static const struct retro_core_option_v2_category s_opts_cats_es[] = {
     { "video",       "V" ES_i "deo",
       "Plugin gr" ES_a "fico, framebuffer y filtrado de texturas." },
     { "sistema",     "Sistema",
-      "CPU emulada, mando, sonido y parches por juego." },
+      "CPU emulada, sonido y parches por juego." },
+    { "control",     "Control",
+      "Accesorio del mando y respuesta del stick anal" ES_o "gico." },
     { "rendimiento", "Rendimiento",
       "Hilo gr" ES_a "fico y lista gr" ES_a "fica en paralelo." },
     { "diagnostico", "Diagn" ES_o "stico",
@@ -1444,12 +1455,39 @@ static const struct retro_core_option_v2_definition s_opts_v2_en[] = {
         "but then there is nowhere to save on the Controller Pak (only one "
         "fits in the console). "
         "None behaves like a bare controller. Applied immediately.",
-        NULL, "sistema",
+        NULL, "control",
         /* ★ "rumble pak" AL FINAL: Salvia guarda el INDICE del valor, y
          * meterlo en medio cambiaria lo que significa un "ninguno" guardado. */
         { { "controller pak", "Controller Pak" }, { "ninguno", "None" },
           { "rumble pak", "Rumble Pak" }, { NULL, NULL } },
         "controller pak"
+    },
+    {
+        OPT_ZONA, "Analog deadzone (percent)", NULL,
+        "Size of the non responsive area around the left stick, as in "
+        "mupen64plus-next. The rest of the travel is rescaled, so slow "
+        "movements are still possible. Applied immediately.",
+        NULL, "control",
+        /* Salvia guarda el INDICE: valores nuevos, siempre al final.  Sin
+         * el signo de tanto por ciento en las etiquetas (ver la nota de los
+         * logs con ese caracter). */
+        { { "0", "0" }, { "5", "5" }, { "10", "10" }, { "15", "15" },
+          { "20", "20" }, { "25", "25" }, { "30", "30" }, { NULL, NULL } },
+        "15"
+    },
+    {
+        OPT_CURVA, "Analog response curve", NULL,
+        "How the left stick travel turns into movement in the game. Linear "
+        "is the usual one. The soft ones leave more control at the start of "
+        "the travel and keep the top speed for the last part, for games "
+        "where a small push already goes too fast. All of them reach the "
+        "maximum with the stick fully pushed. Applied immediately.",
+        NULL, "control",
+        /* Salvia guarda el INDICE: valores nuevos, siempre al final. */
+        { { "lineal", "Linear" }, { "suave", "Soft start" },
+          { "mas suave", "Softer start" }, { "muy suave", "Very soft start" },
+          { NULL, NULL } },
+        "lineal"
     },
     {
         OPT_AUDIO, "Sound", NULL,
@@ -1619,10 +1657,36 @@ static const struct retro_core_option_v2_definition s_opts_v2_es[] = {
         "entonces no hay d" ES_o "nde guardar en el Controller Pak (en la "
         "consola solo cabe uno). "
         "Ninguno responde como un mando sin nada. Se aplica al momento.",
-        NULL, "sistema",
+        NULL, "control",
         { { "controller pak", "Controller Pak" }, { "ninguno", "Ninguno" },
           { "rumble pak", "Rumble Pak" }, { NULL, NULL } },
         "controller pak"
+    },
+    {
+        OPT_ZONA, "Zona muerta del anal" ES_o "gico (por ciento)", NULL,
+        "Tama" ES_n "o de la zona sin respuesta alrededor del stick izquierdo, "
+        "como en mupen64plus-next. El resto del recorrido se reescala, as" ES_i
+        " que los movimientos lentos siguen siendo posibles. Se aplica al "
+        "momento.",
+        NULL, "control",
+        { { "0", "0" }, { "5", "5" }, { "10", "10" }, { "15", "15" },
+          { "20", "20" }, { "25", "25" }, { "30", "30" }, { NULL, NULL } },
+        "15"
+    },
+    {
+        OPT_CURVA, "Curva de respuesta del anal" ES_o "gico", NULL,
+        "C" ES_o "mo se convierte el recorrido del stick izquierdo en "
+        "movimiento en el juego. Lineal es la de siempre. Las suaves dejan m" ES_a "s "
+        "control al principio del recorrido y guardan la velocidad m" ES_a "xima "
+        "para el final, para los juegos en los que con poco ya se va "
+        "demasiado r" ES_a "pido. Todas llegan al m" ES_a "ximo con el stick a "
+        "fondo. Se aplica al momento.",
+        NULL, "control",
+        { { "lineal", "Lineal" }, { "suave", "Suave al inicio" },
+          { "mas suave", "M" ES_a "s suave al inicio" },
+          { "muy suave", "Muy suave al inicio" },
+          { NULL, NULL } },
+        "lineal"
     },
     {
         OPT_AUDIO, "Sonido", NULL,
@@ -1756,6 +1820,10 @@ static const struct retro_variable s_opts_v1[] = {
     { OPT_FBBIL, "Framebuffer texture filtering; auto|activado|desactivado" },
     { OPT_CORE,  "CPU core; recompilador|interprete" },
     { OPT_PAK,   "Controller accessory; controller pak|ninguno|rumble pak" },
+    /* Mismo orden que la V2 (Salvia guarda indices); con V1 el defecto
+     * seria el primero, 0, que es lo de antes. */
+    { OPT_ZONA,  "Analog deadzone (percent); 0|5|10|15|20|25|30" },
+    { OPT_CURVA, "Analog response curve; lineal|suave|mas suave|muy suave" },
     { OPT_AUDIO, "Sound; activado|desactivado" },
     { OPT_CPO,   "Emulated CPU speed; 2 (Wii64)|1 (mas rapida)|3 (mas lenta)" },
     { OPT_GFXH,  "Graphics thread; activado|desactivado" },
@@ -1847,6 +1915,30 @@ static void aplica_opciones(void)
     /* Sin Rumble Pak, ningun motor puede quedarse encendido. */
     if (pak != 3)
         rumble_parar_todo();
+    /* Zona muerta del stick, en caliente (la usa la foto del siguiente
+     * frame).  Sin respuesta del frontend, el 15 por defecto. */
+    int zona = 15;
+    {
+        struct retro_variable v;
+        v.key = OPT_ZONA; v.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
+            zona = atoi(v.value);
+        xbox64_input_set_zona_muerta(zona);
+    }
+    /* La curva del stick, en caliente.  Un valor que no se reconozca se
+     * queda en lineal. */
+    int curva = 0;
+    {
+        struct retro_variable v;
+        v.key = OPT_CURVA; v.value = NULL;
+        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
+        {
+            if      (strcmp(v.value, "suave")     == 0) curva = 1;
+            else if (strcmp(v.value, "mas suave") == 0) curva = 2;
+            else if (strcmp(v.value, "muy suave") == 0) curva = 3;
+        }
+        xbox64_input_set_curva(curva);
+    }
     int audio = lee_opcion(OPT_AUDIO, "activado",       1);
     /* ★ Por defecto ENCENDIDO.  [etapa 4] Ya no es el hilo grafico antiguo
      * (el de la medida de Majora's Mask, quitado el 2026-09-30) sino el
@@ -1956,8 +2048,8 @@ static void aplica_opciones(void)
 
 #if XBOX64_TRAZAS
     logf("[xbox64] opciones: fb=%d 2xsai=%d dynarec=%d pak=%d audio=%d cpo=%d "
-         "gfxh=%d hacks=%d texcache=%d marcatex=%d fbbil=%d",
-         fb, sai, dyna, pak, audio, cpo, gfxh, hacks, texcache, marcatex, fbbil);
+         "gfxh=%d hacks=%d texcache=%d marcatex=%d fbbil=%d zona=%d curva=%d",
+         fb, sai, dyna, pak, audio, cpo, gfxh, hacks, texcache, marcatex, fbbil, zona, curva);
 #endif
 }
 
