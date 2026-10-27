@@ -303,7 +303,14 @@ void saveState() {
         
         // Escribimos un marcador "RCHV" y el tama�o para poder leerlo luego de forma segura
         std::memcpy(ra_ptr, "RCHV", 4);
-        std::memcpy(ra_ptr + 4, &ra_state_size, 4);
+        /* El tamano en BIG-ENDIAN explicito, no en el orden del anfitrion: es el
+         * que siempre ha escrito la Xbox (mismos bytes que antes alli) y asi un
+         * estado se puede cargar en la otra maquina.  Los datos de rcheevos ya
+         * son portables (los escribe en little-endian explicito). */
+        ra_ptr[4] = (uint8_t)((ra_state_size >> 24) & 0xFF);
+        ra_ptr[5] = (uint8_t)((ra_state_size >> 16) & 0xFF);
+        ra_ptr[6] = (uint8_t)((ra_state_size >> 8) & 0xFF);
+        ra_ptr[7] = (uint8_t)(ra_state_size & 0xFF);
         
         if (ra_state_size > 0 && ra_client) {
             rc_client_serialize_progress(ra_client, ra_ptr + 8);
@@ -426,7 +433,18 @@ void loadState(){
 		uint8_t* ra_buffer = NULL;
         // Intentamos leer el marcador "RCHV" y el tama�o de los datos
         if (gzread(file, ra_marker, 4) == 4 && memcmp(ra_marker, "RCHV", 4) == 0) {
-            if (gzread(file, &ra_data_size, 4) == 4 && ra_data_size > 0) {
+            /* Tamano en big-endian explicito: ver saveState.  Un estado viejo de
+             * PC lo traia en little-endian y aqui sale un numero enorme; con el
+             * tope (los datos de rcheevos ocupan KB) se trata como "sin datos de
+             * logros", que es lo mismo que un estado sin bloque RCHV. */
+            uint8_t ra_size_be[4];
+            if (gzread(file, ra_size_be, 4) == 4) {
+                ra_data_size = ((uint32_t)ra_size_be[0] << 24) | ((uint32_t)ra_size_be[1] << 16) |
+                               ((uint32_t)ra_size_be[2] << 8)  |  (uint32_t)ra_size_be[3];
+                if (ra_data_size > 16u * 1024u * 1024u)
+                    ra_data_size = 0;
+            }
+            if (ra_data_size > 0) {
                 ra_buffer = (uint8_t*)malloc(ra_data_size);
                 if (ra_buffer && gzread(file, ra_buffer, (unsigned)ra_data_size) != (int)ra_data_size) {
 					free(ra_buffer);
@@ -437,9 +455,12 @@ void loadState(){
 
 		rc_client_t* ra_client = Achievements::instance()->getClient();
         if (ra_client) {
-			//When loading a save state that does not have runtime state information, 
+			//When loading a save state that does not have runtime state information,
 			//rc_client_deserialize_progress should be called with NULL to reset the runtime state.
-            rc_client_deserialize_progress(ra_client, ra_buffer);
+            /* La version con tamano (la otra esta obsoleta en rcheevos y pasa un
+             * tamano ilimitado): nunca lee mas alla de lo que trae el estado, ni
+             * siquiera si el tamano leido no cuadra (estados viejos de PC). */
+            rc_client_deserialize_progress_sized(ra_client, ra_buffer, ra_buffer ? ra_data_size : 0);
         }
 
 		if (ra_buffer)

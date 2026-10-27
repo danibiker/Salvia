@@ -71,19 +71,28 @@ static unsigned char *const sram = (unsigned char*)(SRAM_LO);
  *     memorias tienen el mismo orden, memcpy tal cual.  El DMA del SP lo esta
  *     siempre (direcciones & ~7, longitud | 7 + 1).
  *   - Si no, byte a byte con ^S8 en los dos lados, que es lo que hace mupen64.
- * En la Xbox no se compila: sigue el memcpy de siempre. */
+ * En la Xbox no se compila: sigue el memcpy de siempre.
+ *
+ * ★ [2026-10-27] SALVO LA SRAM, QUE EN PC VA EN ORDEN N64 (como la EEPROM y el
+ * Controller Pak, y como en la Xbox): el bloque de guardado que lee el frontend
+ * (xbox64_mem_guardado, el .srm) sale asi identico byte a byte en las dos y las
+ * partidas se pueden copiar de una a otra.  Por eso la copia lleva ^S8 solo del
+ * lado de la RDRAM. */
 #ifndef _BIG_ENDIAN
-static void dma_copia_bytes(unsigned char *dst, unsigned int doff,
+static void dma_rdram_a_n64(unsigned char *dst, unsigned int doff,
+                            const unsigned char *rd, unsigned int roff, unsigned int len)
+{
+	unsigned int k;
+	for (k = 0; k < len; k++)
+		dst[doff + k] = rd[(roff + k) ^ S8];
+}
+
+static void dma_n64_a_rdram(unsigned char *rd, unsigned int roff,
                             const unsigned char *src, unsigned int soff, unsigned int len)
 {
 	unsigned int k;
-	if (((doff | soff | len) & 3u) == 0)
-	{
-		memcpy(dst + doff, src + soff, len);
-		return;
-	}
 	for (k = 0; k < len; k++)
-		dst[(doff + k) ^ S8] = src[(soff + k) ^ S8];
+		rd[(roff + k) ^ S8] = src[soff + k];
 }
 #endif
 
@@ -202,7 +211,7 @@ void dma_pi_read()
 						&rdramb[(pi_register.pi_dram_addr_reg)^S8],
 						(pi_register.pi_rd_len_reg & 0xFFFFFE)+2);
 #else
-				dma_copia_bytes(sram, (pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE,
+				dma_rdram_a_n64(sram, (pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE,
 				                rdramb, pi_register.pi_dram_addr_reg,
 				                (pi_register.pi_rd_len_reg & 0xFFFFFE)+2);
 #endif
@@ -284,7 +293,7 @@ void dma_pi_write()
 						&sram[(((pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE))^S8],
 						(pi_register.pi_wr_len_reg & 0xFFFFFE)+2);
 #else
-				dma_copia_bytes(rdramb, pi_register.pi_dram_addr_reg,
+				dma_n64_a_rdram(rdramb, pi_register.pi_dram_addr_reg,
 				                sram, (pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE,
 				                (pi_register.pi_wr_len_reg & 0xFFFFFE)+2);
 #endif
@@ -350,7 +359,7 @@ void dma_pi_write()
 	ROMCache_read(((unsigned char*)rdram + ((unsigned int)(pi_register.pi_dram_addr_reg)^S8)),
 				  i, dma_length);
 #else
-	/* [Windows] Ver dma_copia_bytes: la ROM tiene el mismo orden que la RDRAM. */
+	/* [Windows] Ver "LAS COPIAS DE LOS DMA EN LITTLE-ENDIAN": la ROM tiene el mismo orden que la RDRAM. */
 	if ((((unsigned int)pi_register.pi_dram_addr_reg | (unsigned int)i | (unsigned int)dma_length) & 3u) == 0)
 		ROMCache_read(rdramb + (unsigned int)pi_register.pi_dram_addr_reg, i, dma_length);
 	else
@@ -421,7 +430,7 @@ void dma_sp_write()
 		if (chunk < length)
 			memcpy(&spMemType[0^S8], &rdramb[(dramaddr+chunk)^S8], length-chunk);
 #else
-		/* [Windows] Alineado a 8 siempre: ver dma_copia_bytes. */
+		/* [Windows] Alineado a 8 siempre: ver "LAS COPIAS DE LOS DMA EN LITTLE-ENDIAN". */
 		memcpy(&spMemType[memoff], &rdramb[dramaddr], chunk);
 		if (chunk < length)
 			memcpy(&spMemType[0], &rdramb[dramaddr+chunk], length-chunk);
@@ -460,7 +469,7 @@ void dma_sp_read()
 		if (chunk < length)
 			memcpy(&rdramb[(dramaddr+chunk)^S8], &spMemType[0^S8], length-chunk);
 #else
-		/* [Windows] Alineado a 8 siempre: ver dma_copia_bytes. */
+		/* [Windows] Alineado a 8 siempre: ver "LAS COPIAS DE LOS DMA EN LITTLE-ENDIAN". */
 		memcpy(&rdramb[dramaddr], &spMemType[memoff], chunk);
 		if (chunk < length)
 			memcpy(&rdramb[dramaddr+chunk], &spMemType[0], length-chunk);

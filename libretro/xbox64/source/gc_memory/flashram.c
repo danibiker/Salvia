@@ -138,8 +138,12 @@ void flashram_command(unsigned long command)
 				{
 					int i;
 					flashramWritten = true;
+					/* [Windows, 2026-10-27] La FlashRAM va en ORDEN N64 tambien
+					 * en little-endian: sin ^S8 en su indice (solo en el de la
+					 * RDRAM).  Asi el bloque de guardado (el .srm) es identico
+					 * en la Xbox y en PC.  En la Xbox S8 = 0: el mismo codigo. */
 					for (i=flashRAMInfo.erase_offset; i<(flashRAMInfo.erase_offset+128); i++)
-						flashram[i^S8] = 0xff;
+						flashram[i] = 0xff;
 				}
 				break;
 				case WRITE_MODE:	// Write 128 byte page from RDRAM to the freshly erased page
@@ -147,7 +151,7 @@ void flashram_command(unsigned long command)
 					int i;
 					flashramWritten = true;
 					for (i=0; i<128; i++)
-						flashram[(flashRAMInfo.erase_offset+i)^S8] = ((unsigned char*)rdram)[(flashRAMInfo.write_pointer+i)^S8];
+						flashram[flashRAMInfo.erase_offset+i] = ((unsigned char*)rdram)[(flashRAMInfo.write_pointer+i)^S8];
 				}
 				break;
 				case READ_MODE:
@@ -188,7 +192,7 @@ void dma_read_flashram()
 		case READ_MODE:
 			for (i=0; i<(pi_register.pi_wr_len_reg & 0x0FFFFFE)+2; i++)
 				((unsigned char*)rdram)[(pi_register.pi_dram_addr_reg+i)^S8] =
-				flashram[(((pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE)*2+i)^S8];
+				flashram[((pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE)*2+i];   /* orden N64: ver ERASE_MODE */
 		break;
 		default:
 			//printf("unknown dma_read_flashram:%x\n", flashRAMInfo.mode);
