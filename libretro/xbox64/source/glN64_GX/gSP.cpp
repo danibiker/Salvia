@@ -943,10 +943,11 @@ void gSPLightCBFD( u32 l, s32 n )
 		guVecNormalize((guVector*) &gSP.lights[n].x,(guVector*) &gSP.lights[n].x );
 #endif //__GX__
 
-		gSP.lights[n].posx = (f32)(((s16*)RDRAM)[(address >> 1) + 16]);
-		gSP.lights[n].posy = (f32)(((s16*)RDRAM)[(address >> 1) + 17]);
-		gSP.lights[n].posz = (f32)(((s16*)RDRAM)[(address >> 1) + 18]);
-		gSP.lights[n].ca   = (f32)RDRAM[address + 12] / 16.0f;
+		/* [Windows] Los ^1 / ^3 de GLideN64 en little-endian (0 en la Xbox). */
+		gSP.lights[n].posx = (f32)(((s16*)RDRAM)[((address >> 1) + 16) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].posy = (f32)(((s16*)RDRAM)[((address >> 1) + 17) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].posz = (f32)(((s16*)RDRAM)[((address >> 1) + 18) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].ca   = (f32)RDRAM[(address + 12) ^ N64_BYTE_XOR] / 16.0f;
 	}
 }
 
@@ -965,16 +966,18 @@ void gSPLightAcclaim( u32 l, s32 n )
 
 	if (n >= 0 && n < 8)
 	{
+		/* [Windows] GLideN64 lleva aqui ^1 en los u16 y ^3 en los bytes; Wii64
+		 * los dejo a ^0 (big-endian).  Las macros valen 0 en la Xbox. */
 		const u32 addrShort = addrByte >> 1;
-		gSP.lights[n].posx = (f32)(((s16*)RDRAM)[(addrShort + 0) ^ 0]);
-		gSP.lights[n].posy = (f32)(((s16*)RDRAM)[(addrShort + 1) ^ 0]);
-		gSP.lights[n].posz = (f32)(((s16*)RDRAM)[(addrShort + 2) ^ 0]);
-		gSP.lights[n].ca   = (f32)(((s16*)RDRAM)[(addrShort + 5) ^ 0]);
-		gSP.lights[n].la   = _FIXED2FLOAT( ((u16*)RDRAM)[(addrShort + 6) ^ 0], 16 );
-		gSP.lights[n].qa   = (f32)(((u16*)RDRAM)[(addrShort + 7) ^ 0]);
-		gSP.lights[n].r = GXcastu8f32( RDRAM[(addrByte + 6) ^ 0] );
-		gSP.lights[n].g = GXcastu8f32( RDRAM[(addrByte + 7) ^ 0] );
-		gSP.lights[n].b = GXcastu8f32( RDRAM[(addrByte + 8) ^ 0] );
+		gSP.lights[n].posx = (f32)(((s16*)RDRAM)[(addrShort + 0) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].posy = (f32)(((s16*)RDRAM)[(addrShort + 1) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].posz = (f32)(((s16*)RDRAM)[(addrShort + 2) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].ca   = (f32)(((s16*)RDRAM)[(addrShort + 5) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].la   = _FIXED2FLOAT( ((u16*)RDRAM)[(addrShort + 6) ^ N64_HALFIDX_XOR], 16 );
+		gSP.lights[n].qa   = (f32)(((u16*)RDRAM)[(addrShort + 7) ^ N64_HALFIDX_XOR]);
+		gSP.lights[n].r = GXcastu8f32( RDRAM[(addrByte + 6) ^ N64_BYTE_XOR] );
+		gSP.lights[n].g = GXcastu8f32( RDRAM[(addrByte + 7) ^ N64_BYTE_XOR] );
+		gSP.lights[n].b = GXcastu8f32( RDRAM[(addrByte + 8) ^ N64_BYTE_XOR] );
 		gSP.lights[n].r2 = gSP.lights[n].r;
 		gSP.lights[n].g2 = gSP.lights[n].g;
 		gSP.lights[n].b2 = gSP.lights[n].b;
@@ -1178,12 +1181,14 @@ void gSPNIVertex( u32 v, u32 n, u32 v0 )
 			gSP.vertices[i].s = _FIXED2FLOAT( vertex->s, 5 );
 			gSP.vertices[i].t = _FIXED2FLOAT( vertex->t, 5 );
 
-			u8 *color = &RDRAM[gSP.vertexColorBase + (i << 1)];
+			const u32 colorDir = gSP.vertexColorBase + (i << 1);
 
 			if (gSP.geometryMode & G_LIGHTING)
 			{
-				gSP.vertices[i].nx = (s8)color[0];
-				gSP.vertices[i].ny = (s8)color[1];
+				/* [Windows] Bytes de la RDRAM: ^3 en little-endian, como en
+				 * GLideN64 (0 en la Xbox). */
+				gSP.vertices[i].nx = (s8)RDRAM[(colorDir + 0) ^ N64_BYTE_XOR];
+				gSP.vertices[i].ny = (s8)RDRAM[(colorDir + 1) ^ N64_BYTE_XOR];
 				gSP.vertices[i].nz = (s8)vertex->flag;
 				gSP.vertices[i].a = GXcastu8f32( vertex->color.a );
 			}
@@ -2645,7 +2650,7 @@ static void BgRect1CycStripped( u32 bgAddr )
 		};
 		const u16 *aFormat16 = (const u16*)aFormat;
 
-		u16 L = aFormat16[objBg.imageFmt];
+		u16 L = aFormat16[objBg.imageFmt ^ N64_HALFIDX_XOR];   /* [Windows] el ^1 de GLideN64 */
 		u32 M = aSize[objBg.imageSiz];
 		u16 N = ((objBg.frameW * objBg.scaleW) >> 7) + (K << 5);
 		u16 O = N;
@@ -2973,9 +2978,10 @@ static void BgRectCopyStripped( u32 bgAddr )
 	const u16 *aSize16 = (const u16*)aSize;
 	const u16 imageSzIdx = objBg.imageSiz << 2;
 
-	u16 N0 = aSize16[0 + imageSzIdx];
-	u16 N1 = aSize16[1 + imageSzIdx];
-	u16 N2 = aSize16[2 + imageSzIdx];
+	/* [Windows] El ^1 de GLideN64: la tabla son u32 leidos como u16. */
+	u16 N0 = aSize16[(0 + imageSzIdx) ^ N64_HALFIDX_XOR];
+	u16 N1 = aSize16[(1 + imageSzIdx) ^ N64_HALFIDX_XOR];
+	u16 N2 = aSize16[(2 + imageSzIdx) ^ N64_HALFIDX_XOR];
 
 	G = (G * 0x4000) >> 16;
 
@@ -3491,13 +3497,16 @@ struct S2DEXCoordCorrector
 		const s16 *A01 = (const s16*)CorrectorsA01;
 		const s16 *A23 = (const s16*)CorrectorsA23;
 
+		/* [Windows, 2026-10-26] GLideN64 indexa estas tablas (u32 leidos como
+		 * s16) con ^1, que es lo que Wii64 quito al "adaptarlas a big endian":
+		 * en little-endian vuelve con N64_HALFIDX_XOR (0 en la Xbox). */
 		const u32 O1 = (gSP.objRendermode & (G_OBJRM_SHRINKSIZE_1 | G_OBJRM_SHRINKSIZE_2 | G_OBJRM_WIDEN)) >> 3;
-		A0 = A01[0 + O1];
-		A1 = A01[1 + O1];
+		A0 = A01[(0 + O1) ^ N64_HALFIDX_XOR];
+		A1 = A01[(1 + O1) ^ N64_HALFIDX_XOR];
 
 		const u32 O2 = (gSP.objRendermode & (G_OBJRM_SHRINKSIZE_1 | G_OBJRM_BILERP)) >> 2;
-		A2 = A23[0 + O2];
-		A3 = A23[1 + O2];
+		A2 = A23[(0 + O2) ^ N64_HALFIDX_XOR];
+		A3 = A23[(1 + O2) ^ N64_HALFIDX_XOR];
 
 		if (S2DEX_GetVersion() == S2DEX_VER_1_3)
 		{
@@ -3513,11 +3522,11 @@ struct S2DEXCoordCorrector
 			};
 			const s16 *B = (const s16*)CorrectorsB03_v1_3;
 			const u32 O3 = (_SHIFTL( gSP.objRendermode, 3, 16 ) & (G_OBJRM_SHRINKSIZE_1 | G_OBJRM_SHRINKSIZE_2 | G_OBJRM_WIDEN)) >> 1;
-			B0 = B[0 + O3];
-			B2 = B[2 + O3];
-			B3 = B[3 + O3];
-			B5 = B[5 + O3];
-			B7 = B[7 + O3];
+			B0 = B[(0 + O3) ^ N64_HALFIDX_XOR];
+			B2 = B[(2 + O3) ^ N64_HALFIDX_XOR];
+			B3 = B[(3 + O3) ^ N64_HALFIDX_XOR];
+			B5 = B[(5 + O3) ^ N64_HALFIDX_XOR];
+			B7 = B[(7 + O3) ^ N64_HALFIDX_XOR];
 		}
 		else
 		{
@@ -3526,9 +3535,9 @@ struct S2DEXCoordCorrector
 			};
 			const s16 *B = (const s16*)CorrectorsB03;
 			const u32 O3 = (gSP.objRendermode & G_OBJRM_BILERP) >> 1;
-			B0 = B[0 + O3];
-			B2 = B[2 + O3];
-			B3 = B[3 + O3];
+			B0 = B[(0 + O3) ^ N64_HALFIDX_XOR];
+			B2 = B[(2 + O3) ^ N64_HALFIDX_XOR];
+			B3 = B[(3 + O3) ^ N64_HALFIDX_XOR];
 			B5 = 0;
 			B7 = 0;
 		}
@@ -3684,9 +3693,11 @@ static void _drawYUVImageToFrameBuffer( f32 fUlx, f32 fUly, f32 fLrx, f32 fLry )
 			const u8 y1 = (u8)((t >> 16) & 0xFF);
 			const u8 u  = (u8)((t >> 24) & 0xFF);
 
-			dst[w] = _YUVtoRGBA( y0, u, v );
+			/* [Windows] Indice de u16 ABSOLUTO en la RDRAM con su ^1 en
+			 * little-endian (ulx puede ser impar); en la Xbox es dst[w]. */
+			((u16*)RDRAM)[((rowDst >> 1) + w) ^ N64_HALFIDX_XOR] = _YUVtoRGBA( y0, u, v );
 			if ((w + 1) < width)
-				dst[w + 1] = _YUVtoRGBA( y1, u, v );
+				((u16*)RDRAM)[((rowDst >> 1) + w + 1) ^ N64_HALFIDX_XOR] = _YUVtoRGBA( y1, u, v );
 		}
 	}
 }

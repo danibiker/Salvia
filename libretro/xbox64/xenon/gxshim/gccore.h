@@ -300,8 +300,28 @@ static __inline void ICInvalidateRange(void *startaddr, unsigned int len)
 static __inline void DCFlushRange(void *a, unsigned int n) { (void)a; (void)n; }
 static __inline void DCStoreRange(void *a, unsigned int n) { (void)a; (void)n; }
 static __inline void DCInvalidateRange(void *a, unsigned int n) { (void)a; (void)n; }
-static __inline void DCZeroRange(void *a, unsigned int n) { (void)a; (void)n; }
+/* [Windows, 2026-10-26] El rango SI se pone a cero: es lo que pide el plugin
+ * (ver la nota de la rama de Xbox); lo que sobra en PC es volcar la cache. */
+static __inline void DCZeroRange(void *a, unsigned int n)
+{
+    unsigned char *p = (unsigned char *)a;
+    unsigned int i;
+    for (i = 0; i < n; i++) p[i] = 0;
+}
 static __inline void ICInvalidateRange(void *a, unsigned int n) { (void)a; (void)n; }
+
+/* [Windows] Lo mismo que en la rama de Xbox, y por lo mismo: ver alli. */
+#define GX_DCBZ32(p)  ((void)0)
+#define GX_DCBF32(p)  ((void)0)
+
+#if defined(_MSC_VER)
+#ifndef memalign
+#define memalign(align, size) _aligned_malloc((size), (align))
+#endif
+#ifndef lrint
+#define lrint(x) ((long)((x) >= 0.0 ? ((x) + 0.5) : ((x) - 0.5)))
+#endif
+#endif
 #endif
 
 #ifdef __cplusplus

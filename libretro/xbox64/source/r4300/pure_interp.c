@@ -53,7 +53,7 @@
 #define unlikely(x)     __builtin_expect((x),0)
 #endif
 
-#ifdef __PPC__
+#if defined(__PPC__) || defined(XBOX64_PORT)   /* [Windows] el arbol de Wii64, no la CPU */
 #include "../main/ROM-Cache.h"
 #include "ppc/Wrappers.h"
 #endif
@@ -1497,6 +1497,11 @@ static double interp_redondea(double x, int modo)
 	return floor(x);
      }
 }
+
+/* [Windows, 2026-10-27] Probado y deshecho: saturar en PC las conversiones a
+ * entero fuera de rango como el PowerPC (el x87 da siempre 0x80000000).  Con
+ * la sonda puesta en EP1 Racer no hubo ni una (logs (18)), y la cupula era otra
+ * cosa (la Z sujeta al rango del viewport, ver GXD3D_SetDepthClamp). */
 
 static void ADD_S()
 {

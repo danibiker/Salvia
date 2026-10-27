@@ -83,7 +83,7 @@ enum { MEM_READ_WORD,  MEM_READ_BYTE,  MEM_READ_HALF,  MEM_READ_LONG,
  * definicion no coinciden.  Asi que aqui se anyade la alineacion QUE YA
  * TENIA la definicion: no se cambia nada, se dice lo mismo en los dos
  * sitios.  rdram, mas abajo, ya lo decia en los dos. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 extern __declspec(align(32)) unsigned long SP_DMEM[0x1000/4*2];
 extern unsigned char *const SP_DMEMb;
 extern unsigned long *const SP_IMEM;
@@ -102,7 +102,7 @@ extern unsigned char *const PIF_RAMb;
  * __declspec(align(N)) y va DELANTE.  No se deja caer la alineacion: el
  * arbol la pide a 32 y la declaracion y la definicion (memory.c:82) tienen
  * que coincidir o MSVC da C2086. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX */
 #ifdef USE_EXPANSION
 	extern __declspec(align(32)) unsigned long rdram[0x800000/4];
 #else
@@ -134,7 +134,7 @@ extern unsigned long address, word;
  *
  * Comprobado que nadie que incluya memory.h usa `byte` como TIPO: los
  * ficheros de rsp_hle que lo hacen no incluyen esta cabecera. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: <windows.h> tambien trae `byte` (rpcndr.h) */
 #define byte wii64_byte
 #endif
 extern unsigned char byte;

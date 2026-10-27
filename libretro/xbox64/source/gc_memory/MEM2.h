@@ -26,7 +26,7 @@
 #ifndef MEM2_H
 #define MEM2_H
 
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 /* [Xbox360] REENVIO.  Este fichero es el mapa fijo de la MEM2 de la Wii
  * (desde 0x90000000) y en Xbox 360 esas direcciones no existen.
  *

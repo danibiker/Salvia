@@ -349,6 +349,19 @@ Done:
          : "memory", "cc", "%ecx", "%esi", "%edi", "%eax"
          );
 # endif // PIC
+#else
+    /* [Windows, 2026-10-26] Con NO_ASM (las dos plataformas de este port) la
+     * funcion se quedaba SIN CUERPO.  Solo la llaman las ramas little-endian
+     * (FullTMEM en LoadBlock/LoadTile); la Xbox usa memcpy ahi.  Lo mismo que
+     * el UnswapCopy de C de glN64: el byte N64 `k` del origen esta en la
+     * direccion del anfitrion `(src + k) ^ 3` (la RDRAM empieza alineada). */
+    {
+        const unsigned char *s = (const unsigned char *)src;
+        unsigned char *d = (unsigned char *)dest;
+        uint32 k;
+        for (k = 0; k < numBytes; k++)
+            d[k] = *(const unsigned char *)(((size_t)(s + k)) ^ 3);
+    }
 #endif
 }
 

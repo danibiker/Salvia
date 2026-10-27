@@ -303,10 +303,21 @@ void _2xSaI( void *srcPtr, void *dstPtr,
 			}
 			else
 			{
+#ifndef _BIG_ENDIAN
+				/* [Win32] Cada texel son dos u16 del anfitrion (AARR y luego GGBB):
+				 * leido como u32, AARR va en la mitad BAJA, y el u32 que se escribe
+				 * pone su mitad baja primero.  El bloque AR (0) y el GB (8) con los
+				 * dos texels en el mismo orden que en big-endian. */
+				dstIter->set(0, (product<<16)|(colorA&0xFFFF));
+				dstIter->set(tileW, (product2<<16)|(product1&0xFFFF));
+				dstIter->set(8, (product&0xFFFF0000)|(colorA>>16));
+				dstIter->set(8+tileW, (product2&0xFFFF0000)|(product1>>16));
+#else // !_BIG_ENDIAN
 				dstIter->set(0, (colorA&0xFFFF0000)|(product>>16));
 				dstIter->set(tileW, (product1&0xFFFF0000)|(product2>>16));
 				dstIter->set(8, ((colorA&0xFFFF)<<16)|(product&0xFFFF));
 				dstIter->set(8+tileW, ((product1&0xFFFF)<<16)|(product2&0xFFFF));
+#endif // _BIG_ENDIAN
 				(*dstIter) += 1;
 			}
 

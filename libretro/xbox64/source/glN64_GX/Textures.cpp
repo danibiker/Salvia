@@ -91,25 +91,31 @@ inline u32 GXGetIA44_IA4( u64 *src, u16 x, u16 i, u8 palette )
 	return (u32) color;
 }
 
+/* [Windows, 2026-10-26] LA TMEM ESTA EN EL ORDEN DE BYTES DEL N64 EN LAS DOS
+ * PLATAFORMAS (LoadBlock/LoadTile con UnswapCopy, LoadTLUT con su rama
+ * little-endian de glN64), asi que los bytes se leen igual y cada lectura de
+ * 16/32 bits pasa por N64_BE16/N64_BE32 (xbox/endian_n64.h): en la Xbox es la
+ * identidad, en PC un bswap.  El texel GX se devuelve como VALOR y lo guarda
+ * el que llama como u16 del anfitrion; el shim lo lee igual (GXD3D_TEXEL16). */
 inline u32 GXGetCI4IA_IA8( u64 *src, u16 x, u16 i, u8 palette )
 {
 	u8 ind4B = ((u8*)src)[(x>>1)^(i<<1)];
-	u16 color = (x & 1) ?	*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B & 0x0F)] :
-							*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B >> 4)];
+	u16 color = (x & 1) ?	N64_BE16(*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B & 0x0F)]) :
+							N64_BE16(*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B >> 4)]);
 	color = ((color & 0xff00) >> 8) | ((color & 0x00ff) << 8);
 	return (u32) color;
 }
 
 inline u32 GXGetCI8IA_IA8( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 color = *(u16*)(void*)&TMEM[256 + ((u8*)src)[x^(i<<1)]];
+	u16 color = N64_BE16(*(u16*)(void*)&TMEM[256 + ((u8*)src)[x^(i<<1)]]);
 	color = ((color & 0xff00) >> 8) | ((color & 0x00ff) << 8);
 	return (u32) color;
 }
 
 inline u32 GXGetCI16IA_IA8( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 color = *(u16*)(void*)&TMEM[256 + (u8)((u16*)src)[x^i]];
+	u16 color = N64_BE16(*(u16*)(void*)&TMEM[256 + (u8)N64_BE16(((u16*)src)[x^i])]);
 	color = ((color & 0xff00) >> 8) | ((color & 0x00ff) << 8);
 	return (u32) color;
 }
@@ -117,8 +123,8 @@ inline u32 GXGetCI16IA_IA8( u64 *src, u16 x, u16 i, u8 palette )
 inline u32 GXGetCI4RGBA_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 {
 	u8 ind4B = ((u8*)src)[(x>>1)^(i<<1)];
-	u16 c = (x & 1) ?	*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B & 0x0F)] :
-						*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B >> 4)];
+	u16 c = (x & 1) ?	N64_BE16(*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B & 0x0F)]) :
+						N64_BE16(*(u16*)(void*)&TMEM[256 + (palette << 4) + (ind4B >> 4)]);
 	if ((c&1) != 0)		c = 0x8000|(((c>>11)&0x1F)<<10)|(((c>>6)&0x1F)<<5)|((c>>1)&0x1F);   //opaque texel
 	else				c = 0x0000|(((c>>12)&0xF)<<8)|(((c>>7)&0xF)<<4)|((c>>2)&0xF);   //transparent texel
 	return (u32) c;
@@ -126,7 +132,7 @@ inline u32 GXGetCI4RGBA_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 
 inline u32 GXGetCI8RGBA_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 c = *(u16*)(void*)&TMEM[256 + ((u8*)src)[x^(i<<1)]];
+	u16 c = N64_BE16(*(u16*)(void*)&TMEM[256 + ((u8*)src)[x^(i<<1)]]);
 	if ((c&1) != 0)	c = 0x8000|(((c>>11)&0x1F)<<10)|(((c>>6)&0x1F)<<5)|((c>>1)&0x1F);   //opaque texel
 	else			c = 0x0000|(((c>>12)&0xF)<<8)|(((c>>7)&0xF)<<4)|((c>>2)&0xF);   //transparent texel
 	return (u32) c;
@@ -134,7 +140,7 @@ inline u32 GXGetCI8RGBA_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 
 inline u32 GXGetCI16RGBA_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 c = *(u16*)(void*)&TMEM[256 + (u8)((u16*)src)[x^i]];
+	u16 c = N64_BE16(*(u16*)(void*)&TMEM[256 + (u8)N64_BE16(((u16*)src)[x^i])]);
 	if ((c&1) != 0)	c = 0x8000|(((c>>11)&0x1F)<<10)|(((c>>6)&0x1F)<<5)|((c>>1)&0x1F);   //opaque texel
 	else			c = 0x0000|(((c>>12)&0xF)<<8)|(((c>>7)&0xF)<<4)|((c>>2)&0xF);   //transparent texel
 	return (u32) c;
@@ -149,14 +155,14 @@ inline u32 GXGetI8_IA8( u64 *src, u16 x, u16 i, u8 palette )
 
 inline u32 GXGetIA88_IA8( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 color = ((u16*)src)[x^i];
+	u16 color = N64_BE16(((u16*)src)[x^i]);
 	color = ((color & 0xff00) >> 8) | ((color & 0x00ff) << 8);
 	return (u32) color;
 }
 
 inline u32 GXGetRGBA5551_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 c = ((u16*)src)[x^i];
+	u16 c = N64_BE16(((u16*)src)[x^i]);
 	if ((c&1) != 0)		c = 0x8000|(((c>>11)&0x1F)<<10)|(((c>>6)&0x1F)<<5)|((c>>1)&0x1F);   //opaque texel
 	else				c = 0x0000|(((c>>12)&0xF)<<8)|(((c>>7)&0xF)<<4)|((c>>2)&0xF);   //transparent texel
 	return (u32) c;
@@ -164,7 +170,7 @@ inline u32 GXGetRGBA5551_RGB5A3( u64 *src, u16 x, u16 i, u8 palette )
 
 inline u32 GXGetUYVY8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 {
-	u16 color = ((u16*)src)[x^i];
+	u16 color = N64_BE16(((u16*)src)[x^i]);
 	s32 y, u, v;
 	s32 r, g, b;
 
@@ -172,14 +178,14 @@ inline u32 GXGetUYVY8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 	{
 		y = color & 0xFF;
 		v = (color >> 8) - 0x80;
-		color = ((u16*)src)[x^i^1];
+		color = N64_BE16(((u16*)src)[x^i^1]);
 		u = (color >> 8) - 0x80;
 	}
 	else
 	{
 		y = color & 0xFF;
 		u = (color >> 8) - 0x80;
-		color = ((u16*)src)[x^i^1];
+		color = N64_BE16(((u16*)src)[x^i^1]);
 		v = (color >> 8) - 0x80;
 	}
 
@@ -207,7 +213,7 @@ inline u32 GXGetUYVY8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 inline u32 GXGetRGBA8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 {
 //set palette = 0 for AR texels and palette = 1 for GB texels
-	u32 c = ((u32*)src)[x^i]; // 0xRRGGBBAA
+	u32 c = N64_BE32(((u32*)src)[x^i]); // 0xRRGGBBAA
 	u16 color = (palette & 1) ? /* GGBB */ (u16) ((c >> 8) & 0x0000FFFF) : /* AARR */ (u16) (((c & 0x000000FF) << 8) | (c >> 24));
 	return (u32) color;
 }
@@ -222,7 +228,7 @@ inline u32 GXGetRGBA8888_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
  * compare tire las Z cercanas, que tienen el byte alto a 0. */
 inline u32 GXGetRE2Z_RGBA8( u64 *src, u16 x, u16 i, u8 palette )
 {
-	const u16 z = ((u16*)src)[x^i];
+	const u16 z = N64_BE16(((u16*)src)[x^i]);
 	return (palette & 1) ? /* GGBB */ (u32)((z & 0x00FF) << 8) : /* AARR */ (u32)(0xFF00 | (z >> 8));
 }
 
@@ -1307,6 +1313,29 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 //	UnswapCopy( &RDRAM[gSP.bgImage.address], swapped, numBytes );
 //	dest = (u32*)malloc( texInfo->textureBytes );
 
+	/* [Windows, 2026-10-26] EL FONDO EN EL ORDEN DE BYTES DEL N64.  Los getters
+	 * leen como en la TMEM (orden del N64), y aqui se les da la RDRAM directa:
+	 * en big-endian es lo mismo; en little-endian la RDRAM esta en palabras
+	 * del anfitrion y hay que darle la vuelta, que es justo lo que hacia el
+	 * glN64 original con las dos lineas comentadas de arriba.  Bufer estatico
+	 * que solo crece (nada de malloc por fondo); solo en PC. */
+#ifdef _BIG_ENDIAN
+#define TEXBG_FILA(ty) (&RDRAM[gSP.bgImage.address + (bpl * (ty))])
+#else
+	static u8  *s_bgOrdenN64    = NULL;
+	static u32  s_bgOrdenN64Cap = 0;
+	if (numBytes > s_bgOrdenN64Cap)
+	{
+		free(s_bgOrdenN64);
+		s_bgOrdenN64    = (u8*)malloc(numBytes);
+		s_bgOrdenN64Cap = s_bgOrdenN64 ? numBytes : 0;
+	}
+	if (s_bgOrdenN64)
+		UnswapCopy( &RDRAM[gSP.bgImage.address], s_bgOrdenN64, numBytes );
+#define TEXBG_FILA(ty) (s_bgOrdenN64 ? s_bgOrdenN64 + (bpl * (ty)) \
+                                     : &RDRAM[gSP.bgImage.address + (bpl * (ty))])
+#endif
+
 	if (texInfo->textureBytes > 0)
 	{
 		dest = (u8*) __lwp_heap_allocate(GXtexCache,texInfo->textureBytes);
@@ -1346,7 +1375,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 					for (k = 0; k < 4; k++)
 					{
 						ty = (y+k) % wrapT;
-						src = &RDRAM[gSP.bgImage.address + (bpl * ty)];
+						src = TEXBG_FILA(ty);
 						for (l = 0; l < 8; l++)
 						{
 							tx = (x+l) % wrapS;
@@ -1369,7 +1398,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 					for (k = 0; k < 4; k++)
 					{
 						ty = (y+k) % wrapT;
-						src = &RDRAM[gSP.bgImage.address + (bpl * ty)];
+						src = TEXBG_FILA(ty);
 						for (l = 0; l < 4; l++)
 						{
 							tx = (x+l) % wrapS;
@@ -1393,7 +1422,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 					for (k = 0; k < 4; k++)
 					{
 						ty = (y+k) % wrapT;
-						src = &RDRAM[gSP.bgImage.address + (bpl * ty)];
+						src = TEXBG_FILA(ty);
 						for (l = 0; l < 4; l++)
 						{
 							tx = (x+l) % wrapS;
@@ -1421,8 +1450,8 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 		for (y = 0; y < texInfo->realHeight; y++)
 		{
 			ty = y % wrapT;
-			src = &RDRAM[gSP.bgImage.address + (bpl * ty)];
-	
+			src = TEXBG_FILA(ty);
+
 			for (x = 0; x < texInfo->realWidth; x++)
 			{
 				tx = x % wrapS;
@@ -1477,6 +1506,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 		__lwp_heap_free(GXtexCache, dest);
 		DCFlushRange(scaledDest, texInfo->textureBytes);
 	}	//	cache.enable2xSaI
+#undef TEXBG_FILA
 #endif // __GX__
 
 #ifndef __GX__
@@ -2812,10 +2842,17 @@ static BOOL TextureCache_LoadAtlas( CachedTexture *texInfo, u32 niveles )
 				{
 					const u32 c = lin[(y + k) * ATLAS_ANCHO + x + l];
 					const u32 j = (k * 4 + l) * 2;
+#ifdef _BIG_ENDIAN
 					dst[j]      = (u8)(c >> 24);
 					dst[j + 1]  = (u8)(c >> 16);
 					dst[32 + j]     = (u8)(c >> 8);
 					dst[32 + j + 1] = (u8)c;
+#else
+					/* [Windows] Como el resto de texels GX: 0xAARR / 0xGGBB
+					 * como u16 del anfitrion (ver GXD3D_TEXEL16 en el shim). */
+					*(u16*)(void*)&dst[j]      = (u16)(c >> 16);
+					*(u16*)(void*)&dst[32 + j] = (u16)c;
+#endif
 				}
 			}
 			dst += 64;

@@ -13,6 +13,13 @@
 
 extern "C" void DebugOutputString(const char *msg);
 
+#if !defined(_XBOX)
+/* [Windows, EP1 Racer] Marcado `verz` (23 = GLN64_MARCA_VERZ, gln64_prof.h): el
+ * Z del buffer pintado sobre el frame antes de entregarlo (gx_d3d9.cpp). */
+extern "C" volatile int gln64_marcaluz;
+void gxd3d_pc_ver_z(IDirect3DDevice9 *dev);
+#endif
+
 /* -- VIDEO_EDRAM_MANUAL ------------------------------------------------------
  *
  * A 1 se coloca a mano el Z del core detras de su color en la EDRAM, con
@@ -48,6 +55,16 @@ static IDirect3DDevice9  *s_dev      = NULL;
 
 static IDirect3DSurface9 *s_rt       = NULL;   /* render target del core   */
 static IDirect3DSurface9 *s_ds       = NULL;   /* depth-stencil del core   */
+#if !defined(_XBOX)
+/* [Windows, 2026-10-26] La Z del core como TEXTURA INTZ: el formato de cuatro
+ * letras que los drivers de D3D9 (NVIDIA, AMD, Intel) aceptan como
+ * depth-stencil Y como textura muestreable, que es la unica forma de leer la
+ * profundidad en el D3D9 de PC (aqui no hay Resolve).  `s_ds` es su nivel 0.
+ * NULL si el driver no la acepta: entonces la Z es la D24S8 de siempre y las
+ * copias de profundidad siguen apagadas (gx_d3d9.cpp, "LOS HUECOS EN PC"). */
+static IDirect3DTexture9 *s_dsTex    = NULL;
+#define VH_FMT_INTZ ((D3DFORMAT)MAKEFOURCC('I', 'N', 'T', 'Z'))
+#endif
 static IDirect3DTexture9 *s_tex      = NULL;   /* la que ve el frontend    */
 static IDirect3DSurface9 *s_backbuf  = NULL;   /* back buffer del frontend */
 /* [Mario Tennis, hack_ziComoColor] Segundo color para la mascara de la estela
@@ -100,6 +117,46 @@ static void vh_log(const char *msg)
 }
 #endif
 
+/* Copia el render target del core a la textura de entrega.
+ *
+ * Xbox 360: Resolve, que es la UNICA forma de sacar algo de la EDRAM (y que
+ * escribe la textura tileada, que es lo que el frontend muestrea).
+ *
+ * [Windows, 2026-10-26] StretchRect a la superficie de la textura, creada con
+ * D3DUSAGE_RENDERTARGET (xenon64_video_init) porque es la unica clase de
+ * textura que StretchRect acepta como destino.
+ *
+ * RECT DE ORIGEN EXPLICITO en los dos: en la Xbox, con NULL el destino se
+ * queda SIN TOCAR cuando el render target y la textura no miden lo mismo
+ * (medido con FBG_DUMP; ver Fbg_GpuResolve). */
+static HRESULT vh_copia_a_textura(void)
+{
+#if defined(_XBOX)
+    D3DRECT src;
+    src.x1 = 0;
+    src.y1 = 0;
+    src.x2 = s_w;
+    src.y2 = s_h;
+    return s_dev->Resolve(D3DRESOLVE_RENDERTARGET0, &src, s_tex,
+                          NULL, 0, 0, NULL, 0.0f, 0, NULL);
+#else
+    IDirect3DSurface9 *dst = NULL;
+    RECT r;
+    HRESULT hr;
+
+    r.left   = 0;
+    r.top    = 0;
+    r.right  = s_w;
+    r.bottom = s_h;
+    hr = s_tex->GetSurfaceLevel(0, &dst);
+    if (FAILED(hr) || !dst)
+        return FAILED(hr) ? hr : E_FAIL;
+    hr = s_dev->StretchRect(s_rt, &r, dst, &r, D3DTEXF_NONE);
+    dst->Release();
+    return hr;
+#endif
+}
+
 extern "C" void xenon64_video_set_device(void *pDevice)
 {
     s_dev = (IDirect3DDevice9 *)pDevice;
@@ -138,7 +195,9 @@ extern "C" int xenon64_video_init(int width, int height)
         return 0;
     }
 
-#if VIDEO_EDRAM_MANUAL
+    /* [Windows, 2026-10-26] En PC no hay EDRAM que repartir: la rama de abajo,
+     * la de las superficies colocadas a mano, es solo de la Xbox. */
+#if VIDEO_EDRAM_MANUAL && defined(_XBOX)
     {
         D3DSURFACE_PARAMETERS sp;
         UINT colorTiles;
@@ -275,9 +334,43 @@ extern "C" int xenon64_video_init(int width, int height)
         xenon64_video_shutdown();
         return 0;
     }
+#if !defined(_XBOX)
+    /* [Windows] Primero INTZ (ver s_dsTex); si no, la D24S8 de siempre. */
+    hr = s_dev->CreateTexture(width, height, 1, D3DUSAGE_DEPTHSTENCIL, VH_FMT_INTZ,
+                              D3DPOOL_DEFAULT, &s_dsTex, NULL);
+    if (SUCCEEDED(hr) && s_dsTex)
+    {
+        hr = s_dsTex->GetSurfaceLevel(0, &s_ds);
+        if (FAILED(hr) || !s_ds)
+        {
+            s_dsTex->Release();
+            s_dsTex = NULL;
+            s_ds = NULL;
+        }
+    }
+    else
+        s_dsTex = NULL;
+#if XBOX64_TRAZAS
+    sprintf(dbg, "[VH] Z del core: %s", s_dsTex ? "INTZ (copias de profundidad en PC)"
+                                               : "D24S8 (sin INTZ: sin copias de Z)");
+    vh_log(dbg);
+#endif
+    if (!s_ds)
+#endif
     hr = s_dev->CreateDepthStencilSurface(width, height, D3DFMT_D24S8,
                                           D3DMULTISAMPLE_NONE, 0, TRUE,
                                           &s_ds, NULL);
+#if !defined(_XBOX)
+    /* [Windows] La mascara de Mario Tennis (hack_ziComoColor), sin limite de
+     * EDRAM: siempre.  Un fallo aqui no es fatal, como en la Xbox. */
+    if (SUCCEEDED(hr) && s_ds)
+    {
+        if (FAILED(s_dev->CreateRenderTarget(width, height, D3DFMT_A8R8G8B8,
+                                             D3DMULTISAMPLE_NONE, 0, FALSE,
+                                             &s_rtMasc, NULL)))
+            s_rtMasc = NULL;
+    }
+#endif
 #endif
 
     if (FAILED(hr) || !s_ds)
@@ -294,9 +387,16 @@ extern "C" int xenon64_video_init(int width, int height)
     /* La textura de entrega.  Formato TILEADO a proposito (sin LIN_), que es
      * lo que Resolve escribe de todas formas; es el mismo CreateTexture que
      * usa Fbg_GpuCreate (d3d9_backend.cpp:6178), o sea un destino de Resolve
-     * ya probado en este arbol. */
+     * ya probado en este arbol.
+     * [Windows] Con D3DUSAGE_RENDERTARGET: es el destino de un StretchRect
+     * (vh_copia_a_textura). */
+#if defined(_XBOX)
     hr = s_dev->CreateTexture(width, height, 1, 0, D3DFMT_A8R8G8B8,
                               D3DPOOL_DEFAULT, &s_tex, NULL);
+#else
+    hr = s_dev->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
+                              D3DPOOL_DEFAULT, &s_tex, NULL);
+#endif
     if (FAILED(hr) || !s_tex)
     {
 #if XBOX64_TRAZAS
@@ -330,18 +430,12 @@ extern "C" int xenon64_video_init(int width, int height)
      * Clear + quad + Present del siguiente frame caeria dentro de nuestra
      * textura (trampa nº3 de video_handoff.h). */
     {
-        D3DRECT src;
         s_dev->SetRenderTarget(0, s_rt);
         s_dev->SetDepthStencilSurface(s_ds);
         s_dev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
                      D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
 
-        /* RECT explicito por la misma razon que en el resolve de entrega:
-         * con NULL el destino se queda SIN TOCAR si los tamanos no casan. */
-        src.x1 = 0;  src.y1 = 0;
-        src.x2 = s_w; src.y2 = s_h;
-        s_dev->Resolve(D3DRESOLVE_RENDERTARGET0, &src, s_tex,
-                       NULL, 0, 0, NULL, 0.0f, 0, NULL);
+        vh_copia_a_textura();
 
         if (s_backbuf)
         {
@@ -370,6 +464,9 @@ extern "C" void xenon64_video_shutdown(void)
 
     if (s_tex)     { s_tex->Release();     s_tex = NULL; }
     if (s_ds)      { s_ds->Release();      s_ds = NULL; }
+#if !defined(_XBOX)
+    if (s_dsTex)   { s_dsTex->Release();   s_dsTex = NULL; }   /* [Windows] INTZ */
+#endif
     if (s_rtMasc)  { s_rtMasc->Release();  s_rtMasc = NULL; }
     if (s_rt)      { s_rt->Release();      s_rt = NULL; }
     if (s_backbuf) { s_backbuf->Release(); s_backbuf = NULL; }
@@ -410,6 +507,15 @@ extern "C" void xenon64_video_frame_begin(void)
         vp.MaxZ = 1.0f;
         s_dev->SetViewport(&vp);
     }
+
+#if !defined(_XBOX)
+    /* [Windows, 2026-10-26] El D3D9 de PC solo dibuja entre BeginScene y
+     * EndScene (en la Xbox no hacen falta, y ni el core ni el frontend de la
+     * consola los llaman).  Todo lo que el consumidor de la cola ejecuta en
+     * este frame cae entre este y el de xenon64_video_frame_end; la escena
+     * del frontend (WinD3D9_Present) va despues, fuera de esta. */
+    s_dev->BeginScene();
+#endif
 }
 
 extern "C" void xenon64_video_frame_end(void)
@@ -426,6 +532,12 @@ extern "C" void xenon64_video_frame_end(void)
      * d3dq_sinc en d3d9_grabador.h. */
     d3dq_sinc();
 
+#if !defined(_XBOX)
+    /* [Windows] El cierre de la escena de xenon64_video_frame_begin. */
+    if (s_rt)
+        s_dev->EndScene();
+#endif
+
     if (s_backbuf)
     {
         s_dev->SetRenderTarget(0, s_backbuf);
@@ -436,7 +548,6 @@ extern "C" void xenon64_video_frame_end(void)
 extern "C" int xenon64_video_resolve(void)
 {
     HRESULT hr;
-    D3DRECT src;
 
     if (!s_dev || !s_tex || s_w <= 0 || s_h <= 0)
         return 0;
@@ -460,16 +571,12 @@ extern "C" int xenon64_video_resolve(void)
      * dibujos anteriores ya se han ejecutado, por orden.  Con el grabador a
      * 0 o a 1 el `d3dq_sinc()` era un no-op de todas formas. */
 
-    /* RECT DE ORIGEN EXPLICITO, no NULL: con NULL el destino se queda SIN
-     * TOCAR cuando el render target y la textura no miden lo mismo.  Esta
-     * medido en este arbol con FBG_DUMP; ver Fbg_GpuResolve. */
-    src.x1 = 0;
-    src.y1 = 0;
-    src.x2 = s_w;
-    src.y2 = s_h;
-
-    hr = s_dev->Resolve(D3DRESOLVE_RENDERTARGET0, &src, s_tex,
-                        NULL, 0, 0, NULL, 0.0f, 0, NULL);
+#if !defined(_XBOX)
+    if (gln64_marcaluz == 23)   /* GLN64_MARCA_VERZ: ver arriba */
+        gxd3d_pc_ver_z(s_dev);
+#endif
+    /* RECT DE ORIGEN EXPLICITO, no NULL: ver vh_copia_a_textura. */
+    hr = vh_copia_a_textura();
     if (FAILED(hr))
     {
 #if XBOX64_TRAZAS
@@ -497,6 +604,9 @@ extern "C" int xenon64_video_resolve(void)
 extern "C" void *xenon64_video_texture(void) { return (void *)s_tex; }
 extern "C" void *xenon64_video_rt_core(void)     { return (void *)s_rt; }
 extern "C" void *xenon64_video_rt_mascara(void)  { return (void *)s_rtMasc; }
+#if !defined(_XBOX)
+extern "C" void *xenon64_video_z_textura(void)   { return (void *)s_dsTex; }   /* [Windows] INTZ o NULL */
+#endif
 extern "C" int   xenon64_video_width(void)   { return s_w; }
 extern "C" int   xenon64_video_height(void)  { return s_h; }
 

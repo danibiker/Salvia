@@ -1,5 +1,7 @@
 /*
- * xbox/dynarec_ausente.c  --  los cinco simbolos del dynarec, en la fase 1.
+ * xbox/dynarec_ausente.c  --  los simbolos del dynarec sin dynarec (fase 1
+ * en Xbox; Windows, que no lo tiene).  Eran cinco; la lista entera esta al
+ * final del fichero.
  *
  * `r4300/ppc/*.c` no entra en el enlace hasta la fase 3, pero el nucleo
  * REFERENCIA cinco de sus simbolos.  Censado sobre los .c de la fase 1:
@@ -99,6 +101,24 @@ void invalidate_func(unsigned int addr)
 void dynarec_tlbvar_vaciar(void)
 {
 	DEBUG_print("dynarec_ausente: se ha LLAMADO a dynarec_tlbvar_vaciar()", DBG_USBGECKO);
+}
+
+/* [Windows, logs (6)] Los dos que faltaban del censo, de la fase 3 en adelante
+ * (en la Xbox nunca se echaron en falta: alli ppc/ esta en el enlace).
+ *   dynarec_olvida_enlace  r4300.c:217 (rama `else` de go(), la del dynarec) y
+ *                          savestate_n64.c:341 (tras `if (dynacore != 1) return;`)
+ *   invalidate_block       savestate_n64.c:334 (idem)
+ * Con el interprete puro ninguno se alcanza, igual que los de arriba. */
+void dynarec_olvida_enlace(void)
+{
+	DEBUG_print("dynarec_ausente: se ha LLAMADO a dynarec_olvida_enlace()", DBG_USBGECKO);
+}
+
+void invalidate_block(PowerPC_block *ppc_block, int is_deinit)
+{
+	(void)ppc_block;
+	(void)is_deinit;
+	DEBUG_print("dynarec_ausente: se ha LLAMADO a invalidate_block()", DBG_USBGECKO);
 }
 
 #endif /* !XBOX64_DYNAREC */

@@ -88,6 +88,11 @@ void        *xenon64_video_texture(void);
  * NULL si no cupo en la EDRAM).  Ver GXD3D_SetDestinoColor. */
 void        *xenon64_video_rt_core(void);
 void        *xenon64_video_rt_mascara(void);
+#if !defined(_XBOX)
+/* [Windows] La Z del core como textura INTZ (IDirect3DTexture9 *), o NULL si
+ * el driver no la acepto.  La leen las copias de profundidad de gx_d3d9.cpp. */
+void        *xenon64_video_z_textura(void);
+#endif
 int          xenon64_video_width(void);
 int          xenon64_video_height(void);
 

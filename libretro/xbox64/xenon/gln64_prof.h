@@ -487,6 +487,13 @@ extern volatile unsigned int gln64_dbg_nocombw;
  * en gris opaco (negro = 0, blanco = 1).  Ver gxd3d_build_texalfa en
  * xenon/gx_d3d9_tev.cpp. */
 #define GLN64_MARCA_TEXALFA  21
+/* [Windows, EP1 Racer] HERRAMIENTA FIJA, solo en PC: al entregar el frame pinta
+ * encima el Z QUE QUEDO en el buffer, con la paleta de `prof` (gxd3d_pc_ver_z
+ * en gx_d3d9.cpp, llamada desde xenon64_video_resolve).  Comparada con `prof`
+ * dice si una superficie no dejo su Z (asi se vio que el D3D9 de PC sujeta la
+ * profundidad del shader al viewport).  El 23 va tambien a pelo alli.  (El 22,
+ * `clamptodo`, fue una prueba ya retirada.) */
+#define GLN64_MARCA_VERZ      23
 
 extern volatile int          gln64_marcaluz;   /* la palanca (opcion de core) */
 /* Opcion `xbox64_fb_bilineal`: 0 auto, 1 activado, 2 desactivado.  Ver

@@ -28,11 +28,12 @@
 #include "Config.h"
 #include "FrameBuffer.h"
 
-#if defined(HW_RVL) || defined(_XBOX)
+#if defined(HW_RVL) || defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 #include "../gc_memory/MEM2.h"
 
-#if defined(_XBOX)
-/* [Xbox360] `__builtin_clz` es de GCC; en MSVC para Xenon es esto. */
+#if defined(XBOX64_PORT)
+/* [Xbox360] `__builtin_clz` es de GCC; en MSVC para Xenon es esto.
+ * [Windows] El de xbox/win32/ppcintrinsics.h. */
 #include <ppcintrinsics.h>
 #define __builtin_clz( x )	_CountLeadingZeros( x )
 #endif
@@ -49,7 +50,7 @@ static u8  * const dcBuf = (u8*)DEPTHCOPY_BUF_LO;
 static u16 * const dcLut = (u16*)DEPTHCOPY_LUT_LO;
 
 // Not sure if these really help considering it's in MEM2?
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX; en PC __dcbt no hace nada */
 /* [Xbox360] Sin ensamblador en linea en MSVC.  El prefetch es el mismo
  * `dcbt`.  El CLAIM se queda VACIO: en Xenon la linea de cache es de 128
  * bytes y no de 32, asi que un `dcbz` sobre una fila de 16 pixeles (32 bytes)
@@ -157,10 +158,14 @@ static void _dcConvert( u16 *dst, u32 width, u32 height )
 					DC_CLAIM( out );
 
 				const u16 *t = tile + (r << 2);
-				out[0] = dcLut[t[0]];
-				out[1] = dcLut[t[1]];
-				out[2] = dcLut[t[2]];
-				out[3] = dcLut[t[3]];
+				/* [Windows, 2026-10-26] Pixeles de 16 bits de la RDRAM: ^1 de
+				 * indice en little-endian (`out` va de 4 en 4 desde un depth
+				 * image alineado).  `t[k]` es el valor que deja el shim como
+				 * u16 del anfitrion en las dos plataformas: el indice no cambia. */
+				out[0 ^ N64_HALFIDX_XOR] = dcLut[t[0]];
+				out[1 ^ N64_HALFIDX_XOR] = dcLut[t[1]];
+				out[2 ^ N64_HALFIDX_XOR] = dcLut[t[2]];
+				out[3 ^ N64_HALFIDX_XOR] = dcLut[t[3]];
 			}
 		}
 	}
@@ -334,7 +339,7 @@ void DepthCopy_NoteDepthImageWritten()
 	}
 }
 
-#else // HW_RVL || _XBOX
+#else // HW_RVL || XBOX64_PORT
 
 // Not for GameCube, at least not now anyway, maybe someday.
 void DepthCopy_Reset() {}

@@ -306,9 +306,17 @@ static LONG hl_filtro_excepcion(EXCEPTION_POINTERS *ep)
         char l[160];
 
         s_stExcepCod = (unsigned int)er->ExceptionCode;
+#if defined(_XBOX)
         _snprintf(l, sizeof(l), "[LISTA] EXCEPCION cod=%08X pc=%08X lr=%08X dir=%08X (%s)",
                   (unsigned int)er->ExceptionCode, (unsigned int)er->ExceptionAddress,
                   (ep->ContextRecord != NULL) ? (unsigned int)ep->ContextRecord->Lr : 0u, dir,
+#else
+        /* [Windows] En x86 no hay LR: la vuelta esta en la pila.  Se da el
+         * puntero de pila; el llamador lo da el depurador de VS. */
+        _snprintf(l, sizeof(l), "[LISTA] EXCEPCION cod=%08X pc=%08X esp=%08X dir=%08X (%s)",
+                  (unsigned int)er->ExceptionCode, (unsigned int)er->ExceptionAddress,
+                  (ep->ContextRecord != NULL) ? (unsigned int)ep->ContextRecord->Esp : 0u, dir,
+#endif
                   (er->NumberParameters >= 1 && er->ExceptionInformation[0] != 0) ? "escritura"
                                                                                 : "lectura");
         l[sizeof(l) - 1] = 0;

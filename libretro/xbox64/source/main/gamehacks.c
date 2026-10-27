@@ -193,7 +193,7 @@ void hack_yoshistory() {
 
 void hack_zelda_oot() {
 	if(zelda_subscreen_address) {
-		rdramb[zelda_subscreen_address] = 2;
+		rdramb[zelda_subscreen_address ^ N64_BYTE_XOR] = 2;   /* [Windows] byte N64: ^3 en little-endian */
 	}
 }
 

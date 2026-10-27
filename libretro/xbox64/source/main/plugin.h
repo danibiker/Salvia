@@ -191,8 +191,40 @@ typedef struct {
 	int  Plugin;
 } CONTROL;
 
+/* [Windows, 2026-10-26] pif.c copia `Value` a la PIF RAM (en orden de bytes
+ * del N64) con `*(u32*)(Command + 3) = Keys.Value`: el primer byte es el de
+ * A/B/Z/Start/cruceta con A en el bit 7.  En big-endian (Wii, Xbox) los campos
+ * de bits se reparten desde el bit mas alto y este orden encaja; MSVC en x86
+ * los reparte desde el bit 0 y el byte bajo va primero, asi que alli el orden
+ * es el de mupen64plus (m64p_plugin.h), con X antes que Y: los botones de cada
+ * byte al reves, y el stick donde estaba.  input_n64.c rellena por nombre. */
 typedef union {
 	DWORD Value;
+#ifndef _BIG_ENDIAN
+	struct {
+		unsigned R_DPAD       : 1;
+		unsigned L_DPAD       : 1;
+		unsigned D_DPAD       : 1;
+		unsigned U_DPAD       : 1;
+		unsigned START_BUTTON : 1;
+		unsigned Z_TRIG       : 1;
+		unsigned B_BUTTON     : 1;
+		unsigned A_BUTTON     : 1;
+
+		unsigned R_CBUTTON    : 1;
+		unsigned L_CBUTTON    : 1;
+		unsigned D_CBUTTON    : 1;
+		unsigned U_CBUTTON    : 1;
+		unsigned R_TRIG       : 1;
+		unsigned L_TRIG       : 1;
+		unsigned Reserved1    : 1;
+		unsigned Reserved2    : 1;
+
+		signed   X_AXIS       : 8;
+
+		signed   Y_AXIS       : 8;
+	};
+#else
 	struct {
 		unsigned A_BUTTON     : 1;
 		unsigned B_BUTTON     : 1;
@@ -213,9 +245,10 @@ typedef union {
 		unsigned R_CBUTTON    : 1;
 		
 		signed   X_AXIS       : 8;
-		
+
 		signed   Y_AXIS       : 8;
 	};
+#endif
 } BUTTONS;
 
 typedef struct {

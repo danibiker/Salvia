@@ -39,7 +39,9 @@ extern "C" {
 int rom_read(fileBrowser_file*);
 int fill_header(fileBrowser_file*);
 void calculateMD5(fileBrowser_file*, unsigned char digest[16]);
-#ifndef __PPC__
+/* [Windows, logs (2)] `__PPC__` aqui es "el arbol de Wii64", no la CPU: en PC
+ * tambien es `rom_length` (rom_gc.c:46).  Ver XBOX64_PORT en xbox64_pre.h. */
+#if !defined(__PPC__) && !defined(XBOX64_PORT)
 extern int taille_rom;
 #else
 extern int rom_length;
@@ -65,6 +67,11 @@ typedef struct _rom_header
    unsigned char Version;
 } rom_header;
 extern rom_header ROM_HEADER;
+#ifndef _BIG_ENDIAN
+/* [Windows] La cabecera tal como esta en la ROM (palabras del anfitrion), la
+ * que reciben los plugins en `HEADER`.  Ver rom_gc.c. */
+extern unsigned char rom_cabecera_plugins[sizeof(rom_header)];
+#endif
 
 typedef struct _rom_settings
 {
@@ -79,6 +86,9 @@ extern rom_settings ROM_SETTINGS;
 #define BYTE_SWAP_NONE 0
 #define BYTE_SWAP_HALF 1
 #define BYTE_SWAP_BYTE 2
+#ifndef _BIG_ENDIAN
+#define BYTE_SWAP_WORD16 3   /* [Windows] .v64 en little-endian: ver rom_gc.c */
+#endif
 int init_byte_swap(unsigned int magicWord);
 void byte_swap(char* buffer, unsigned int length, int byte_swap_type);
 

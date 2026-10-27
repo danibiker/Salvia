@@ -13,7 +13,7 @@
 
 #include "../gui/DEBUG.h"
 
-#ifdef __PPC__
+#if defined(__PPC__) || defined(XBOX64_PORT)   /* [Windows] el arbol de Wii64, no la CPU */
 #include "RSPPlugin.h"
 #endif
 

@@ -43,6 +43,35 @@
  *     LNK2001: unresolved external symbol gxd3d_init     <- SIN decorar */
 #include "gx_d3d9.h"
 #include "video_handoff.h"
+
+/* [Windows, 2026-10-26] LAS TEXTURAS QUE SE ESCRIBEN POR CPU (las del juego y
+ * la curva de la niebla Z: las dos pasan por gxd3d_consumidor_sube_tex).  En
+ * la Xbox una textura D3DPOOL_DEFAULT se bloquea sin mas.  En el D3D9 de PC
+ * NO: `LockRect` sobre DEFAULT sin D3DUSAGE_DYNAMIC falla, y como el
+ * consumidor solo mira SUCCEEDED, ninguna textura llegaba a la GPU.  En PC van
+ * DYNAMIC y se bloquean con DISCARD (se reescriben enteras).  Mismo uso para
+ * todas, asi que el almacen de d3dq (por clase de uso) las sigue sirviendo. */
+#if defined(_XBOX)
+#define GXD3D_USO_TEX_CPU   0
+#define GXD3D_LOCK_TEX_CPU  0
+#else
+#define GXD3D_USO_TEX_CPU   D3DUSAGE_DYNAMIC
+#define GXD3D_LOCK_TEX_CPU  D3DLOCK_DISCARD
+#endif
+
+/* [Windows, 2026-10-26] LAS TEXTURAS DE Z QUE MUESTREAN LOS SHADERS (la copia
+ * del decal del N64 / la niebla por Z / los modos 2-4, y los Z guardados de
+ * Mario Golf).  En la Xbox son D24S8 destino de un Resolve, y la Z se lee en
+ * `.g`.  En PC una D24S8 no se puede crear como textura: son R32F de render
+ * target que llena el pase INTZ -> R32F (gxd3d_pc_z_a_textura, desde el
+ * Resolve de d3dq), y la Z se lee en `.r` (GXD3D_ZC en gx_d3d9_tev.cpp). */
+#if defined(_XBOX)
+#define GXD3D_ZTEX_USO  0
+#define GXD3D_ZTEX_FMT  D3DFMT_D24S8
+#else
+#define GXD3D_ZTEX_USO  D3DUSAGE_RENDERTARGET
+#define GXD3D_ZTEX_FMT  D3DFMT_R32F
+#endif
 #include "../source/xenon64_diag.h"
 #include "../source/libogc_lwp_heap.h"   /* lwp_heap_free_hook */
 /* [Fase 6] `xbox64_gfx_plugin_activo` y XBOX64_GFX_RICE.  Los usa
@@ -334,7 +363,11 @@ static void tbmp_pon16(unsigned char *p, unsigned int v)
 static const char *tbmp_dir(void)
 {
     /* `game:\` el primero: es la raiz del juego y es donde se mira. */
+#if defined(_XBOX)
     static const char *cand[] = { "game:\\", "devkit:\\", "cache:\\", "D:\\" };
+#else
+    static const char *cand[] = { ".\\" };   /* [Windows] junto al ejecutable */
+#endif
     int  i;
     char ruta[128];
 
@@ -992,10 +1025,33 @@ static const char *s_vsSource =
      *   - la z real viaja en `cpos`, ya mapeada al rango del viewport, y el
      *     pixel shader escribe `saturate(cpos.z / cpos.w)`: la misma
      *     profundidad que D3D habria interpolado, sujeta por pixel.
-     * Bandera en uHalfPx.w (GXD3D_SetDepthClamp). */
+     * Bandera en uHalfPx.w (GXD3D_SetDepthClamp).
+     *
+     * ★ [Episode I Racer, 2026-10-27] MODO 2 (uHalfPx.w = 2): TRIANGULOS CON UN
+     * VERTICE DETRAS DEL OJO (w <= 0).  Con `max(z, 0)` no valen -- con w < 0
+     * no hay z que cumpla 0 <= z <= w y D3D los recortaba mal: los huecos del
+     * A/B de los logs 38-39 --, y por eso se quedaban fuera y D3D los cortaba
+     * por el plano cercano del JUEGO.  En EP1 ese plano esta en w ~5 ([ZRECON],
+     * logs (13)): con la camara cercana se perdia el suelo de alrededor y se
+     * veia por debajo.  GL con GL_DEPTH_CLAMP los recorta solo por x/y, o sea
+     * por el plano del OJO.  Aqui igual: la z del recortador es `w - eps`
+     * (0 <= z <= w  <=>  w >= eps) y el plano LEJANO pasa al pixel shader en
+     * `cpos.x` = w - z, lineal en homogeneas: `clip()` exacto por pixel.  En
+     * el modo 1 `cpos.x` = w > 0 y no descarta nada (el lejano ya lo recorta
+     * D3D).  El pixel shader no usaba cpos.x ni cpos.y.
+     * ★ SOLO EN PC: arreglo el suelo cortado de EP1 en PC (confirmado por el
+     * usuario).  En la Xbox no se ha visto el defecto ni se ha probado el modo,
+     * asi que alli el shader no cambia. */
     "  if (uHalfPx.w > 0.5) {\n"
     "    o.cpos.z = uZRange.x * clip.w + clip.z * uZRange.y;\n"
     "    o.pos.z  = max(clip.z, 0.0);\n"
+#if !defined(_XBOX)
+    "    o.cpos.x = clip.w;\n"
+    "    if (uHalfPx.w > 1.5) {\n"
+    "      o.pos.z  = clip.w - 1.0e-5;\n"
+    "      o.cpos.x = clip.w - clip.z;\n"
+    "    }\n"
+#endif
     "  }\n"
     "  o.uv0  = In.uv0;\n"
     "  o.uv1  = In.uv1;\n"
@@ -1860,6 +1916,18 @@ void GX_SetViewport(f32 xOrig, f32 yOrig, f32 wd, f32 ht, f32 nearZ, f32 farZ)
     if (!s_rs.valid || memcmp(&vp, &s_rs.viewport, sizeof(vp)) != 0)
     {
         gxd3d_flush_pending();
+#if !defined(_XBOX)
+        /* [Windows] Con la profundidad sujeta puesta, el de D3D en [0, 1]:
+         * ver GXD3D_SetDepthClamp.  El espejo guarda el del juego. */
+        if (s_halfPx[3] > 0.5f)
+        {
+            D3DVIEWPORT9 vpDev = vp;
+            vpDev.MinZ = 0.0f;
+            vpDev.MaxZ = 1.0f;
+            g_pd3dDevice->SetViewport(&vpDev);
+        }
+        else
+#endif
         g_pd3dDevice->SetViewport(&vp);
         s_rs.viewport = vp;
     }
@@ -2044,8 +2112,32 @@ static void gxd3d_lock_next_vb(void)
  * dentro de otro avanzaria la cola dos veces por la misma orden.  Tampoco
  * hace falta: con el grabador puesto, cuando el consumidor llega aqui todo
  * lo anterior ya se ha ejecutado, por orden. */
+/* [Windows, 2026-10-27] ★★ [Episode I Racer, la cupula de la cabina y trozos
+ * de carroceria que faltan segun el angulo] EN PC NO SE DIBUJA DESDE UN VERTEX
+ * BUFFER BLOQUEADO.  Aqui el buffer se queda bloqueado toda la pasada y cada
+ * DrawPrimitive lee de el: en la Xbox vale (memoria unificada: lo que escribe
+ * la CPU lo ve la GPU), en el D3D9 de PC no esta permitido, y con un buffer
+ * estatico (sin D3DUSAGE_DYNAMIC) el driver puede dar una copia y subirla en
+ * el Unlock: los dibujos leen lo que habia de la vez anterior.  Que lotes
+ * salen mal depende de cuanto se dibujo antes, o sea del angulo de la camara
+ * (con la camara de lado la cupula salia).  Los controles descartaron Z,
+ * texturas, shaders y CPU emulada (la Xbox con el interprete la dibuja).
+ * En PC: buffers DYNAMIC y, por lote, Lock (DISCARD al empezar un buffer,
+ * NOOVERWRITE despues) + copia + Unlock, y entonces el DrawPrimitive.  En la
+ * Xbox, lo de siempre. */
+#if !defined(_XBOX)
+static int s_cvListo = 0;   /* CONSUMIDOR: hay buffer elegido para esta pasada */
+#endif
+
 static void gxd3d_consumidor_rota_vb(IDirect3DDevice9 *dev)
 {
+#if !defined(_XBOX)
+    (void)dev;
+    s_vbIndex = (s_vbIndex + 1) % GXD3D_VB_COUNT;
+    s_cvListo = s_vb[s_vbIndex] ? 1 : 0;
+    s_cvUsed  = 0;
+    s_cvStream = 0;
+#else
     void *p = NULL;
     (void)dev;
     if (s_cvData)
@@ -2071,6 +2163,7 @@ static void gxd3d_consumidor_rota_vb(IDirect3DDevice9 *dev)
     /* ★ OBLIGATORIO al cambiar de buffer: sin esto la GPU seguiria leyendo
      * del buffer ANTERIOR. */
     s_cvStream = 0;
+#endif
 }
 
 void gxd3d_consumidor_dibuja(IDirect3DDevice9 *dev, unsigned int prim,
@@ -2088,11 +2181,32 @@ void gxd3d_consumidor_dibuja(IDirect3DDevice9 *dev, unsigned int prim,
         return;
     }
 
+#if !defined(_XBOX)
+    /* [Windows] Ver la nota de gxd3d_consumidor_rota_vb. */
+    if (!s_cvListo || s_cvUsed + (int)nverts > GXD3D_MAX_VERTS)
+        gxd3d_consumidor_rota_vb(dev);
+    if (!s_cvListo) return;
+    {
+        void *p = NULL;
+        const DWORD fl = (s_cvUsed == 0) ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE;
+        if (FAILED(s_vb[s_vbIndex]->Lock((UINT)((size_t)s_cvUsed * sizeof(GXD3DVertex)),
+                                         (UINT)((size_t)nverts * sizeof(GXD3DVertex)), &p, fl)) || !p)
+        {
+#if XBOX64_TRAZAS
+            gxd3d_dbg_vbdrop += nverts;
+#endif
+            return;
+        }
+        memcpy(p, verts, (size_t)nverts * sizeof(GXD3DVertex));
+        s_vb[s_vbIndex]->Unlock();
+    }
+#else
     if (!s_cvData || s_cvUsed + (int)nverts > GXD3D_MAX_VERTS)
         gxd3d_consumidor_rota_vb(dev);
     if (!s_cvData) return;
 
     memcpy(&s_cvData[s_cvUsed], verts, (size_t)nverts * sizeof(GXD3DVertex));
+#endif
 
     if (!s_cvStream)
     {
@@ -2569,8 +2683,9 @@ static void gxd3d_zcopia(void)
     if (!s_zcTex)
     {
         /* Tileada, como todo destino de un Resolve
-         * (reference_xbox360_resolve_siempre_tilea). */
-        if (FAILED(g_pd3dDevice->CreateTexture(w, h, 1, 0, D3DFMT_D24S8,
+         * (reference_xbox360_resolve_siempre_tilea).  [Windows] R32F de render
+         * target: ver GXD3D_ZTEX_USO. */
+        if (FAILED(g_pd3dDevice->CreateTexture(w, h, 1, GXD3D_ZTEX_USO, GXD3D_ZTEX_FMT,
                                                D3DPOOL_DEFAULT, &s_zcTex, NULL)))
         {
             s_zcTex = NULL;
@@ -2686,7 +2801,7 @@ void GXD3D_GuardaZ(u32 dir)
     }
     if (!e->tex)
     {
-        if (FAILED(g_pd3dDevice->CreateTexture(w, h, 1, 0, D3DFMT_D24S8,
+        if (FAILED(g_pd3dDevice->CreateTexture(w, h, 1, GXD3D_ZTEX_USO, GXD3D_ZTEX_FMT,
                                                D3DPOOL_DEFAULT, &e->tex, NULL)))
         {
             e->tex = NULL;
@@ -2804,7 +2919,7 @@ int GXD3D_SetNieblaZ(u8 on, const u8 *alfa, GXColor color,
             /* Lineal: la sube LockRect, como las texturas de GX_LoadTexObj
              * (reference_xbox360_lockrect_no_tilea). */
             if (!s_nzCurva[k] &&
-                FAILED(g_pd3dDevice->CreateTexture(256, 1, 1, 0, D3DFMT_LIN_A8R8G8B8,
+                FAILED(g_pd3dDevice->CreateTexture(256, 1, 1, GXD3D_USO_TEX_CPU, D3DFMT_LIN_A8R8G8B8,
                                                    D3DPOOL_DEFAULT, &s_nzCurva[k], NULL)))
             {
                 s_nzCurva[k] = NULL;
@@ -3202,9 +3317,13 @@ void gxd3d_informe(unsigned frames)
     if (frames == 0) frames = 1;
     if (frec == 0)
     {
+#if defined(_XBOX)
         LARGE_INTEGER f;
         if (QueryPerformanceFrequency(&f) && f.QuadPart) frec = f.QuadPart;
         else                                             frec = 49875000;
+#else
+        frec = XBOX64_TB_HZ;   /* [Windows] __mftb a la del Xenon (ppcintrinsics.h) */
+#endif
     }
 
     /* us por frame.  tb como mucho ~50M ticks: 50M * 1e6 = 5e13, cabe. */
@@ -3995,6 +4114,19 @@ static void gxd3d_untile_ia4(const u8 *src, u32 *dst, int w, int h)
                 }
 }
 
+/* [Windows, 2026-10-26] EL TEXEL DE 16 BITS, EN EL ORDEN EN QUE LO ESCRIBEN
+ * LOS PLUGINS.  glN64_GX y Rice_GX lo guardan con `*(u16 *)p = v`, o sea en el
+ * orden del anfitrion: en big-endian eso son los bytes de la especificacion de
+ * GX (alto primero) y se leen como siempre; en little-endian estan al reves,
+ * y lo barato es leerlos tal cual como u16 (sin coste) en vez de darles la
+ * vuelta en cada escritura de los plugins.  Lo mismo para los pares AR/GB de
+ * RGBA8 (gxd3d_untile_rgba8).  En la Xbox la expresion es la de antes. */
+#ifdef _BIG_ENDIAN
+#define GXD3D_TEXEL16(p) ((u16)(((p)[0] << 8) | (p)[1]))
+#else
+#define GXD3D_TEXEL16(p) (*(const u16 *)(p))
+#endif
+
 static void gxd3d_untile_ia8(const u8 *src, u32 *dst, int w, int h)
 {
     int bx, by, y, x;
@@ -4004,8 +4136,8 @@ static void gxd3d_untile_ia8(const u8 *src, u32 *dst, int w, int h)
                 for (x = 0; x < 4; x++)
                 {
                     /* GameCube es big-endian igual que nosotros: el halfword
-                     * se lee tal cual, sin swap. */
-                    u16 v = (u16)((src[0] << 8) | src[1]); src += 2;
+                     * se lee tal cual, sin swap.  [Windows] GXD3D_TEXEL16. */
+                    u16 v = GXD3D_TEXEL16(src); src += 2;
                     u8 a = (u8)(v >> 8), i = (u8)(v & 0xFF);
                     if (by + y < h && bx + x < w)
                         dst[(by+y)*w + bx+x] = ((u32)a<<24)|((u32)i<<16)|((u32)i<<8)|i;
@@ -4020,7 +4152,7 @@ static void gxd3d_untile_rgb565(const u8 *src, u32 *dst, int w, int h)
             for (y = 0; y < 4; y++)
                 for (x = 0; x < 4; x++)
                 {
-                    u16 v = (u16)((src[0] << 8) | src[1]); src += 2;
+                    u16 v = GXD3D_TEXEL16(src); src += 2;
                     u8 r = (u8)(((v >> 11) & 0x1F) * 255 / 31);
                     u8 g = (u8)(((v >>  5) & 0x3F) * 255 / 63);
                     u8 b = (u8)(( v        & 0x1F) * 255 / 31);
@@ -4037,7 +4169,7 @@ static void gxd3d_untile_rgb5a3(const u8 *src, u32 *dst, int w, int h)
             for (y = 0; y < 4; y++)
                 for (x = 0; x < 4; x++)
                 {
-                    u16 v = (u16)((src[0] << 8) | src[1]); src += 2;
+                    u16 v = GXD3D_TEXEL16(src); src += 2;
                     u8 r, g, b, a;
                     if (v & 0x8000)
                     {   /* 0RRRRRGGGGGBBBBB, alfa opaco */
@@ -4072,8 +4204,15 @@ static void gxd3d_untile_rgba8(const u8 *src, u32 *dst, int w, int h)
             for (y = 0; y < 4; y++)
                 for (x = 0; x < 4; x++)
                 {
+#ifdef _BIG_ENDIAN
                     u8 a = *ar++, r = *ar++;
                     u8 g = *gb++, b = *gb++;
+#else
+                    /* [Windows] Los plugins guardan 0xAARR / 0xGGBB como u16
+                     * del anfitrion: el byte bajo va primero. */
+                    u8 r = *ar++, a = *ar++;
+                    u8 b = *gb++, g = *gb++;
+#endif
                     if (by + y < h && bx + x < w)
                         dst[(by+y)*w + bx+x] = ((u32)a<<24)|((u32)r<<16)|((u32)g<<8)|b;
                 }
@@ -4558,7 +4697,7 @@ void gxd3d_consumidor_sube_tex(IDirect3DTexture9 *tex, const void *texels,
     const u32 *tmp = (const u32 *)texels;
 
     if (!tex || !tmp || w <= 0 || h <= 0 || sw < w) return;
-    if (SUCCEEDED(tex->LockRect(0, &lr, NULL, 0)))
+    if (SUCCEEDED(tex->LockRect(0, &lr, NULL, GXD3D_LOCK_TEX_CPU)))
     {
         int y;
         for (y = 0; y < h; y++)
@@ -4687,12 +4826,37 @@ static u8 gxd3d_resolved_mono(void *key);   /* mas abajo, con s_rtt */
  * bandera que tenia. */
 void GXD3D_SetDepthClamp(u8 on)
 {
-    const float f = on ? 1.0f : 0.0f;
+    /* 0 apagada, 1 normal, 2 con un vertice detras del ojo (ver el VS). */
+    const float f = (on >= 2) ? 2.0f : (on ? 1.0f : 0.0f);
     if (s_halfPx[3] == f) return;
     gxd3d_flush_pending();
     s_halfPx[3]   = f;
     s_halfPxDirty = 1;
     gxd3d_tev_zclamp(on ? 1 : 0);
+#if !defined(_XBOX)
+    /* [Windows, 2026-10-27] ★★ [Episode I Racer, el piloto delante de todo el
+     * pod] EL D3D9 DE PC SUJETA LA PROFUNDIDAD DEL PIXEL SHADER AL RANGO DEL
+     * VIEWPORT [MinZ, MaxZ]; Xenos no.  El shader escribe
+     * `MinZ + z/w * (MaxZ - MinZ)` (c10), que por delante del cercano queda POR
+     * DEBAJO de MinZ y sigue ordenado por distancia: en la Xbox el piloto queda
+     * detras de la carroceria.  En PC todo eso caia en MinZ -- MEDIDO con el
+     * marcado `verz`: el pod entero de un solo color plano, igual que el
+     * piloto --, empataba y ganaba el ultimo dibujado.  EP1 dibuja el pod con
+     * un viewport de MinZ distinto de 0.  Arreglo: mientras dura la profundidad
+     * sujeta, el viewport de D3D va con [0, 1]; la conversion al rango del
+     * juego ya la hace el shader con c10 (s_zRange, que no cambia).  Al
+     * apagarla vuelve el del juego.  El recorte no depende de MinZ/MaxZ. */
+    if (s_rs.viewport.Width != 0 && s_rs.viewport.Height != 0)
+    {
+        D3DVIEWPORT9 vpDev = s_rs.viewport;
+        if (on)
+        {
+            vpDev.MinZ = 0.0f;
+            vpDev.MaxZ = 1.0f;
+        }
+        g_pd3dDevice->SetViewport(&vpDev);
+    }
+#endif
     /* (Las dos lineas de Hi-Z de abajo pasan ahora por `gxd3d_hiz_aplica`,
      * que tambien mira el dibujo sobre el depth image; ver
      * GXD3D_SetRenderToDepth.  Lo que dice la nota no cambia.) */
@@ -4843,7 +5007,7 @@ void GX_LoadTexObj(GXTexObj *obj, u8 mapid)
          * bandas horizontales de bloques rectangulares sobre una geometria
          * por lo demas correcta ([[feedback_referencia_que_funciona]]). */
         if (!resubir &&
-            FAILED(g_pd3dDevice->CreateTexture(obj->width, obj->height, 1, 0,
+            FAILED(g_pd3dDevice->CreateTexture(obj->width, obj->height, 1, GXD3D_USO_TEX_CPU,
                                                D3DFMT_LIN_A8R8G8B8, D3DPOOL_DEFAULT,
                                                &tex, NULL)))
         {
@@ -5281,9 +5445,16 @@ static void gxd3d_resolve_to_gx_buffer(void *dest, u16 sl, u16 st, u16 sw, u16 s
         /* ★ TILEADA a proposito (D3DFMT_A8R8G8B8, no LIN_): `Resolve` de
          * Xenos escribe SIEMPRE tileado aunque el destino se declare
          * LIN_*, y declararlo lineal solo consigue que el muestreador lo
-         * lea mal.  Medido, ver reference_xbox360_resolve_siempre_tilea. */
+         * lea mal.  Medido, ver reference_xbox360_resolve_siempre_tilea.
+         * [Windows] En PC el Resolve es un StretchRect (d3dq_resolve_pc), y
+         * su destino tiene que ser un render target. */
+#if defined(_XBOX)
         if (FAILED(g_pd3dDevice->CreateTexture(dw, dh, 1, 0, D3DFMT_A8R8G8B8,
                                                D3DPOOL_DEFAULT, &slot->tex, NULL)))
+#else
+        if (FAILED(g_pd3dDevice->CreateTexture(dw, dh, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
+                                               D3DPOOL_DEFAULT, &slot->tex, NULL)))
+#endif
         {
             slot->tex = NULL;
             return;
@@ -5391,7 +5562,9 @@ extern "C" void gxd3d_fb_activa(void *gxtex)
 
 struct GXD3DZHueco
 {
+#if defined(_XBOX)
     D3DTexture   hdr;        /* cabecera propia, apunta a `mem`              */
+#endif
     u8          *mem;        /* texels: memoria fisica cacheada, 64 KB pags   */
     u16          w, h;       /* lo resuelto (el doble que la copia)           */
     u16          ox, oy;     /* esquina del EFB resuelta (GX_PeekZ)           */
@@ -5414,6 +5587,339 @@ static volatile u32 s_stZMal = 0, s_stZSinMem = 0;
 static volatile u32 s_stZRawEsq = 0, s_stZRawCen = 0;
 static volatile u32 s_stZMin = 0xFFFFFFFFu, s_stZMax = 0;
 
+#if !defined(_XBOX)
+/* ====================================================================== *
+ * [Windows, 2026-10-26] LOS HUECOS EN PC.
+ *
+ * En la Xbox un hueco es una textura con cabecera propia sobre memoria fisica
+ * (XGSetTextureHeader) en la que la GPU escribe con Resolve (TILEADO), y una
+ * fence dice cuando ha terminado.  Nada de eso existe en el D3D9 de PC, asi
+ * que aqui un hueco es memoria normal en LINEAL (fila a fila, `w` texels de 4
+ * bytes) y la LLENA EL CONSUMIDOR al ejecutar la marca de la copia
+ * (gxd3d_consumidor_marca_z), con una lectura sincrona:
+ *   - Z: la profundidad del core es una textura INTZ (video_handoff.cpp); un
+ *     pase de shader la vuelca a una R32F del tamano de la copia y
+ *     GetRenderTargetData la trae a memoria del sistema.  Cada texel se guarda
+ *     como `z24 << 8`, lo MISMO que deja la D24S8 de la Xbox (Z en los 24 bits
+ *     altos), asi que todo lo de despues lee igual.
+ *   - Color: StretchRect del rect del render target a una A8R8G8B8 del tamano
+ *     de la copia y GetRenderTargetData (0xAARRGGBB por texel, como alli).
+ * Despues se reponen el destino, la Z y la sombra de estado (d3dq_bind), y el
+ * hueco queda LISTO en el acto: sin fences, la lectura ya ha esperado a la
+ * GPU.  El productor no cambia su logica (turnos, secuencias, entrega sin
+ * esperas); solo no escribe cabeceras ni pide Resolve, y lee en lineal.
+ * Sin INTZ (driver que no la acepta) las copias de Z no se hacen. */
+struct GXD3DLeePC
+{
+    IDirect3DTexture9 *rt;     /* render target del tamano de la copia */
+    IDirect3DSurface9 *sys;    /* SYSTEMMEM, mismo tamano y formato    */
+    UINT w, h;
+};
+static GXD3DLeePC s_pcLeeZ, s_pcLeeC;
+static IDirect3DPixelShader9 *s_pcZPs = NULL;
+static int s_pcZPsMal = 0;
+static volatile u32 s_stPcLeeMal = 0;   /* lecturas que fallaron (traza) */
+
+static int gxd3d_pc_lee_prepara(IDirect3DDevice9 *dev, GXD3DLeePC *l, UINT w, UINT h,
+                                D3DFORMAT fmt)
+{
+    if (l->rt && l->sys && l->w == w && l->h == h)
+        return 1;
+    if (l->sys) { l->sys->Release(); l->sys = NULL; }
+    if (l->rt)  { l->rt->Release();  l->rt  = NULL; }
+    l->w = l->h = 0;
+    if (FAILED(dev->CreateTexture(w, h, 1, D3DUSAGE_RENDERTARGET, fmt, D3DPOOL_DEFAULT,
+                                  &l->rt, NULL)) || !l->rt)
+    {
+        l->rt = NULL;
+        return 0;
+    }
+    if (FAILED(dev->CreateOffscreenPlainSurface(w, h, fmt, D3DPOOL_SYSTEMMEM,
+                                                &l->sys, NULL)) || !l->sys)
+    {
+        l->rt->Release();
+        l->rt = NULL;
+        l->sys = NULL;
+        return 0;
+    }
+    l->w = w;
+    l->h = h;
+    return 1;
+}
+
+/* EL PASE INTZ -> R32F.  Dibuja la Z del rect (sx, sy, w, h) del EFB en `dst`
+ * (una R32F de render target) a partir de (dx, dy), y deja el device como
+ * estaba: destino y Z a mano, el resto por la sombra (d3dq_bind).  Lo usan la
+ * lectura por CPU de los huecos (gxd3d_pc_lee_z) y el Resolve de profundidad
+ * a textura (gxd3d_pc_z_a_textura: el decal del N64, la niebla por Z, los
+ * modos 2-4 de GXD3D_SetRenderToDepth, el Z guardado de Mario Golf). */
+static int gxd3d_pc_z_pasa_ps(IDirect3DDevice9 *dev, IDirect3DSurface9 *dst,
+                              UINT sx, UINT sy, UINT w, UINT h, UINT dx, UINT dy,
+                              IDirect3DPixelShader9 *psOtro);
+
+static int gxd3d_pc_z_pasa(IDirect3DDevice9 *dev, IDirect3DSurface9 *dst,
+                           UINT sx, UINT sy, UINT w, UINT h, UINT dx, UINT dy)
+{
+    return gxd3d_pc_z_pasa_ps(dev, dst, sx, sy, w, h, dx, dy, NULL);
+}
+
+/* `psOtro` != NULL: ese shader en vez del de copia (lo usa gxd3d_pc_ver_z). */
+static int gxd3d_pc_z_pasa_ps(IDirect3DDevice9 *dev, IDirect3DSurface9 *dst,
+                              UINT sx, UINT sy, UINT w, UINT h, UINT dx, UINT dy,
+                              IDirect3DPixelShader9 *psOtro)
+{
+    IDirect3DTexture9 *zt = (IDirect3DTexture9 *)xenon64_video_z_textura();
+    IDirect3DSurface9 *rtViejo = NULL, *dsViejo = NULL;
+    const float W = (float)xenon64_video_width();
+    const float H = (float)xenon64_video_height();
+    struct { float x, y, z, rhw, u, v; } q[4];
+    float u0, v0, u1, v1, x0, y0, x1, y1;
+    UINT i;
+
+    if (!zt || !dst || !w || !h || W <= 0.0f || H <= 0.0f)
+        return 0;
+    if (!s_pcZPs)
+    {
+        /* La profundidad de la INTZ sale en .r como float de 0 a 1.  ps_2_0:
+         * va con el pipeline de vertices fijo (vertices ya transformados). */
+        static const char src[] =
+            "sampler2D z : register(s0);\n"
+            "float4 main(float2 uv : TEXCOORD0) : COLOR0 { return tex2D(z, uv).rrrr; }\n";
+        LPD3DXBUFFER code = NULL, err = NULL;
+        if (s_pcZPsMal)
+            return 0;
+        if (FAILED(D3DXCompileShader(src, (UINT)strlen(src), NULL, NULL, "main", "ps_2_0",
+                                     0, &code, &err, NULL)) || !code ||
+            FAILED(dev->CreatePixelShader((const DWORD *)code->GetBufferPointer(), &s_pcZPs)))
+        {
+            s_pcZPs = NULL;
+            s_pcZPsMal = 1;
+        }
+        if (code) code->Release();
+        if (err)  err->Release();
+        if (!s_pcZPs)
+            return 0;
+    }
+
+    dev->GetRenderTarget(0, &rtViejo);
+    dev->GetDepthStencilSurface(&dsViejo);
+    dev->SetRenderTarget(0, dst);        /* deja el viewport al tamano de dst */
+    dev->SetDepthStencilSurface(NULL);   /* la INTZ no puede ser Z y textura a la vez */
+
+    dev->SetVertexShader(NULL);
+    dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1);
+    dev->SetPixelShader(psOtro ? psOtro : s_pcZPs);
+    /* El destino puede seguir ligado como textura (la copia del decal en el
+     * sampler 3, del lote anterior): render target y textura a la vez no
+     * vale en D3D9.  Fuera los demas; d3dq_bind los repone. */
+    for (i = 1; i < 8; i++)
+        dev->SetTexture(i, NULL);
+    dev->SetTexture(0, zt);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    dev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    dev->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+    dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    dev->SetRenderState(D3DRS_COLORWRITEENABLE, 0x0000000F);
+
+    /* Un texel del destino por texel del EFB: los -0.5 de D3D9 dejan el centro
+     * de cada pixel en el centro de su texel de origen. */
+    x0 = (float)dx - 0.5f;        y0 = (float)dy - 0.5f;
+    x1 = (float)(dx + w) - 0.5f;  y1 = (float)(dy + h) - 0.5f;
+    u0 = (float)sx / W;           v0 = (float)sy / H;
+    u1 = (float)(sx + w) / W;     v1 = (float)(sy + h) / H;
+    q[0].x = x0;  q[0].y = y0;  q[0].u = u0;  q[0].v = v0;
+    q[1].x = x1;  q[1].y = y0;  q[1].u = u1;  q[1].v = v0;
+    q[2].x = x0;  q[2].y = y1;  q[2].u = u0;  q[2].v = v1;
+    q[3].x = x1;  q[3].y = y1;  q[3].u = u1;  q[3].v = v1;
+    for (i = 0; i < 4; i++) { q[i].z = 0.0f; q[i].rhw = 1.0f; }
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
+
+    /* Lo del core, de vuelta: destino y Z a mano, el resto por la sombra.
+     * DrawPrimitiveUP suelta el stream 0: que el siguiente dibujo lo religue. */
+    dev->SetRenderTarget(0, rtViejo);
+    dev->SetDepthStencilSurface(dsViejo);
+    if (rtViejo) rtViejo->Release();
+    if (dsViejo) dsViejo->Release();
+    dev->SetTexture(0, NULL);
+    s_cvStream = 0;
+    d3dq_bind();
+    return 1;
+}
+
+/* La Z del rect (ox, oy, w, h) del EFB a `h->mem`, como `z24 << 8`. */
+static int gxd3d_pc_lee_z(IDirect3DDevice9 *dev, GXD3DZHueco *hu)
+{
+    IDirect3DSurface9 *dst = NULL;
+    D3DLOCKED_RECT lr;
+    HRESULT hr;
+    UINT x, y;
+
+    if (!hu->mem || !hu->w || !hu->h)
+        return 0;
+    if (!gxd3d_pc_lee_prepara(dev, &s_pcLeeZ, hu->w, hu->h, D3DFMT_R32F))
+        return 0;
+    if (FAILED(s_pcLeeZ.rt->GetSurfaceLevel(0, &dst)) || !dst)
+        return 0;
+    if (!gxd3d_pc_z_pasa(dev, dst, hu->ox, hu->oy, hu->w, hu->h, 0, 0))
+    {
+        dst->Release();
+        return 0;
+    }
+    hr = dev->GetRenderTargetData(dst, s_pcLeeZ.sys);
+    dst->Release();
+    if (FAILED(hr))
+        return 0;
+
+    if (FAILED(s_pcLeeZ.sys->LockRect(&lr, NULL, D3DLOCK_READONLY)))
+        return 0;
+    for (y = 0; y < hu->h; y++)
+    {
+        const float *f = (const float *)((const u8 *)lr.pBits + (size_t)y * lr.Pitch);
+        u32 *o = (u32 *)hu->mem + (size_t)y * hu->w;
+        for (x = 0; x < hu->w; x++)
+        {
+            float d = f[x];
+            if (d < 0.0f) d = 0.0f;
+            if (d > 1.0f) d = 1.0f;
+            o[x] = ((u32)(d * 16777215.0f + 0.5f)) << 8;
+        }
+    }
+    s_pcLeeZ.sys->UnlockRect();
+    return 1;
+}
+
+/* El color del rect (ox, oy, w, h) del render target actual a `h->mem`. */
+static int gxd3d_pc_lee_color(IDirect3DDevice9 *dev, GXD3DZHueco *hu)
+{
+    IDirect3DSurface9 *src = NULL, *dst = NULL;
+    D3DLOCKED_RECT lr;
+    RECT r;
+    HRESULT hr;
+    UINT y;
+
+    if (!hu->mem || !hu->w || !hu->h)
+        return 0;
+    if (!gxd3d_pc_lee_prepara(dev, &s_pcLeeC, hu->w, hu->h, D3DFMT_A8R8G8B8))
+        return 0;
+    if (FAILED(dev->GetRenderTarget(0, &src)) || !src)
+        return 0;
+    if (FAILED(s_pcLeeC.rt->GetSurfaceLevel(0, &dst)) || !dst)
+    {
+        src->Release();
+        return 0;
+    }
+    r.left  = hu->ox;          r.top    = hu->oy;
+    r.right = hu->ox + hu->w;  r.bottom = hu->oy + hu->h;
+    hr = dev->StretchRect(src, &r, dst, NULL, D3DTEXF_NONE);
+    src->Release();
+    if (SUCCEEDED(hr))
+        hr = dev->GetRenderTargetData(dst, s_pcLeeC.sys);
+    dst->Release();
+    if (FAILED(hr))
+        return 0;
+
+    if (FAILED(s_pcLeeC.sys->LockRect(&lr, NULL, D3DLOCK_READONLY)))
+        return 0;
+    for (y = 0; y < hu->h; y++)
+        memcpy((u32 *)hu->mem + (size_t)y * hu->w,
+               (const u8 *)lr.pBits + (size_t)y * lr.Pitch, (size_t)hu->w * 4);
+    s_pcLeeC.sys->UnlockRect();
+    return 1;
+}
+
+/* El Resolve de PROFUNDIDAD a textura, en PC (lo llama d3dq_resolve_pc, en el
+ * consumidor).  En la Xbox el Resolve deja la Z de la EDRAM en una D24S8; aqui
+ * la textura es una R32F de render target (GXD3D_ZTEX_USO/FMT) y se llena con
+ * el pase INTZ -> R32F, sin pasar por la CPU.  Los shaders la leen en `.r`
+ * (GXD3D_ZC en gx_d3d9_tev.cpp).  Sin INTZ no hace nada. */
+void gxd3d_pc_z_a_textura(IDirect3DDevice9 *dev, IDirect3DBaseTexture9 *dstTex, UINT level,
+                          const D3DRECT *src, const D3DPOINT *dstPt)
+{
+    IDirect3DSurface9 *dst = NULL;
+    D3DSURFACE_DESC dd;
+    const LONG W = (LONG)xenon64_video_width();
+    const LONG H = (LONG)xenon64_video_height();
+    LONG sx, sy, ex, ey, dx, dy;
+
+    if (!dev || !dstTex || dstTex->GetType() != D3DRTYPE_TEXTURE || W <= 0 || H <= 0)
+        return;
+    sx = src ? src->x1 : 0;   sy = src ? src->y1 : 0;
+    ex = src ? src->x2 : W;   ey = src ? src->y2 : H;
+    if (sx < 0) sx = 0;
+    if (sy < 0) sy = 0;
+    if (ex > W) ex = W;
+    if (ey > H) ey = H;
+    if (FAILED(((IDirect3DTexture9 *)dstTex)->GetSurfaceLevel(level, &dst)) || !dst)
+        return;
+    dst->GetDesc(&dd);
+    dx = dstPt ? dstPt->x : 0;
+    dy = dstPt ? dstPt->y : 0;
+    if (ex - sx > (LONG)dd.Width  - dx) ex = sx + (LONG)dd.Width  - dx;
+    if (ey - sy > (LONG)dd.Height - dy) ey = sy + (LONG)dd.Height - dy;
+    if (ex > sx && ey > sy && dd.Format == D3DFMT_R32F)
+    {
+        if (!gxd3d_pc_z_pasa(dev, dst, (UINT)sx, (UINT)sy, (UINT)(ex - sx), (UINT)(ey - sy),
+                             (UINT)dx, (UINT)dy))
+            s_stPcLeeMal++;
+    }
+    dst->Release();
+}
+
+/* [Windows, EP1 Racer] Marcado `verz` (GLN64_MARCA_VERZ): justo antes de
+ * entregar el frame (xenon64_video_resolve), pinta sobre el color el Z QUE HAY
+ * DE VERDAD en el buffer, con la paleta del marcado `prof` (rojo = z entera,
+ * verde = 0,90-1, azul = 0,99-1).  `prof` pinta la z que calcula cada
+ * superficie; esto, la que queda escrita al final.  Donde las dos capturas no
+ * coinciden, una superficie no escribio su Z (o paso la prueba sin deber).
+ * Solo diagnostico; sin INTZ no hace nada. */
+static IDirect3DPixelShader9 *s_pcVerZPs = NULL;
+static int s_pcVerZPsMal = 0;
+
+void gxd3d_pc_ver_z(IDirect3DDevice9 *dev)
+{
+    IDirect3DSurface9 *rt = NULL;
+    const UINT W = (UINT)xenon64_video_width();
+    const UINT H = (UINT)xenon64_video_height();
+
+    if (!dev || !W || !H || s_pcVerZPsMal)
+        return;
+    if (!s_pcVerZPs)
+    {
+        static const char src[] =
+            "sampler2D z : register(s0);\n"
+            "float4 main(float2 uv : TEXCOORD0) : COLOR0 {\n"
+            "  float d = tex2D(z, uv).r;\n"
+            "  return float4(saturate(d), saturate((d - 0.90) * 10.0),\n"
+            "                saturate((d - 0.99) * 100.0), 1.0);\n"
+            "}\n";
+        LPD3DXBUFFER code = NULL, err = NULL;
+        if (FAILED(D3DXCompileShader(src, (UINT)strlen(src), NULL, NULL, "main", "ps_2_0",
+                                     0, &code, &err, NULL)) || !code ||
+            FAILED(dev->CreatePixelShader((const DWORD *)code->GetBufferPointer(), &s_pcVerZPs)))
+        {
+            s_pcVerZPs = NULL;
+            s_pcVerZPsMal = 1;
+        }
+        if (code) code->Release();
+        if (err)  err->Release();
+        if (!s_pcVerZPs)
+            return;
+    }
+    if (FAILED(dev->GetRenderTarget(0, &rt)) || !rt)
+        return;
+    gxd3d_pc_z_pasa_ps(dev, rt, 0, 0, W, H, 0, 0, s_pcVerZPs);
+    rt->Release();
+}
+#endif
+
 /* ★ [Banjo-Kazooie, 2026-10-24] INTERRUPTOR DE LA COPIA DEL COLOR SINCRONA
  * (GLideN64 ctSync).  A 0 desaparece todo su codigo y
  * GXD3D_CopiaColorARDRAMSincrona se queda en pedir la copia de siempre (1-3
@@ -5433,6 +5939,31 @@ static HANDLE      s_cSincEv = NULL;   /* el consumidor avisa: hueco listo */
 /* Consumidor: la fence de la copia `seq`, recien resuelta en el hueco `k`. */
 void gxd3d_consumidor_marca_z(IDirect3DDevice9 *dev, unsigned int k, unsigned int seq)
 {
+#if !defined(_XBOX)
+    /* [Windows] Ver "LOS HUECOS EN PC": aqui se LLENA el hueco, y queda listo
+     * en el acto (la lectura ya ha esperado a la GPU).  Si la lectura falla
+     * se marca igual: la copia sincrona no se queda esperando su tope, y el
+     * juego ve lo que hubiera (como sin copia). */
+    if (dev && k < GXD3D_HUECOS)
+    {
+        GXD3DZHueco *hu = &s_zHueco[k];
+        const int ok = (k < GXD3D_Z_HUECOS) ? gxd3d_pc_lee_z(dev, hu)
+                                            : gxd3d_pc_lee_color(dev, hu);
+        if (!ok)
+            s_stPcLeeMal++;
+        hu->fenceSeq = seq;
+        __lwsync();   /* los texels antes que el aviso */
+        hu->lista = seq;
+#if GXD3D_CCOPIA_SINC
+        if (s_cSincHueco[k] && s_cSincEv)
+            SetEvent(s_cSincEv);
+#endif
+#if XBOX64_TRAZAS
+        if (k < GXD3D_Z_HUECOS)
+            s_stZMarcas++;
+#endif
+    }
+#else
     if (dev && k < GXD3D_HUECOS)   /* los de Z y los de color */
     {
         s_zHueco[k].fence    = dev->InsertFence();
@@ -5455,12 +5986,16 @@ void gxd3d_consumidor_marca_z(IDirect3DDevice9 *dev, unsigned int k, unsigned in
             s_stZMarcas++;
 #endif
     }
+#endif /* _XBOX */
 }
 
 /* Consumidor, en cada SWAP (y sin hilo, al final de cada d3dq_drena): que
  * copias ha terminado ya la GPU.  No bloquea. */
 void gxd3d_consumidor_revisa_z(IDirect3DDevice9 *dev)
 {
+#if !defined(_XBOX)
+    (void)dev;   /* [Windows] sin fences: el hueco queda listo al marcarlo */
+#else
     unsigned int k;
     if (!dev)
         return;
@@ -5473,6 +6008,7 @@ void gxd3d_consumidor_revisa_z(IDirect3DDevice9 *dev)
             h->lista = h->fenceSeq;
         }
     }
+#endif /* _XBOX */
 }
 
 /* ★★ [logs 23-25] EL RELOJ DE `conv` ES QueryPerformanceCounter, NO __mftb.
@@ -5490,9 +6026,15 @@ void gxd3d_consumidor_revisa_z(IDirect3DDevice9 *dev)
 #if XBOX64_TRAZAS   /* solo lo usan las medidas de [ZCOPIA]/[CCOPIA] */
 static unsigned long long gxd3d_reloj(void)
 {
+#if defined(_XBOX)
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
     return (unsigned long long)t.QuadPart;
+#else
+    /* [Windows] El __mftb de PC ya es QueryPerformanceCounter, escalado a la
+     * frecuencia del Xenon (ppcintrinsics.h): mismas unidades que la Xbox. */
+    return (unsigned long long)__mftb();
+#endif
 }
 #endif
 
@@ -5514,6 +6056,7 @@ static unsigned long long gxd3d_reloj(void)
  * (gxd3d_entrega_z). */
 #define GXD3D_ZT_MAXW 1280u
 #define GXD3D_ZT_MAXH 1024u
+#if defined(_XBOX)   /* [Windows] hasta gxd3d_entrega_z; la de PC, en el #else: "LOS HUECOS EN PC" */
 static u32 s_ztCol[2][GXD3D_ZT_MAXW];
 static u32 s_ztFila[GXD3D_ZT_MAXH];
 static u8  s_ztFilaB[GXD3D_ZT_MAXH];
@@ -5783,6 +6326,162 @@ static void gxd3d_entrega_z(void)
 #endif
     s_zEntregada = mejor->lista;
 }
+#else  /* !_XBOX */
+/* [Windows] La copia de Z en PC: lo mismo que la de la Xbox de arriba, con el
+ * hueco en LINEAL y sin cabecera ni Resolve (ver "LOS HUECOS EN PC"). */
+
+/* Reserva los huecos [ini, fin) una vez por vida del core, como en la Xbox. */
+static int gxd3d_pc_huecos_reserva(unsigned int ini, unsigned int fin)
+{
+    unsigned int k;
+    for (k = ini; k < fin; k++)
+        if (!s_zHueco[k].mem)
+        {
+            s_zHueco[k].mem = (u8 *)XPhysicalAlloc(GXD3D_Z_CAP, MAXULONG_PTR, 0, PAGE_READWRITE);
+            if (!s_zHueco[k].mem)
+                return 0;
+        }
+    return 1;
+}
+
+/* Productor: convierte el hueco `h` (ya lleno) a `dest` en el formato de GX
+ * de la copia de la Xbox: bloques de 4x4, texel = z24 >> 8 con los bytes
+ * cambiados, la caja de 2x2 con el doble exacto en horizontal y, si no, la
+ * muestra mas cercana al centro.  Aqui en lineal: fila `sy` = t + sy * sw. */
+static void gxd3d_convierte_z(GXD3DZHueco *h, u16 *out, unsigned int dw, unsigned int dh)
+{
+    const unsigned int sw = h->w, sh = h->h;
+    const unsigned int grupos = dw >> 2;   /* dw es multiplo de 4 */
+    const u32 *t = (const u32 *)h->mem;
+    unsigned int x, y;
+#if XBOX64_TRAZAS
+    u32 zmin = 0xFFFFFFFFu, zmax = 0;
+    s_stZRawEsq = t[0];
+    s_stZRawCen = t[(sh / 2u) * sw + sw / 2u];
+#endif
+
+    for (y = 0; y < dh; y++)
+    {
+        u16 *fila = out + (((y >> 2) * grupos) << 4) + ((y & 3u) << 2);
+        for (x = 0; x < dw; x++)
+        {
+            u32 z;
+            if (sw == 2u * dw)
+            {
+                unsigned int sy = (((2u * y + 1u) * sh) / (2u * dh)) & ~1u;
+                const u32 *f0, *f1;
+                if (sy + 1u >= sh)
+                    sy = (sh - 2u) & ~1u;
+                f0 = t + (size_t)sy * sw + 2u * x;
+                f1 = f0 + sw;
+                z = ((f0[0] >> 8) + (f0[1] >> 8) + (f1[0] >> 8) + (f1[1] >> 8) + 2u) >> 2;
+            }
+            else
+            {
+                const unsigned int sy = ((2u * y + 1u) * sh) / (2u * dh);
+                const unsigned int sx = ((2u * x + 1u) * sw) / (2u * dw);
+                z = t[(size_t)sy * sw + sx] >> 8;
+            }
+#if XBOX64_TRAZAS
+            if (z < zmin) zmin = z;
+            if (z > zmax) zmax = z;
+#endif
+            fila[((x >> 2) << 4) + (x & 3u)] =
+                (u16)((((z >> 8) & 0xFFu) << 8) | ((z >> 16) & 0xFFu));
+        }
+    }
+#if XBOX64_TRAZAS
+    s_stZMin = (zmin < s_stZMin) ? zmin : s_stZMin;
+    s_stZMax = (zmax > s_stZMax) ? zmax : s_stZMax;
+#endif
+}
+
+static void gxd3d_copia_z(void *dest, u16 sl, u16 st, u16 sw, u16 sh, u16 dw, u16 dh)
+{
+    /* Lo mismo que admite la de la Xbox. */
+    if (!dest || !dw || !dh || (dw & 3u) ||
+        sw < dw || sh < 2u || sh < dh ||
+        (sw != (u16)(dw * 2u) && (dw > GXD3D_ZT_MAXW || dh > GXD3D_ZT_MAXH)) ||
+        (u32)sw * sh * 4u > GXD3D_Z_CAP)
+    {
+#if XBOX64_TRAZAS
+        s_stZMal++;
+#endif
+        return;
+    }
+    if (s_zMemOk == 0)
+        s_zMemOk = gxd3d_pc_huecos_reserva(0, GXD3D_Z_HUECOS) ? 1 : -1;
+    if (s_zMemOk < 0)
+    {
+#if XBOX64_TRAZAS
+        s_stZSinMem++;
+#endif
+        return;
+    }
+
+    {
+        const unsigned int k = s_zSeq % GXD3D_Z_HUECOS;
+        GXD3DZHueco *h = &s_zHueco[k];
+
+        h->w  = sw;  h->h  = sh;
+        h->ox = sl;  h->oy = st;
+        s_zSeq = s_zSeq + 1;
+        h->pedida = s_zSeq;   /* hasta su marca, el hueco no se lee */
+        s_zDest = dest;
+        s_zDw = dw;
+        s_zDh = dh;
+#if XBOX64_TRAZAS
+        s_stZPedidas++;
+#endif
+#if D3D_GRABADOR
+        g_pd3dDevice->MarcaProfundidad(k, s_zSeq);
+#else
+        gxd3d_consumidor_marca_z(g_pd3dDevice, k, s_zSeq);
+#endif
+    }
+}
+
+/* Productor, en `GX_DrawDone`: igual que la de la Xbox (sin el __dcbf: aqui
+ * la memoria la escribio la CPU del consumidor). */
+static void gxd3d_entrega_z(void)
+{
+    GXD3DZHueco *mejor = NULL;
+    unsigned int k;
+
+    if (s_zSeq == s_zEntregada || !s_zDest)
+        return;
+    for (k = 0; k < GXD3D_Z_HUECOS; k++)
+    {
+        GXD3DZHueco *h = &s_zHueco[k];
+        const u32 lista = h->lista;
+        if (lista && lista == h->pedida && (int)(lista - s_zEntregada) > 0 &&
+            (!mejor || (int)(lista - mejor->lista) > 0))
+            mejor = h;
+    }
+    if (!mejor)
+    {
+#if XBOX64_TRAZAS
+        s_stZSinDato++;
+#endif
+        return;
+    }
+    __lwsync();   /* el aviso antes que los texels */
+    if (mejor->w >= s_zDw && mejor->h >= 2u && mejor->h >= s_zDh &&
+        (mejor->w == (u16)(s_zDw * 2u) || (s_zDw <= GXD3D_ZT_MAXW && s_zDh <= GXD3D_ZT_MAXH)))
+    {
+        gxd3d_convierte_z(mejor, (u16 *)s_zDest, s_zDw, s_zDh);
+#if XBOX64_TRAZAS
+        s_stZEntregadas++;
+        s_stZRetraso += s_zSeq - mejor->lista;
+#endif
+    }
+#if XBOX64_TRAZAS
+    else
+        s_stZMal++;
+#endif
+    s_zEntregada = mejor->lista;
+}
+#endif /* _XBOX */
 
 /* ------------------------------------------------------------------ */
 /* ★★ LA COPIA DEL COLOR A LA RDRAM (GLideN64 copyToRDRAM)              */
@@ -5841,6 +6540,7 @@ void GXD3D_ColorARDRAMAzulPM(int activo)
     s_cAzulPM = activo ? 1 : 0;
 }
 
+#if defined(_XBOX)   /* [Windows] hasta gxd3d_entrega_color_hueco; la de PC, en el #else */
 void GXD3D_PideColorARDRAM(u16 *dest, u32 dir, u16 x, u16 y, u16 w, u16 h,
                            u16 n64w, u16 n64h)
 {
@@ -6062,6 +6762,143 @@ static int gxd3d_entrega_color_hueco(GXD3DZHueco *mejor, unsigned int iMejor,
     }
     return 1;
 }
+#else  /* !_XBOX */
+/* [Windows] La copia del color a la RDRAM en PC: la de la Xbox de arriba con
+ * el hueco en LINEAL (ver "LOS HUECOS EN PC"). */
+void GXD3D_PideColorARDRAM(u16 *dest, u32 dir, u16 x, u16 y, u16 w, u16 h,
+                           u16 n64w, u16 n64h)
+{
+    const u32 rtW = (u32)xenon64_video_width();
+    const u32 rtH = (u32)xenon64_video_height();
+
+    if (!dest || !w || !h || !n64w || !n64h || (u32)x + w > rtW || (u32)y + h > rtH ||
+        (u32)w * h * 4u > GXD3D_Z_CAP)
+    {
+#if XBOX64_TRAZAS
+        s_stCMal++;
+#endif
+        return;
+    }
+
+    gxd3d_flush_pending();   /* lo dibujado tiene que entrar en la copia */
+
+    if (s_cMemOk == 0)
+        s_cMemOk = gxd3d_pc_huecos_reserva(GXD3D_Z_HUECOS, GXD3D_HUECOS) ? 1 : -1;
+    if (s_cMemOk < 0)
+    {
+#if XBOX64_TRAZAS
+        s_stCSinMem++;
+#endif
+        return;
+    }
+
+    {
+        const unsigned int i = s_cSeq % GXD3D_C_HUECOS;
+        const unsigned int k = GXD3D_Z_HUECOS + i;
+        GXD3DZHueco *hu = &s_zHueco[k];
+
+        hu->w  = w;  hu->h  = h;
+        hu->ox = x;  hu->oy = y;
+        s_cSeq = s_cSeq + 1;
+        hu->pedida = s_cSeq;   /* hasta su marca, el hueco no se lee */
+        s_cInfo[i].dest = dest;
+        s_cInfo[i].dir  = dir;
+        s_cInfo[i].n64w = n64w;
+        s_cInfo[i].n64h = n64h;
+#if XBOX64_TRAZAS
+        s_stCPedidas++;
+#endif
+#if D3D_GRABADOR
+        g_pd3dDevice->MarcaProfundidad(k, s_cSeq);
+#else
+        gxd3d_consumidor_marca_z(g_pd3dDevice, k, s_cSeq);
+#endif
+    }
+}
+
+static int gxd3d_entrega_color_hueco(GXD3DZHueco *mejor, unsigned int iMejor,
+                                     u32 *dir, u32 *bytes);
+
+int GXD3D_EntregaColorARDRAM(u32 *dir, u32 *bytes)
+{
+    GXD3DZHueco *mejor = NULL;
+    unsigned int k, iMejor = 0;
+
+    if (s_cSeq == s_cEntregada)
+        return 0;
+    for (k = GXD3D_Z_HUECOS; k < GXD3D_HUECOS; k++)
+    {
+        GXD3DZHueco *hu = &s_zHueco[k];
+        const u32 lista = hu->lista;
+        if (lista && lista == hu->pedida && (int)(lista - s_cEntregada) > 0 &&
+            (!mejor || (int)(lista - mejor->lista) > 0))
+        {
+            mejor  = hu;
+            iMejor = k - GXD3D_Z_HUECOS;
+        }
+    }
+    if (!mejor)
+    {
+#if XBOX64_TRAZAS
+        s_stCSinDato++;
+#endif
+        return 0;
+    }
+    return gxd3d_entrega_color_hueco(mejor, iMejor, dir, bytes);
+}
+
+/* El hueco (lineal, 0xAARRGGBB por texel) a la RDRAM en RGBA5551: el pixel
+ * mas cercano al centro de cada celda del N64, como en la Xbox, y con el ^1
+ * de indice de los pixeles de 16 bits de la RDRAM en little-endian (el color
+ * image empieza alineado a 8). */
+static int gxd3d_entrega_color_hueco(GXD3DZHueco *mejor, unsigned int iMejor,
+                                     u32 *dir, u32 *bytes)
+{
+    const GXD3DCopiaColor *ci = &s_cInfo[iMejor];
+    const u32 w = mejor->w, h = mejor->h;
+    const u32 *t = (const u32 *)mejor->mem;
+    const int azulPM = s_cAzulPM;
+    u32 ox, oy;
+
+    __lwsync();   /* el aviso antes que los texels */
+    if (ci->n64w > (u32)(sizeof(s_cSx) / sizeof(s_cSx[0])))
+    {
+#if XBOX64_TRAZAS
+        s_stCMal++;
+#endif
+        s_cEntregada = mejor->lista;
+        return 0;
+    }
+    for (ox = 0; ox < ci->n64w; ox++)
+        s_cSx[ox] = (u16)(((2u * ox + 1u) * w) / (2u * ci->n64w));
+    for (oy = 0; oy < ci->n64h; oy++)
+    {
+        const u32 sy = ((2u * oy + 1u) * h) / (2u * ci->n64h);
+        const u32 *fila = t + (size_t)sy * w;
+        u16 *dst = ci->dest + oy * ci->n64w;
+        for (ox = 0; ox < ci->n64w; ox++)
+        {
+            const u32 v = fila[s_cSx[ox]];
+            /* GLideN64 1f4d04f4: con el hack, azul += 4 si 0 < azul <= 0xFB. */
+            u32 b = v & 0xFFu;
+            if (azulPM && b > 0x00u && b <= 0xFBu)
+                b += 0x04u;
+            dst[ox ^ N64_HALFIDX_XOR] = (u16)((((v >> 16) & 0xF8u) << 8) |   /* R -> 15..11 */
+                                              (((v >>  8) & 0xF8u) << 3) |   /* G -> 10..6  */
+                                              ((b & 0xF8u) >> 2) |           /* B ->  5..1  */
+                                              1u);
+        }
+    }
+    s_cEntregada = mejor->lista;
+#if XBOX64_TRAZAS
+    s_stCEntregadas++;
+    s_stCRetraso += s_cSeq - mejor->lista;
+#endif
+    *dir   = ci->dir;
+    *bytes = (u32)ci->n64w * ci->n64h * 2u;
+    return 1;
+}
+#endif /* _XBOX */
 
 /* ------------------------------------------------------------------ */
 /* ★ LA COPIA DEL COLOR SINCRONA (GLideN64 ctSync, Banjo-Kazooie)       */
@@ -6186,6 +7023,18 @@ extern "C" void gxd3d_zcopia_informe(void)
     char l[256];
     gxd3d_ccopia_informe();   /* [Mario Kart 64, Banjo] la del color */
     gxd3d_peekz_informe();
+#if !defined(_XBOX)
+    /* [Windows] Lecturas de huecos del consumidor que fallaron (sin INTZ, sin
+     * R32F como destino, GetRenderTargetData...).  Si sale, esa es la pieza. */
+    if (s_stPcLeeMal)
+    {
+        _snprintf(l, sizeof(l), "[WIN] huecos: %u lecturas fallidas (INTZ=%s)",
+                  (unsigned)s_stPcLeeMal, xenon64_video_z_textura() ? "si" : "NO");
+        l[sizeof(l) - 1] = 0;
+        DebugOutputString(l);
+        s_stPcLeeMal = 0;
+    }
+#endif
     if (s_zSeq == 0 && s_stZMal == 0 && s_stZSinMem == 0)
         return;
     _snprintf(l, sizeof(l),
@@ -6414,6 +7263,117 @@ static u32          s_pzFuenteSeq = 0;      /* que copia tiene la fuente    */
 static volatile u32 s_stPzPedidas = 0, s_stPzNuevas = 0, s_stPzLecturas = 0;
 static volatile u32 s_stPzSinFuente = 0, s_stPzFuera = 0, s_stPzOcupados = 0;
 
+#if !defined(_XBOX)
+/* [Windows] GX_PeekZ en PC: la misma logica que la de la Xbox de abajo (la
+ * fuente es la copia LISTA mas nueva; la de este frame, a un hueco libre), con
+ * el hueco en LINEAL y lleno por el consumidor (ver "LOS HUECOS EN PC"). */
+void GXD3D_PreparaPeekZ(u16 x, u16 y, u16 w, u16 h)
+{
+    const u32 rtW = (u32)xenon64_video_width();
+    const u32 rtH = (u32)xenon64_video_height();
+    GXD3DZHueco *mejor = NULL;
+    unsigned int k;
+
+    if (!w || !h || (u32)x + w > rtW || (u32)y + h > rtH || (u32)w * h * 4u > GXD3D_Z_CAP)
+    {
+#if XBOX64_TRAZAS
+        s_stZMal++;
+#endif
+        return;
+    }
+
+    /* 1. La fuente: la copia lista mas nueva. */
+    for (k = 0; k < GXD3D_Z_HUECOS; k++)
+    {
+        GXD3DZHueco *hz = &s_zHueco[k];
+        const u32 lista = hz->lista;
+        if (lista && lista == hz->pedida && (!mejor || (int)(lista - mejor->lista) > 0))
+            mejor = hz;
+    }
+    if (mejor && (mejor != s_pzFuente || mejor->lista != s_pzFuenteSeq))
+    {
+        __lwsync();   /* el aviso antes que los texels */
+        s_pzFuente    = mejor;
+        s_pzFuenteSeq = mejor->lista;
+#if XBOX64_TRAZAS
+        s_stPzNuevas++;
+#endif
+    }
+
+    /* 2. La copia de este frame, a un hueco libre (ni la fuente ni uno con una
+     * copia en vuelo): la nota de la version de la Xbox. */
+    gxd3d_flush_pending();   /* lo dibujado tiene que entrar en la copia */
+    if (s_zMemOk == 0)
+        s_zMemOk = gxd3d_pc_huecos_reserva(0, GXD3D_Z_HUECOS) ? 1 : -1;
+    if (s_zMemOk < 0)
+    {
+#if XBOX64_TRAZAS
+        s_stZSinMem++;
+#endif
+        return;
+    }
+    {
+        unsigned int kk = GXD3D_Z_HUECOS;
+        GXD3DZHueco *hz;
+
+        for (k = 0; k < GXD3D_Z_HUECOS; k++)
+        {
+            const GXD3DZHueco *c = &s_zHueco[k];
+            if (c != s_pzFuente && (c->pedida == 0 || c->lista == c->pedida))
+            {
+                kk = k;
+                break;
+            }
+        }
+        if (kk == GXD3D_Z_HUECOS)
+        {
+#if XBOX64_TRAZAS
+            s_stPzOcupados++;
+#endif
+            return;
+        }
+        hz = &s_zHueco[kk];
+        hz->w  = w;  hz->h  = h;
+        hz->ox = x;  hz->oy = y;
+        s_zSeq = s_zSeq + 1;
+        hz->pedida = s_zSeq;   /* hasta su marca, el hueco no se lee */
+#if XBOX64_TRAZAS
+        s_stPzPedidas++;
+#endif
+#if D3D_GRABADOR
+        g_pd3dDevice->MarcaProfundidad(kk, s_zSeq);
+#else
+        gxd3d_consumidor_marca_z(g_pd3dDevice, kk, s_zSeq);
+#endif
+    }
+}
+
+void GX_PeekZ(u16 x, u16 y, u32 *z)
+{
+    const GXD3DZHueco *f = s_pzFuente;
+    if (!z)
+        return;
+    *z = 0x00FFFFFF;   /* el plano lejano, sin fuente */
+    if (!f || !f->mem || f->lista != s_pzFuenteSeq)
+    {
+#if XBOX64_TRAZAS
+        s_stPzSinFuente++;
+#endif
+        return;
+    }
+    if (x < f->ox || y < f->oy || x >= f->ox + f->w || y >= f->oy + f->h)
+    {
+#if XBOX64_TRAZAS
+        s_stPzFuera++;
+#endif
+        return;
+    }
+    *z = ((const u32 *)f->mem)[(size_t)(y - f->oy) * f->w + (x - f->ox)] >> 8;
+#if XBOX64_TRAZAS
+    s_stPzLecturas++;
+#endif
+}
+#else
 void GXD3D_PreparaPeekZ(u16 x, u16 y, u16 w, u16 h)
 {
     const u32 rtW = (u32)xenon64_video_width();
@@ -6573,6 +7533,7 @@ void GX_PeekZ(u16 x, u16 y, u32 *z)
     s_stPzLecturas++;
 #endif
 }
+#endif /* _XBOX */
 
 /* Una linea por segundo (con la de [ZCOPIA]) si hubo algo: cuantas copias se
  * pidieron, cuantas fuentes nuevas se tomaron, cuantas lecturas se sirvieron
@@ -6784,13 +7745,21 @@ void VIDEO_WaitVSync(void) { }
 int gxd3d_init(void)
 {
     int i;
+    /* [Windows] DYNAMIC: Lock con DISCARD/NOOVERWRITE por lote (ver
+     * gxd3d_consumidor_rota_vb).  Fuera de la llamada: `FAILED` es una macro y
+     * no admite directivas entre sus argumentos. */
+#if !defined(_XBOX)
+    const DWORD usoVb = D3DUSAGE_WRITEONLY | D3DUSAGE_DYNAMIC;
+#else
+    const DWORD usoVb = D3DUSAGE_WRITEONLY;
+#endif
     if (!g_pd3dDevice) return 0;
 
     for (i = 0; i < GXD3D_VB_COUNT; i++)
     {
         if (FAILED(g_pd3dDevice->CreateVertexBuffer(
                 GXD3D_MAX_VERTS * sizeof(GXD3DVertex),
-                D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &s_vb[i], NULL)))
+                usoVb, 0, D3DPOOL_DEFAULT, &s_vb[i], NULL)))
             return 0;
     }
     g_pd3dDevice->CreateVertexDeclaration(s_vertexDecl, &s_decl);
@@ -6835,6 +7804,9 @@ int gxd3d_init(void)
     s_cvData   = NULL;
     s_cvUsed   = 0;
     s_cvStream = 0;
+#if !defined(_XBOX)
+    s_cvListo  = 0;
+#endif
     s_primeraPasada = 1;
     s_pendActive = 0;  s_pendCount = 0;
     memset(s_samp, 0, sizeof(s_samp));

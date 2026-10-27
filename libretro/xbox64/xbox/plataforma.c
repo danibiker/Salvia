@@ -296,7 +296,13 @@ void xbox64_opciones(int framebuffer, int sai2x, int dynarec, int pak, int cpo,
 	 * que SI usa la maquinaria de bloques.  La pareja que tiene sentido
 	 * ofrecer es dynarec / interprete puro, que ademas es el A/B con el
 	 * que se depuro la fase 3. */
+#if XBOX64_DYNAREC
 	dynacore = s_opt_dynarec ? DYNACORE_DYNAREC : DYNACORE_PURE_INTERP;
+#else
+	/* [Windows] Sin dynarec en el enlace (xbox64_fase.h): siempre el
+	 * interprete puro, diga lo que diga la opcion. */
+	dynacore = DYNACORE_PURE_INTERP;
+#endif
 
 	/* El pak de los cuatro mandos.  Tambien vale en caliente: `pif.c` lo
 	 * consulta en cada comando del PIF. */
@@ -367,10 +373,19 @@ static unsigned     s_vueltas;
  * pisaba con su memcpy y tampoco entraban en el savestate, que guarda
  * `SP_DMEM`. */
 
+/* [Windows] La cabecera que ven los plugins: en big-endian el propio
+ * ROM_HEADER (como Wii64); en little-endian la copia en el orden de la ROM,
+ * como mupen64 (ver rom_gc.c, rom_cabecera_a_struct). */
+#ifdef _BIG_ENDIAN
+#define XBOX64_HEADER_PLUGINS ((BYTE*)&ROM_HEADER)
+#else
+#define XBOX64_HEADER_PLUGINS ((BYTE*)rom_cabecera_plugins)
+#endif
+
 static void gfx_info_init(void)      /* main_gc-menu2.cpp:506 */
 {
 	gfx_info.MemoryBswaped = TRUE;
-	gfx_info.HEADER = (BYTE*)&ROM_HEADER;
+	gfx_info.HEADER = XBOX64_HEADER_PLUGINS;
 	gfx_info.RDRAM = (BYTE*)rdram;
 	/* ★ La DMEM VIVA, como en Wii64.  Ver la nota de arriba sobre las
 	 * escrituras de glN64 en la DMEM que la sombra perdia. */
@@ -444,7 +459,7 @@ static void gfx_info_init(void)      /* main_gc-menu2.cpp:506 */
 static void audio_info_init(void)    /* main_gc-menu2.cpp:540 */
 {
 	audio_info.MemoryBswaped = TRUE;
-	audio_info.HEADER = (BYTE*)&ROM_HEADER;
+	audio_info.HEADER = XBOX64_HEADER_PLUGINS;
 	audio_info.RDRAM = (BYTE*)rdram;
 	audio_info.DMEM = (BYTE*)SP_DMEM;
 	audio_info.IMEM = (BYTE*)SP_IMEM;
@@ -464,7 +479,7 @@ void control_info_init(void)         /* main_gc-menu2.cpp:557 */
 	int i;
 
 	control_info.MemoryBswaped = TRUE;
-	control_info.HEADER = (BYTE*)&ROM_HEADER;
+	control_info.HEADER = XBOX64_HEADER_PLUGINS;
 	control_info.Controls = Controls;
 	/* ★★ FASE 4: LOS CUATRO ENCHUFADOS, Y EL ORIGINAL NO LO HACIA ASI.
 	 *
@@ -1185,6 +1200,36 @@ void xbox64_traza_cpu(void)
 	          (unsigned)vi_register.vi_delay, s_frame_hecho, s_vueltas);
 	l[sizeof(l) - 1] = 0;
 	xbox64_log_line(l);
+
+	/* [Windows, 2026-10-26] El bucle donde se queda la CPU: 10 palabras de
+	 * codigo alrededor del pc (desde pc-16) y los 32 registros (la mitad
+	 * baja).  Para desensamblarlo a mano y ver que espera.  Solo KSEG0/KSEG1
+	 * (lo mapeado por TLB no se traduce aqui).  La RDRAM va en palabras del
+	 * orden del anfitrion: cada palabra es la instruccion tal cual. */
+	{
+		const unsigned int pc = (unsigned int)r4300.pc;
+		int i, j;
+		if (pc >= 0x80000000u && pc < 0xC0000000u)
+		{
+			const unsigned int base = ((pc & 0x1FFFFFFFu) & ~3u) - 16u;
+			int n = _snprintf(l, sizeof(l), "[CPU] codigo desde %08X:", (pc & ~3u) - 16u);
+			for (i = 0; i < 10 && n > 0 && n < (int)sizeof(l) - 10; i++)
+			{
+				const unsigned int fis = (base + 4u * (unsigned)i) & 0x7FFFFCu;
+				n += _snprintf(l + n, sizeof(l) - n, " %08X", (unsigned)rdram[fis >> 2]);
+			}
+			l[sizeof(l) - 1] = 0;
+			xbox64_log_line(l);
+		}
+		for (j = 0; j < 4; j++)
+		{
+			int n = _snprintf(l, sizeof(l), "[CPU] r%02d-r%02d:", j * 8, j * 8 + 7);
+			for (i = 0; i < 8 && n > 0 && n < (int)sizeof(l) - 10; i++)
+				n += _snprintf(l + n, sizeof(l) - n, " %08X", (unsigned)r4300.gpr[j * 8 + i]);
+			l[sizeof(l) - 1] = 0;
+			xbox64_log_line(l);
+		}
+	}
 #endif
 }
 

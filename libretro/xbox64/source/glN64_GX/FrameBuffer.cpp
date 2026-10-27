@@ -1618,7 +1618,10 @@ void FrameBuffer_GX_CargaNuevoDesdeRDRAM()
 						u16 px = 0;
 						if (y < alto && x < ancho)
 						{
-							const u16 n64 = *(const u16*) &RDRAM[dir + (y * ancho + x) * 2];
+							/* [Windows] Media palabra N64: ^2 en little-endian.  El
+						 * texel GX de abajo va como u16 del anfitrion (el shim
+						 * lo lee asi: GXD3D_TEXEL16). */
+						const u16 n64 = *(const u16*) &RDRAM[(dir + (y * ancho + x) * 2) ^ N64_HALF_XOR];
 							summ += n64;
 							px = (n64 & 1u) ? (u16)((n64 >> 1) | 0x8000u) : (u16)0;
 						}
@@ -1949,11 +1952,23 @@ void FrameBuffer_CopyToRDRAM( u32 sourceAddress, u32 address, u32 width, u32 hei
 			const u8 *tile = tileRow + (sx >> 2) * 64;
 			const u32 t = i + ((sx & 3) << 1);
 
+#ifdef _BIG_ENDIAN
 			const u8 r = tile[t + 1];
 			const u8 g = tile[32 + t];
 			const u8 b = tile[32 + t + 1];
+#else
+			/* [Windows] Pares 0xAARR / 0xGGBB como u16 del anfitrion: el byte
+			 * bajo primero (como gxd3d_untile_rgba8 en el shim). */
+			const u8 r = tile[t];
+			const u8 g = tile[32 + t + 1];
+			const u8 b = tile[32 + t];
+#endif
 
-			dst[ox] = (u16)(((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1);
+			/* [Windows] Pixel N64 en la RDRAM: indice de u16 ABSOLUTO con su ^1
+			 * en little-endian (el renglon puede empezar a mitad de palabra si
+			 * `width` es impar).  En la Xbox es la misma direccion que dst[ox]. */
+			((u16*)RDRAM)[(((address + oy * width * 2) >> 1) + ox) ^ N64_HALFIDX_XOR] =
+				(u16)(((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1);
 		}
 	}
 

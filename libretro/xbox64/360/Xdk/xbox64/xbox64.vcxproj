@@ -238,27 +238,40 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <!-- [Windows, 2026-10-26] Win32 con la plataforma en la ruta, como los demas
+       nucleos (gambatte, FBNeo): asi no pisa el xbox64.lib de Xbox, que se
+       queda donde lo busca Salvia.vcxproj (Release\). -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)$(Configuration)\obj\</IntDir>
   </PropertyGroup>
+  <!-- [Windows, 2026-10-26] LAS DOS CONFIGURACIONES Win32 SON LA BUILD DE
+       WINDOWS, no copias de las de Xbox (lo eran hasta hoy):
+       - xbox\win32 VA LA PRIMERA: sus xtl.h, ppcintrinsics.h y xgraphics.h
+         sustituyen a las del XDK sin tocar los ~25 ficheros que las incluyen.
+       - Sin xenon\gxshim\xbox (su windows.h taparia el de verdad).
+       - $(DXSDK_DIR)Include para d3dx9.h, el mismo SDK con el que enlaza el
+         frontend de Windows (Salvia.vcxproj, ADDITIONAL_LIB_DIRS_WIN).
+       - Sin _XBOX, __PPC__, _BIG_ENDIAN, __BIG_ENDIAN__ (x86 es little-endian),
+         ni USE_RECOMP_CACHE / FASTMEM* (son del dynarec, que no va).
+       - PPC_DYNAREC SE QUEDA: no dice "hay dynarec" (ver xbox\xbox64_fase.h). -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>LIBRETRO;_DEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\..\xbox\win32;..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;_DEBUG;WIN32;_LIB;_CRT_SECURE_NO_WARNINGS;PPC_DYNAREC;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <!-- OBLIGATORIO.  Sin esto el XDK compila TODOS los .c como C++ y el
            nucleo no pasa: C++ no tiene declaracion implicita de funcion
@@ -291,7 +304,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\xenon\gxshim\xbox;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>LIBRETRO;_DEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <CompileAs>Default</CompileAs>
@@ -319,8 +332,8 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>LIBRETRO;NDEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\..\xbox\win32;..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>LIBRETRO;NDEBUG;WIN32;_LIB;_CRT_SECURE_NO_WARNINGS;PPC_DYNAREC;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>Default</CompileAs>
       <!-- ★ OBLIGATORIA, no comodidad.  r4300/macros.h define los registros
@@ -351,7 +364,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\;..\..\..\source;..\..\..\xbox;..\..\..\xbox\compat;..\..\..\xenon\gxshim;..\..\..\xenon\gxshim\xbox;..\..\..\..\..\libs\zlib;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>LIBRETRO;NDEBUG;_XBOX;__PPC__;PPC_DYNAREC;USE_RECOMP_CACHE;FASTMEM;FASTMEM_HOT_NOFLUSH;_BIG_ENDIAN=1;__BIG_ENDIAN__;GLN64_GX;USE_EXPANSION;NO_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>Default</CompileAs>
@@ -397,12 +410,16 @@
          que no se debe hacer.
          ★ Recomp-Cache-Heap.c va con ellos, NO Recomp-Cache.c: la variante
          -Heap es la que compila Wii64 (FASE0.txt:113). -->
-    <ClCompile Include="..\..\..\source\r4300\ppc\MIPS-to-PPC.c">     <CompileAs>CompileAsCpp</CompileAs></ClCompile>
-    <ClCompile Include="..\..\..\source\r4300\ppc\Recompile.c">       <CompileAs>CompileAsCpp</CompileAs></ClCompile>
-    <ClCompile Include="..\..\..\source\r4300\ppc\Wrappers.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
-    <ClCompile Include="..\..\..\source\r4300\ppc\FuncTree.c">        <CompileAs>CompileAsCpp</CompileAs></ClCompile>
-    <ClCompile Include="..\..\..\source\r4300\ppc\Register-Cache.c">  <CompileAs>CompileAsCpp</CompileAs></ClCompile>
-    <ClCompile Include="..\..\..\source\r4300\Recomp-Cache-Heap.c">   <CompileAs>CompileAsCpp</CompileAs></ClCompile>
+    <!-- [Windows, 2026-10-26] Ninguno de los seis en Win32: el codigo que
+         emiten es PowerPC.  Windows va solo con el interprete puro
+         (xbox\xbox64_fase.h pone XBOX64_DYNAREC a 0 y dynarec_ausente.c los
+         sustituye). -->
+    <ClCompile Include="..\..\..\source\r4300\ppc\MIPS-to-PPC.c">     <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Recompile.c">       <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Wrappers.c">        <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\FuncTree.c">        <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\ppc\Register-Cache.c">  <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="..\..\..\source\r4300\Recomp-Cache-Heap.c">   <CompileAs>CompileAsCpp</CompileAs><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
     <!-- gc_memory -->
     <ClCompile Include="..\..\..\source\gc_memory\tlb.c" />
     <ClCompile Include="..\..\..\source\gc_memory\memory.c" />
@@ -623,7 +640,7 @@
     <!-- Fase 3: los tres simbolos de libgcc que el dynarec llama desde el
          codigo que emite. Va como C (sin CompileAs) para que los nombres
          salgan sin decorar, que es como los pide MIPS-to-PPC.c. -->
-    <ClCompile Include="..\..\..\xbox\libgcc_ppc.c" />
+    <ClCompile Include="..\..\..\xbox\libgcc_ppc.c"><ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild></ClCompile>
     <!-- Fase 2: la adopcion del device.  Es C++ porque d3d9_grabador.h
          declara una clase. -->
     <ClCompile Include="..\..\..\xbox\gfx_host.cpp" />

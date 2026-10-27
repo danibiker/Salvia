@@ -466,11 +466,15 @@ static unsigned tb_a_us_frame(unsigned long long tb, unsigned frames)
     static LONGLONG frec = 0;
     if (frec == 0)
     {
+#if defined(_XBOX)
         LARGE_INTEGER f;
         if (QueryPerformanceFrequency(&f) && f.QuadPart)
             frec = f.QuadPart;
         else
             frec = 49875000;      /* respaldo: timebase del Xenon */
+#else
+        frec = XBOX64_TB_HZ;      /* [Windows] __mftb a la del Xenon (ppcintrinsics.h) */
+#endif
     }
     if (frames == 0)
         frames = 1;
@@ -1548,6 +1552,9 @@ static const struct retro_core_option_v2_definition s_opts_v2_en[] = {
           { "etapa3", "Stage 3" }, { "etapa4", "Stage 4" }, { "etapa5", "Stage 5" },
           { "niebla", "Fog" }, { "prof", "Depth" }, { "sinz", "No Z" },
           { "volcado", "Dump" }, { "lle", "LLE" }, { "texalfa", "Texture alpha" },
+#if !defined(_XBOX)
+          { "verz", "Depth buffer (PC)" },
+#endif
           { NULL, NULL } },
         "desactivado"
     },
@@ -1721,6 +1728,9 @@ static const struct retro_core_option_v2_definition s_opts_v2_es[] = {
           { "etapa3", "Etapa 3" }, { "etapa4", "Etapa 4" }, { "etapa5", "Etapa 5" },
           { "niebla", "Niebla" }, { "prof", "Profundidad" }, { "sinz", "Sin Z" },
           { "volcado", "Volcado" }, { "lle", "LLE" }, { "texalfa", "Alfa de textura" },
+#if !defined(_XBOX)
+          { "verz", "Buffer de Z (PC)" },
+#endif
           { NULL, NULL } },
         "desactivado"
     },
@@ -1753,7 +1763,11 @@ static const struct retro_variable s_opts_v1[] = {
     { OPT_LISTA_SP, "Parallel list: wait for the RSP; desactivado|activado|foto" },
     { OPT_HACKS, "Per-game patches; activado|desactivado" },
     { OPT_TEXCACHE, "Converted texture cache; activado|desactivado" },
-    { OPT_MARCATEX, "Diagnostic marking; desactivado|combinador|sombreado|textura|sinclip|sinniebla|etapa0|etapa1|etapa2|etapa3|etapa4|etapa5|niebla|prof|sinz|volcado|lle|texalfa" },
+    { OPT_MARCATEX, "Diagnostic marking; desactivado|combinador|sombreado|textura|sinclip|sinniebla|etapa0|etapa1|etapa2|etapa3|etapa4|etapa5|niebla|prof|sinz|volcado|lle|texalfa"
+#if !defined(_XBOX)
+      "|verz"
+#endif
+    },
     { NULL, NULL }
 };
 
@@ -1895,6 +1909,9 @@ static void aplica_opciones(void)
             else if (strcmp(v.value, "volcado")    == 0) marcatex = 19;
             else if (strcmp(v.value, "lle")        == 0) marcatex = 20;
             else if (strcmp(v.value, "texalfa")    == 0) marcatex = 21;
+#if !defined(_XBOX)
+            else if (strcmp(v.value, "verz")       == 0) marcatex = 23;   /* solo PC */
+#endif
             /* etapa1..etapa5 -> 8..12, que es lo que espera el generador. */
             else if (strncmp(v.value, "etapa", 5)  == 0 &&
                      v.value[5] >= '1' && v.value[5] <= '5')
@@ -1960,16 +1977,23 @@ static volatile int s_rumble[4] = { -1, -1, -1, -1 };
 
 extern "C" void xbox64_rumble(int puerto, int encendido)
 {
+#if defined(_XBOX)
     XINPUT_VIBRATION vib;
+#endif
     if (puerto < 0 || puerto > 3)
         return;
     encendido = encendido ? 1 : 0;
     if (s_rumble[puerto] == encendido)
         return;
     s_rumble[puerto] = encendido;
+#if defined(_XBOX)
     vib.wLeftMotorSpeed  = encendido ? 0xFFFF : 0;
     vib.wRightMotorSpeed = encendido ? 0x8000 : 0;
     XInputSetState((DWORD)puerto, &vib);
+#endif
+    /* [Windows, 2026-10-26, fase 1] Sin vibracion: el frontend de PC lee los
+     * mandos por SDL y el core no enlaza XInput.  Pendiente: la interfaz de
+     * rumble de libretro (RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE). */
 }
 
 /* Apaga los cuatro: al descargar el juego, al apagar el core y al cambiar de

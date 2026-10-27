@@ -65,7 +65,7 @@
  * Es el mismo apanyo que ya tenian los otros tres en este arbol -- un
  * puntero constante a una direccion del mapa -- y por eso la linea de
  * `mempack`, justo debajo, lleva anyos escrita asi. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 static unsigned char *const eeprom = (unsigned char*)(EEPROM_LO);
 #else
 static unsigned char eeprom[0x800] __attribute__((aligned(32)));
@@ -161,7 +161,7 @@ void init_eeprom() {
 	 * guardada que reaparece en otro cartucho.
 	 *
 	 * Se usa el tamanyo por nombre, que es el mismo en las dos ramas. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX */
 	memset(&eeprom[0], 0, EEPROM_SIZE);
 #else
 	memset(&eeprom[0], 0, sizeof(eeprom));

@@ -801,11 +801,13 @@ static bool retro_environment(unsigned cmd, void *data) {
 		 * centinela RETRO_HW_FRAME_BUFFER_VALID.  Ver hw_refresh.
 		 * ================================================================= */
 		case 30002: { // RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE
-			#if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
+			#if defined(SALVIA_GPU_VIDEO) && (defined(_XBOX) || defined(WIN))
 			/* Por el accesor de la API publica de libSDLx360, y no por el
 			 * `extern LPDIRECT3DDEVICE9 D3D_Device` de SDL_xboxvideo.h: esa
 			 * cabecera es INTERNA del driver de video y el frontend no la
-			 * incluye. */
+			 * incluye.
+			 * [xbox64, 2026-10-26] En Windows, el mismo nombre en
+			 * src/video/win_d3d9.cpp: el device de la capa D3D9 del frontend. */
 			void *dev = SDL_XBOX_GetD3DDevice();
 			if (!data || !dev) return false;
 			*(void **)data = dev;
@@ -817,7 +819,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case 30003: { // RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE
-			#if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
+			#if defined(SALVIA_GPU_VIDEO) && (defined(_XBOX) || defined(WIN))
 			/* Tiene que coincidir EXACTAMENTE con la del core
 			 * (libretro/Xenon64/360/Xdk/xenon64/libretro_core.cpp). */
 			struct salvia_d3d_texture {
@@ -1042,9 +1044,9 @@ static inline void hw_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
     if (!data) return;
 
-    #if defined(SALVIA_GPU_VIDEO) && defined(_XBOX)
-    /* >>> CORE QUE RENDERIZA CON DIRECT3D (Xenon64).  Ver los environments
-     * 30002/30003 en retro_environment.
+    #if defined(SALVIA_GPU_VIDEO) && (defined(_XBOX) || defined(WIN))
+    /* >>> CORE QUE RENDERIZA CON DIRECT3D (Xenon64, xbox64; en Windows,
+     * xbox64).  Ver los environments 30002/30003 en retro_environment.
      *
      * OJO CON EL CENTINELA: RETRO_HW_FRAME_BUFFER_VALID es (void*)-1, NO
      * NULL, asi que el `if (!data)` de arriba NO lo filtra.  Sin esta rama el

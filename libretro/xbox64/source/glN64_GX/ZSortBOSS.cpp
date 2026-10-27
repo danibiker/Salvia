@@ -392,7 +392,7 @@ void ZSortBOSS_MultMPMTX( u32 _w0, u32 _w1 )
 
 		int fog = (int)(w * _FIXED2FLOAT( gSP.fog.multiplier, 16 ) + gSP.fog.offset);
 		fog = SATURATES8( fog );
-		v.fog = zsbState.fogtable[fog + 128];
+		v.fog = zsbState.fogtable[(fog + 128) ^ N64_BYTE_XOR];   /* [Windows] copiada en crudo de la RDRAM */
 
 		v.cc = 0;
 		if (x >= w) v.cc |= 0x10;

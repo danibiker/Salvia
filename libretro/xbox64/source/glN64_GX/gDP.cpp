@@ -375,7 +375,7 @@ void gDPUpdateColorImage(void)
 
     u16 *xfb = (u16*)VI.xfb[VI.which_fb];
 
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 	/* [Xbox360] ★ ESTA FUNCION NO SE PUEDE EJECUTAR AQUI, Y ESTO LO DICE
 	 * EN VEZ DE REVENTAR.
 	 *
@@ -709,7 +709,8 @@ void gDPSetTextureImage( u32 format, u32 size, u32 width, u32 address )
 		if (format == G_IM_FMT_RGBA)
 		{
 			const u16 *tabla = (const u16*)&RDRAM[gSP.DMAOffsets.tex_offset];
-			gSP.DMAOffsets.tex_shift = tabla[gSP.DMAOffsets.tex_count];
+			/* [Windows] El ^1 de GLideN64 vuelve en little-endian (0 en la Xbox). */
+			gSP.DMAOffsets.tex_shift = tabla[gSP.DMAOffsets.tex_count ^ N64_HALFIDX_XOR];
 			gDP.textureImage.address += gSP.DMAOffsets.tex_shift;
 		}
 		else
@@ -1247,8 +1248,9 @@ static BOOL _gDPCheckForFrameBufferTextureCuerpo( u32 address, u32 width, u32 by
  * `tmem*8 + bytes` pasaba de 4096, y la TMEM se quedaba con lo anterior.
  * Portado durante el caso de Goemon, pero NO era su causa: alli ninguna carga
  * se sale (log 34, cero envueltas); la causa fue CHANGED_TILE en gDPSetTile.
- * Se deja por ser lo de la referencia.  Solo el camino big-endian (el
- * nuestro); si la carga cabe, el codigo de siempre. */
+ * Se deja por ser lo de la referencia.  Si la carga cabe, el codigo de
+ * siempre.  En little-endian (PC) cada trozo con UnswapCopy, como el camino
+ * que cabe; UnswapCopy admite un origen sin alinear (src ^ 3). */
 static void _gDPCopiaTMEMEnvuelta( u32 tmemQW, const u8 *src, u32 bytes )
 {
 	u32 d = (tmemQW << 3) & 0xFFF;
@@ -1257,7 +1259,11 @@ static void _gDPCopiaTMEMEnvuelta( u32 tmemQW, const u8 *src, u32 bytes )
 		u32 trozo = 4096 - d;
 		if (trozo > bytes)
 			trozo = bytes;
+#ifndef _BIG_ENDIAN
+		UnswapCopy( (void*)src, (u8*)TMEM + d, trozo );
+#else // !_BIG_ENDIAN
 		memcpy( (u8*)TMEM + d, src, trozo );
+#endif // _BIG_ENDIAN
 		src += trozo;
 		bytes -= trozo;
 		d = 0;
@@ -1392,11 +1398,7 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 	 * empieza fuera; las filas se cortan al llegar al final y la ultima se
 	 * copia a medias. */
 	const BOOL envuelve = (((gDP.loadTile->tmem << 3) + bpl * height) > 4096) ? TRUE : FALSE;
-	if ((address >= RDRAMSize)
-#ifndef _BIG_ENDIAN
-		|| envuelve // Stay within TMEM
-#endif // _BIG_ENDIAN
-		)
+	if (address >= RDRAMSize)
 	{
 #ifdef DEBUG
 		DebugMsg( DEBUG_HIGH | DEBUG_ERROR | DEBUG_TEXTURE, "// Attempting to load texture tile out of range\n" );
@@ -1513,26 +1515,24 @@ void gDPLoadBlock( u32 tile, u32 uls, u32 ult, u32 lrs, u32 dxt )
 
 	/* [Xbox360] La TMEM se envuelve (ver _gDPCopiaTMEMEnvuelta). */
 	const BOOL envuelve = (((gDP.loadTile->tmem << 3) + bytes) > 4096) ? TRUE : FALSE;
-#ifndef _BIG_ENDIAN
-	if (envuelve)
-		return;
-#endif // _BIG_ENDIAN
 
 	gDP.loadInfo[gDP.loadTile->tmem & 0x1FF].texAddress = address;
 
 	u64* src = (u64*)&RDRAM[address];
 	u64* dest = &TMEM[gDP.loadTile->tmem];
 
-#ifndef _BIG_ENDIAN
-	UnswapCopy( src, dest, bytes );
-#else // !_BIG_ENDIAN
 	if (!envuelve)
+	{
+#ifndef _BIG_ENDIAN
+		UnswapCopy( src, dest, bytes );
+#else // !_BIG_ENDIAN
 		memcpy( dest, src, bytes );
+#endif // _BIG_ENDIAN
+	}
 	else
 	{
 		_gDPCopiaTMEMEnvuelta( gDP.loadTile->tmem, (const u8*)src, bytes );
 	}
-#endif // _BIG_ENDIAN
 
 	if (dxt != 0)
 	{
@@ -2114,7 +2114,7 @@ static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 			memcpy( &RDRAM[dst], src, numBytes );
 		else
 			for (u32 a = dst; a < end; a++)
-				RDRAM[a] = _gDPFillByte( fill, a );
+				RDRAM[a ^ N64_BYTE_XOR] = _gDPFillByte( fill, a );   /* [Windows] byte N64 */
 		return;
 	}
 
@@ -2127,12 +2127,26 @@ static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 	if (src)
 	{
 		const u8 *s = src + head;
+#if defined(_XBOX)
 		for (u32 n = span >> 3; n; --n, s += 8)
 		{
 			f64 quad;
 			memcpy( &quad, s, 8 );
 			wgPipe->F64 = quad;
 		}
+#else
+		/* [Windows, 2026-10-26] En x86 un `double` puede pasar por la pila x87,
+		 * y `fld` convierte los NaN de senal en silenciosos: 8 bytes de RDRAM
+		 * que casualmente lo parezcan saldrian con un bit cambiado.  En PowerPC
+		 * lfd/stfd no tocan los bits.  Aqui van como dos u32, que el anillo
+		 * escribe igual en orden. */
+		for (u32 n = span >> 2; n; --n, s += 4)
+		{
+			u32 palabra;
+			memcpy( &palabra, s, 4 );
+			wgPipe->U32 = palabra;
+		}
+#endif
 	}
 	else
 	{
@@ -2151,9 +2165,9 @@ static void _gDPWriteRDRAM( u32 dst, const u8 *src, u32 fill, u32 numBytes )
 	else
 	{
 		for (u32 a = dst; a < wgStart; a++)
-			RDRAM[a] = _gDPFillByte( fill, a );
+			RDRAM[a ^ N64_BYTE_XOR] = _gDPFillByte( fill, a );   /* [Windows] byte N64 */
 		for (u32 a = wgEnd; a < end; a++)
-			RDRAM[a] = _gDPFillByte( fill, a );
+			RDRAM[a ^ N64_BYTE_XOR] = _gDPFillByte( fill, a );
 	}
 }
 
@@ -2280,7 +2294,7 @@ static void _gDPArtifactEscribe( u32 address, u16 value )
 {
 	if ((address + 1) >= RDRAMSize)
 		return;
-	*(u16*)&RDRAM[address] = value;
+	*(u16*)&RDRAM[address ^ N64_HALF_XOR] = value;   /* [Windows] media palabra N64 */
 }
 
 static u16 _gDPPeekDepth( u16 x, u16 y )
@@ -2497,7 +2511,7 @@ static BOOL _gDPTexrectPaletteMod( f32 lrx, f32 lry )
 	const u16 prim16 = (u16)((prmr << 11) | (prmg << 6) | (prmb << 1) | 1);
 	for (u32 i = 0; i < 16; ++i)
 	{
-		const u16 entrada = *(const u16*)&TMEM[256 + i];
+		const u16 entrada = N64_BE16(*(const u16*)&TMEM[256 + i]);   /* [Windows] TMEM en orden N64 */
 		_gDPArtifactEscribe( gDP.colorImage.address + (i << 1), (entrada & 0x0001) ? prim16 : env16 );
 	}
 	return TRUE;
@@ -2606,7 +2620,7 @@ void gDPTextureRectangle( f32 ulx, f32 uly, f32 lrx, f32 lry, s32 tile, f32 s, f
 		GXColor color;
 		u32 i;
 		for (i = 0; i < 256; i++)
-			alfa[i] = (u8)((*(const u16*)&TMEM[256 + i]) >> 8);
+			alfa[i] = (u8)(N64_BE16(*(const u16*)&TMEM[256 + i]) >> 8);   /* [Windows] TMEM en orden N64 */
 		color.r = GXcastf32u8( gDP.fogColor.r );
 		color.g = GXcastf32u8( gDP.fogColor.g );
 		color.b = GXcastf32u8( gDP.fogColor.b );

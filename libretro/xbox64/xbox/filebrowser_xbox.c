@@ -64,7 +64,12 @@
 
 /* Xbox 360: las rutas son de la forma "game:\..." o "hdd:\...".  El limite
  * del struct es FILE_BROWSER_MAX_PATH_LEN (192). */
+#if defined(_XBOX)
 #define RAIZ_GUARDADO_POR_DEFECTO "game:\\saves"
+#else
+/* [Windows] Junto al ejecutable, si el frontend no da su directorio. */
+#define RAIZ_GUARDADO_POR_DEFECTO ".\\saves"
+#endif
 
 static char s_raiz_guardado[FILE_BROWSER_MAX_PATH_LEN] = RAIZ_GUARDADO_POR_DEFECTO;
 

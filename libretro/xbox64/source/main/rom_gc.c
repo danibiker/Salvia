@@ -61,6 +61,24 @@ void stripInvalidChars(char *str) {
 
 int init_byte_swap(unsigned int magicWord){
 
+#ifndef _BIG_ENDIAN
+	/* [Windows, 2026-10-26] La primera palabra se lee como u32 del ANFITRION
+	 * (ROM-Cache.c), y aqui la ROM tiene que acabar en palabras del anfitrion
+	 * (el modelo de memoria de mupen64 en little-endian):
+	 *   .z64  80 37 12 40 -> 0x40123780: voltear cada palabra (HALF, __lwbrx)
+	 *   .n64  40 12 37 80 -> 0x80371240: ya esta (NONE)
+	 *   .v64  37 80 40 12 -> 0x12408037: rotar 16 cada palabra (WORD16)
+	 * La tabla de abajo es la de big-endian, que en PC dejaba fuera las .v64. */
+	switch(magicWord){
+		case 0x40123780:
+			return BYTE_SWAP_HALF;
+		case 0x80371240:
+			return BYTE_SWAP_NONE;
+		case 0x12408037:
+			return BYTE_SWAP_WORD16;
+	}
+	return BYTE_SWAP_BAD;
+#else
 	switch(magicWord){
 		case 0x37804012:					//37804012 aka byteswapped
 			return BYTE_SWAP_BYTE;
@@ -70,6 +88,7 @@ int init_byte_swap(unsigned int magicWord){
 			return BYTE_SWAP_NONE;
 	}
 	return BYTE_SWAP_BAD;
+#endif
 }
 
 void byte_swap(char* buffer, unsigned int length, int byte_swap_type) {
@@ -85,6 +104,14 @@ void byte_swap(char* buffer, unsigned int length, int byte_swap_type) {
 		for (i = 0; i < (length & ~3); i += 2)
 			*(u16 *)(buffer + i) = __lhbrx(buffer, i);
 	}
+#ifndef _BIG_ENDIAN
+	else if(byte_swap_type == BYTE_SWAP_WORD16){	/* [Windows] .v64: ver init_byte_swap */
+		for (i = 0; i < (length & ~3); i += 4) {
+			const u32 w = *(u32 *)(buffer + i);
+			*(u32 *)(buffer + i) = (w << 16) | (w >> 16);
+		}
+	}
+#endif
 }
 
 static struct {
@@ -136,6 +163,54 @@ bool isEEPROM16k()
 	return false;
 }
 
+#ifndef _BIG_ENDIAN
+/* [Windows, 2026-10-26] LA CABECERA EN LITTLE-ENDIAN.  La ROM esta en palabras
+ * de 32 bits del orden del anfitrion (ROM-Cache.c), asi que el ROMCache_read
+ * de rom_read deja ROM_HEADER con los campos de 32 bits bien y los de byte y
+ * media palabra (el nombre, Cartridge_ID, Country_code) revueltos.  En
+ * big-endian los dos ordenes coinciden y esto no existe.
+ *   - Los plugins reciben la cabecera COMO LA ROM (`rom_cabecera_plugins`),
+ *     que es lo que les da mupen64 en little-endian: Rice la voltea el mismo
+ *     (Video.cpp, `#ifndef _BIG_ENDIAN`) y GLideN64 lee el nombre con ^3.
+ *   - El nucleo usa ROM_HEADER como struct de verdad: se rehace leyendo los
+ *     bytes del cartucho en su orden (k ^ 3) y montando cada campo. */
+unsigned char rom_cabecera_plugins[sizeof(rom_header)];
+
+static unsigned int cabecera_u32(const unsigned char *b, int o)
+{
+	return ((unsigned int)b[o] << 24) | ((unsigned int)b[o + 1] << 16) |
+	       ((unsigned int)b[o + 2] << 8) | (unsigned int)b[o + 3];
+}
+
+static void rom_cabecera_a_struct(void)
+{
+	unsigned char b[sizeof(rom_header)];
+	unsigned int k;
+
+	memcpy(rom_cabecera_plugins, &ROM_HEADER, sizeof(rom_header));
+	for (k = 0; k < sizeof(rom_header); k++)
+		b[k] = rom_cabecera_plugins[k ^ 3];
+
+	ROM_HEADER.init_PI_BSB_DOM1_LAT_REG  = b[0];
+	ROM_HEADER.init_PI_BSB_DOM1_PGS_REG  = b[1];
+	ROM_HEADER.init_PI_BSB_DOM1_PWD_REG  = b[2];
+	ROM_HEADER.init_PI_BSB_DOM1_PGS_REG2 = b[3];
+	ROM_HEADER.ClockRate  = cabecera_u32(b, 4);
+	ROM_HEADER.PC         = cabecera_u32(b, 8);
+	ROM_HEADER.Release    = cabecera_u32(b, 12);
+	ROM_HEADER.CRC1       = cabecera_u32(b, 16);
+	ROM_HEADER.CRC2       = cabecera_u32(b, 20);
+	ROM_HEADER.Unknown[0] = cabecera_u32(b, 24);
+	ROM_HEADER.Unknown[1] = cabecera_u32(b, 28);
+	memcpy(ROM_HEADER.Name, b + 32, 20);
+	ROM_HEADER.unknown         = cabecera_u32(b, 52);
+	ROM_HEADER.Manufacturer_ID = cabecera_u32(b, 56);
+	ROM_HEADER.Cartridge_ID    = (unsigned short)(((unsigned int)b[60] << 8) | b[61]);
+	ROM_HEADER.Country_code    = b[62];
+	ROM_HEADER.Version         = b[63];
+}
+#endif
+
 /* Loads the ROM into the ROM cache */
 int rom_read(fileBrowser_file* file){
 
@@ -154,6 +229,9 @@ int rom_read(fileBrowser_file* file){
      return ret;
    }
    ROMCache_read((u8*)&ROM_HEADER, 0, sizeof(rom_header));
+#ifndef _BIG_ENDIAN
+   rom_cabecera_a_struct();   /* [Windows] ver arriba */
+#endif
 
   //Copy header name as Goodname (in the .ini we can use CRC to identify ROMS)
   memset((char*)buffer,0,1024);

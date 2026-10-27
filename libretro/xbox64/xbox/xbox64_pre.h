@@ -126,6 +126,10 @@
  * esta en el bloque `bool` de mas abajo. */
 #include <stdbool.h>
 
+/* [Windows, 2026-10-26] Las macros del orden de bytes del anfitrion (en la
+ * Xbox, 0 y la identidad).  Solo macros: no rompe la regla de este fichero. */
+#include "endian_n64.h"
+
 /* ------------------------------------------------------------------ */
 /* [Fase 6] Los dos plugins graficos en el mismo binario               */
 /* ------------------------------------------------------------------ */
@@ -243,6 +247,20 @@
 /* ====================================================================== */
 /* A partir de aqui, MACROS.  Ninguna cabecera mas.                       */
 /* ====================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* XBOX64_PORT: lo que el port cambia de Wii64, en las DOS plataformas */
+/* ------------------------------------------------------------------ */
+/* [Windows, 2026-10-26] Hasta la build de Windows, `_XBOX` decia dos cosas a
+ * la vez: "hardware de la Xbox 360" y "este port, compilado con MSVC y sin
+ * libogc".  En el arbol de Wii64 copiado, las ramas del port (el mapa de
+ * memoria de xbox/xbox_mem.h en vez de MEM2/ARAM, `__declspec(align)` en vez
+ * de `__attribute__`, la ROM entera en RAM, el limite de frame de libretro,
+ * el `byte` renombrado...) son de la segunda clase, y Windows las necesita
+ * igual: sin ellas caeria en las ramas de GameCube, que compilan y apuntan a
+ * 0x7F000000.  Esas usan XBOX64_PORT; `_XBOX` queda para lo que es de la
+ * consola (Resolve, EDRAM, tileado, fences, dynarec PowerPC). */
+#define XBOX64_PORT 1
 
 /* ------------------------------------------------------------------ */
 /* bool: MSVC 10 no trae <stdbool.h> para C                            */

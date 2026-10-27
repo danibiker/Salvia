@@ -117,11 +117,15 @@ extern "C" void gln64_prof_informe(unsigned frames)
 
     if (frec == 0)
     {
+#if defined(_XBOX)
         LARGE_INTEGER f;
         if (QueryPerformanceFrequency(&f) && f.QuadPart)
             frec = f.QuadPart;
         else
             frec = 49875000;      /* respaldo: timebase del Xenon */
+#else
+        frec = XBOX64_TB_HZ;      /* [Windows] __mftb a la del Xenon (ppcintrinsics.h) */
+#endif
     }
 
     /* ★★ MICROSEGUNDOS POR FRAME, NO MILISEGUNDOS POR SEGUNDO.

@@ -112,6 +112,19 @@ static __inline void xenon_icache_invalidate(void* startaddr, unsigned int len)
 	__asm__ volatile("sync\n\t isync");
 }
 
+#elif defined(_MSC_VER) && defined(_M_IX86)
+
+/* [Windows, 2026-10-26] Sin dynarec (xbox64_fase.h) no se genera codigo, asi
+ * que no hay instrucciones que invalidar; y en x86 la cache de instrucciones
+ * es coherente con la de datos de todos modos. */
+#define XENON_CACHE_LINE 64
+
+static __inline void xenon_icache_invalidate(void* startaddr, unsigned int len)
+{
+	(void)startaddr;
+	(void)len;
+}
+
 #else
 #error "No se sabe como invalidar la I-cache con este compilador"
 #endif

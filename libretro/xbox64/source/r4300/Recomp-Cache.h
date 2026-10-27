@@ -29,7 +29,7 @@
  * EXACTAMENTE el mismo que el tope que usa `release()`.  Con las dos
  * definiciones sueltas podrian separarse y `release()` escribiria fuera
  * del array sin que nada avisara. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 /* Trae RECOMP_CACHE_SIZE y RECOMP_CACHE_LO.  Mismo reenvio y misma ruta que
  * usa gc_memory/MEM2.h:41. */
 #include "../../xbox/xbox_mem.h"

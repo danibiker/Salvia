@@ -94,6 +94,11 @@ typedef int SURFFORMAT;
 #define CONST const
 
 
+/* [Windows, logs (1)] Estos tres y BITMAPFILEHEADER/BI_RGB de mas abajo los
+ * trae <windows.h> en PC (wingdi.h, que define `_WINGDI_`); el XDK no los
+ * tiene y en la Xbox salen de aqui.  Mismos campos, asi que basta con no
+ * repetirlos (C2011). */
+#ifndef _WINGDI_
 #if defined(_MSC_VER)
 #pragma pack(push, 1)
 #endif
@@ -130,6 +135,7 @@ typedef struct tagBITMAPINFO
    BITMAPINFOHEADER bmiHeader;
    RGBQUAD bmiColors[1];
 } BITMAPINFO;
+#endif /* !_WINGDI_ */
 
 typedef enum _IMAGE_FILEFORMAT 
 {
@@ -156,6 +162,7 @@ typedef struct _IMAGE_INFO
 } IMAGE_INFO;
 
 
+#ifndef _WINGDI_   /* [Windows] ver la nota de BITMAPINFOHEADER */
 #if defined(_MSC_VER)
 #pragma pack(push, 1)
 #endif
@@ -174,6 +181,7 @@ typedef struct tagBITMAPFILEHEADER
 #endif
 
 #define BI_RGB 0
+#endif /* !_WINGDI_ */
 
 typedef enum _BLEND 
 {

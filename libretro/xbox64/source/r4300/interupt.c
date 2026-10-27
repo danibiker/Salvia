@@ -40,7 +40,7 @@
 unsigned int interrupt_unsafe_state = 0;
 #include "exception.h"
 #include "../config.h"
-#ifdef _XBOX
+#ifdef XBOX64_PORT   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 /* [Xbox360] xbox64_frame_boundary: ver el gancho de VI_INT, mas abajo. */
 #include "../../xbox/plataforma.h"
 #endif
@@ -372,7 +372,7 @@ void gen_interupt()
 				dpc_register.do_on_unfreeze |= DELAY_UPDATESCREEN;
 			else
 				updateScreen();
-#ifdef _XBOX
+#ifdef XBOX64_PORT   /* [Windows] antes _XBOX */
       /* [Xbox360] El limite de frame para libretro.
        *
        * `go()` (r4300.c:192) no vuelve hasta que `r4300.stop`, y retro_run

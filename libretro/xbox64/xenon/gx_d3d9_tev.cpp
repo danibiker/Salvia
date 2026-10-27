@@ -1694,9 +1694,18 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
      * 24_8 + OOGR).  La curva (ARGB = color de niebla y TLUT >> 8) la sube y
      * la liga gx_d3d9.cpp, un texel por indice.  Sustituye a todo lo de
      * arriba: es el color del pixel, como el shader de GLideN64. */
+    /* [Windows, 2026-10-26] EL CANAL DE LA COPIA DE Z.  En la Xbox la copia es
+     * una D24S8 resuelta y la Z sale en `.g` (ver la nota de arriba).  En PC es
+     * una R32F con la Z en `.r` (gx_d3d9.cpp, gxd3d_pc_z_pasa; los canales que
+     * faltan se leen como 1).  Mismo valor, de 0 a 1. */
+#if defined(_XBOX)
+#define GXD3D_ZC ".g"
+#else
+#define GXD3D_ZC ".r"
+#endif
     if (k->nieblaZ)
         EMIT("  {\n"
-             "    float zNz = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+             "    float zNz = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC ";\n"
              "    float iZ = clamp(floor((zNz - uNieblaZPar.x) * uNieblaZPar.y), 0.0, 261632.0);\n"
              "    float eNz = step(131072.0, iZ) + step(196608.0, iZ) + step(229376.0, iZ)\n"
              "              + step(245760.0, iZ) + step(253952.0, iZ) + step(258048.0, iZ)\n"
@@ -1740,7 +1749,7 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
             EMIT("  float zDec = saturate(uZTex.x);\n");
         else
             EMIT("  float zDec = saturate(IN.pos.z / IN.pos.w);\n");
-        EMIT("  float zBufDec = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+        EMIT("  float zBufDec = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC ";\n"
              "  float dzDec = max(4.0 * fwidth(zDec), 4.0 / 16777215.0);\n"
              "  clip((zDec + dzDec >= zBufDec && zDec - dzDec <= zBufDec &&\n"
              "        zBufDec < 1.0 - 4.0 / 16777215.0) ? 1.0 : -1.0);\n");
@@ -1754,7 +1763,7 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
                 EMIT("  float zPropia = saturate(uZTex.x);\n");
             else
                 EMIT("  float zPropia = saturate(IN.pos.z / IN.pos.w);\n");
-            EMIT("  float zCopia = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+            EMIT("  float zCopia = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC ";\n"
                  "  clip((zPropia < zCopia) ? 1.0 : -1.0);\n");
         }
         /* ★ [Mario Golf] Modo 3: la COPIA de un Z guardado al Z, pixel a pixel
@@ -1768,13 +1777,13 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
          * con uDepthTex = copia del Z actual y el color = el Z del fondo: el
          * Z guardado vuelve solo donde el actual vale 0. */
         if (k->rtz == 4)
-            EMIT("  clip((tex2D(uZActual, (floor(vpos) + 0.5) * uZCopiaInv.xy).g > 0.0) ? -1.0 : 1.0);\n"
+            EMIT("  clip((tex2D(uZActual, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC " > 0.0) ? -1.0 : 1.0);\n"
                  "  o.c = outc;\n"
-                 "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+                 "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC ";\n"
                  "  return o;\n}\n");
         else if (k->rtz == 3)
             EMIT("  o.c = outc;\n"
-                 "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy).g;\n"
+                 "  o.d = tex2D(uZCopia, (floor(vpos) + 0.5) * uZCopiaInv.xy)" GXD3D_ZC ";\n"
                  "  return o;\n}\n");
         /* ★ [Resident Evil 2] Modo 5: la profundidad es la PALABRA DE Z DEL N64
          * del texel (GLideN64 5e51b386: textura de Z con el texel crudo,
@@ -1810,7 +1819,15 @@ static IDirect3DPixelShader9 *gxd3d_generate(const GXD3DTevKey *k, char **soloTe
          * (`cpos` ya va mapeada al rango del viewport en el vertex shader),
          * sujeta a [0,1] por pixel, como GL_DEPTH_CLAMP.  El Z-texture de
          * arriba manda si los dos estan puestos: es una profundidad fija. */
+    {
+        /* [Windows] `clip(IN.pos.x)`: el plano lejano del modo 2 (w - z, ver
+         * el vertex shader en gx_d3d9.cpp); en el modo 1 vale w > 0 y no
+         * descarta.  Solo en PC: la Xbox no usa el modo 2. */
+#if !defined(_XBOX)
+        EMIT("  clip(IN.pos.x);\n");
+#endif
         EMIT("  o.c = outc;\n  o.d = saturate(IN.pos.z / IN.pos.w);\n  return o;\n}\n");
+    }
     else
         EMIT("  return outc;\n}\n");
 

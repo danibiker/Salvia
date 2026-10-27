@@ -1820,13 +1820,16 @@ void ProcessVertexDataDKR(uint32 dwAddr, uint32 dwV0, uint32 dwNum)
 
     nOff = 0;
     uint32 end = dwV0 + dwNum;
+    /* [Windows, 2026-10-26] Direcciones de BYTE de medias palabras: Rice upstream
+     * pone `^ 2`, y Wii64 lo cambio por `^ S16`, que es el xor de INDICE (1 en
+     * little-endian, typedefs.h).  `S16 << 1` es 2 en PC y 0 en la Xbox. */
     for (i = dwV0; i < end; i++)
     {
         XVECTOR3 w;
 
-        g_vtxNonTransformed[i].x = (float)*(short*)((pVtxBase+nOff + 0) ^ S16);
-        g_vtxNonTransformed[i].y = (float)*(short*)((pVtxBase+nOff + 2) ^ S16);
-        g_vtxNonTransformed[i].z = (float)*(short*)((pVtxBase+nOff + 4) ^ S16);
+        g_vtxNonTransformed[i].x = (float)*(short*)((pVtxBase+nOff + 0) ^ (S16 << 1));
+        g_vtxNonTransformed[i].y = (float)*(short*)((pVtxBase+nOff + 2) ^ (S16 << 1));
+        g_vtxNonTransformed[i].z = (float)*(short*)((pVtxBase+nOff + 4) ^ (S16 << 1));
 
         //if( status.isSSEEnabled )
         //  SSEVec3TransformDKR(g_vtxTransformed[i], g_vtxNonTransformed[i]);
@@ -1867,8 +1870,8 @@ void ProcessVertexDataDKR(uint32 dwAddr, uint32 dwV0, uint32 dwNum)
 
         RSP_Vtx_Clipping(i);
 
-        short wA = *(short*)((pVtxBase+nOff + 6) ^ S16);
-        short wB = *(short*)((pVtxBase+nOff + 8) ^ S16);
+        short wA = *(short*)((pVtxBase+nOff + 6) ^ (S16 << 1));
+        short wB = *(short*)((pVtxBase+nOff + 8) ^ (S16 << 1));
 
         s8 r = (s8)(wA >> 8);
         s8 g = (s8)(wA);

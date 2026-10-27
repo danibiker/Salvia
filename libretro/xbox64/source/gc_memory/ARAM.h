@@ -24,7 +24,7 @@
 #ifndef ARAM_H
 #define ARAM_H
 
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 /* [Xbox360] REENVIO.  Mismo caso que MEM2.h: este es el mapa de la ARAM de
  * la GameCube (desde 0x7F000000).  El motivo de reenviar los DOS y no
  * editar a los usuarios esta explicado en MEM2.h y en xbox/xbox_mem.h.

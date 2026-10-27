@@ -547,8 +547,15 @@ static void _RSP_SetGameHacks()
 
 	if (HEADER != NULL)
 	{
+		/* [Windows] En little-endian la cabecera llega en el orden de la ROM
+		 * (palabras del anfitrion), como en mupen64: GLideN64 lee aqui
+		 * HEADER[(32 + i) ^ 3].  Ver rom_gc.c, rom_cabecera_a_struct. */
 		for (int i = 0; i < 20; i++)
+#ifdef _BIG_ENDIAN
 			RSP.romname[i] = (char)HEADER[32 + i];
+#else
+			RSP.romname[i] = (char)HEADER[(32 + i) ^ 3];
+#endif
 		RSP.romname[20] = 0;
 
 		// Remove all trailing spaces.

@@ -91,7 +91,7 @@ DPS_register dps_register;
 
 /* [Xbox360] Misma traduccion de alineacion que en memory.h:61.  Tiene que
  * casar con la declaracion o MSVC da C2086. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 __declspec(align(32)) unsigned long rdram[MEM_SIZE/4];
 unsigned char *const rdramb = (unsigned char *)(rdram);
 __declspec(align(32)) unsigned long SP_DMEM[0x1000/4*2];
@@ -3031,19 +3031,30 @@ void read_rom()
 		word = sign_extended(*(unsigned long *)ROMCache_pointer(address & 0x3FFFFFF));
 }
 
+/* [Windows, 2026-10-26] En little-endian la ROM esta en palabras de 32 bits
+ * en el orden del anfitrion, igual que la RDRAM (ROM-Cache.c la voltea al
+ * cargar: una .z64 sale BYTE_SWAP_HALF), asi que byte y media palabra llevan
+ * el mismo ^S8/^S16 que read_rdramb/h, y la doble va por sus dos palabras como
+ * read_rdramd: es lo que hace mupen64 (memory.c, read_romb/h/d).  Wii64 los
+ * quito porque en big-endian S8 = S16 = 0.  En la Xbox el codigo es el mismo. */
 void read_romb()
 {
-	byte = sign_extendedb(*(unsigned char *)ROMCache_pointer(address & 0x3FFFFFF));
+	byte = sign_extendedb(*(unsigned char *)ROMCache_pointer((address & 0x3FFFFFF)^S8));
 }
 
 void read_romh()
 {
-	hword = sign_extendedh(*(unsigned short *)ROMCache_pointer(address & 0x3FFFFFF));
+	hword = sign_extendedh(*(unsigned short *)ROMCache_pointer((address & 0x3FFFFFF)^S16));
 }
 
 void read_romd()
 {
+#ifdef _BIG_ENDIAN
 	dword = *(unsigned long long *)ROMCache_pointer(address & 0x3FFFFFF);
+#else
+	dword = ((unsigned long long)(*(unsigned long *)ROMCache_pointer(address & 0x3FFFFFF)) << 32) |
+	        (*(unsigned long *)ROMCache_pointer((address & 0x3FFFFFF) + 4));
+#endif
 }
 
 void write_rom()

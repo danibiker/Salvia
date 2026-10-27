@@ -778,6 +778,13 @@ void OGL_UpdateStates()
 
 	if (gDP.changed & CHANGED_RENDERMODE)
 	{
+		/* [Xbox360] [Episode I Racer, 2026-10-27] PROBADO Y DESHECHO: la funcion
+		 * de Z por ZMODE de GLideN64 (OPA/XLU = LESS; 6ea36941, 2910417f).  Con
+		 * la camara cercana ~10.000 triangulos/s salen a profundidad 0
+		 * ([NONCERCA] cerca3, logs (12)) y con LESS todo lo que empata despues
+		 * desaparece: el usuario vio el coche mas recortado y sin piloto.  Si
+		 * GLideN64 usa LESS y se ve bien, alli esos triangulos NO estan todos
+		 * a 0: el problema es la profundidad, no la funcion. */
 		if (gDP.otherMode.depthCompare)
 //			glDepthFunc( GL_LEQUAL );
 			GXZfunc = GX_LEQUAL;
@@ -1680,8 +1687,9 @@ void OGL_UpdateStates()
 }
 
 #ifdef __GX__
-// [Xbox360] The pending triangles need GXD3D_SetDepthClamp; see OGL_AddTriangle.
-static BOOL s_gxZClamp = FALSE;
+// [Xbox360] The pending triangles need GXD3D_SetDepthClamp (0 off, 1 normal,
+// 2 with a vertex behind the eye); see OGL_AddTriangle.
+static u8 s_gxZClamp = 0;
 #endif // __GX__
 
 /* [Xbox360] ★ [Mario Tennis, marcador: la franja de abajo corrida a la
@@ -1790,8 +1798,18 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade
 	 * (logs 38-39): pidiendola tambien para esos, aparecian huecos en el
 	 * escenario de escenas concretas; sin ellos, ningun hueco y la N entera, y
 	 * `tri` 200-3300/s con `detras = 0` en la escena.  Esos triangulos siguen
-	 * como antes: los recorta D3D en el plano cercano. */
-	BOOL zClamp = FALSE;
+	 * como antes: los recorta D3D en el plano cercano.
+	 *
+	 * ★ [Episode I Racer, 2026-10-27] YA NO: VAN EN EL MODO 2.  Los huecos de
+	 * aquel A/B eran de la forma de sujetar (`max(z, 0)` con w < 0, ver el
+	 * vertex shader en gx_d3d9.cpp), no de sujetarlos.  Dejarlos al plano
+	 * cercano cuesta caro cuando el juego lo pone lejos: en EP1 esta en w ~5
+	 * ([ZRECON], logs (13)) y con la camara cercana se perdia el suelo de
+	 * alrededor -- "se ve por debajo del suelo", 100-2.000 triangulos/s en
+	 * `corta` de [NONCERCA] --.  El modo 2 los recorta por el plano del OJO,
+	 * como GL con GL_DEPTH_CLAMP.  Con los TRES detras no se pide: no se ve
+	 * nada y D3D los tira enteros. */
+	u8 zClamp = 0;
 
 	if (OGL.GXcombWok && GBI_IsNoN())
 	{
@@ -1809,6 +1827,14 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade
 				behind++;
 			else if ((-OGL.GXcombW[2][2] + (OGL.GXcombW[2][3] / pv.w)) < -1.0f)
 				tooNear++;
+			/* [Episode I Racer, 2026-10-27] MEDIDO con la sonda [ZRECON] (logs
+			 * (13), retirada): la z que rehace combW desde la w es la del
+			 * vertice (diferencia < 0,01 salvo con w ~0,001), y por delante del
+			 * cercano salen los MISMOS vertices con las dos.  Con la camara
+			 * cercana el cercano del juego esta en w ~5 y la carroceria y el
+			 * piloto en w 0,001-3: estan de verdad por delante del cercano, y su
+			 * Z sujeta queda POR DEBAJO de MinZ (en PC hace falta el viewport en
+			 * [0, 1]: ver GXD3D_SetDepthClamp). */
 		}
 
 		/* [Xbox360] ★ [Episode I Racer, tiras de la carroceria que no encajan
@@ -1834,7 +1860,15 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2, bool primShade
 			OGL.GXupdateMtx = TRUE;
 		}
 
-		zClamp = (useCombW && tooNear != 0 && behind == 0) ? TRUE : FALSE;
+		if (useCombW && behind == 0 && tooNear != 0)
+			zClamp = 1;
+#if !defined(_XBOX)
+		/* [Windows] Solo en PC: arreglo el suelo cortado de EP1 en PC; en la
+		 * Xbox no se ha probado y alli queda como estaba.  Ver la nota del
+		 * vertex shader en gx_d3d9.cpp. */
+		else if (useCombW && behind != 0 && behind < 3)
+			zClamp = 2;
+#endif
 	}
 
 	if (zClamp != s_gxZClamp)
@@ -2142,7 +2176,7 @@ void OGL_DrawTriangles()
 	 * OGL_AddTriangle).  Se apaga al cerrarlo: asi ningun otro dibujo -- VI,
 	 * rects, FrameBuffer -- la hereda, y el shim vacia el lote al cambiar. */
 	if (s_gxZClamp && OGL.GXuseCombW)
-		GXD3D_SetDepthClamp( 1 );
+		GXD3D_SetDepthClamp( s_gxZClamp );
 	{
 		const int nv = (int)OGL.numVertices;
 		GXD3DVertex *dst = gxd3d_lote_abrir( nv );

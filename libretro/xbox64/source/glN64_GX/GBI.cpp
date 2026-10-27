@@ -55,7 +55,7 @@
 /* ★ DIVERGENCIA vs Wii64.  Ver xenon/gxshim/DIVERGENCIAS.txt punto 6.
  * <unistd.h> es POSIX y el XDK no lo trae.  GBI.cpp no usa nada de el: la
  * rama __LINUX__ lo arrastraba por costumbre. */
-#ifndef _XBOX
+#ifndef XBOX64_PORT   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 # include <unistd.h>
 #endif
 # include <stdlib.h>
@@ -65,7 +65,7 @@
  * ella, `crc32()`, y la declara/implementa nuestro shim.
  * NO vale sustituirla por otro hash: su valor se COMPARA contra la tabla de
  * microcodigos conocidos (`specialMicrocodes[i].crc`). */
-#ifndef _XBOX
+#ifndef XBOX64_PORT   /* [Windows] antes _XBOX: el crc32 del shim, no el de zlib */
 #include <zlib.h>
 #endif
 
@@ -440,7 +440,19 @@ MicrocodeInfo *GBI_DetectMicrocode( u32 uc_start, u32 uc_dstart, u16 uc_dsize )
 	current->type = F3D;
 
 	// See if we can identify it by CRC
+#ifdef _BIG_ENDIAN
 	uc_crc = crc32( 0, &RDRAM[uc_start & 0x1FFFFFFF], 4096 );
+#else
+	/* [Windows, 2026-10-26] La tabla de arriba es de Wii64: crc32 de zlib sobre
+	 * la RDRAM en big-endian, o sea sobre los bytes en el orden del N64.  En
+	 * little-endian la RDRAM esta en palabras del anfitrion: se le da la
+	 * vuelta antes, como hace la deteccion por texto de mas abajo. */
+	{
+		static u8 uc_orden_n64[4096];
+		UnswapCopy( &RDRAM[uc_start & 0x1FFFFFFF], uc_orden_n64, 4096 );
+		uc_crc = crc32( 0, uc_orden_n64, 4096 );
+	}
+#endif
 	current->crc = uc_crc;
 #if 0 //def __GX__
 	sprintf(txtbuffer,"GBI:uc_crc: %x", uc_crc);

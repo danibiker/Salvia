@@ -33,6 +33,10 @@
  * ★ Es idempotente y no molesta al resto del arbol: nadie mas incluye
  * <windows.h>, y si algun dia alguien lo hace, aterriza aqui en vez de
  * fallar.
+ *
+ * [Windows, 2026-10-26] VIVE EN gxshim/xbox/, QUE SOLO ESTA EN EL INCLUDE
+ * PATH DE LAS CONFIGURACIONES DE Xbox 360 (xbox64.vcxproj).  En la build de
+ * Windows taparia el <windows.h> de verdad.
  */
 
 #ifndef _XBOX64_GXSHIM_WINDOWS_H_

@@ -454,7 +454,13 @@ Done:
 	{
 		u32 dword = *(u32 *)src;
 #ifndef _BIG_ENDIAN
+#if defined(_MSC_VER)
+		/* [Windows, logs (4)] El mismo bswap, con el intrinseco de MSVC: el
+		 * asm de GCC no compila en VS2010. */
+		dword = _byteswap_ulong( dword );
+#else
 		__asm__ volatile( "bswapl %0\n\t" : "=q"(dword) : "0"(dword) );
+#endif
 #else // !_BIG_ENDIAN
 		dword = ((dword & 0xFF)<<24)|(((dword>>8) & 0xFF)<<16)|(((dword>>16) & 0xFF)<<8)|((dword>>24)& 0xFF);
 #endif // _BIG_ENDIAN

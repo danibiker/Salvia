@@ -77,7 +77,17 @@
  *
  * ★ Y hay una consecuencia en el mapa de memoria: `BLOCKS_LO` cuelga de
  * PPC_DYNAREC (r4300.c:64), no de esto, asi que sus 4 MB se reservan
- * desde la fase 1.  Ver xbox/xbox_mem.h. */
+ * desde la fase 1.  Ver xbox/xbox_mem.h.
+ *
+ * [Windows, 2026-10-26] En Win32 NO hay dynarec: el codigo que emite es
+ * PowerPC.  El vcxproj saca de la build los .c de ppc/, Recomp-Cache-Heap.c
+ * y libgcc_ppc.c, quita USE_RECOMP_CACHE / FASTMEM*, y aqui queda a 0, con
+ * lo que dynarec_ausente.c pone los stubs y plataforma.c usa siempre el
+ * interprete puro. */
+#if defined(_XBOX)
 #define XBOX64_DYNAREC 1
+#else
+#define XBOX64_DYNAREC 0
+#endif
 
 #endif /* _XBOX64_FASE_H_ */

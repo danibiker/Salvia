@@ -60,6 +60,16 @@ static int                    g_tex_w = 0, g_tex_h = 0;
 static D3DFORMAT              g_tex_fmt    = D3DFMT_X8R8G8B8;
 static int                    g_tex_bpp    = 32;
 
+/* [xbox64, 2026-10-26] Textura de un core que renderiza con D3D (env 30003),
+ * como g_extGameTex en SDL_xboxvideo.c.  NO es nuestra: no se libera ni se
+ * recrea aqui.  Mientras esta puesta manda ella en s0, y SUS dimensiones en
+ * el quad y en c1; g_game_tex/g_game_surf se quedan como estaban para cuando
+ * se retire.  GAME_W/GAME_H dan el tamano de la que alimenta el quad. */
+static LPDIRECT3DTEXTURE9     g_ext_tex    = NULL;
+static int                    g_ext_w = 0, g_ext_h = 0;
+#define GAME_W (g_ext_tex ? g_ext_w : g_tex_w)
+#define GAME_H (g_ext_tex ? g_ext_h : g_tex_h)
+
 static LPDIRECT3DVERTEXBUFFER9 g_vb        = NULL;       /* 3 verts: triangulo fullscreen */
 static VTX                    g_verts[3];
 
@@ -288,8 +298,8 @@ void HLSLBackground::draw() {
 	 * resolucion del backbuffer, al volver del menu el efecto muestrea con
 	 * offsets erroneos y "desaparece". El fondo debe ser transparente al
 	 * pipeline del juego. */
-	if (g_tex_w > 0) {
-		float cGameDims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
+	if (GAME_W > 0) {
+		float cGameDims[4] = { (float)GAME_W, (float)GAME_H, 0, 0 };
 		m_dev->SetPixelShaderConstantF(1, cGameDims, 1);
 	}
 }
@@ -607,7 +617,7 @@ void XBOX_SelectEffect(int effectID)
     /* 2. c1 = textureDims, SIEMPRE. Antes habia efectos que no lo escribian;
           ponerlo de mas es inocuo (cuesta 4 floats por cambio de efecto, no
           por frame) y elimina la casuistica. */
-    dims[0] = (float)g_tex_w; dims[1] = (float)g_tex_h; dims[2] = 0; dims[3] = 0;
+    dims[0] = (float)GAME_W; dims[1] = (float)GAME_H; dims[2] = 0; dims[3] = 0;
     g_dev->SetPixelShaderConstantF(1, dims, 1);
 
     /* 3. Sampler s0: filtro y wrap SIEMPRE. Escribir el wrap incondicionalmente
@@ -635,8 +645,8 @@ void XBOX_SelectEffect(int effectID)
         g_dev->SetSamplerState(s, D3DSAMP_ADDRESSV, MapWrap(pass->luts[i].wrap));
     }
 
-    if (!g_fullscreen && g_tex_w > 0)
-        UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    if (!g_fullscreen && GAME_W > 0)
+        UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
 }
 
 /* =====================================================================
@@ -774,7 +784,7 @@ static void DrawOverlay(void)
      * Se usa g_activePS -el puntero ya validado por SelectEffect- y NO
      * g_compiled[g_current_effect]: esto corre cada frame con el menu abierto,
      * y un NULL aqui seria pantalla negra en Xenon. */
-    g_dev->SetTexture(0, g_game_tex);
+    g_dev->SetTexture(0, g_ext_tex ? g_ext_tex : g_game_tex);
     g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
     g_dev->SetPixelShader(g_activePS ? g_activePS : g_fallbackPS);
     g_dev->SetSamplerState(0, D3DSAMP_MINFILTER, g_current_filter);
@@ -844,19 +854,190 @@ SDL_Surface* WinD3D9_SetGameMode(int width, int height, int bpp)
 }
 
 /* =====================================================================
+ * [xbox64, 2026-10-26] Cores que renderizan con Direct3D (env 30002/30003
+ * de salvia.cpp).  Port de lo mismo en SDL_xboxvideo.c; el porque largo esta
+ * alli y en salvia.cpp.
+ * =================================================================== */
+
+/* NUESTRO PIPELINE, NO EL QUE DEJE EL CORE (XBOX_SetupQuadState).  Un core
+ * que comparte el device deja puestos su vertex shader y su declaracion, su
+ * viewport, la Z, el scissor y el blend, sus constantes c0..c7 (c1 es el
+ * textureDims de nuestros presets) y texturas en s1..s3 (las LUT).  El render
+ * target y la Z ya los devuelve el core al acabar su frame
+ * (xenon64_video_frame_end).  Para los cores que entregan pixeles esto pone
+ * los valores que ya tenian; el SelectEffect, que rehace c1 y los samplers,
+ * solo con textura externa, como en la Xbox. */
+static void SetupQuadState(void)
+{
+    D3DVIEWPORT9 vp;
+
+    g_dev->SetVertexShader(NULL);
+    g_dev->SetFVF(VTX_FVF);   /* y fuera la declaracion de vertices del core */
+    g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
+
+    /* Al tamano del back buffer: el core deja el suyo (640x480 del N64). */
+    vp.X = 0;
+    vp.Y = 0;
+    vp.Width  = g_pp.BackBufferWidth;
+    vp.Height = g_pp.BackBufferHeight;
+    vp.MinZ = 0.0f;
+    vp.MaxZ = 1.0f;
+    g_dev->SetViewport(&vp);
+
+    g_dev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+    g_dev->SetRenderState(D3DRS_COLORWRITEENABLE, 0x0000000F);
+    g_dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
+    g_dev->SetRenderState(D3DRS_LIGHTING, FALSE);
+
+    g_dev->SetPixelShader(g_activePS ? g_activePS : g_fallbackPS);
+    g_dev->SetSamplerState(0, D3DSAMP_MINFILTER, g_current_filter);
+    g_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, g_current_filter);
+    g_dev->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+
+    if (g_ext_tex)
+        XBOX_SelectEffect(g_current_effect);
+}
+
+void* SDL_XBOX_GetD3DDevice(void)
+{
+    return (void *)g_dev;
+}
+
+int SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height)
+{
+    if (!g_dev) return 0;
+
+    if (g_cs_init) EnterCriticalSection(&g_cs);
+
+    if (!texture || width <= 0 || height <= 0) {
+        /* Vuelta al camino normal: el core va a liberar la suya. */
+        g_ext_tex = NULL;
+        g_ext_w = 0;
+        g_ext_h = 0;
+        g_dev->SetTexture(0, g_game_tex);
+    } else {
+        g_ext_tex = (LPDIRECT3DTEXTURE9)texture;
+        g_ext_w = width;
+        g_ext_h = height;
+        g_dev->SetTexture(0, g_ext_tex);
+    }
+    /* El quad (letterbox, escalado entero) y c1 con el tamano que manda. */
+    if (GAME_W > 0)
+        UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
+    XBOX_SelectEffect(g_current_effect);
+
+    if (g_cs_init) LeaveCriticalSection(&g_cs);
+    return 1;
+}
+
+/* La miniatura del savestate cuando la imagen la pinta el core.  En PC no hay
+ * tileado: GetRenderTargetData a una superficie SYSTEMMEM (por eso la textura
+ * del core es D3DUSAGE_RENDERTARGET) y, si el tamano pedido es otro, D3DX la
+ * escala en CPU.  Una vez por savestate. */
+int SDL_XBOX_CaptureGameTexture(void *dst, int w, int h)
+{
+    static LPDIRECT3DSURFACE9 s_sys = NULL;   /* SYSTEMMEM, del tamano de la del core */
+    static int                s_sysW = 0, s_sysH = 0;
+    static D3DFORMAT          s_sysFmt = D3DFMT_UNKNOWN;
+
+    LPDIRECT3DSURFACE9 src = NULL;
+    LPDIRECT3DSURFACE9 fin = NULL;
+    D3DSURFACE_DESC    desc;
+    D3DLOCKED_RECT     lr;
+    HRESULT            hr;
+    int                y;
+
+    if (!dst || w <= 0 || h <= 0 || !g_dev || !g_ext_tex)
+        return 0;
+
+    if (g_cs_init) EnterCriticalSection(&g_cs);
+
+    if (FAILED(g_ext_tex->GetSurfaceLevel(0, &src)) || !src) {
+        if (g_cs_init) LeaveCriticalSection(&g_cs);
+        return 0;
+    }
+    src->GetDesc(&desc);
+
+    if (s_sys && (s_sysW != (int)desc.Width || s_sysH != (int)desc.Height || s_sysFmt != desc.Format)) {
+        s_sys->Release();
+        s_sys = NULL;
+    }
+    if (!s_sys) {
+        if (FAILED(g_dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format,
+                                                      D3DPOOL_SYSTEMMEM, &s_sys, NULL))) {
+            s_sys = NULL;
+            src->Release();
+            if (g_cs_init) LeaveCriticalSection(&g_cs);
+            return 0;
+        }
+        s_sysW = (int)desc.Width;
+        s_sysH = (int)desc.Height;
+        s_sysFmt = desc.Format;
+    }
+
+    hr = g_dev->GetRenderTargetData(src, s_sys);
+    src->Release();
+    if (FAILED(hr)) {
+        if (g_cs_init) LeaveCriticalSection(&g_cs);
+        return 0;
+    }
+
+    /* Tal cual si ya es lo pedido en 32 bits; si no, D3DX escala y convierte. */
+    if (w == s_sysW && h == s_sysH &&
+        (s_sysFmt == D3DFMT_A8R8G8B8 || s_sysFmt == D3DFMT_X8R8G8B8)) {
+        fin = s_sys;
+        fin->AddRef();
+    } else {
+        if (FAILED(g_dev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8,
+                                                      D3DPOOL_SYSTEMMEM, &fin, NULL))) {
+            if (g_cs_init) LeaveCriticalSection(&g_cs);
+            return 0;
+        }
+        if (FAILED(D3DXLoadSurfaceFromSurface(fin, NULL, NULL, s_sys, NULL, NULL,
+                                              D3DX_FILTER_LINEAR, 0))) {
+            fin->Release();
+            if (g_cs_init) LeaveCriticalSection(&g_cs);
+            return 0;
+        }
+    }
+
+    if (FAILED(fin->LockRect(&lr, NULL, D3DLOCK_READONLY))) {
+        fin->Release();
+        if (g_cs_init) LeaveCriticalSection(&g_cs);
+        return 0;
+    }
+    /* Fila a fila: el pitch de la superficie no tiene por que ser w*4. */
+    for (y = 0; y < h; ++y)
+        memcpy((unsigned char *)dst + (size_t)y * (size_t)w * 4,
+               (unsigned char *)lr.pBits + (size_t)y * (size_t)lr.Pitch,
+               (size_t)w * 4);
+    fin->UnlockRect();
+    fin->Release();
+
+    if (g_cs_init) LeaveCriticalSection(&g_cs);
+    return 1;
+}
+
+/* =====================================================================
  * Ajustes en caliente (mismos nombres que en Xbox).
  * =================================================================== */
 void SDL_XBOX_SetDisplaySize(float aspect_ratio)
 {
     g_aspect = aspect_ratio;
-    UpdateVertexBuffer(g_tex_w, g_tex_h, aspect_ratio);
+    UpdateVertexBuffer(GAME_W, GAME_H, aspect_ratio);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
 
 void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
 {
     g_fullscreen = fullscreen;
-    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
 
@@ -864,14 +1045,14 @@ void SDL_XBOX_SetDisplayOverflow(int type)
 {
     g_scale_type = type;
     g_overflow   = (type != 0);   /* reduce(0) recorta a pantalla; increase y 1x-5x pueden salirse */
-    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
 
 void SDL_XBOX_SetRotation(int rotation)
 {
     g_rotation = (rotation >= 0 && rotation <= 3) ? rotation : 0;
-    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
 
@@ -973,7 +1154,7 @@ static int RecreateDefaultResources(void)
         if (FAILED(g_dev->CreateTexture(g_tex_w, g_tex_h, 1, D3DUSAGE_DYNAMIC,
                                         fmt, D3DPOOL_DEFAULT, &g_game_tex, NULL)))
             return 0;
-        UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+        UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
         g_dev->SetTexture(0, g_game_tex);
         g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
         g_dev->SetFVF(VTX_FVF);
@@ -1121,7 +1302,7 @@ void SDL_XBOX_SetVSync(int enable)
         g_dev->SetFVF(VTX_FVF);
     }
     XBOX_SelectEffect(g_current_effect);
-    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    UpdateVertexBuffer(GAME_W, GAME_H, g_aspect);
 
     /* Recrear recursos GPU del overlay (g_ovl_surf preservado) */
     if (g_ovl_surf) InitOverlay();
@@ -1154,14 +1335,17 @@ void WinD3D9_Present(void)
     D3DLOCKED_RECT lr;
     HRESULT hr;
 
-    if (!g_dev || !g_game_tex || !g_game_surf) return;
+    if (!g_dev || !g_vb) return;
+    /* [xbox64] Con textura externa la imagen ya esta en la GPU (la pinta el
+     * core) y g_game_tex/g_game_surf no participan. */
+    if (!g_ext_tex && (!g_game_tex || !g_game_surf)) return;
 
     if (g_cs_init) EnterCriticalSection(&g_cs);
 
     /* Subir el frame del core (g_game_surf) a la textura dinamica. Copiamos
        exactamente w*bpp por fila (los pitches de origen y destino pueden
        diferir por padding). */
-    if (SUCCEEDED(g_game_tex->LockRect(0, &lr, NULL, D3DLOCK_DISCARD))) {
+    if (!g_ext_tex && SUCCEEDED(g_game_tex->LockRect(0, &lr, NULL, D3DLOCK_DISCARD))) {
         int y;
         int rb = g_game_surf->w * g_game_surf->format->BytesPerPixel;
         if (rb > lr.Pitch) rb = lr.Pitch;
@@ -1173,10 +1357,14 @@ void WinD3D9_Present(void)
 
     if (g_ovl_enabled) UploadOverlay();
 
+    /* [xbox64] Nuestro pipeline, no el del core.  ANTES del Clear, para que
+     * el scissor apagado le deje borrar el back buffer entero. */
+    SetupQuadState();
+
     g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 
     if (SUCCEEDED(g_dev->BeginScene())) {
-        g_dev->SetTexture(0, g_game_tex);
+        g_dev->SetTexture(0, g_ext_tex ? g_ext_tex : g_game_tex);
         g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
         g_dev->SetFVF(VTX_FVF);
         DrawMainQuad();

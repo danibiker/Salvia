@@ -115,9 +115,35 @@ volatile unsigned int d3dq_dbg_alm_crea   = 0;
  * shader en c0..c12 (`TEVC_TOTAL` 12 + `TEVC_MARCA`, gx_d3d9_tev.cpp:292-300),
  * y solo usa los samplers 0..3.
  * ====================================================================== */
+/* [Windows, 2026-10-26] ★ EN PC LOS ESTADOS NO VAN DE 4 EN 4.  En el D3D9 de
+ * escritorio D3DRS_* y D3DSAMP_* son enteros seguidos (D3DRS_SCISSORTESTENABLE
+ * = 174, D3DSAMP_MAGFILTER = 5...), y el `& 3` de sombra_rs/sombra_samp los
+ * descartaba casi todos: el bind de cada pasada no reponia NADA, y el core
+ * empezaba cada frame con lo que dejo el quad del frontend (recorte y Z
+ * apagados, su mezcla...) mientras el espejo del productor creia lo suyo.
+ * Sintoma: el texto de los dialogos de SM64 se salia del recuadro al
+ * desplazarse.  En PC se indexa por el valor tal cual; en la Xbox, igual que
+ * siempre. */
+#if defined(_XBOX)
 #define SOMBRA_RS     (404 / 4)
-#define SOMBRA_SAMP   4
 #define SOMBRA_STIPOS (80 / 4)
+#define SOMBRA_RS_I(st)     ((unsigned int)(st) >> 2)
+#define SOMBRA_RS_VALE(st)  ((unsigned int)(st) < 404u && !((unsigned int)(st) & 3u))
+#define SOMBRA_RS_ST(k)     ((D3DRENDERSTATETYPE)((k) << 2))
+#define SOMBRA_SP_I(t)      ((unsigned int)(t) >> 2)
+#define SOMBRA_SP_VALE(t)   ((unsigned int)(t) < 80u && !((unsigned int)(t) & 3u))
+#define SOMBRA_SP_ST(k)     ((D3DSAMPLERSTATETYPE)((k) << 2))
+#else
+#define SOMBRA_RS     XBOX64_D3DRS_SOLO_XBOX      /* 300: los de PC acaban en 209 */
+#define SOMBRA_STIPOS 16                          /* D3DSAMP_DMAPOFFSET = 13 */
+#define SOMBRA_RS_I(st)     ((unsigned int)(st))
+#define SOMBRA_RS_VALE(st)  ((unsigned int)(st) < (unsigned int)SOMBRA_RS)
+#define SOMBRA_RS_ST(k)     ((D3DRENDERSTATETYPE)(k))
+#define SOMBRA_SP_I(t)      ((unsigned int)(t))
+#define SOMBRA_SP_VALE(t)   ((unsigned int)(t) < (unsigned int)SOMBRA_STIPOS)
+#define SOMBRA_SP_ST(k)     ((D3DSAMPLERSTATETYPE)(k))
+#endif
+#define SOMBRA_SAMP   4
 #define SOMBRA_VSC    16
 #define SOMBRA_PSC    21     /* c0..c20: c16/c17 = GXD3D_LOD_CONST, c18/c19 = GXD3D_ATLAS_CONST, c20 = GXD3D_NIEBLAZ_CONST (gx_d3d9_int.h) */
 
@@ -167,16 +193,16 @@ void d3dq_sombra_reset(void)
 
 static void sombra_rs(DWORD st, DWORD v)
 {
-    const unsigned int i = (unsigned int)st >> 2;
-    if ((unsigned int)st >= 404u || ((unsigned int)st & 3u)) return;
+    const unsigned int i = SOMBRA_RS_I(st);
+    if (!SOMBRA_RS_VALE(st)) return;
     if (!s_sRsOk[i]) { s_sRsOk[i] = 1; s_sRsLista[s_sRsN++] = (unsigned short)i; }
     s_sRs[i] = v;
 }
 
 static void sombra_samp(DWORD s, DWORD tipo, DWORD v)
 {
-    const unsigned int t = (unsigned int)tipo >> 2;
-    if (s >= SOMBRA_SAMP || (unsigned int)tipo >= 80u || ((unsigned int)tipo & 3u)) return;
+    const unsigned int t = SOMBRA_SP_I(tipo);
+    if (s >= SOMBRA_SAMP || !SOMBRA_SP_VALE(tipo)) return;
     s_sSamp[s][t] = v;  s_sSampOk[s][t] = 1;
 }
 
@@ -326,7 +352,7 @@ void d3dq_bind(void)
     for (i = 0; i < s_sRsN; i++)
     {
         const unsigned int k = s_sRsLista[i];
-        dev->SetRenderState((D3DRENDERSTATETYPE)(k << 2), s_sRs[k]);
+        dev->SetRenderState(SOMBRA_RS_ST(k), s_sRs[k]);
         n++;
     }
     if (s_sVSOk)   { dev->SetVertexShader(s_sVS);        n++; }
@@ -338,7 +364,7 @@ void d3dq_bind(void)
         for (t = 0; t < SOMBRA_STIPOS; t++)
             if (s_sSampOk[i][t])
             {
-                dev->SetSamplerState((DWORD)i, (D3DSAMPLERSTATETYPE)(t << 2),
+                dev->SetSamplerState((DWORD)i, SOMBRA_SP_ST(t),
                                      s_sSamp[i][t]);
                 n++;
             }
@@ -791,6 +817,118 @@ void d3dq_mete(const D3DQCmd *c)
 #endif /* D3D_GRABADOR < 2 */
 }
 
+#if !defined(_XBOX)
+/* [Windows, 2026-10-26] EL `Resolve` DE LA XBOX, EN PC.
+ *
+ * En la Xbox, Resolve es la unica forma de sacar algo de la EDRAM: copia un
+ * rectangulo del render target (o del Z) a una textura y, si se pide, borra
+ * despues el origen.  En PC el render target ya es memoria de video normal:
+ *   - el COLOR se copia con StretchRect a la superficie de la textura (que
+ *     tiene que estar creada con D3DUSAGE_RENDERTARGET para poder ser
+ *     destino; las que no lo esten fallan aqui y no se copian);
+ *   - la PROFUNDIDAD no se puede copiar asi en D3D9 de PC: se salta (las
+ *     copias de Z quedan para la fase 2);
+ *   - el punto de destino NULL es (0,0), y el rectangulo se recorta al tamanyo
+ *     del destino;
+ *   - los borrados (D3DRESOLVE_CLEAR*) se hacen despues con Clear sobre el
+ *     mismo rectangulo. */
+/* gx_d3d9.cpp: el Resolve de PROFUNDIDAD a una textura R32F (pase INTZ). */
+void gxd3d_pc_z_a_textura(IDirect3DDevice9 *dev, IDirect3DBaseTexture9 *dstTex, UINT level,
+                          const D3DRECT *src, const D3DPOINT *dstPt);
+
+static void d3dq_resolve_pc(IDirect3DDevice9 *dev, DWORD flags, const D3DRECT *src,
+                            IDirect3DBaseTexture9 *dstTex, const D3DPOINT *dstPt,
+                            UINT level, const D3DVECTOR4 *clr, float clearZ,
+                            DWORD clearStencil)
+{
+    const DWORD fuente = flags & 0x7u;
+    IDirect3DSurface9 *rt = NULL;
+    RECT rs;
+    int  hayRect = 0;
+
+    /* [Windows, 2026-10-26] Fuente de profundidad: la Z del core es INTZ y se
+     * copia con un pase de shader (no hay StretchRect de Z a textura).  El
+     * rect se queda para el borrado de abajo, si lo hay. */
+    if (fuente == D3DRESOLVE_DEPTHSTENCIL)
+    {
+        if (dstTex)
+            gxd3d_pc_z_a_textura(dev, dstTex, level, src, dstPt);
+        if (src)
+        {
+            rs.left = src->x1;  rs.top = src->y1;
+            rs.right = src->x2; rs.bottom = src->y2;
+            hayRect = (rs.right > rs.left && rs.bottom > rs.top) ? 1 : 0;
+        }
+    }
+
+    if (fuente <= D3DRESOLVE_RENDERTARGET3 &&
+        SUCCEEDED(dev->GetRenderTarget(fuente, &rt)) && rt)
+    {
+        D3DSURFACE_DESC dr;
+        rt->GetDesc(&dr);
+        if (src)
+        {
+            rs.left = src->x1;  rs.top = src->y1;
+            rs.right = src->x2; rs.bottom = src->y2;
+        }
+        else
+        {
+            rs.left = 0;  rs.top = 0;
+            rs.right = (LONG)dr.Width;  rs.bottom = (LONG)dr.Height;
+        }
+        if (rs.right  > (LONG)dr.Width)  rs.right  = (LONG)dr.Width;
+        if (rs.bottom > (LONG)dr.Height) rs.bottom = (LONG)dr.Height;
+        hayRect = (rs.right > rs.left && rs.bottom > rs.top) ? 1 : 0;
+
+        if (hayRect && dstTex && dstTex->GetType() == D3DRTYPE_TEXTURE)
+        {
+            IDirect3DSurface9 *dst = NULL;
+            if (SUCCEEDED(((IDirect3DTexture9 *)dstTex)->GetSurfaceLevel(level, &dst)) && dst)
+            {
+                D3DSURFACE_DESC dd;
+                RECT rd, rsc = rs;
+                dst->GetDesc(&dd);
+                rd.left = dstPt ? dstPt->x : 0;
+                rd.top  = dstPt ? dstPt->y : 0;
+                rd.right  = rd.left + (rs.right - rs.left);
+                rd.bottom = rd.top  + (rs.bottom - rs.top);
+                if (rd.right  > (LONG)dd.Width)  { rsc.right  -= rd.right  - (LONG)dd.Width;  rd.right  = (LONG)dd.Width; }
+                if (rd.bottom > (LONG)dd.Height) { rsc.bottom -= rd.bottom - (LONG)dd.Height; rd.bottom = (LONG)dd.Height; }
+                if (rd.right > rd.left && rd.bottom > rd.top)
+                    dev->StretchRect(rt, &rsc, dst, &rd, D3DTEXF_NONE);
+                dst->Release();
+            }
+        }
+    }
+
+    if (flags & (D3DRESOLVE_CLEARRENDERTARGET | D3DRESOLVE_CLEARDEPTHSTENCIL))
+    {
+        DWORD que = 0;
+        D3DCOLOR col = 0;
+        if (flags & D3DRESOLVE_CLEARRENDERTARGET)
+        {
+            que |= D3DCLEAR_TARGET;
+            if (clr)
+                col = D3DCOLOR_COLORVALUE(clr->x, clr->y, clr->z, clr->w);
+        }
+        if (flags & D3DRESOLVE_CLEARDEPTHSTENCIL)
+            que |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
+        if (hayRect)
+        {
+            D3DRECT cr;
+            cr.x1 = rs.left;  cr.y1 = rs.top;
+            cr.x2 = rs.right; cr.y2 = rs.bottom;
+            dev->Clear(1, &cr, que, col, clearZ, clearStencil);
+        }
+        else
+            dev->Clear(0, NULL, que, col, clearZ, clearStencil);
+    }
+
+    if (rt)
+        rt->Release();
+}
+#endif
+
 /* La traduccion de UNA orden.  Vive aparte para que la compartan los tres
  * valores de la palanca: con el 1 la llama `d3dq_mete` en el acto y con el 2
  * y el 3 la llama `d3dq_drena` desde el anillo.  Dos copias de este switch
@@ -817,11 +955,17 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
         break;
 
     case QOP_CreateDepthStencilSurface:
+        /* [Windows] El ultimo parametro en PC es el HANDLE compartido, no los
+         * D3DSURFACE_PARAMETERS de la EDRAM: ahi va NULL. */
         *(HRESULT *)c->p[2] = dev->CreateDepthStencilSurface(
             c->w[0], c->w[1], (D3DFORMAT)c->w[2],
             (D3DMULTISAMPLE_TYPE)c->w[3], c->w[4], (BOOL)c->w[5],
             (D3DSurface **)c->p[0],
+#if defined(_XBOX)
             (CONST D3DSURFACE_PARAMETERS *)c->p[1]);
+#else
+            NULL);
+#endif
         break;
 
     case QOP_CreateVertexShader:
@@ -867,6 +1011,7 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
     case QOP_Resolve:
     {
         union { unsigned int u; float f; } z; z.u = c->w[3];
+#if defined(_XBOX)
         dev->Resolve(c->w[0],
                      (CONST D3DRECT *)c->p[0],
                      (D3DBaseTexture *)c->p[1],
@@ -875,6 +1020,15 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
                      (CONST D3DVECTOR4 *)c->p[3],
                      z.f, c->w[4],
                      (CONST D3DRESOLVE_PARAMETERS *)c->p[4]);
+#else
+        d3dq_resolve_pc(dev, c->w[0],
+                        (CONST D3DRECT *)c->p[0],
+                        (D3DBaseTexture *)c->p[1],
+                        (CONST D3DPOINT *)c->p[2],
+                        c->w[1],
+                        (CONST D3DVECTOR4 *)c->p[3],
+                        z.f, c->w[4]);
+#endif
         break;
     }
 
@@ -893,6 +1047,13 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
      * del consumidor, para reaplicarlos en el siguiente `d3dq_bind()`.  Ver
      * D3DQ_BIND en d3d9_grabador.h. */
     case QOP_SetRenderState:
+#if !defined(_XBOX)
+        /* [Windows] Los estados de la Xbox (D3DRS_VIEWPORTENABLE, D3DRS_HIZ*,
+         * ver xbox/win32/xtl.h) no existen en el D3D9 de PC: ni al device ni a
+         * la sombra. */
+        if (c->w[0] >= XBOX64_D3DRS_SOLO_XBOX)
+            break;
+#endif
         dev->SetRenderState((D3DRENDERSTATETYPE)c->w[0], c->w[1]);
         sombra_rs(c->w[0], c->w[1]);
         break;
@@ -972,6 +1133,13 @@ static void d3dq_ejecuta(const D3DQCmd *c, IDirect3DDevice9 *dev)
     /* Las dos lecturas que solo ocurren la PRIMERA vez que se mira un
      * estado: a partir de ahi contesta el espejo. */
     case QOP_GetRenderState:
+#if !defined(_XBOX)
+        if (c->w[0] >= XBOX64_D3DRS_SOLO_XBOX)
+        {
+            *(DWORD *)c->p[0] = 0;
+            break;
+        }
+#endif
         dev->GetRenderState((D3DRENDERSTATETYPE)c->w[0], (DWORD *)c->p[0]);
         break;
 

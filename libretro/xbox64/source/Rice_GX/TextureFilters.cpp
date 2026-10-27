@@ -2192,6 +2192,21 @@ void LoadHiresTexture( TxtrCacheEntry &entry )
     {
 		unsigned int stride = info.lPitch * 4; // 4 lines in GX tile
 		bool readOK = ArchiveReader::getInstance().readTexture( info.lpSurface, archiveEntry, archiveEntryInfo, stride);
+#ifndef _BIG_ENDIAN
+		/* [Windows, 2026-10-26] El .pak trae los texels RGBA8 de GX en el orden
+		 * de bytes de la especificacion (pares AR/GB, alto primero), y el shim
+		 * los lee en PC como u16 del anfitrion (GXD3D_TEXEL16), que es como los
+		 * escribe el resto de Rice: se da la vuelta a cada par aqui, antes de
+		 * Mirror/Clamp (que copian unidades enteras).  En la Xbox no existe. */
+		if (readOK)
+		{
+			unsigned short *p16 = (unsigned short *)info.lpSurface;
+			const unsigned int n = ((unsigned int)info.lPitch * (unsigned int)height) >> 1;
+			unsigned int k;
+			for (k = 0; k < n; k++)
+				p16[k] = (unsigned short)((p16[k] >> 8) | (p16[k] << 8));
+		}
+#endif
 #ifdef SHOW_DEBUG
 		if (readOK)
 			sprintf(txtbuffer,"readTexture success\r\n");

@@ -37,7 +37,7 @@
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 /* [Xbox360] ★ LA TERCERA RAMA.
  *
  * Este fichero estaba partido en HW_RVL (MEM2 + memoria virtual paginada de
@@ -113,7 +113,7 @@ void ROMCache_init(fileBrowser_file* f){
 }
 
 void ROMCache_deinit(){
-#ifdef _XBOX
+#ifdef XBOX64_PORT
 	/* [Xbox360] Lo llama rom_read cuando ROMCache_load falla, y
 	 * xbox/plataforma.c en cada descarga.  Tiene que ser reentrante: se
 	 * puede llamar dos veces seguidas. */
@@ -131,7 +131,7 @@ void ROMCache_deinit(){
 }
 
 void* ROMCache_pointer(u32 rom_offset){
-#ifdef _XBOX
+#ifdef XBOX64_PORT
 	if (rom_offset >= ROMSize)
 		return s_romCeros + (rom_offset & 0xFFFu);
 	return ROMBase + rom_offset;
@@ -196,7 +196,7 @@ static void ensure_block(u32 block){
 
 
 void ROMCache_read(u8* ram_dest, u32 rom_offset, u32 length){
-#ifdef _XBOX
+#ifdef XBOX64_PORT
 	/* [Xbox360] La ROM entera esta en RAM: una copia y ya.  El guardia
 	 * existe porque gc_memory/memory.c lee la ROM en el arranque, ANTES de
 	 * que nadie haya comprobado que la carga fue bien. */
@@ -248,7 +248,7 @@ void ROMCache_read(u8* ram_dest, u32 rom_offset, u32 length){
 
 int ROMCache_load(fileBrowser_file* file){
 	char txt[128];
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)
 	sprintf(txt, "Loading ROM fully into RAM");
 #elif defined(HW_RVL)
 	sprintf(txt, "Loading ROM %s into MEM2",ROMTooBig ? "partially" : "fully");
@@ -256,7 +256,7 @@ int ROMCache_load(fileBrowser_file* file){
 	sprintf(txt, "Loading ROM %s into ARAM",ROMTooBig ? "partially" : "fully");
 #endif
 
-#ifdef _XBOX
+#ifdef XBOX64_PORT
 	/* [Xbox360] La rama simple: reservar ROMSize y leer de una tacada.
 	 *
 	 * El orden lo marca el original y no es libre: el tipo de byteswap se

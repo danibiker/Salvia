@@ -79,6 +79,18 @@ void         SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);
 void         SDL_XBOX_SetOverscan(int x, int y);
 
+/* [xbox64, 2026-10-26] Cores que renderizan con Direct3D (environments
+ * 30002/30003 de salvia.cpp), como en la Xbox:
+ *   - GetD3DDevice: el device del frontend, que el core comparte.
+ *   - SetExternalGameTexture: la textura del core sustituye a la nuestra en
+ *     s0 (NULL/0 = retirarla).  Tiene que ser D3DUSAGE_RENDERTARGET para
+ *     poder capturarla.  Devuelve 1 OK / 0 error.
+ *   - CaptureGameTexture: la imagen de esa textura en ARGB de 32 bits, w*h
+ *     pixeles densos (miniatura del savestate).  1 OK / 0 sin textura o fallo. */
+void*        SDL_XBOX_GetD3DDevice(void);
+int          SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height);
+int          SDL_XBOX_CaptureGameTexture(void *dst, int w, int h);
+
 /* Devuelve el IDirect3DDevice9 interno (para HLSLBackground u otros). */
 struct IDirect3DDevice9;
 struct IDirect3DDevice9* WinD3D9_GetDevice(void);

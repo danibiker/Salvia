@@ -639,6 +639,7 @@ void VI_GX_renderCpuFramebuffer()
 			src3 += 8; w4 = *(u32*)src3; w5 = *(u32*)(src3 + 4);
 			src4 += 8; w6 = *(u32*)src4; w7 = *(u32*)(src4 + 4);
 
+#ifdef _BIG_ENDIAN
 			w0 = ((w0 >> 1) | (w0 << 31)) | 0x80008000u;
 			w1 = ((w1 >> 1) | (w1 << 31)) | 0x80008000u;
 			w2 = ((w2 >> 1) | (w2 << 31)) | 0x80008000u;
@@ -647,6 +648,22 @@ void VI_GX_renderCpuFramebuffer()
 			w5 = ((w5 >> 1) | (w5 << 31)) | 0x80008000u;
 			w6 = ((w6 >> 1) | (w6 << 31)) | 0x80008000u;
 			w7 = ((w7 >> 1) | (w7 << 31)) | 0x80008000u;
+#else
+			/* [Windows, 2026-10-26] Cada u32 son dos texels RGB5A3 (p0 << 16 |
+			 * p1) y el shim los lee como u16 del anfitrion (GXD3D_TEXEL16): en
+			 * little-endian el primero en memoria es la mitad BAJA, asi que
+			 * las mitades se intercambian.  Rotar 1 y luego 16 es rotar 17; la
+			 * mascara es simetrica.  Las palabras de la RDRAM ya vienen con su
+			 * valor (orden del anfitrion), no hacen falta mas cambios. */
+			w0 = ((w0 >> 17) | (w0 << 15)) | 0x80008000u;
+			w1 = ((w1 >> 17) | (w1 << 15)) | 0x80008000u;
+			w2 = ((w2 >> 17) | (w2 << 15)) | 0x80008000u;
+			w3 = ((w3 >> 17) | (w3 << 15)) | 0x80008000u;
+			w4 = ((w4 >> 17) | (w4 << 15)) | 0x80008000u;
+			w5 = ((w5 >> 17) | (w5 << 15)) | 0x80008000u;
+			w6 = ((w6 >> 17) | (w6 << 15)) | 0x80008000u;
+			w7 = ((w7 >> 17) | (w7 << 15)) | 0x80008000u;
+#endif
 
 			wgPipe->U32 = w0; wgPipe->U32 = w1;
 			wgPipe->U32 = w2; wgPipe->U32 = w3;
@@ -821,8 +838,15 @@ static void VI_GX_copiaDesdeRDRAM( u32 inicio, BOOL vaciar )
 					const u32 w1 = _viCfbAlfa( src[1] );
 					if (w0 | w1)
 						hayAlgo = TRUE;
+#ifdef _BIG_ENDIAN
 					*dst++ = w0;
 					*dst++ = w1;
+#else
+					/* [Windows] Dos texels por u32: en little-endian el primero
+					 * en memoria es la mitad baja (ver VI_GX_renderCpuFramebuffer). */
+					*dst++ = (w0 << 16) | (w0 >> 16);
+					*dst++ = (w1 << 16) | (w1 >> 16);
+#endif
 				}
 	}
 

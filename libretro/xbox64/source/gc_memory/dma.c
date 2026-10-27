@@ -61,6 +61,32 @@
 #endif
 static unsigned char *const sram = (unsigned char*)(SRAM_LO);
 
+/* [Windows, 2026-10-26] LAS COPIAS DE LOS DMA EN LITTLE-ENDIAN.  RDRAM, SP
+ * DMEM/IMEM, SRAM y ROM estan en palabras de 32 bits del orden del anfitrion
+ * (memory.h: S8 = 3), y el byte N64 `a` vive en `a ^ S8`.  Wii64 copia con
+ * memcpy y deja el ^S8 solo en las direcciones, que en big-endian (S8 = 0) no
+ * hace nada; en little-endian desplaza la copia entera 3 bytes (el IPL3 de
+ * Mario 64 calculaba mal su checksum y se colgaba en su `bal` a si mismo).
+ *   - Origen y destino alineados a 4 (y longitud multiplo de 4): las dos
+ *     memorias tienen el mismo orden, memcpy tal cual.  El DMA del SP lo esta
+ *     siempre (direcciones & ~7, longitud | 7 + 1).
+ *   - Si no, byte a byte con ^S8 en los dos lados, que es lo que hace mupen64.
+ * En la Xbox no se compila: sigue el memcpy de siempre. */
+#ifndef _BIG_ENDIAN
+static void dma_copia_bytes(unsigned char *dst, unsigned int doff,
+                            const unsigned char *src, unsigned int soff, unsigned int len)
+{
+	unsigned int k;
+	if (((doff | soff | len) & 3u) == 0)
+	{
+		memcpy(dst + doff, src + soff, len);
+		return;
+	}
+	for (k = 0; k < len; k++)
+		dst[(doff + k) ^ S8] = src[(soff + k) ^ S8];
+}
+#endif
+
 #include "../xenon64_diag.h"   /* XBOX64_TRAZAS */
 #if XBOX64_TRAZAS
 /* Parte de la herramienta fija [HILOS] (xbox/plataforma.c): los ultimos 16
@@ -171,9 +197,15 @@ void dma_pi_read()
 			if (flashRAMInfo.use_flashram != 1)
 			{
 				sramWritten = true;
+#ifdef _BIG_ENDIAN
 				memcpy(	&sram[((pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE)^S8],
 						&rdramb[(pi_register.pi_dram_addr_reg)^S8],
 						(pi_register.pi_rd_len_reg & 0xFFFFFE)+2);
+#else
+				dma_copia_bytes(sram, (pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE,
+				                rdramb, pi_register.pi_dram_addr_reg,
+				                (pi_register.pi_rd_len_reg & 0xFFFFFE)+2);
+#endif
 				flashRAMInfo.use_flashram = -1;
 			}
 			else
@@ -247,9 +279,15 @@ void dma_pi_write()
 		{
 			if (flashRAMInfo.use_flashram != 1)
 			{
+#ifdef _BIG_ENDIAN
 				memcpy(	&rdramb[(pi_register.pi_dram_addr_reg)^S8],
 						&sram[(((pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE))^S8],
 						(pi_register.pi_wr_len_reg & 0xFFFFFE)+2);
+#else
+				dma_copia_bytes(rdramb, pi_register.pi_dram_addr_reg,
+				                sram, (pi_register.pi_cart_addr_reg-0x08000000)&0xFFFE,
+				                (pi_register.pi_wr_len_reg & 0xFFFFFE)+2);
+#endif
 				flashRAMInfo.use_flashram = -1;
 			}
 			else
@@ -308,8 +346,21 @@ void dma_pi_write()
 		to RDRAM address: ((unsigned int)(pi_register.pi_dram_addr_reg)^S8)
 		of length:	length
 	*/
+#ifdef _BIG_ENDIAN
 	ROMCache_read(((unsigned char*)rdram + ((unsigned int)(pi_register.pi_dram_addr_reg)^S8)),
 				  i, dma_length);
+#else
+	/* [Windows] Ver dma_copia_bytes: la ROM tiene el mismo orden que la RDRAM. */
+	if ((((unsigned int)pi_register.pi_dram_addr_reg | (unsigned int)i | (unsigned int)dma_length) & 3u) == 0)
+		ROMCache_read(rdramb + (unsigned int)pi_register.pi_dram_addr_reg, i, dma_length);
+	else
+	{
+		unsigned int k;
+		for (k = 0; k < (unsigned int)dma_length; k++)
+			rdramb[((unsigned int)pi_register.pi_dram_addr_reg + k) ^ S8] =
+				*(unsigned char *)ROMCache_pointer(((unsigned int)i + k) ^ S8);
+	}
+#endif
 #if XBOX64_TRAZAS
 	pir_nota(0, (unsigned)dma_length);
 #endif
@@ -365,9 +416,16 @@ void dma_sp_write()
 	{
 		memoff = memaddr & 0xFFF;
 		chunk = (0x1000 - memoff < length) ? (0x1000 - memoff) : length;
+#ifdef _BIG_ENDIAN
 		memcpy(&spMemType[memoff^S8], &rdramb[dramaddr^S8], chunk);
 		if (chunk < length)
 			memcpy(&spMemType[0^S8], &rdramb[(dramaddr+chunk)^S8], length-chunk);
+#else
+		/* [Windows] Alineado a 8 siempre: ver dma_copia_bytes. */
+		memcpy(&spMemType[memoff], &rdramb[dramaddr], chunk);
+		if (chunk < length)
+			memcpy(&spMemType[0], &rdramb[dramaddr+chunk], length-chunk);
+#endif
 		memaddr  += length;
 		dramaddr += length + skip;
 	}
@@ -397,9 +455,16 @@ void dma_sp_read()
 	{
 		memoff = memaddr & 0xFFF;
 		chunk = (0x1000 - memoff < length) ? (0x1000 - memoff) : length;
+#ifdef _BIG_ENDIAN
 		memcpy(&rdramb[dramaddr^S8], &spMemType[memoff^S8], chunk);
 		if (chunk < length)
 			memcpy(&rdramb[(dramaddr+chunk)^S8], &spMemType[0^S8], length-chunk);
+#else
+		/* [Windows] Alineado a 8 siempre: ver dma_copia_bytes. */
+		memcpy(&rdramb[dramaddr], &spMemType[memoff], chunk);
+		if (chunk < length)
+			memcpy(&rdramb[dramaddr+chunk], &spMemType[0], length-chunk);
+#endif
 		memaddr  += length;
 		dramaddr += length + skip;
 	}

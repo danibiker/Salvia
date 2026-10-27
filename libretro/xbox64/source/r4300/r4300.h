@@ -85,7 +85,7 @@ typedef struct {
  *
  * MSVC no tiene equivalente -- ni r13 reservado, ni small data area -- asi
  * que aqui se cae, y se cae a proposito.  No hay nada que reponer. */
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX: ver xbox64_pre.h */
 extern R4300 r4300;
 #else
 extern R4300 r4300 __attribute__((section(".sbss")));
@@ -96,7 +96,7 @@ extern R4300 r4300 __attribute__((section(".sbss")));
 #define local_rs32 LOW_WORD(local_rs)
 #define local_rt32 LOW_WORD(local_rt)
 
-#if defined(_XBOX)
+#if defined(XBOX64_PORT)   /* [Windows] antes _XBOX */
 extern precomp_instr PC;   /* [Xbox360] ver la nota de `.sbss` arriba */
 #else
 extern precomp_instr PC __attribute__((section(".sbss")));

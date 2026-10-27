@@ -405,8 +405,14 @@ void TexRectToN64FrameBuffer_YUV_16b(uint32 x0, uint32 y0, uint32 width, uint32 
             int y1 = (uint8)(val>>16)&0xFF;
             int u  = (uint8)(val>>24)&0xFF;
 
-            pN64Dst[x+x0+0] = ConvertYUVtoR5G5B5X1(y0,u,v); //Note: This should be Endian-independent
-            pN64Dst[x+x0+1] = ConvertYUVtoR5G5B5X1(y1,u,v);
+            /* [Windows, 2026-10-26] No lo es: los pixeles de 16 bits de la
+             * RDRAM llevan ^S16 de indice en little-endian, contado desde el
+             * principio de la RDRAM (el renglon puede empezar a media palabra).
+             * En la Xbox S16 = 0: la misma direccion que pN64Dst[x+x0]. */
+            uint16 *rdram16 = (uint16*)g_pRDRAMu8;
+            const uint32 ix = (uint32)(&pN64Dst[x+x0] - rdram16);
+            rdram16[(ix+0)^S16] = ConvertYUVtoR5G5B5X1(y0,u,v); //Note: This should be Endian-independent
+            rdram16[(ix+1)^S16] = ConvertYUVtoR5G5B5X1(y1,u,v);
         }
     }
 }

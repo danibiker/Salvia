@@ -268,7 +268,21 @@ void aiLenChanged(void)
 		if (trozo > frames - i)
 			trozo = frames - i;
 
+#ifdef _BIG_ENDIAN
 		memcpy(&s_anillo[ini * 2u], origen + i * 4u, trozo * 4u);
+#else
+		/* [Windows, 2026-10-26] En little-endian la RDRAM esta en palabras del
+		 * anfitrion: cada frame es el VALOR (L << 16) | R, que en memoria queda
+		 * R, L.  Se rota cada palabra para dejar L, R como espera libretro
+		 * (lo mismo que hace audio-sdl de mupen64plus).  Misma cuenta de bytes. */
+		{
+			const unsigned int *w = (const unsigned int *)(origen + i * 4u);
+			unsigned int *d = (unsigned int *)&s_anillo[ini * 2u];
+			unsigned k;
+			for (k = 0; k < trozo; k++)
+				d[k] = (w[k] << 16) | (w[k] >> 16);
+		}
+#endif
 		i += trozo;
 	}
 

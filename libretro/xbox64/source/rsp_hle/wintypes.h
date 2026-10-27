@@ -109,7 +109,12 @@ typedef int RECT;
  * `C2061: syntax error : identifier 'PAINTSTRUCT'`.
  *
  * Lo usa una sola linea, el puntero a funcion `PaintBPPanel` de la
- * interfaz de depuracion de zilmar, que nadie implementa. */
+ * interfaz de depuracion de zilmar, que nadie implementa.
+ *
+ * [Windows, logs (3)] En PC si lo trae <windows.h> (winuser.h, que define
+ * `_WINUSER_`; el XDK no la define): ahi se deja el suyo. */
+#ifndef _WINUSER_
 typedef int PAINTSTRUCT;
+#endif
 
 #endif /* __WINTYPES_H__ */
