@@ -410,6 +410,11 @@ extern DECLSPEC int   SDL_XBOX_SetExternalGameTexture(void *texture, int width, 
  * implementacion, en SDL_xboxvideo.c. */
 extern DECLSPEC int   SDL_XBOX_CaptureGameTexture(void *dst, int w, int h);
 
+/* Devuelve si el core declara una textura como superficie principal y acepta
+ * el ancho y el alto de esa superficie como parametros a devolver */ 
+extern DECLSPEC int SDL_XBOX_hasExternalGameTexture(int *w, int *h);
+
+
 /*
  * Makes sure the given list of rectangles is updated on the given screen.
  * If 'x', 'y', 'w' and 'h' are all 0, SDL_UpdateRect will update the entire

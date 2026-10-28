@@ -133,6 +133,7 @@ struct t_scale_props{
 	int filter;
 	bool integer_scale;
 	int integer_scale_type;
+	int sync_type;
 
 	t_scale_props(){
 		sw = sh = dw = dh = scale = 0;
@@ -140,6 +141,7 @@ struct t_scale_props{
 		bpp = 16;
 		integer_scale = false;
 		integer_scale_type = SCALE_INT_REDUCE;
+		sync_type = OPT_SYNC_VIDEO;
 	}
 };
 

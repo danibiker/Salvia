@@ -840,9 +840,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 				/* Se invalida el tamano cacheado para que el siguiente frame
 				 * por el camino normal vuelva a crear la textura del juego
 				 * (la rama de cambio de geometria de hw_refresh). */
-				gameMenu->current_video_settings.sw  = 0;
-				gameMenu->current_video_settings.sh  = 0;
-				gameMenu->current_video_settings.bpp = 0;
+				cfgLoader->current_video_settings.sw  = 0;
+				cfgLoader->current_video_settings.sh  = 0;
+				cfgLoader->current_video_settings.bpp = 0;
 				LOG_DEBUG("Core D3D: textura externa retirada");
 				return true;
 			}
@@ -852,9 +852,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 			/* Para que el resto del frontend sepa el tamano del juego.  bpp a
 			 * 32: la textura del core es A8R8G8B8. */
-			gameMenu->current_video_settings.sw  = t->width;
-			gameMenu->current_video_settings.sh  = t->height;
-			gameMenu->current_video_settings.bpp = 32;
+			cfgLoader->current_video_settings.sw  = t->width;
+			cfgLoader->current_video_settings.sh  = t->height;
+			cfgLoader->current_video_settings.bpp = 32;
 
 			LOG_DEBUG("Core D3D: textura externa %ux%u (%p)",
 				t->width, t->height, t->texture);
@@ -1115,7 +1115,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
     const unsigned row_bytes = width * (bpp / 8);
     SDL_Surface*& screen = gameMenu->gameScreen;
-	t_scale_props &current_video_settings = gameMenu->current_video_settings;
+	t_scale_props &current_video_settings = cfgLoader->current_video_settings;
 
 	#ifdef SALVIA_GPU_VIDEO
     if (width  != current_video_settings.sw || height != current_video_settings.sh || bpp != current_video_settings.bpp){
@@ -2423,7 +2423,7 @@ static void __declspec(noinline) runGameLoop() {
 			const double flipEnd = Constant::getTicks();
 			gameMenu->sync->note_flip(flipEnd - flipIni);
 			gameMenu->sync->note_present(flipEnd);
-			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
+			gameMenu->sync->limit_fps(nextFrameTime, cfgLoader->current_video_settings.sync_type, gameMenu->gameTicks);
 		}
 	//} __except (EXCEPTION_EXECUTE_HANDLER) {
 	//	printAndDelay();

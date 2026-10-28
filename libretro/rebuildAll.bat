@@ -172,7 +172,7 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	
 	set NAME[31]=xbox64
 	set  SLN[31]=xbox64\360\Xdk\xbox64\xbox64.sln
-	set PLAT[31]=Xbox360
+	set PLAT[31]=Both
 	set  CFG[31]=%CONFIG%
 
 	for /l %%i in (0,1,31) do (

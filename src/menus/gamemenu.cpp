@@ -1687,7 +1687,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 					XBOX_SelectEffect(next);
 					/* Mantener sincronizado el ultimo valor aplicado: si no,
 					 * checkDisplayOptions creeria que sigue el anterior. */
-					current_video_settings.filter = next;
+					cfgLoader->current_video_settings.filter = next;
 
 					msgShader = LanguageManager::instance()->get("msg.filter") + " "
 						+ shaders->displayName(next);
@@ -1763,7 +1763,8 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			}
 
 			if (getEmuStatus() == EMU_MENU_OVERLAY && overlay){
-				bg_screenshot = clonarPantalla(gameScreen, 180);
+				clonarPantallaOrTextura(gameScreen, 180);
+				
 				//Si hay mensajes de logros en curso, mostramos el menu de logros
 				if (!messagesAchievement.empty() && messagesAchievement.get_at(0)->type == ACH_UNLOCKED){
 					configMenus->setAchievementsAsSelected();
@@ -1893,10 +1894,42 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 		//copia = SDL_DisplayFormat(tmp);
 		SDL_FreeSurface(tmp);
 	}
-	
 	// Imagen plana sin transparencias
 	SDL_SetAlpha(copia, SDL_RLEACCEL, 0xFF);
     return copia;
+}
+
+/** Necesitamos clonar la pantalla de texturas D3D */
+void GameMenu::clonarPantallaOrTextura(SDL_Surface* src, int transparency) {
+	int widthTex, heightTex;
+	if (SDL_XBOX_hasExternalGameTexture(&widthTex, &heightTex)) {
+		LOG_DEBUG("Has external game texture");
+		const std::size_t total = (std::size_t)widthTex * heightTex * 4;
+		uint8_t *shot = new uint8_t[total];
+
+		if (SDL_XBOX_CaptureGameTexture(shot, (int)widthTex, (int)heightTex)) {
+			SDL_Surface *tmp = SDL_CreateRGBSurfaceFrom(
+				shot,
+				widthTex,
+				heightTex,
+				32,                 // bits por pixel
+				widthTex * 4,       // pitch
+				0x00FF0000,         // R
+				0x0000FF00,         // G
+				0x000000FF,         // B
+				0xFF000000          // A
+			);
+			if (tmp) {
+				bg_screenshot = clonarPantalla(tmp, transparency);
+				SDL_FreeSurface(tmp);
+			} else {
+				LOG_ERROR("SDL_CreateRGBSurfaceFrom failed: %s", SDL_GetError());
+			}
+		}
+		delete [] shot;
+	} else {
+		bg_screenshot = clonarPantalla(src, transparency);
+	}
 }
 
 void GameMenu::selectScalerMode(int mode){
@@ -2778,8 +2811,8 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 		SDL_FreeSurface(rawSurface);
 #endif
     }
-
-    // 2. VOLCADO ULTRA RAPIDO DEL TECLADO BASE
+    
+	//Drawing the keyboard
 	SDL_Rect rect = { keyb.iniX, keyb.iniY, totalKeyboardW, totalKeyboardH};
     SDL_BlitSurface(keyb.keyboardSurface, nullptr, this->overlay, &rect);
 	
@@ -2814,43 +2847,36 @@ void GameMenu::checkDisplayOptions(){
 	// Overriding the shader mode if the core has specified something greater than 0. 
 	// 0 is actually -1 in the cfg file which represents "Auto"
 	const int currentShader = cfgEmu->shaderMode > 0 ? cfgEmu->shaderMode - 1 : *this->current_shader;
-	if (current_video_settings.filter != currentShader){
+	if (cfgLoader->current_video_settings.filter != currentShader){
 		XBOX_SelectEffect(currentShader);
-		current_video_settings.filter = currentShader;
+		cfgLoader->current_video_settings.filter = currentShader;
 	}
 
 	// Overriding the integer scale if the core has specified something greater than 0. 
 	// 0 is actually -1 in the cfg file which represents "Auto"
 	const bool currentIntegerScale = cfgEmu->integerScale > 0 ? (cfgEmu->integerScale - 1) == 1 : *this->current_integer_scale;
-	if (current_video_settings.integer_scale != currentIntegerScale){
+	if (cfgLoader->current_video_settings.integer_scale != currentIntegerScale){
 		SDL_XBOX_SetDisplayFullscreen(currentIntegerScale == false);
-		current_video_settings.integer_scale = currentIntegerScale;
+		cfgLoader->current_video_settings.integer_scale = currentIntegerScale;
 	}
 
 	// Overriding the integer scale type if the core has specified something greater than 0. 
 	// 0 is actually -1 in the cfg file which represents "Auto"
 	const int currentIntegerScaleType = cfgEmu->scaleIntMode > 0 ? cfgEmu->scaleIntMode - 1 : *this->current_integer_scale_type;
-	if (current_video_settings.integer_scale_type != currentIntegerScaleType){
+	if (cfgLoader->current_video_settings.integer_scale_type != currentIntegerScaleType){
 		SDL_XBOX_SetDisplayOverflow(currentIntegerScaleType);
-		current_video_settings.integer_scale_type = currentIntegerScaleType;
+		cfgLoader->current_video_settings.integer_scale_type = currentIntegerScaleType;
 	}
 	#endif
 
 	// Overriding the aspect ratio if the core has specified something greater than 0. 
 	// 0 is actually -1 in the cfg file which represents "Auto"
 	float currentRatio = cfgEmu->aspectRatio > 0 ? aspectRatioValues[cfgEmu->aspectRatio - 1] : aspectRatioValues[*this->current_ratio];
-	if (current_video_settings.ratio != currentRatio){
-		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", currentRatio, current_video_settings.sw, current_video_settings.sh);
+	if (cfgLoader->current_video_settings.ratio != currentRatio){
+		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", currentRatio, cfgLoader->current_video_settings.sw, cfgLoader->current_video_settings.sh);
 		#ifdef SALVIA_GPU_VIDEO
 		SDL_XBOX_SetDisplaySize(currentRatio);
 		#endif
-		current_video_settings.ratio = currentRatio;
-	}
-
-	// Overriding the video synchronization mode if the core has specified something greater than 0. 
-	// 0 is actually -1 in the cfg file which represents "Auto"
-	const int currentSyncType = cfgEmu->syncMode > 0 ? cfgEmu->syncMode - 1 : *this->current_sync;
-	if (*this->current_sync != currentSyncType){
-		*this->current_sync = currentSyncType;
+		cfgLoader->current_video_settings.ratio = currentRatio;
 	}
 }

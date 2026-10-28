@@ -99,6 +99,9 @@ static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de panta
 static int g_display_scale_type = 0; /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
 static int g_texture_width = 0;
 static int g_texture_height = 0;
+static LPDIRECT3DTEXTURE9 s_capTex = NULL;
+static int s_capW   = 0;
+static int s_capH   = 0;
 
 /* >>> TEXTURA EXTERNA: cores que renderizan ellos mismos con Direct3D.
  *
@@ -1172,10 +1175,6 @@ int SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height)
  * entonces el llamante simplemente se queda sin miniatura. */
 int SDL_XBOX_CaptureGameTexture(void *dst, int w, int h)
 {
-	static LPDIRECT3DTEXTURE9 s_capTex = NULL;
-	static int                s_capW   = 0;
-	static int                s_capH   = 0;
-
 	LPDIRECT3DSURFACE9 srcSurf = NULL;
 	LPDIRECT3DSURFACE9 dstSurf = NULL;
 	D3DLOCKED_RECT     lr;
@@ -1241,6 +1240,12 @@ int SDL_XBOX_CaptureGameTexture(void *dst, int w, int h)
 	IDirect3DSurface9_UnlockRect(dstSurf);
 	IDirect3DSurface9_Release(dstSurf);
 	return 1;
+}
+
+int SDL_XBOX_hasExternalGameTexture(int *w, int *h){
+	*w = s_capW;
+	*h = s_capH;
+	return s_capTex && s_capW > 0 && s_capH > 0 ? 1 : 0;
 }
 
 void SDL_XBOX_SetScreenResolution(int w, int h) {

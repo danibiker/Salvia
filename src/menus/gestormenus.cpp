@@ -265,7 +265,10 @@ void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig)
 	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
-	menuEmulation->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
+	OpcionLista *listaSync = new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef());
+	menuEmulation->opciones.push_back(listaSync);
+	listaSync->callback = &GestorMenus::selectSync;
+	listaSync->context  = refConfig;
 	
 	//--------Opcion de fastforward---------
 	menuEmulation->opciones.push_back(new OpcionInt(LanguageManager::instance()->get("menu.options.fastforward"), 
@@ -1110,6 +1113,15 @@ std::string GestorMenus::selectResolution(void* inst, void *index, void *values)
 	} else {
 		cfg->setWidth(0);  cfg->setHeight(0);    //"Auto"
 	}
+	return "";
+}
+
+std::string GestorMenus::selectSync(void* inst, void *index, void *values) {
+	if (!inst || !index || !values) return "";
+	CfgLoader* cfg = static_cast<CfgLoader*>(inst);
+	const int idx = *static_cast<int*>(index);
+	//Storing the value of the synchronization selected. 
+	cfg->current_video_settings.sync_type = idx;
 	return "";
 }
 

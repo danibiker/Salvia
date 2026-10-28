@@ -955,6 +955,12 @@ int SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height)
     return 1;
 }
 
+bool SDL_XBOX_hasExternalGameTexture(int *w, int *h){
+	*w = g_ext_w;
+	*h = g_ext_h;
+	return g_ext_tex && g_ext_w > 0 && g_ext_h > 0;
+}
+
 /* La miniatura del savestate cuando la imagen la pinta el core.  En PC no hay
  * tileado: GetRenderTargetData a una superficie SYSTEMMEM (por eso la textura
  * del core es D3DUSAGE_RENDERTARGET) y, si el tamano pedido es otro, D3DX la

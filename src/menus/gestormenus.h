@@ -662,6 +662,7 @@ public:
 	static std::string selectMidiModule(void* inst, void *index, void *values);
 	static std::string selectResolution(void* inst, void *index, void *values);
 	static std::string selectLang(void* inst, void *index, void *values);
+	static std::string selectSync(void* inst, void *index, void *values);
 
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);

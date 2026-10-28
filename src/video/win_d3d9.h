@@ -91,6 +91,8 @@ void*        SDL_XBOX_GetD3DDevice(void);
 int          SDL_XBOX_SetExternalGameTexture(void *texture, int width, int height);
 int          SDL_XBOX_CaptureGameTexture(void *dst, int w, int h);
 
+bool		 SDL_XBOX_hasExternalGameTexture(int *w, int *h);
+
 /* Devuelve el IDirect3DDevice9 interno (para HLSLBackground u otros). */
 struct IDirect3DDevice9;
 struct IDirect3DDevice9* WinD3D9_GetDevice(void);

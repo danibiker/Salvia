@@ -831,6 +831,18 @@ void CfgLoader::loadCoreParams(){
 	}
 #endif
 	applyCoreParamsFile(getCoreCfgPath());
+
+	// We do this only one time at the core initialization. It was previously in the emulator loop like 
+	// the aspect ratio or filters options, which have specific hotkeys attached and menu options. I found that at that level,
+	// it can be a bit confusing for the user to select the synchronization mode in combination with the core overrides.
+
+	// Overriding the video synchronization mode if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	const int currentSyncType = getCfgEmu()->syncMode > 0 ? getCfgEmu()->syncMode - 1 : configMain[cfg::syncMode].valueInt;
+	if (current_video_settings.sync_type != currentSyncType){
+		//I don't want to change the current general option, so I store the value in the option sync_type 
+		current_video_settings.sync_type = currentSyncType;
+	}
 }
 
 // Aplica un fichero de opciones de core (lineas "key=indice", '#'=comentario)

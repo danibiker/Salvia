@@ -82,6 +82,7 @@ public:
 	std::vector<FieldIdDesc> idioma;
 	int idxRegion;
 	int idxIdioma;
+	t_scale_props current_video_settings;
 
 private:
 	static const std::string CONFIGFILE; 

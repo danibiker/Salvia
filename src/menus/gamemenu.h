@@ -122,7 +122,6 @@ class GameMenu : public Engine{
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;
-		t_scale_props current_video_settings;
 
 		#ifndef SALVIA_GPU_VIDEO
 		ScalerFunc current_scaler;
@@ -185,6 +184,7 @@ class GameMenu : public Engine{
 		void fillOverlay(int colorIndex);
 		void fillOverlayAlpha(int colorIndex, int alpha);
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
+		void clonarPantallaOrTextura(SDL_Surface*, int);
 		bool loadBgImage();
 		bool someImageLoaded();
 		void nextImageLoaded();
