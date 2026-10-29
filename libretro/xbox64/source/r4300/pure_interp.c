@@ -3396,7 +3396,22 @@ static void SD()
 
 void prefetch()
 {
-	unsigned long *mem = fast_mem_access(r4300.pc);
+	unsigned long *mem;
+
+	/* [Windows] ★★ [Rush 2049, 2026-10-29] r0 VALE SIEMPRE CERO.  Este
+	 * interprete no lo protegia: una instruccion del juego con destino r0
+	 * (en la consola no hace nada) lo dejaba en 3D088889, y luego el
+	 * `li a0,0x60` (= addiu a0, r0, 0x60) del hueco de retardo del `jal` de
+	 * __osException daba 3D0888E9: el envio de mensaje leia una cola basura
+	 * (EFF9EFF9) y entraba en un bucle de fallos de TLB para siempre, al
+	 * empezar la carrera.  La referencia (mupen64plus-core pure_interp.c,
+	 * InterpretOpcode) convierte en NOP toda instruccion con destino r0; aqui
+	 * se pone a cero antes de CADA instruccion -- prefetch() es por donde
+	 * pasan el bucle y todos los huecos de retardo --, que da lo mismo.  En la
+	 * Xbox no se notaba porque corre el recompilador. */
+	r4300.gpr[0] = 0;
+
+	mem = fast_mem_access(r4300.pc);
 	if (mem == NULL)
 	{
 		mem = fast_mem_access(r4300.pc);

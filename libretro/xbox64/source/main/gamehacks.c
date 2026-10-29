@@ -268,7 +268,13 @@ void GameSpecificHackSetup() {
 	 * [Bottom of the 9th, 2026-10-26] Tambien de la referencia: mupen64plus.ini
 	 * `CountPerOp=1` en (U).  Con 2 la pantalla "LEAGUE A VS" tardaba ~20 s a
 	 * 0-2 listas/s con 60 VI/s, igual con Rice; [HILOS] dio el hilo principal
-	 * CORRIENDO (pri 10, pc 801B80B0), sin esperar ninguna cola. */
+	 * CORRIENDO (pri 10, pc 801B80B0), sin esperar ninguna cola.
+	 *
+	 * [San Francisco Rush 2049, Windows, 2026-10-29] Tambien de la referencia:
+	 * mupen64plus.ini `CountPerOp=1` en (E) y (U).  Con 2 se quedaba parado al
+	 * empezar la carrera: graficos, audio y AI a 0, [HILOS] con todos los
+	 * hilos esperando su cola (vacias) y la CPU en el bucle ocioso; lo ultimo,
+	 * DMA de PI de 256 bytes (carga de la pista).  La huella de RE2. */
 	if((curCRC[0] == 0x30C7AC50 && curCRC[1] == 0x7704072D) ||   // Conker's Bad Fur Day (U)
 	   (curCRC[0] == 0x373F5889 && curCRC[1] == 0x9A6CA80A) ||   // Conker's Bad Fur Day (E)
 	   (curCRC[0] == 0x66CF0FFE && curCRC[1] == 0xAD697F9C) ||   // Fighting Force 64 (E)
@@ -277,7 +283,9 @@ void GameSpecificHackSetup() {
 	   (curCRC[0] == 0x9B500E8E && curCRC[1] == 0xE90550B3) ||   // Resident Evil 2 (E)
 	   (curCRC[0] == 0x2F493DD0 && curCRC[1] == 0x2E64DFD9) ||   // Resident Evil 2 (U) (V1.0)
 	   (curCRC[0] == 0xAA18B1A5 && curCRC[1] == 0x07DB6AEB) ||   // Resident Evil 2 (U) (V1.1)
-	   (curCRC[0] == 0xD72FD14D && curCRC[1] == 0x1FED32C4))     // Bottom of the 9th (U)
+	   (curCRC[0] == 0xD72FD14D && curCRC[1] == 0x1FED32C4) ||   // Bottom of the 9th (U)
+	   (curCRC[0] == 0x51D29418 && curCRC[1] == 0xD5B46AE3) ||   // San Francisco Rush 2049 (E) (M6)
+	   (curCRC[0] == 0xB9A9ECA2 && curCRC[1] == 0x17AAE48E))     // San Francisco Rush 2049 (U)
 		xbox64_db_count_per_op(COUNT_PER_OP_1);
 	else
 		xbox64_db_count_per_op(0);
