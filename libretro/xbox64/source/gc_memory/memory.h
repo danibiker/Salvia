@@ -342,6 +342,12 @@ extern RSP_register rsp_register;
 extern RI_register ri_register;
 extern AI_register ai_register;
 extern int ai_delayed_carry;
+/* [Xbox360] [Top Gear Rally, 2026-10-29] Las muestras del AI se entregan
+ * mientras el DMA suena, como mupen64plus-core (ai_controller.c).  Ver la
+ * nota de ai_fifo_addr0 en memory.c. */
+void ai_dma_fin(void);                 /* AI_INT: lo que quede del DMA que acaba */
+void ai_dma_siguiente(void);           /* AI_INT con la cola llena: empieza el siguiente */
+void ai_dma_tras_cargar_estado(void);  /* al iniciar y tras cargar un savestate */
 extern DPC_register dpc_register;
 extern DPS_register dps_register;
 

@@ -225,20 +225,28 @@ void aiDacrateChanged(int SystemType)
 	}
 }
 
+/* [Top Gear Rally, 2026-10-29] El AI ya NO llama a aiLenChanged: entrega
+ * los trozos de cada DMA a medida que suenan, con xbox64_audio_empujar (ver
+ * la nota de ai_fifo_addr0 en memory.c).  Esto queda por si algun camino
+ * del plugin lo usa: el bloque entero, como antes. */
 void aiLenChanged(void)
 {
-	const unsigned char *origen;
-	unsigned bytes, frames, i;
+	if (!s_info.AI_DRAM_ADDR_REG || !s_info.AI_LEN_REG)
+		return;
+	xbox64_audio_empujar(*s_info.AI_DRAM_ADDR_REG, *s_info.AI_LEN_REG);
+}
 
-	if (!audioEnabled || !s_info.RDRAM ||
-	    !s_info.AI_DRAM_ADDR_REG || !s_info.AI_LEN_REG)
+void xbox64_audio_empujar(unsigned addr, unsigned bytes)
+{
+	const unsigned char *origen;
+	unsigned frames, i;
+
+	if (!audioEnabled || !s_info.RDRAM)
 		return;
 
 	/* gc_audio/audio.c:125-126.  La mascara de 24 bits es la que usa la
 	 * referencia; el registro trae una direccion fisica de RDRAM. */
-	origen = (const unsigned char *)s_info.RDRAM +
-	         (*s_info.AI_DRAM_ADDR_REG & 0xFFFFFF);
-	bytes  = *s_info.AI_LEN_REG;
+	origen = (const unsigned char *)s_info.RDRAM + (addr & 0xFFFFFF);
 
 	frames = bytes / 4u;                 /* 4 bytes = un frame estereo */
 	if (frames == 0)

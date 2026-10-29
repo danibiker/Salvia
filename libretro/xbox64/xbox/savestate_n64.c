@@ -372,6 +372,9 @@ static void carga_registros(struct cursor *c)
 	lee_pal(c,    &vi_register,    sizeof(vi_register));
 	lee_pal(c,    &ri_register,    sizeof(ri_register));
 	lee_pal(c,    &ai_register,    sizeof(ai_register));
+	/* [Xbox360] [Top Gear Rally, 2026-10-29] La FIFO del AI vive fuera de
+	 * `ai_register` (el formato no cambia): se rehace desde el registro. */
+	ai_dma_tras_cargar_estado();
 	lee_campos(c, &dpc_register,   sizeof(dpc_register), voltea_dpc);
 	lee_pal(c,    &dps_register,   sizeof(dps_register));
 }

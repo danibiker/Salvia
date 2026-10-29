@@ -459,6 +459,9 @@ void gen_interupt()
     break;
   
     case AI_INT:
+      /* [Xbox360] [Top Gear Rally, 2026-10-29] Lo que quede por entregar
+       * del DMA que acaba (ai_end_of_dma_event de mupen64plus-core). */
+      ai_dma_fin();
       if (ai_register.ai_status & 0x80000000) { // full
         /* Schedule the queued transfer from the count this event was due at,
            not from Count.  Upstream's do_dma() uses Count, but it reaches there
@@ -471,6 +474,7 @@ void gen_interupt()
         ai_register.ai_status &= ~0x80000000;
         ai_register.current_delay = ai_register.next_delay;
         ai_register.current_len = ai_register.next_len;
+        ai_dma_siguiente();   /* [Xbox360] su direccion, carry y last_read */
         add_interupt_event_count(AI_INT, ai_event + ai_register.next_delay);
       }
       else {

@@ -65,6 +65,7 @@
 #include <assert.h>
 #include "../../xbox/hilo_lista.h"   /* [Xbox360] etapa 5: el DP de la lista en paralelo */
 #include "../xenon64_diag.h"   /* XBOX64_TRAZAS */
+#include "../../xbox/audio_n64.h"    /* xbox64_audio_empujar: las muestras del AI */
 
 /* definitions of the rcp's structures and memory area */
 RDRAM_register rdram_register;
@@ -438,6 +439,7 @@ int init_memory()
 	rwmem[0xa450] = rw_ai;
 	memset(&ai_register, 0, sizeof(AI_register));
 	ai_delayed_carry = 0;
+	ai_dma_tras_cargar_estado();   /* [Xbox360] FIFO y last_read del AI a cero */
 	readai[0x0] = &ai_register.ai_dram_addr;
 	readai[0x4] = &ai_register.ai_len;
 	readai[0x8] = &ai_register.ai_control;
@@ -2247,7 +2249,93 @@ void write_vid()
 	*readvi[*address_low+4] = dword & 0xFFFFFFFF;
 }
 
+/* [Xbox360] ★★ [Top Gear Rally, audio entrecortado, 2026-10-29] LAS MUESTRAS
+ * SE ENTREGAN MIENTRAS EL DMA SUENA, como mupen64plus-core
+ * (device/rcp/ai/ai_controller.c: do_dma, read_ai_regs, ai_end_of_dma_event).
+ *
+ * Antes se entregaba el bloque ENTERO al escribir AI_LEN (aiLenChanged, como
+ * Wii64).  Top Gear Rally mezcla en la CPU y escribe bloques de 16384 bytes
+ * = 4096 frames = 186 ms a 21998 Hz: medido (sonda temporal), 54 de cada 60
+ * retro_run no entregaban NADA y uno entregaba 4096 de golpe; el frontend se
+ * vaciaba entre bloque y bloque.  Ahora, como la referencia:
+ *
+ *   empieza un DMA  last_read = su longitud (lo que falta por entregar)
+ *   leer AI_LEN     se entrega lo que ya ha sonado (last_read - restante)
+ *   fin del DMA     se entrega lo que quede (AI_INT, interupt.c)
+ *
+ * Y el carry de +0x2000 pasa, tambien como la referencia, a la direccion del
+ * DMA cuando EMPIEZA, no al registro al escribirlo.
+ *
+ * ★ Estado FUERA de `ai_register` a proposito: esa estructura va entera en
+ * los savestates (xbox/savestate_n64.c) y cambiarla rompe los existentes.
+ * Al cargar un estado se reinicia (ai_dma_tras_cargar_estado). */
+static unsigned long ai_fifo_addr0 = 0;   /* direccion del DMA que suena */
+static unsigned long ai_fifo_addr1 = 0;   /* direccion del DMA en cola */
+static unsigned long ai_last_read  = 0;   /* bytes del DMA que suena aun sin entregar */
+
+/* do_dma de la referencia: un DMA de `len` bytes EMPIEZA en ai_fifo_addr0. */
+static void ai_dma_empieza(unsigned long len)
+{
+	if (len == 0)
+	{
+		ai_last_read = 0;
+		return;
+	}
+	ai_last_read = len;
+	if (ai_delayed_carry)
+	{
+		ai_fifo_addr0 += 0x2000;
+	}
+	ai_delayed_carry = (((ai_fifo_addr0 + len) & 0x1FFF) == 0);
+}
+
+/* ai_end_of_dma_event de la referencia, la parte de las muestras: lo que
+ * quede del DMA que acaba.  Lo llama el manejador de AI_INT. */
+void ai_dma_fin(void)
+{
+	if (ai_last_read != 0)
+	{
+		unsigned long diff = ai_register.current_len - ai_last_read;
+		xbox64_audio_empujar(ai_fifo_addr0 + diff, ai_last_read);
+		ai_last_read = 0;
+	}
+}
+
+/* fifo_pop de la referencia con la cola LLENA: el DMA en cola empieza.  Lo
+ * llama el manejador de AI_INT DESPUES de pasar next_* a current_*. */
+void ai_dma_siguiente(void)
+{
+	ai_fifo_addr0 = ai_fifo_addr1;
+	ai_dma_empieza(ai_register.current_len);
+}
+
+/* Tras cargar un savestate (o al iniciar): lo pendiente de antes no vale.
+ * Si habia un DMA en cola, su direccion es la ultima escrita en el registro. */
+void ai_dma_tras_cargar_estado(void)
+{
+	ai_last_read  = 0;
+	ai_fifo_addr0 = ai_register.ai_dram_addr;
+	ai_fifo_addr1 = ai_register.ai_dram_addr;
+}
+
+static unsigned long ai_remaining_dma_length_calc(void);
+
+/* read_ai_regs de la referencia para AI_LEN: el restante, y entregar lo que
+ * ya ha sonado desde la ultima vez. */
 static unsigned long ai_remaining_dma_length(void)
+{
+	unsigned long restante = ai_remaining_dma_length_calc();
+
+	if (restante < ai_last_read)
+	{
+		unsigned long diff = ai_register.current_len - ai_last_read;
+		xbox64_audio_empujar(ai_fifo_addr0 + diff, ai_last_read - restante);
+		ai_last_read = restante;
+	}
+	return restante;
+}
+
+static unsigned long ai_remaining_dma_length_calc(void)
 {
 	unsigned long *next_ai_event;
 
@@ -2343,26 +2431,25 @@ static void ai_len_written(void)
 {
 	unsigned long delay;
 
-	if (ai_register.ai_len != 0)
-	{
-		if (ai_delayed_carry)
-			ai_register.ai_dram_addr += 0x2000;
-		ai_delayed_carry = (((ai_register.ai_dram_addr + ai_register.ai_len) & 0x1FFF) == 0);
-	}
-
-	aiLenChanged();
+	/* [Xbox360] [Top Gear Rally, 2026-10-29] Ni aiLenChanged ni el carry
+	 * aqui: las muestras salen mientras el DMA suena y el carry se aplica
+	 * cuando EMPIEZA (ai_dma_empieza), como fifo_push/do_dma de
+	 * mupen64plus-core.  Ver la nota de ai_fifo_addr0. */
 	delay = get_dma_duration();
 	if (no_audio_delay) delay = 0;
 	if (ai_register.ai_status & 0x40000000) // busy
 	{
+		ai_fifo_addr1 = ai_register.ai_dram_addr;
 		ai_register.next_delay = delay;
 		ai_register.next_len = ai_register.ai_len;
 		ai_register.ai_status |= 0x80000000;
 	}
 	else
 	{
+		ai_fifo_addr0 = ai_register.ai_dram_addr;
 		ai_register.current_delay = delay;
 		ai_register.current_len = ai_register.ai_len;
+		ai_dma_empieza(ai_register.current_len);
 		update_count();
 		add_interupt_event(AI_INT, delay);
 		ai_register.ai_status |= 0x40000000;

@@ -26,6 +26,12 @@ unsigned xbox64_audio_frecuencia(void);
  * dentro de la emulacion. */
 int xbox64_audio_frecuencia_cambio(void);
 
+/* [Top Gear Rally, 2026-10-29] Copia al anillo `bytes` del bufer del AI que
+ * empieza en la direccion fisica `addr` de RDRAM.  La llama el AI (memory.c,
+ * interupt.c) con cada trozo de un DMA a medida que suena, como
+ * push_samples en mupen64plus-core. */
+void xbox64_audio_empujar(unsigned addr, unsigned bytes);
+
 /* Tira lo que haya en el anillo.  Al cargar una ROM o un savestate. */
 void xbox64_audio_reset(void);
 
