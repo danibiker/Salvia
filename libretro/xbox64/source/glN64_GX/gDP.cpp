@@ -514,6 +514,31 @@ static f32 *_gDPFillColorActual( void )
 	return s_c;
 }
 
+#ifdef __GX__
+static BOOL _gDPCopiaAuxARDRAM( void );   /* [Top Gear Hyper-Bike] definida abajo */
+
+/* [Xbox360] ★ [Top Gear Hyper-Bike, checkpoints y bola a traves de las
+ * montanas, la moto por encima del piloto, 2026-10-29] hack_zAuxAparte: UN Z
+ * APARTE PARA LOS AUXILIARES, como GLideN64 (un depth buffer por framebuffer:
+ * depthBufferList().saveBuffer(colorImage) en gDPFillRectangle, y
+ * clearDepthBuffer borra el del FBO actual).  Aqui el EFB tiene UN Z.
+ *
+ * MEDIDO ([ZDIB]/[ZBOR], logs del 2026-10-29 16:50 y 16:58): a mitad de cada
+ * frame el juego pinta la sombra de la moto y el piloto en un auxiliar de 64
+ * de ancho (ci 00341640) con prueba y escritura de Z, y antes borra SU Z
+ * (relleno FFFC con ci == zi = 00342700, w=64, ~1 por frame).  Ese borrado se
+ * llevaba el Z de la escena entera (el terreno y el piloto ya pintados): todo
+ * lo de despues -- checkpoints, la bola, la moto -- salia por encima.
+ *
+ * Al borrar el Z de un auxiliar (ci == zi con un ancho que no es el del VI) se
+ * GUARDA antes el Z de la escena (GXD3D_GuardaZ, la maquinaria de Mario Golf,
+ * con una direccion propia que no es de la RDRAM), y al volver a un buffer del
+ * ancho del VI se REPONE entero (OGL_RestauraZ). */
+#define GLN64_ZAUX_TAG 0xFFFFFFF0u
+static BOOL s_zAuxGuardado = FALSE;
+
+#endif
+
 void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 {
 	/* [Xbox360] [Resident Evil 2] GLideN64 5e51b386, FrameBufferList::saveBuffer:
@@ -587,6 +612,13 @@ void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 				FrameBuffer_SaveBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width, gDP.colorImage.height );
 
 #ifdef __GX__
+			/* [Xbox360] [Top Gear Hyper-Bike] hack_copyAuxToRDRAM: el auxiliar
+			 * que se deja, a su RDRAM y fuera de la lista, con el EFB aun
+			 * pintado y antes de reponer el siguiente.  Ver _gDPCopiaAuxARDRAM. */
+			if ((config.generalEmulation.hacks & hack_copyAuxToRDRAM) != 0 &&
+			    gDP.colorImage.changed)
+				_gDPCopiaAuxARDRAM();
+
 			/* [Xbox360] [Mario Tennis] hack_ziComoColor: la mascara (el depth
 			 * image como color) va en su propio render target.  Se sale de el
 			 * DESPUES de guardarla (SaveBuffer resuelve del destino ligado) y
@@ -680,6 +712,15 @@ void gDPSetColorImage( u32 format, u32 size, u32 width, u32 address )
 	 * FrameBuffer_GX_CargaPendiente (FrameBuffer.cpp). */
 	if ((config.generalEmulation.hacks & hack_texrectPaletteMod) == 0)
 		FrameBuffer_GX_CargaNuevoDesdeRDRAM();
+
+	/* [Xbox360] [Top Gear Hyper-Bike] hack_zAuxAparte: de vuelta a un buffer
+	 * del ancho del VI, el Z de la escena que se guardo al borrar el de un
+	 * auxiliar.  Ver gDPFillRectangle. */
+	if (s_zAuxGuardado && width == VI.width)
+	{
+		s_zAuxGuardado = FALSE;
+		OGL_RestauraZ( GLN64_ZAUX_TAG );
+	}
 #endif // __GX__
 
 #ifdef DEBUG
@@ -1881,6 +1922,20 @@ void gDPFillRectangle( s32 ulx, s32 uly, s32 lrx, s32 lry )
 				 * ancho y no lo sufre. */
 				const BOOL entero = (ulx <= 0 &&
 				                     lrx >= (s32)gDP.colorImage.width) ? TRUE : FALSE;
+#ifdef __GX__
+				/* [Top Gear Hyper-Bike] hack_zAuxAparte: el Z de un AUXILIAR;
+				 * antes de borrarlo, el de la escena a un lado (una vez hasta que
+				 * se reponga en gDPSetColorImage).  Ver s_zAuxGuardado. */
+				if ((config.generalEmulation.hacks & hack_zAuxAparte) != 0 &&
+				    gDP.colorImage.width != VI.width && !s_zAuxGuardado)
+				{
+					if (OGL.numTriangles)
+						OGL_DrawTriangles();
+					OGL_ApplyPendingClears();
+					GXD3D_GuardaZ( GLN64_ZAUX_TAG );
+					s_zAuxGuardado = TRUE;
+				}
+#endif
 				if (entero || gDP.otherMode.cycleType != G_CYC_FILL)
 					OGL_ClearDepthBuffer();
 				else
@@ -3214,6 +3269,80 @@ static void _gDPCopiaColorARDRAM()
 	GXD3D_PideColorARDRAM( (u16*)&rdramb[dirCI], dirCI, (u16)x, (u16)y, (u16)w, (u16)h,
 	                       (u16)n64w, (u16)n64h );
 }
+
+/* [Xbox360] ★ [Top Gear Hyper-Bike, el suelo con cuadros negros o perdidos y
+ * lineas negras, 2026-10-29] LOS AUXILIARES A LA RDRAM (hack_copyAuxToRDRAM),
+ * como GLideN64 con copyAuxToRDRAM (FrameBufferList::saveBuffer:
+ *
+ *     if (m_pCurrent != nullptr && copyAuxToRDRAM != 0) {
+ *         if (m_pCurrent->isAuxiliary()) {
+ *             FrameBuffer_CopyToRDRAM(m_pCurrent->m_startAddress, true);
+ *             removeBuffer(m_pCurrent->m_startAddress);
+ *         }
+ *     }
+ *
+ * y su FrameBuffer::init, que con la opcion los dibuja a escala 1).  Aqui al
+ * DEJAR el auxiliar (gDPSetColorImage), con el EFB todavia pintado: la copia
+ * SINCRONA del rect (la de Banjo, GXD3D_CopiaColorARDRAMSincrona), reducida a
+ * la resolucion N64, y el buffer fuera de la lista.  Cuando el juego vuelve a
+ * pintar en el, el buffer nace de nuevo desde la RDRAM
+ * (FrameBuffer_GX_CargaNuevoDesdeRDRAM), con la base que puso la CPU; y
+ * cuando lo usa como textura, la carga sale de la RDRAM, como en la consola.
+ *
+ * MEDIDO (sondas [FBQUITA]/[FBHUELLA], logs del 2026-10-29, retiradas): el
+ * juego escribe con la CPU la base de cada cuadro de 32x32 del terreno y
+ * pinta encima con el RDP; como textura de framebuffer la CPU pisaba la
+ * huella y el buffer se quitaba (las cargas salian de una RDRAM sin lo
+ * pintado), la cache desalojaba otros y en los bordes de la textura (72x480
+ * por un cuadro de 32) salian juntas: las lineas negras.  GLideN64 por
+ * defecto falla igual; con la opcion, bien (usuario, mupen64plus-next).
+ * Con [AUXCP] (retirada): 1.200 copias, todas de 32x32 y ninguna fuera de su
+ * cuadro.  Los cuadros de RUIDO que quedaban despues eran otra cosa: el
+ * combinador de dos ciclos (hack_cicloDosCruzado, Combiner.cpp).
+ *
+ * Solo 16 bits (lo que escribe la conversion) y no el depth image.  El alto
+ * es el pintado (gDP.colorImage.height, acotado al scissor). */
+static BOOL _gDPCopiaAuxARDRAM( void )
+{
+	const u32 dir  = gDP.colorImage.address;
+	const u32 n64w = gDP.colorImage.width;
+	u32 n64h = gDP.colorImage.height;
+	u32 bytes = 0;
+	FrameBuffer *buffer;
+
+	if (gDP.colorImage.size != G_IM_SIZ_16b || dir == gDP.depthImageAddress ||
+	    n64w == 0 || n64h == 0 || !FrameBuffer_EsAuxiliar( n64w, gDP.colorImage.size ))
+		return FALSE;
+	// Con foto (Cruis'n), lo escrito no llegaria a la RDRAM real.
+	if (rdramb != RDRAM)
+		return FALSE;
+	// RDRAMSize es una MASCARA (ultima direccion valida), no un tamano.
+	if (dir + n64w * 2 > RDRAMSize + 1)
+		return FALSE;
+	if (dir + n64w * n64h * 2 > RDRAMSize + 1)
+		n64h = (RDRAMSize + 1 - dir) / (n64w * 2);
+
+	{
+		const u32 x = OGL.GXorigX;
+		const u32 y = OGL.GXorigY;
+		const u32 w = (u32)((f32)n64w * OGL.GXscaleX + 0.5f);
+		const u32 h = (u32)((f32)n64h * OGL.GXscaleY + 0.5f);
+		if (w == 0 || h == 0)
+			return FALSE;
+		GXD3D_ColorARDRAMAzulPM( 0 );
+		if (!GXD3D_CopiaColorARDRAMSincrona( (u16*)&rdramb[dir], dir, (u16)x, (u16)y,
+		                                     (u16)w, (u16)h, (u16)n64w, (u16)n64h, &bytes ))
+			bytes = 0;
+	}
+
+	// Fuera de la lista ANTES de reponer marcas: la suya pisaria lo copiado.
+	buffer = FrameBuffer_GetBuffer( dir );
+	if (buffer != NULL)
+		FrameBuffer_Remove( buffer );
+	if (bytes != 0)
+		FrameBuffer_RestampMarkers( dir, dir + bytes - 1 );   // escritura nuestra
+	return TRUE;
+}
 #endif // __GX__
 
 void gDPFullSync()
@@ -3223,6 +3352,17 @@ void gDPFullSync()
 #ifdef __GX__
 	if ((config.generalEmulation.hacks & hack_copyToRDRAM) != 0)
 		_gDPCopiaColorARDRAM();
+
+	/* [Xbox360] [Top Gear Hyper-Bike] hack_copyAuxToRDRAM, la otra mitad de
+	 * GLideN64 (gDPFullSync: `if (copyAuxToRDRAM) { copyAux(); removeAux(); }`):
+	 * el auxiliar que sigue siendo el color image al acabar la lista, a la
+	 * RDRAM ahora, con el EFB todavia suyo, y ya guardado: que el cambio de
+	 * color image no lo vuelva a guardar ni a copiar.  En los logs de Hyper-Bike
+	 * no se dio nunca (sus listas no acaban en un cuadro); se deja por ser lo
+	 * de la referencia. */
+	if ((config.generalEmulation.hacks & hack_copyAuxToRDRAM) != 0 &&
+	    gDP.colorImage.changed && _gDPCopiaAuxARDRAM())
+		gDP.colorImage.changed = FALSE;
 #endif // __GX__
 
 	if (gDP.m_subscreen &&

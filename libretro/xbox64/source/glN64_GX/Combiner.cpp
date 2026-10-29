@@ -23,6 +23,7 @@
 #endif // __LINUX__
 #include "OpenGL.h"
 #include "Combiner.h"
+#include "Config.h"	// [Xbox360] hack_cicloDosCruzado (Top Gear Hyper-Bike)
 #ifndef __GX__
 # include "NV_register_combiners.h"
 # include "texture_env_combine.h"
@@ -341,7 +342,47 @@ CachedCombiner *Combiner_Compile( u64 mux )
 	     ac[0].sa == ac[1].sa && ac[0].sb == ac[1].sb &&
 	     ac[0].m  == ac[1].m  && ac[0].a  == ac[1].a) ? TRUE : FALSE;
 
-	if (numCycles == 2 && !ciclosIguales)
+	/* [Xbox360] ★ [Top Gear Hyper-Bike, cuadros del suelo con ruido de colores,
+	 * 2026-10-29] hack_cicloDosCruzado: EL CRUCE TAMBIEN CON LOS CICLOS IGUALES,
+	 * como la consola (angrylion, mupen64plus-video-angrylion/n64video/rdp/
+	 * combiner.c:352-353, combiner_2cycle_cycle1: `texel0_color =
+	 * texel1_color; texel1_color = nexttexel_color` antes del segundo ciclo).
+	 * La salida es la del SEGUNDO ciclo, y ahi TEXEL0 es el texel del tile+1.
+	 *
+	 * Los cuadros del suelo se pintan con 00127E24:22FD7CBE en los dos ciclos:
+	 * (T0 - T1)*SHADE + T1, SHADE = 0 en la RDRAM ([AUXVTX]) y tile base 2: el
+	 * tile 2 (TMEM 0x100) es la textura del cuadro, que el juego carga siempre,
+	 * y el tile 3 (TMEM 0x000) solo la carga para algunos cuartos; en los otros
+	 * tiene lo que dejo la escena (una CI4 de 0x1E5F20...) -- ver [SEQ], log
+	 * 16:22: `LD 293C88 -> 100`, dos DRAW, y despues `LD 294790 -> 000`.  En la
+	 * consola el segundo ciclo da (T1 - T0)*SHADE + T0 ~ el tile 2: limpio.
+	 * Con la fusion de GLideN64 (b0a01b26, sin cruce si los ciclos son iguales)
+	 * salia el tile 3: el ruido.  Por juego: la fusion la necesitan Banjo y
+	 * 1080 (ver arriba). */
+	/* ★ SOLO SI EL CICLO LEE LAS DOS TEXTURAS.  La 1a version cruzaba todo
+	 * combinador de ciclos iguales del juego y la pantalla salia NEGRA desde
+	 * los titulos (usuario, 16:27): un TEXEL0*SHADE en los dos ciclos pasaba a
+	 * TEXEL1*SHADE, y aqui el tile+1 de esos dibujos no tiene textura (lo mismo
+	 * que Banjo y 1080, arriba).  La mezcla de los cuadros lee T0 y T1; ahi el
+	 * cruce solo cambia los pesos. */
+	/* Y sin LOD_FRACTION: la mezcla de mipmaps (G_CC_TRILERP y familia) va por
+	 * el atlas de TextureCache_LoadAtlas, que ya elige los tiles; no se toca. */
+	BOOL leeT0 = FALSE, leeT1 = FALSE, leeLod = FALSE;
+	{
+		const int *ent[8] = { &cc[0].sa, &cc[0].sb, &cc[0].m, &cc[0].a,
+		                      &ac[0].sa, &ac[0].sb, &ac[0].m, &ac[0].a };
+		int k;
+		for (k = 0; k < 8; k++)
+		{
+			if (*ent[k] == TEXEL0 || *ent[k] == TEXEL0_ALPHA) leeT0 = TRUE;
+			if (*ent[k] == TEXEL1 || *ent[k] == TEXEL1_ALPHA) leeT1 = TRUE;
+			if (*ent[k] == LOD_FRACTION) leeLod = TRUE;
+		}
+	}
+	const BOOL cruzaIguales = (ciclosIguales && numCycles == 2 && leeT0 && leeT1 && !leeLod &&
+	                           (config.generalEmulation.hacks & hack_cicloDosCruzado) != 0) ? TRUE : FALSE;
+
+	if (numCycles == 2 && (!ciclosIguales || cruzaIguales))
 	{
 		int *ent[8];
 		int k;

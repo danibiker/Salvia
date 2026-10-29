@@ -2768,6 +2768,75 @@ void OGL_DrawDepthFill( int ulx, int uly, int lrx, int lry, float depth )
 #endif // __GX__
 }
 
+/* [Xbox360] ★ [Top Gear Hyper-Bike, checkpoints y bola a traves de las
+ * montanas, la moto por encima del piloto, 2026-10-29] EL Z DE LA ESCENA, DE
+ * VUELTA tras la pasada de la sombra.  Un rect que cubre TODO el render target
+ * en el modo 3 de GXD3D_SetRenderToDepth (el de Mario Golf): profundidad = el
+ * Z guardado en ese pixel, en ALWAYS con escritura y sin color.  Ver
+ * hack_zAuxAparte (Config.h) y gDPFillRectangle / gDPSetColorImage. */
+void OGL_RestauraZ( u32 dir )
+{
+#ifdef __GX__
+	if (OGL.numTriangles)
+		OGL_DrawTriangles();
+	OGL_ApplyPendingClears();
+	if (!GXD3D_UsaZGuardada( dir ))
+		return;
+	OGL_UpdateStates();
+
+	GXD3D_SetDecalN64( 0 );
+	GXD3D_SetRenderToDepth( 3 );
+	GX_SetColorUpdate(GX_DISABLE);
+	GX_SetAlphaUpdate(GX_DISABLE);
+	GX_SetZMode(GX_ENABLE, GX_ALWAYS, GX_TRUE);
+
+	GX_SetNumChans(1);
+	GX_SetNumTexGens(0);
+	GX_SetNumTevStages(1);
+	GX_SetTevOp (GX_TEVSTAGE0, GX_PASSCLR);
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXMAP_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+	GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z8,0);
+	GX_SetZCompLoc(GX_TRUE);
+	GX_SetAlphaCompare(GX_ALWAYS,0,GX_AOP_AND,GX_ALWAYS,0);
+	GX_SetFog(GX_FOG_NONE,0.1,1.0,0.0,1.0,GXCOL_BLACK);   /* [Xbox360] literal compuesto */
+	/* El render target entero, en pixeles, como FrameBuffer_RestoreBuffer. */
+	GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
+	GX_SetScissor((u32) 0,(u32) 0,(u32) OGL.width,(u32) OGL.height);
+	GX_SetCullMode (GX_CULL_NONE);
+	Mtx44 GXprojection;
+	guOrtho(GXprojection, 0, OGL.height, 0, OGL.width, 0.0f, 1.0f);
+	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC);
+	GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+
+	GX_ClearVtxDesc();
+	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+		GX_Position3f32(0.0f, 0.0f, 0.0f);
+		GX_Color4u8(0, 0, 0, 0);
+		GX_Position3f32((f32) OGL.width, 0.0f, 0.0f);
+		GX_Color4u8(0, 0, 0, 0);
+		GX_Position3f32((f32) OGL.width, (f32) OGL.height, 0.0f);
+		GX_Color4u8(0, 0, 0, 0);
+		GX_Position3f32(0.0f, (f32) OGL.height, 0.0f);
+		GX_Color4u8(0, 0, 0, 0);
+	GX_End();
+
+	GXD3D_SetRenderToDepth( 0 );
+	GX_SetColorUpdate(GX_ENABLE);
+	GX_SetAlphaUpdate(GX_ENABLE);
+	OGL.GXupdateMtx = true;
+	OGL.GXupdateFog = true;
+	OGL_UpdateCullFace();
+	OGL_UpdateViewport();
+	gDP.changed |= CHANGED_SCISSOR | CHANGED_COMBINE | CHANGED_RENDERMODE;
+#endif // __GX__
+}
+
 void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls, float ult, float lrs, float lrt, bool flip, const float *colorOverride )
 {
 	GLN64_PROF_SCOPE(rect);    /* [Xbox360] sonda temporal, xenon/gln64_prof.h */

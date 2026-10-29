@@ -249,6 +249,9 @@ void OGL_DrawTriangles();
 void OGL_DrawLine( SPVertex *vertices, int v0, int v1, float width );
 void OGL_DrawRect( int ulx, int uly, int lrx, int lry, float *color );
 void OGL_DrawDepthFill( int ulx, int uly, int lrx, int lry, float depth );
+// [Xbox360] [Top Gear Hyper-Bike] El Z entero del render target desde un Z
+// guardado (GXD3D_GuardaZ), pixel a pixel.  Ver hack_zAuxAparte (Config.h).
+void OGL_RestauraZ( u32 dir );
 // [Xbox360] Screen-space triangles (N64 pixel coordinates), drawn as the strip
 // (v[i], v[i+1], v[i+2]) GLideN64's drawScreenSpaceTriangle gets from LLETriangle.
 void OGL_DrawScreenSpaceTriangles( SPVertex *vertices, u32 count, BOOL textured );

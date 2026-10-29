@@ -749,6 +749,22 @@ static void _RSP_SetGameHacks()
 	 * se activaria (ver la nota de arriba). */
 	else if (strstr( nombreIni, "EXCITEBIKE" ) != NULL)
 		config.generalEmulation.hacks |= hack_copyDepthToRDRAM;
+	/* [Xbox360] ★ [Top Gear Hyper-Bike, el suelo con cuadros negros o perdidos
+	 * y lineas negras, 2026-10-29] GLideN64 copyAuxToRDRAM ("Copy auxiliary
+	 * color buffers to N64 memory", apagado por defecto).  El juego escribe
+	 * con la CPU la base de cada cuadro de terreno de 32x32 en la RDRAM, pinta
+	 * encima con el RDP (color image de 32 de ancho) y lo usa como textura:
+	 * como textura de framebuffer se perdian (la CPU pisa la huella al
+	 * reescribirlos, [FBHUELLA]) y dejaban juntas.  GLideN64 por defecto falla
+	 * igual; con esa opcion sale bien (comprobado por el usuario en
+	 * mupen64plus-next).  Nombre interno "Top Gear Hyper Bike".  Ver
+	 * _gDPCopiaAuxARDRAM (gDP.cpp). */
+	/* ★ [Top Gear Hyper-Bike, cuadros de ruido] hack_cicloDosCruzado: ver
+	 * Combiner_Compile (Combiner.cpp).
+	 * ★ [Top Gear Hyper-Bike, objetos a traves de las montanas, la moto encima
+	 * del piloto] hack_zAuxAparte: ver gDPFillRectangle (gDP.cpp). */
+	else if (strstr( nombreIni, "TOP GEAR HYPER BIKE" ) != NULL)
+		config.generalEmulation.hacks |= hack_copyAuxToRDRAM | hack_cicloDosCruzado | hack_zAuxAparte;
 	/* [Xbox360] [Paper Mario / Mario Story] GLideN64.custom.ini [PAPER%20MARIO]
 	 * y [MARIO%20STORY]: copyToRDRAM=1 (0ad54a88).  Y lo que GLideN64 pone en
 	 * su RSP.cpp para los mismos nombres y que solo actua sobre esa copia:
