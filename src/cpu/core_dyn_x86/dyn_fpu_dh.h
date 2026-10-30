@@ -21,19 +21,19 @@
 #if C_FPU
 
 static void FPU_FLD_16(PhysPt addr) {
-	dyn_dh_fpu.temp.m1 = (Bit32u)mem_readw(addr);
+	dyn_dh_fpu.temp.m1 = (Bit32u)mem_readw_inline(addr);
 }
 
 static void FPU_FST_16(PhysPt addr) {
-	mem_writew(addr,(Bit16u)dyn_dh_fpu.temp.m1);
+	mem_writew_inline(addr,(Bit16u)dyn_dh_fpu.temp.m1);
 }
 
 static void FPU_FLD_32(PhysPt addr) {
-	dyn_dh_fpu.temp.m1 = mem_readd(addr);
+	dyn_dh_fpu.temp.m1 = mem_readd_inline(addr);
 }
 
 static void FPU_FST_32(PhysPt addr) {
-	mem_writed(addr,dyn_dh_fpu.temp.m1);
+	mem_writed_inline(addr,dyn_dh_fpu.temp.m1);
 }
 
 static void FPU_FLD_64(PhysPt addr) {

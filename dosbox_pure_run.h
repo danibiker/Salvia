@@ -331,7 +331,7 @@ struct DBP_Run
 			if (mode == RUN_NONE) return false; // YML had no startup
 			autoboot.use = !ymlload.is_utility; // disable autoboot for utility config
 			autoboot.skip = 0; // otherwise force enable auto start when switching variant
-			WriteAutoBoot(RUN_VARIANT, patch.enabled_variant, str);
+			if (!ymlload.is_utility) WriteAutoBoot(RUN_VARIANT, patch.enabled_variant, str);
 		}
 		else
 		{
@@ -415,7 +415,7 @@ struct DBP_Run
 					}
 					else // recursively called from above with 'midiconfig'
 					{
-						((val += '^') += (yml_key[7] == 't' ? 'M' : 'S')).append(Val, (size_t)(ValX - Val));
+						((val += '^') += (yml_key[7] == 't' /*mt32*/ ? 'M' : yml_key[7] == 'c'/*sc55*/ ? 'S' : 'F')).append(Val, (size_t)(ValX - Val));
 					}
 				}
 				else
@@ -523,6 +523,7 @@ struct DBP_Run
 						||Parse("video_card", "dosbox", "machine" , "generic_svga","svga_s3" , "generic_hercules","hercules" , "generic_cga","cga" , "generic_ega","ega" , "generic_vga","vgaonly" , "generic_tandy","tandy" , "generic_pcjr","pcjr" , "tandy","tandy" , "pcjr","pcjr" , "svga_s3_trio","svga_s3", "svga_tseng_et3000","svga_et3000" , "svga_tseng_et4000","svga_et4000" , "svga_paradise_pvga1a","svga_paradise" , "")
 						||Parse("video_memory", "dosbox", "vmemsize", "/")
 						||Parse("video_voodoo", "pci", "voodoo" , "v1_8mb","8mb" , "v1_4mb","4mb" , "none","false" , "")
+						||Parse("video_cga_composite", "render", "cga_composite" , "true","1" , "false","2" , "")
 					);
 				case 's':
 					return (0
@@ -533,6 +534,7 @@ struct DBP_Run
 						||Parse("sound_hdma", "sblaster", "hdma", "~")
 						||Parse("sound_midi", "midi", "mpu401" , "true","intelligent" , "false","none" , "^")
 						||Parse("sound_mt32", "midi", "mpu401" , "true","intelligent" , "false","none" , "^")
+						||Parse("sound_sc55", "midi", "mpu401" , "true","intelligent" , "false","none" , "^")
 						||Parse("sound_gus", "gus", "gus" , "true","true" , "false","false" , "")
 						||Parse("sound_tandy", "speaker", "tandy" , "true","on" , "false","auto" , "")
 					);
