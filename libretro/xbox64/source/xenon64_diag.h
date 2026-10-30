@@ -86,7 +86,7 @@
  *
  * Puede llegar por /D del compilador: /D XBOX64_TRAZAS=1 */
 #ifndef XBOX64_TRAZAS
-#define XBOX64_TRAZAS 0
+#define XBOX64_TRAZAS 1
 #endif
 
 #ifndef XENON64_DIAG

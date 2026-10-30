@@ -813,14 +813,21 @@ static void _RSP_SetGameHacks()
 	 * temporal: Donkey Kong 64 se llama "DONKEY KONG 64".  Desde Wii64
 	 * 443f68b tiene su propia entrada (hack_copyDepthToRDRAM). */
 
+	/* [Xbox360] ★ [2026-10-30] Los de ESTE juego, y encima los que el usuario
+	 * fuerza desde las core options de la categoria "GL" (xenon/gln64_hacks.h).
+	 * Despues de esta linea `config.generalEmulation.hacks` ya es el valor
+	 * efectivo. */
+	const u32 hacksJuego = config.generalEmulation.hacks;
+	Config_HacksDelJuego( hacksJuego );
+
 	/* [Xbox360] Una linea por carga: el nombre interno y los arreglos por
 	 * juego que han quedado puestos.  Sin ella, que una entrada no case solo
 	 * se ve por sus efectos (Banjo, log 2). */
 #if XBOX64_TRAZAS
 	{
-		char l[96];
-		sprintf( l, "[GLN64] rom interna=\"%s\" hacks=%08X",
-		         RSP.romname, (unsigned)config.generalEmulation.hacks );
+		char l[128];
+		sprintf( l, "[GLN64] rom interna=\"%s\" hacks=%08X (del juego %08X)",
+		         RSP.romname, (unsigned)config.generalEmulation.hacks, (unsigned)hacksJuego );
 		DebugOutputString( l );
 	}
 #endif

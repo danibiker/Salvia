@@ -74,6 +74,189 @@ extern "C" void gln64_mux_actual(unsigned int *m0, unsigned int *m1, unsigned in
  * Enlace C++, igual que en upstream. */
 Config config;
 
+/* ====================================================================== */
+/* [Xbox360] ★ [2026-10-30] LOS ARREGLOS POR JUEGO COMO CORE OPTIONS.      */
+/* ====================================================================== */
+/* El porque y los tres valores, en xenon/gln64_hacks.h.  Aqui la tabla que
+ * publica libretro_core.cpp (una opcion por hack_* de Config.h, en el mismo
+ * orden que alli) y la combinacion con los del juego.
+ *
+ * ★ LA CLAVE NO SE CAMBIA NUNCA: el frontend guarda el valor por clave (y
+ * Salvia, el indice del valor).  Las etiquetas y los textos, si.
+ *
+ * Las tildes del espanol, en UTF-8 por escapes como en libretro_core.cpp
+ * (ES_a y compania); aqui con otro nombre para no pisar aquellas. */
+#include "gln64_hacks.h"
+
+#define GH_a "\xC3\xA1"
+#define GH_e "\xC3\xA9"
+#define GH_i "\xC3\xAD"
+#define GH_o "\xC3\xB3"
+#define GH_u "\xC3\xBA"
+#define GH_n "\xC3\xB1"
+
+static const Gln64HackOpcion s_hacksTabla[] = {
+	{ "xbox64_gl_subscreen", hack_subscreen,
+	  "Subscreen without delay", "Subpantalla sin retraso",
+	  "Draws the pause subscreen picture from what is on screen. Zelda Ocarina of Time, Animal Forest.",
+	  "Pinta la imagen de la subpantalla de pausa con lo que hay en pantalla. Zelda Ocarina of Time, Animal Forest." },
+	{ "xbox64_gl_clearalonedepthbuffer", hack_clearAloneDepthBuffer,
+	  "Clear depth without frame buffer", "Borrar Z sin framebuffer",
+	  "Clears a depth buffer that has no frame buffer of its own. GoldenEye and Perfect Dark multiplayer.",
+	  "Borra un buffer de profundidad que no tiene framebuffer propio. Multijugador de GoldenEye y Perfect Dark." },
+	{ "xbox64_gl_papermariosubscreen", hack_paperMarioSubscreen,
+	  "Paper Mario subscreen", "Subpantalla de Paper Mario",
+	  "Corrects the blue of the color copy to RDRAM (subscreen delay). Paper Mario.",
+	  "Corrige el azul de la copia del color a la RDRAM (retraso de la subpantalla). Paper Mario." },
+	{ "xbox64_gl_rectdepthbuffercopypd", hack_rectDepthBufferCopyPD,
+	  "Depth reads by rectangle", "Lecturas de Z por rect" GH_a "ngulo",
+	  "Serves the game's depth buffer reads (light coronas). Perfect Dark, Turok.",
+	  "Atiende las lecturas del buffer de profundidad del juego (coronas de luz). Perfect Dark, Turok." },
+	{ "xbox64_gl_texrectpalettemod", hack_texrectPaletteMod,
+	  "Palette written by texrect", "Paleta escrita por texrect",
+	  "The 2D lighting palette the game writes with a texrect. Paper Mario.",
+	  "La paleta de la iluminaci" GH_o "n 2D que el juego escribe con un texrect. Paper Mario." },
+	{ "xbox64_gl_vidosbuffers", hack_viDosBuffers,
+	  "Screen across two buffers", "Pantalla entre dos buffers",
+	  "Shows the end of one color buffer and the start of the next when the screen starts inside the first. Beetle Adventure Racing menus.",
+	  "Muestra el final de un buffer de color y el principio del siguiente cuando la pantalla empieza dentro del primero. Men" GH_u "s de Beetle Adventure Racing." },
+	{ "xbox64_gl_zeldammlente", hack_zeldaMMLente,
+	  "Lens of Truth depth", "Profundidad de la Lente de la Verdad",
+	  "Depth copy by background rectangles. Zelda Majora's Mask.",
+	  "Copia de profundidad por rect" GH_a "ngulos de fondo. Zelda Majora's Mask." },
+	{ "xbox64_gl_re2", hack_RE2,
+	  "Resident Evil 2 backgrounds", "Fondos de Resident Evil 2",
+	  "512-wide backgrounds and buffers, depth textures and N64 depth words. Resident Evil 2. Better applied when the game loads.",
+	  "Fondos y buffers de 512 de ancho, texturas de profundidad y profundidad N64. Resident Evil 2. Mejor aplicarlo al cargar el juego." },
+	{ "xbox64_gl_texrectshadowmap", hack_texrectShadowMap,
+	  "Fog from shadow map", "Niebla desde el mapa de sombra",
+	  "A texrect that reads the depth image is drawn as fog. Beetle Adventure Racing.",
+	  "Un texrect que lee la imagen de profundidad se pinta como niebla. Beetle Adventure Racing." },
+	{ "xbox64_gl_fbtextureoffset", hack_fbTextureOffset,
+	  "Frame buffer texture offset", "Desplazamiento de textura de framebuffer",
+	  "Offsets frame buffer textures by half a texel. Conker's shadow, the Bob-ombs in Mario Tennis.",
+	  "Desplaza medio texel las texturas de framebuffer. La sombra de Conker, los Bob-omb de Mario Tennis." },
+	{ "xbox64_gl_fbcopytordram", hack_fbCopyToRDRAM,
+	  "Write frame buffer to RDRAM", "Escribir framebuffer en RDRAM",
+	  "Writes the screen back to N64 memory for real. Majora's Mask pictograph.",
+	  "Escribe de verdad la pantalla en la memoria del N64. Pictograf" GH_i "a de Majora's Mask." },
+	{ "xbox64_gl_copydepthtordram", hack_copyDepthToRDRAM,
+	  "Copy depth to RDRAM", "Copiar profundidad a RDRAM",
+	  "Copies the depth buffer into the N64 depth image, one frame late. Glows and sun in Zelda OoT/MM, Donkey Kong 64, Excitebike 64.",
+	  "Copia el buffer de profundidad en la imagen de profundidad del N64, un frame tarde. Brillos y sol de Zelda OoT/MM, Donkey Kong 64, Excitebike 64." },
+	{ "xbox64_gl_texrectcopytoitself", hack_texrectCopyToItself,
+	  "Skip texrect copy onto itself", "Saltar texrect que se copia a s" GH_i " mismo",
+	  "Skips texrects that copy an 8-bit color image onto itself. Conker's shadow.",
+	  "Se salta los texrect que copian una imagen de color de 8 bits sobre s" GH_i " misma. La sombra de Conker." },
+	{ "xbox64_gl_donotresetothermodeh", hack_doNotResetOtherModeH,
+	  "Keep othermode H between frames", "Conservar othermode H entre frames",
+	  "Does not reset othermode.h at the frame swap. Quake, Quake II.",
+	  "No reinicia othermode.h al cambiar de frame. Quake, Quake II." },
+	{ "xbox64_gl_donotresetothermodel", hack_doNotResetOtherModeL,
+	  "Keep othermode L between frames", "Conservar othermode L entre frames",
+	  "Does not reset othermode.l at the frame swap. Quake.",
+	  "No reinicia othermode.l al cambiar de frame. Quake." },
+	{ "xbox64_gl_copyfromrdram", hack_copyFromRDRAM,
+	  "Draw what the CPU writes", "Pintar lo que escribe la CPU",
+	  "Draws over the frame what the CPU wrote into the screen buffer. Dr. Mario 64 pills, Resident Evil 2 credits.",
+	  "Pinta sobre el frame lo que la CPU escribi" GH_o " en el buffer de pantalla. Pastillas de Dr. Mario 64, cr" GH_e "ditos de Resident Evil 2." },
+	{ "xbox64_gl_copytordram", hack_copyToRDRAM,
+	  "Copy color to RDRAM", "Copiar color a RDRAM",
+	  "Writes the main color buffer to N64 memory, 1-3 frames late. Mario Kart 64 TV, Banjo-Kazooie puzzle, Castlevania menu, Paper Mario.",
+	  "Escribe el buffer de color principal en la memoria del N64, 1-3 frames tarde. Tele de Mario Kart 64, puzle de Banjo-Kazooie, men" GH_u " de Castlevania, Paper Mario." },
+	{ "xbox64_gl_copytordramsync", hack_copyToRDRAMSync,
+	  "Copy color to RDRAM in the same frame", "Copiar color a RDRAM en el mismo frame",
+	  "With 'Copy color to RDRAM', waits for the GPU so the copy lands in this frame. Banjo-Kazooie puzzle after a load. Costs performance.",
+	  "Con 'Copiar color a RDRAM', espera a la GPU para que la copia llegue en este frame. Puzle de Banjo-Kazooie tras una carga. Cuesta rendimiento." },
+	{ "xbox64_gl_n64depthcomparedec", hack_n64DepthCompareDec,
+	  "N64 decal depth compare", "Comparaci" GH_o "n de Z decal del N64",
+	  "The decal depth mode compared in the shader against a depth copy. ISS64 player shadows.",
+	  "El modo de profundidad decal comparado en el shader contra una copia de la Z. Sombras de los jugadores de ISS64." },
+	{ "xbox64_gl_zicomocolor", hack_ziComoColor,
+	  "Depth image as color, apart", "Imagen de Z como color, aparte",
+	  "The depth image used as a color image gets its own render target. Mario Tennis ball trail.",
+	  "La imagen de profundidad usada como imagen de color va en su propio render target. Estela de la pelota de Mario Tennis." },
+	{ "xbox64_gl_texrectshadealpha", hack_texrectShadeAlpha,
+	  "Texrect alpha 1 with SHADE", "Alfa 1 en texrect con SHADE",
+	  "Texrect vertex alpha is 1 when the alpha combiner is SHADE only. Bottom of the 9th intro and pitcher reticle.",
+	  "El alfa de v" GH_e "rtice de los texrect es 1 cuando el combinador de alfa es solo SHADE. Intro y ret" GH_i "cula del lanzador de Bottom of the 9th." },
+	{ "xbox64_gl_starcraftbackgrounds", hack_StarCraftBackgrounds,
+	  "StarCraft backgrounds", "Fondos de StarCraft",
+	  "A load with the RGBA16 palette is never a frame buffer texture. StarCraft 64 map picture.",
+	  "Una carga con la paleta RGBA16 nunca es textura de framebuffer. Imagen del mapa de StarCraft 64." },
+	{ "xbox64_gl_fbauxfilasdemas", hack_fbAuxFilasDeMas,
+	  "Extra rows of auxiliary buffers", "Filas de m" GH_a "s en buffers auxiliares",
+	  "A load from an auxiliary buffer may run 8 rows past its drawn height. Bottom of the 9th player face.",
+	  "Una carga desde un buffer auxiliar puede pasar 8 filas de su alto pintado. Cara del jugador de Bottom of the 9th." },
+	{ "xbox64_gl_alfaaleatoria", hack_alfaAleatoria,
+	  "Random alpha threshold", "Umbral de alfa aleatorio",
+	  "Texrects with threshold alpha compare use a random threshold per pixel. Top Gear Rally wheel dust.",
+	  "Los texrect con comparaci" GH_o "n de alfa por umbral usan un umbral aleatorio por p" GH_i "xel. Polvo de las ruedas de Top Gear Rally." },
+	{ "xbox64_gl_fbimagenpropia", hack_fbImagenPropia,
+	  "Frame buffer read as its own image", "Framebuffer le" GH_i "do como su propia imagen",
+	  "A load that reads a frame buffer as its own image is served from it even if the RDRAM changed. Mario Tennis replay panel.",
+	  "Una carga que lee un framebuffer como su propia imagen se sirve de " GH_e "l aunque cambie la RDRAM. Panel de repeticiones de Mario Tennis." },
+	{ "xbox64_gl_copyauxtordram", hack_copyAuxToRDRAM,
+	  "Copy auxiliary buffers to RDRAM", "Copiar buffers auxiliares a RDRAM",
+	  "Auxiliary color buffers are copied to N64 memory when the game leaves them. Top Gear Hyper-Bike terrain. Costs performance.",
+	  "Los buffers de color auxiliares se copian a la memoria del N64 cuando el juego los deja. Terreno de Top Gear Hyper-Bike. Cuesta rendimiento." },
+	{ "xbox64_gl_zauxaparte", hack_zAuxAparte,
+	  "Separate depth for auxiliary buffers", "Z aparte para buffers auxiliares",
+	  "Clearing the depth of an auxiliary buffer does not wipe the scene depth. Top Gear Hyper-Bike checkpoints and bike.",
+	  "Borrar la profundidad de un buffer auxiliar no se lleva la de la escena. Checkpoints y moto de Top Gear Hyper-Bike." },
+	{ "xbox64_gl_ciclodoscruzado", hack_cicloDosCruzado,
+	  "Two-cycle texel swap", "Cruce de texels en dos ciclos",
+	  "In two-cycle mode, swaps TEXEL0/TEXEL1 in the second cycle also when both cycles are equal, like the console. Top Gear Hyper-Bike terrain tiles.",
+	  "En dos ciclos, cruza TEXEL0/TEXEL1 en el segundo ciclo tambi" GH_e "n con los dos ciclos iguales, como la consola. Cuadros del terreno de Top Gear Hyper-Bike." },
+};
+
+static u32 s_hacksJuego   = 0;   /* los de RSP.cpp para la ROM cargada */
+static u32 s_hacksActivar = 0;   /* forzados encendidos (opciones)     */
+static u32 s_hacksQuitar  = 0;   /* forzados apagados (opciones)       */
+
+static void _hacksAplica( void )
+{
+	config.generalEmulation.hacks = (s_hacksJuego & ~s_hacksQuitar) | s_hacksActivar;
+}
+
+extern "C" const Gln64HackOpcion *gln64_hacks_tabla(int *n)
+{
+	if (n)
+		*n = (int)(sizeof(s_hacksTabla) / sizeof(s_hacksTabla[0]));
+	return s_hacksTabla;
+}
+
+void Config_HacksDelJuego( u32 juego )
+{
+	s_hacksJuego = juego;
+	_hacksAplica();
+}
+
+/* ★ EN CALIENTE.  libretro_core.cpp la llama desde `aplica_opciones`, con el
+ * emulador aparcado en el fin de un VI (`hilo_emu_pausar`), asi que ninguna
+ * lista esta a medias.  Casi todos los hack_* se consultan en el momento de
+ * usarlos; los que preparan algo al cargar (hack_RE2) quedan completos solo
+ * al recargar el juego. */
+extern "C" void gln64_hacks_forzados(unsigned int activar, unsigned int quitar)
+{
+	const u32 antes = config.generalEmulation.hacks;
+	s_hacksActivar = activar;
+	s_hacksQuitar  = quitar & ~activar;
+	_hacksAplica();
+#if XBOX64_TRAZAS
+	if (config.generalEmulation.hacks != antes)
+	{
+		char l[128];
+		sprintf( l, "[GLN64] hacks por opcion: activados=%08X quitados=%08X | del juego=%08X -> %08X",
+		         (unsigned)s_hacksActivar, (unsigned)s_hacksQuitar,
+		         (unsigned)s_hacksJuego, (unsigned)config.generalEmulation.hacks );
+		DebugOutputString( l );
+	}
+#else
+	(void)antes;
+#endif
+}
+
 /* ★ Contadores de los dos subcomandos de `gSPModifyVertex` que colocan un
  * vertice directamente en pantalla.  La explicacion larga y como leerlos
  * esta en GLN64_MODIFYVTX_SCREEN (xenon/gln64_prof.h); salen en [GLN64MV].

@@ -73,6 +73,7 @@ extern "C" {
 
 /* El informe del perfilador de glN64.  Trae su propio `extern "C"`. */
 #include "../../../xenon/gln64_prof.h"
+#include "../../../xenon/gln64_hacks.h"   /* [2026-10-30] la categoria "GL" de las opciones */
 /* ★ EXPLICITO, aunque `gln64_prof.h` ya lo arrastre: este fichero prueba
  * `#if XBOX64_SONDAS`, y una macro sin definir vale 0 en un `#if` SIN error y
  * SIN aviso.  O sea que si un dia cambia la cadena de includes, las sondas se
@@ -1383,6 +1384,12 @@ static const struct retro_core_option_v2_category s_opts_cats_en[] = {
       "Graphics thread and parallel display list." },
     { "diagnostico", "Diagnostics",
       "Tools to hunt down bugs; not gameplay modes." },
+    /* [2026-10-30] Una opcion por arreglo por juego de glN64; se rellenan en
+     * `construye_opciones` desde xenon/gln64_hacks.h. */
+    { "gl",          "GL (per-game fixes)",
+      "glN64 per-game fixes. Auto: what the game is set to. Enabled/Disabled: "
+      "forced, for unidentified games or to remove a fix. Only with glN64; "
+      "applied immediately." },
     { NULL, NULL, NULL }
 };
 
@@ -1397,6 +1404,10 @@ static const struct retro_core_option_v2_category s_opts_cats_es[] = {
       "Hilo gr" ES_a "fico y lista gr" ES_a "fica en paralelo." },
     { "diagnostico", "Diagn" ES_o "stico",
       "Herramientas para cazar fallos; no son modos de juego." },
+    { "gl",          "GL (arreglos por juego)",
+      "Arreglos por juego de glN64. Auto: lo que tenga puesto el juego. "
+      "Activado/Desactivado: forzado, para juegos no identificados o para "
+      "quitar un arreglo. Solo con glN64; se aplica al momento." },
     { NULL, NULL, NULL }
 };
 
@@ -1801,14 +1812,26 @@ static const struct retro_core_option_v2_definition s_opts_v2_es[] = {
     { NULL, NULL, NULL, NULL, NULL, NULL, { { NULL, NULL } }, NULL }
 };
 
-static const struct retro_core_options_v2 s_opts_v2_en_tabla = {
+/* [2026-10-30] ★ LAS TABLAS QUE SE PUBLICAN: las de arriba MAS una opcion por
+ * arreglo por juego de glN64 (categoria "gl"), que salen de la tabla de
+ * xenon/gln64_config.cpp (ver xenon/gln64_hacks.h) en vez de escribirse aqui
+ * dos veces a mano.  Las rellena `construye_opciones`, una vez, antes de
+ * publicar.  Tres valores, como OPT_FBBIL: `auto` (por defecto, lo que diga
+ * RSP.cpp para el juego), `activado` y `desactivado`. */
+#define OPC_MAX 96   /* 17 opciones de arriba + 28 de GL, con margen */
+static struct retro_core_option_v2_definition s_opts_full_en[OPC_MAX];
+static struct retro_core_option_v2_definition s_opts_full_es[OPC_MAX];
+static struct retro_variable                  s_opts_v1_full[OPC_MAX];
+static char                                   s_opts_v1_txt[OPC_MAX][128];
+
+static struct retro_core_options_v2 s_opts_v2_en_tabla = {
     (struct retro_core_option_v2_category *)s_opts_cats_en,
-    (struct retro_core_option_v2_definition *)s_opts_v2_en
+    s_opts_full_en
 };
 
-static const struct retro_core_options_v2 s_opts_v2_es_tabla = {
+static struct retro_core_options_v2 s_opts_v2_es_tabla = {
     (struct retro_core_option_v2_category *)s_opts_cats_es,
-    (struct retro_core_option_v2_definition *)s_opts_v2_es
+    s_opts_full_es
 };
 
 /* La reserva para un frontend sin V2: en ingles, el idioma comun.  Los
@@ -1839,11 +1862,84 @@ static const struct retro_variable s_opts_v1[] = {
     { NULL, NULL }
 };
 
+/* Una opcion de GL en la tabla de un idioma. */
+static void anade_hack_v2(struct retro_core_option_v2_definition *d,
+                          const Gln64HackOpcion *h, int es)
+{
+    memset(d, 0, sizeof(*d));
+    d->key          = h->clave;
+    d->desc         = es ? h->nombreEs : h->nombreEn;
+    d->info         = es ? h->infoEs   : h->infoEn;
+    d->category_key = "gl";
+    d->values[0].value = "auto";
+    d->values[0].label = es ? "Auto (lo del juego)" : "Auto (game setting)";
+    d->values[1].value = "activado";
+    d->values[1].label = es ? "Activado" : "Enabled";
+    d->values[2].value = "desactivado";
+    d->values[2].label = es ? "Desactivado" : "Disabled";
+    /* values[3] = { NULL, NULL } por el memset: el terminador. */
+    d->default_value = "auto";
+}
+
+/* Copia la tabla fija sin su terminador; devuelve cuantas. */
+static int copia_base_v2(struct retro_core_option_v2_definition *dst,
+                         const struct retro_core_option_v2_definition *src)
+{
+    int n = 0;
+    while (src[n].key && n < OPC_MAX - 1)
+    {
+        dst[n] = src[n];
+        n++;
+    }
+    return n;
+}
+
+static void construye_opciones(void)
+{
+    static int hecho = 0;
+    const Gln64HackOpcion *t;
+    int nh = 0, nen, nes, n1, i;
+
+    if (hecho)
+        return;
+    hecho = 1;
+
+    t   = gln64_hacks_tabla(&nh);
+    nen = copia_base_v2(s_opts_full_en, s_opts_v2_en);
+    nes = copia_base_v2(s_opts_full_es, s_opts_v2_es);
+    for (n1 = 0; s_opts_v1[n1].key && n1 < OPC_MAX - 1; n1++)
+        s_opts_v1_full[n1] = s_opts_v1[n1];
+
+    for (i = 0; i < nh; i++)
+    {
+        if (nen < OPC_MAX - 1)
+            anade_hack_v2(&s_opts_full_en[nen++], &t[i], 0);
+        if (nes < OPC_MAX - 1)
+            anade_hack_v2(&s_opts_full_es[nes++], &t[i], 1);
+        if (n1 < OPC_MAX - 1)
+        {
+            _snprintf(s_opts_v1_txt[n1], sizeof(s_opts_v1_txt[n1]),
+                      "%s; auto|activado|desactivado", t[i].nombreEn);
+            s_opts_v1_txt[n1][sizeof(s_opts_v1_txt[n1]) - 1] = 0;
+            s_opts_v1_full[n1].key   = t[i].clave;
+            s_opts_v1_full[n1].value = s_opts_v1_txt[n1];
+            n1++;
+        }
+    }
+    /* Los terminadores: el resto del array ya es cero (static). */
+#if XBOX64_TRAZAS
+    if (nen >= OPC_MAX - 1 || nes >= OPC_MAX - 1 || n1 >= OPC_MAX - 1)
+        logf("[xbox64] opciones: OPC_MAX (%d) se queda corto; faltan opciones de GL", OPC_MAX);
+#endif
+}
+
 static void publica_opciones(void)
 {
     unsigned version = 0;
     unsigned idioma  = RETRO_LANGUAGE_ENGLISH;
     struct retro_core_options_v2_intl intl;
+
+    construye_opciones();
 
     /* La tabla local solo si el frontend esta en espanol; si no, NULL y el
      * frontend usa la `us` (ingles). */
@@ -1867,7 +1963,7 @@ static void publica_opciones(void)
 #if XBOX64_TRAZAS
     logf("[xbox64] el frontend no acepta core options V2; se usa el formato clasico");
 #endif
-    environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)s_opts_v1);
+    environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)s_opts_v1_full);
 }
 
 /* Devuelve 1 si el valor es `si`, 0 si no, y `porDefecto` si el frontend
@@ -2038,6 +2134,33 @@ static void aplica_opciones(void)
             if      (strcmp(v.value, "activado")    == 0) fbbil = 1;
             else if (strcmp(v.value, "desactivado") == 0) fbbil = 2;
         }
+    }
+
+    /* [2026-10-30] Los arreglos por juego de glN64 forzados desde la
+     * categoria "GL": cada opcion en `activado` o `desactivado` pone su bit en
+     * una de las dos mascaras; `auto` (o sin respuesta del frontend) no toca
+     * el del juego.  EN CALIENTE: ver gln64_hacks_forzados. */
+    {
+        const Gln64HackOpcion *t;
+        int nh = 0, i;
+        unsigned int glOn = 0, glOff = 0;
+
+        t = gln64_hacks_tabla(&nh);
+        for (i = 0; i < nh; i++)
+        {
+            struct retro_variable v;
+            v.key = t[i].clave; v.value = NULL;
+            if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
+            {
+                if      (strcmp(v.value, "activado")    == 0) glOn  |= t[i].bit;
+                else if (strcmp(v.value, "desactivado") == 0) glOff |= t[i].bit;
+            }
+        }
+        gln64_hacks_forzados(glOn, glOff);
+#if XBOX64_TRAZAS
+        if (glOn || glOff)
+            logf("[xbox64] opciones GL: activados=%08X desactivados=%08X", glOn, glOff);
+#endif
     }
 
     xbox64_opciones(fb, sai, dyna, pak, cpo, gfxh, hacks);

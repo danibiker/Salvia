@@ -29,6 +29,7 @@
 #include "wii64config.h"
 #include "../../xbox/plataforma.h"
 #include "../../xbox/hilo_lista.h"   /* [Cruis'n USA] hilo_lista_sp_db */
+#include "mupen64plus_ini.h"         /* [BattleTanx] la CountPerOp de la referencia */
 
 /* ★★ `RICE_GFX` ERA UN DEFINE DE COMPILACION, Y AQUI NO PUEDE SERLO.
  *
@@ -237,7 +238,27 @@ void GameSpecificHackSetup() {
 	ROMCache_read((u8*)&curCRC[0], 0x10, sizeof(unsigned int)*2);
 	//print_gecko("CRC values %08X %08X\r\n", curCRC[0], curCRC[1]);
 
-	/* [Xbox360] ★ [Conker, logs 13-16] VELOCIDAD DE CPU 1 PARA CONKER.
+	/* [Xbox360] ★ [BattleTanx, 2026-10-30] LA VELOCIDAD DE CPU, DE LA REFERENCIA.
+	 *
+	 * La `CountPerOp` de cada juego se lee de mupen64plus.ini (directorio
+	 * system), como mupen64plus: por el MD5 de la ROM y, si no esta, por el
+	 * CRC, siguiendo RefMD5.  Ver mupen64plus_ini.c.  Antes se copiaban a
+	 * mano aqui los CRC de cada juego que se colgaba (Fighting Force 64,
+	 * Resident Evil 2, Bottom of the 9th, San Francisco Rush 2049), y cada
+	 * juego nuevo costaba una sesion de sondas para acabar en el mismo
+	 * valor que ya traia la referencia: BattleTanx (U) se quedaba en negro
+	 * con 2 y arranca con el 3 del ini.  El Donald Duck que Wii64 ponia a 3
+	 * a mano (abajo, retirado) tambien lo trae el ini.
+	 *
+	 * Va por `xbox64_db_count_per_op` y no escribiendo `count_per_op`: asi
+	 * sobrevive a un cambio de opciones en partida, y solo manda si el
+	 * usuario dejo la opcion por defecto.  Sin valor en el ini (o sin el
+	 * fichero) se pone a 0, en cada carga.
+	 *
+	 * ★ LA UNICA EXCEPCION: CONKER, A 1, QUE EL INI NO LO TRAE.
+	 * [Conker, logs 13-16] PENDIENTE: en mupen64plus-core funciona con 2 y
+	 * aqui no, asi que nuestra CPU (la de Wii64) cuenta el tiempo distinto
+	 * en algun sitio.  Cuando se encuentre esa diferencia, fuera de aqui.
 	 *
 	 * Con la de Wii64 (count_per_op = 2) Conker se queda parado para siempre:
 	 * la foto `[LISTA3]` del log 16 (sonda ya retirada) dio el COMPARE_INT VENCIDO
@@ -246,49 +267,12 @@ void GameSpecificHackSetup() {
 	 * ya vencidos por ~260.000 ciclos, porque entre leer Count y escribir
 	 * Compare hace mucho trabajo, y con 2 cada instruccion avanza Count el
 	 * doble.  Con 1 no se paro en ninguna prueba (logs 14 y 15) y va mas
-	 * fluido.  La referencia (mupen64plus.ini) no le pone CountPerOp.
-	 *
-	 * Va por `xbox64_db_count_per_op` y no escribiendo `count_per_op`: asi
-	 * sobrevive a un cambio de opciones en partida, y solo manda si el
-	 * usuario dejo la opcion por defecto.  Para todos los demas juegos se
-	 * pone a 0 aqui mismo, en cada carga.
-	 *
-	 * [Fighting Force 64, log 44] Este SI lo trae la referencia:
-	 * mupen64plus.ini le pone `CountPerOp=1` en (E) y (U).  Con 2 el juego iba
-	 * a 3-10 img/s con 60 VI/s y la mitad del frame libre: cada VI le daba la
-	 * mitad de instrucciones.
-	 *
-	 * [Resident Evil 2, logs 9-13] Tambien lo trae la referencia: mupen64plus.ini
-	 * `CountPerOp=1` en las cuatro (J, E, U 1.0 y U 1.1).  Con 2, a 60 VI/s y
-	 * con la imagen ya bien, el juego se quedaba en negro tras la intro: la
-	 * sonda [HILOS] dio todos los hilos esperando con normalidad (planificador,
-	 * VI, PI, cargador) sin ningun fallo y sin nadie que lanzara trabajo nuevo,
-	 * la huella de Conker.
-	 *
-	 * [Bottom of the 9th, 2026-10-26] Tambien de la referencia: mupen64plus.ini
-	 * `CountPerOp=1` en (U).  Con 2 la pantalla "LEAGUE A VS" tardaba ~20 s a
-	 * 0-2 listas/s con 60 VI/s, igual con Rice; [HILOS] dio el hilo principal
-	 * CORRIENDO (pri 10, pc 801B80B0), sin esperar ninguna cola.
-	 *
-	 * [San Francisco Rush 2049, Windows, 2026-10-29] Tambien de la referencia:
-	 * mupen64plus.ini `CountPerOp=1` en (E) y (U).  Con 2 se quedaba parado al
-	 * empezar la carrera: graficos, audio y AI a 0, [HILOS] con todos los
-	 * hilos esperando su cola (vacias) y la CPU en el bucle ocioso; lo ultimo,
-	 * DMA de PI de 256 bytes (carga de la pista).  La huella de RE2. */
+	 * fluido.  La referencia (mupen64plus.ini) no le pone CountPerOp. */
 	if((curCRC[0] == 0x30C7AC50 && curCRC[1] == 0x7704072D) ||   // Conker's Bad Fur Day (U)
-	   (curCRC[0] == 0x373F5889 && curCRC[1] == 0x9A6CA80A) ||   // Conker's Bad Fur Day (E)
-	   (curCRC[0] == 0x66CF0FFE && curCRC[1] == 0xAD697F9C) ||   // Fighting Force 64 (E)
-	   (curCRC[0] == 0x32EFC7CB && curCRC[1] == 0xC3EA3F20) ||   // Fighting Force 64 (U)
-	   (curCRC[0] == 0x7EAE2488 && curCRC[1] == 0x9D40A35A) ||   // Biohazard 2 (J)
-	   (curCRC[0] == 0x9B500E8E && curCRC[1] == 0xE90550B3) ||   // Resident Evil 2 (E)
-	   (curCRC[0] == 0x2F493DD0 && curCRC[1] == 0x2E64DFD9) ||   // Resident Evil 2 (U) (V1.0)
-	   (curCRC[0] == 0xAA18B1A5 && curCRC[1] == 0x07DB6AEB) ||   // Resident Evil 2 (U) (V1.1)
-	   (curCRC[0] == 0xD72FD14D && curCRC[1] == 0x1FED32C4) ||   // Bottom of the 9th (U)
-	   (curCRC[0] == 0x51D29418 && curCRC[1] == 0xD5B46AE3) ||   // San Francisco Rush 2049 (E) (M6)
-	   (curCRC[0] == 0xB9A9ECA2 && curCRC[1] == 0x17AAE48E))     // San Francisco Rush 2049 (U)
+	   (curCRC[0] == 0x373F5889 && curCRC[1] == 0x9A6CA80A))     // Conker's Bad Fur Day (E)
 		xbox64_db_count_per_op(COUNT_PER_OP_1);
 	else
-		xbox64_db_count_per_op(0);
+		xbox64_db_count_per_op(mupen64plus_ini_count_per_op(curCRC[0], curCRC[1]));
 
 	/* [Xbox360] ★ [Cruis'n USA, logs 12, 19 y 20] "ESPERAR AL RSP" EN "FOTO".
 	 *
@@ -443,30 +427,11 @@ void GameSpecificHackSetup() {
 		game_specific_hack = &hack_topgear_od_u;
 		restore_count_per_op();
 	}
-	else if(
-			(curCRC[0] == 0xC16C421B && curCRC[1] == 0xA21580F7) /*||	// Donald Duck Quackers
-			(curCRC[0] == 0x72611D7D && curCRC[1] == 0x9919BDD2) || // HSV Adventure Racing (A)
-			(curCRC[0] == 0xA1B64A61 && curCRC[1] == 0xD014940B) || // Beetle Adventure Racing! (E) (M3)
-			(curCRC[0] == 0x9C7318D2 && curCRC[1] == 0x24AE0DC1) || // Beetle Adventure Racing (J)
-			(curCRC[0] == 0x3DF17480 && curCRC[1] == 0x193DED5A) || // Donald Duck - Quack Attack (E) (M5)
-			(curCRC[0] == 0xF478D8B3 && curCRC[1] == 0x9716DD6D) || // LEGO Racers (E) (M10)
-			(curCRC[0] == 0x096A40EA && curCRC[1] == 0x8ABE0A10) || // LEGO Racers (U) (M10)
-			(curCRC[0] == 0xD3D806FC && curCRC[1] == 0xB43AA2A8) || // Monster Truck Madness 64 (E) (M5)
-			(curCRC[0] == 0xB19AD999 && curCRC[1] == 0x7E585118) || // Monster Truck Madness 64 (U)
-			(curCRC[0] == 0x02D8366A && curCRC[1] == 0x6CABEF9C) || // Road Rash 64 (E)
-			(curCRC[0] == 0xF050746C && curCRC[1] == 0x247B820B) || // Road Rash 64 (U)
-			(curCRC[0] == 0x1AA05AD5 && curCRC[1] == 0x46F52D80) || // Pilotwings 64 (E) (M3)
-			(curCRC[0] == 0x09CC4801 && curCRC[1] == 0xE42EE491) || // Pilotwings 64 (J)
-			(curCRC[0] == 0xC851961C && curCRC[1] == 0x78FCAAFA) || // Pilotwings 64 (U)
-			(curCRC[0] == 0x535DF3E2 && curCRC[1] == 0x609789F1) || // Wave Race 64 - Shindou Edition (J) (V1.2)
-			(curCRC[0] == 0xD4C45A1A && curCRC[1] == 0xF425B25E)  // WCW Nitro (U)
-			(curCRC[0] == 0xCEA8B54F && curCRC[1] == 0x7F21D503) || // Wetrix (E) (M6)
-			(curCRC[0] == 0xDCB6EAFA && curCRC[1] == 0xC6BBCFA3) || // Wetrix (J)
-			*/)
-	{ // Wetrix (U) (M6)
-				old_count_per_op = count_per_op;
-				count_per_op = COUNT_PER_OP_3;
-	}
+	/* [Xbox360] [BattleTanx, 2026-10-30] Aqui iba la rama de Wii64 que ponia
+	 * `count_per_op = COUNT_PER_OP_3` a mano para Donald Duck - Goin' Quackers
+	 * (U) (y una lista comentada de otros).  Retirada: la CountPerOp sale de
+	 * mupen64plus.ini (arriba), que le pone 3.  Sin ella `old_count_per_op`
+	 * ya no se escribe y las `restore_count_per_op()` no hacen nada. */
 	/* ★ Con Rice activo, esta rama vacia CORTA la cadena: los parches que
 	 * vienen debajo son remiendos de glN64 y Wii64 los excluia con
 	 * `#ifndef RICE_GFX`.  Interponer un `else if` cuesta dos lineas y deja

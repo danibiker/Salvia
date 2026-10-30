@@ -429,6 +429,8 @@
     <ClCompile Include="..\..\..\source\gc_memory\flashram.c" />
     <!-- main -->
     <ClCompile Include="..\..\..\source\main\gamehacks.c" />
+    <!-- [BattleTanx] la CountPerOp de mupen64plus.ini; mete md5.c dentro con otros nombres -->
+    <ClCompile Include="..\..\..\source\main\mupen64plus_ini.c" />
     <ClCompile Include="..\..\..\source\main\rom_gc.c" />
     <ClCompile Include="..\..\..\source\main\ROM-Cache.c" />
     <ClCompile Include="..\..\..\source\main\timers.c" />

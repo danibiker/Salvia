@@ -53,4 +53,8 @@ extern Config config;
 
 void Config_LoadConfig();
 void Config_DoConfig();
+// [Xbox360] Los hack_* que RSP.cpp ha puesto para la ROM cargada; el valor
+// efectivo los combina con los forzados desde las core options de la
+// categoria "GL".  Ver xenon/gln64_hacks.h y xenon/gln64_config.cpp.
+void Config_HacksDelJuego( u32 juego );
 #endif
