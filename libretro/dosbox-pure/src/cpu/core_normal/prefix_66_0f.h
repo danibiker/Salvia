@@ -443,6 +443,16 @@
 			else {GetEAa;*rmrd=LoadMd(eaa);SaveMd(eaa,LoadMd(eaa)+oldrmrd);}
 			break;
 		}
+	CASE_0F_D(0xc7)												/* CMPXCHG8B */
+		{
+			if (CPU_ArchitectureType<CPU_ARCHTYPE_PENTIUMSLOW) goto illegal_opcode;
+			GetRM;
+			if (((rm >> 3) & 7) != 1 || rm >= 0xc0) goto illegal_opcode; // CMPXCHG8B /1 r/m
+			GetEAa;
+			extern void CPU_CMPXCHG8B(PhysPt eaa);
+			CPU_CMPXCHG8B(eaa);
+			break;
+		}
 	CASE_0F_D(0xc8)												/* BSWAP EAX */
 		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegal_opcode;
 		BSWAPD(reg_eax);break;

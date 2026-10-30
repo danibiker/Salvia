@@ -143,7 +143,7 @@ struct differencingDisk
 		{
 			if (!saveFile && !savePath.empty())
 			{
-				saveFile = fopen(savePath.c_str(), "wb+");
+				saveFile = fopen_wrap(savePath.c_str(), "wb+");
 				if (saveFile) { fwrite("FFDD\x1", 5, 1, saveFile); saveEndCursor = 5; };
 				savePath.clear();
 			}
@@ -224,7 +224,7 @@ struct lfndirentry {
 	Bit8u name2[12];
 	Bit16u loFirstClust;
 	Bit8u name3[4];
-	char* Name(int j) { return (char*)(j < 5 ? name1 + j*2 : j < 11 ? name2 + (j-5)*2 : name3 + (j-11)*2); }
+	Bit8u* Name(int j) { return (Bit8u*)(j < 5 ? name1 + j*2 : j < 11 ? name2 + (j-5)*2 : name3 + (j-11)*2); }
 } GCC_ATTRIBUTE(packed);
 #ifdef _MSC_VER
 #pragma pack ()
@@ -361,8 +361,9 @@ struct fatFromDOSDrive
 					const bool isLongFileName = (!dot && !dotdot && !(dta_attr & DOS_ATTR_VOLUME) && ffdd.drive->GetLongFileName(f.path, longname));
 					if (isLongFileName)
 					{
-						size_t lfnlen = strlen(longname);
-						const char *lfn_end = longname + lfnlen;
+						size_t lfnlen = 0, lfncount;
+						const Bit8u *lfn_begin = (Bit8u*)longname, *lfn_end = lfn_begin + lfnlen, *plfn;
+						for (; *lfn_end; lfnlen++) { while ((*(++lfn_end) & 0xC0) == 0x80) { } }
 						for (size_t i = 0, lfnblocks = (lfnlen + 12) / 13; i != lfnblocks; i++)
 						{
 							lfndirentry* le = (lfndirentry*)AddDirEntry(ffdd, useFAT16Root, diridx);
@@ -370,13 +371,20 @@ struct fatFromDOSDrive
 							le->attrib = DOS_ATTR_LONG_NAME;
 							le->type = 0;
 							le->loFirstClust = 0;
-							const char* plfn = longname + (lfnblocks - i - 1) * 13;
-							for (int j = 0; j != 13; j++, plfn++)
+							for (plfn = lfn_begin, lfncount = (lfnblocks - i - 1) * 13; lfncount; lfncount--) { while ((*(++plfn) & 0xC0) == 0x80) { } }
+							for (int j = 0; j != 13; j++)
 							{
-								char* p = le->Name(j);
-								if (plfn > lfn_end) { p[0] = p[1] = (char)0xFF; }
-								else if (plfn == lfn_end) { p[0] = p[1] = 0; }
-								else { p[0] = *plfn; p[1] = 0; }
+								Bit8u* p = le->Name(j);
+								if (plfn > lfn_end) { p[0] = p[1] = 0xFF; continue; }
+								if (plfn == lfn_end) { p[0] = p[1] = 0; plfn++; continue; }
+
+								Bit16u c = *(plfn++);
+								if (c < 0xC0) { }
+								else if (c < 0xE0 && plfn[0]) { c = (Bit16u)((c&0x3f)<<6) | (*(plfn++)&0x7f); } // 2 byte encoded
+								else if (c < 0xF0 && plfn[0] && plfn[1]) { plfn += 2; c = (Bit16u)((c&0x1f)<<12) | ((plfn[-2]&0x7f)<<6) | (plfn[-1]&0x7f); } // 3 byte encoded
+								else if (plfn[0] && plfn[1] && plfn[2]) { plfn += 3; c = '_'; } // 4 byte encoded (larger than Bit16u, would need UTF-16 surrogate handling)
+								else c = '_'; // invalid UTF-8
+								p[0] = (Bit8u)c; p[1] = (Bit8u)(c >> 8);
 							}
 						}
 					}
@@ -444,13 +452,13 @@ struct fatFromDOSDrive
 						{
 							for (int j = 0; j != 13; j++)
 							{
-								char c = *le->Name(j);
+								Bit8u* p = le->Name(j); Bit16u c = (Bit16u)(p[0] | (p[1] << 8)); 
 								if (c == '\0') { lossy |= (niext && ni - niext > 3); break; }
 								if (c == '.') { if (ni > 8) { memset(entryname+8, ' ', 3); ni = 8; } if (!ni || niext) { lossy = 1; } niext = ni; continue; }
 								if (c == ' ' || ni == 11 || (ni == 8 && !niext)) { lossy = 1; continue; }
 								if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) { }
 								else if (c >= 'a' && c <= 'z') { c ^= 0x20; }
-								else if (strchr("$%'-_@~`!(){}^#&", c)) { }
+								else if (c < 0x80 && strchr("$%'-_@~`!(){}^#&", (char)c)) { }
 								else { lossy = 1; c = '_'; }
 								entryname[ni++] = (Bit8u)c;
 							}
@@ -897,7 +905,7 @@ struct sparseVhd
 		vhd_footer.sectors_per_track = (Bit8u)sect;
 		VHD_WRITE_BE32(vhd_footer.disk_type, 3); /* sparse */;
 		srand((int)timestamp);
-		for (int i = 0; i != 8; i++) vhd_footer.unique_id[i] = (Bit8u)rand();
+		for (int i = 0; i != 16; i++) vhd_footer.unique_id[i] = (Bit8u)rand();
 		vhd_footer.unique_id[8] = (vhd_footer.unique_id[8] & 0x3f) | 0x80;
 		vhd_footer.unique_id[6] = (vhd_footer.unique_id[6] & 0xf) | 0x40;
 		Bit32u vhd_footer_checksum = CalcChecksum((Bit8u*)&vhd_footer, sizeof(vhd_footer));
@@ -1334,6 +1342,7 @@ Bit32u imageDisk::Read_Raw(Bit8u *buffer, Bit32u seek, Bit32u len)
 	}
 	current_fpos += (Bit32u)len;
 	last_action = READ;
+	if (vhd) { vhd->current_fpos = current_fpos; vhd->last_action = sparseVhd::READ; }
 	return len;
 }
 
