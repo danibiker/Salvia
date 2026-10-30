@@ -78,8 +78,9 @@ struct MidiHandler_sc55 : public MidiHandler
 			const int rPos = conf_len - 8;
 			const char rCap = (conf[rPos] & 0x20), oCap = (conf[rPos+1] & 0x20);
 			const char* romfns[] = { "ROM2", "ROM2_ST", "ROM_SM", "WAVEROM1", "WAVEROM2", "WAVEROM3" };
-			for (const char* romfn : romfns)
+			for (size_t _ri = 0; _ri != sizeof(romfns)/sizeof(romfns[0]); _ri++)
 			{
+				const char* romfn = romfns[_ri];
 				// Try to open matching file using the same capitalization used for ROM1.BIN
 				char* path = &pathstr.assign(conf, rPos).append(romfn).append(conf + conf_len - 4)[0];
 				for (int i = 0; romfn[i]; i++) { if (romfn[i] >= 'A' && romfn[i] <= 'Z') { path[rPos+i] |= (i ? oCap : rCap); } }
@@ -142,7 +143,7 @@ struct MidiHandler_sc55 : public MidiHandler
 
 	void Close(void)
 	{
-		for (DOS_File*& f : roms) { if (f) { f->Close(); delete f; f = NULL; } }
+		for (int _ri = 0; _ri != MAXROMS; _ri++) { DOS_File*& f = roms[_ri]; if (f) { f->Close(); delete f; f = NULL; } }
 		if (d_zip)  { delete d_zip;        d_zip = NULL; }
 		if (chan)   { chan->Enable(false); chan  = NULL; }
 		if (mo)     { delete mo;           mo    = NULL; } // also deletes chan!

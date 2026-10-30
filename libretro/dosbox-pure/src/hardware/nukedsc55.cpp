@@ -5212,7 +5212,7 @@ static void SM_Opcode_INC(uint8_t opcode) // 3a, e6, f6, ee, fe
     SM_Update_NZ(val);
 }
 
-static void (*SM_Opcode_Table[256])(uint8_t opcode)
+static void (*SM_Opcode_Table[256])(uint8_t opcode) =
 {
     SM_Opcode_NotImplemented, // 00
     SM_Opcode_ORA, // 01
@@ -6479,13 +6479,15 @@ static void MCU_GA_SetGAInt(uint8_t line, int value)
         MCU_Interrupt_SetRequest(INTERRUPT_SOURCE_IRQ1, ga_int_trigger != 0);
 }
 
-enum class ResetType {
-    NONE,
-    GS_RESET,
-    GM_RESET,
+struct ResetType {
+    enum Type {
+        NONE,
+        GS_RESET,
+        GM_RESET
+    };
 };
 
-static void MIDI_Reset(ResetType resetType)
+static void MIDI_Reset(ResetType::Type resetType)
 {
     const unsigned char gmReset[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
     const unsigned char gsReset[] = { 0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7 };

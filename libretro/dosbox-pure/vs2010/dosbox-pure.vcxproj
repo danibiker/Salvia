@@ -183,7 +183,7 @@
     <ClCompile>
       <WarningLevel>Level2</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>C_UNALIGNED_MEMORY=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
@@ -205,9 +205,9 @@
       <OpenMPSupport>false</OpenMPSupport>
       <CompileAs>CompileAsCpp</CompileAs>
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
-      <PreschedulingOptimization>true</PreschedulingOptimization>
-      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
-      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <Link>
         <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -229,12 +229,11 @@
     <ClCompile Include="..\src\cpu\core_dyn_x86.cpp">
       <ExcludedFromBuild Condition="'$(Platform)'=='Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\src\cpu\core_full.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="..\src\cpu\core_full.cpp" />
     <ClCompile Include="..\src\cpu\core_normal.cpp" />
     <ClCompile Include="..\src\cpu\core_prefetch.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\src\cpu\core_simple.cpp" />
     <ClCompile Include="..\src\cpu\core_stubs_xbox.cpp" />
@@ -250,7 +249,12 @@
     <ClCompile Include="..\src\dos\dos.cpp" />
     <ClCompile Include="..\src\dos\dos_classes.cpp" />
     <ClCompile Include="..\src\dos\dos_devices.cpp" />
-    <ClCompile Include="..\src\dos\dos_execute.cpp" />
+    <ClCompile Include="..\src\dos\dos_execute.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Default</InlineFunctionExpansion>
+      <IntrinsicFunctions Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</IntrinsicFunctions>
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Neither</FavorSizeOrSpeed>
+    </ClCompile>
     <ClCompile Include="..\src\dos\dos_files.cpp" />
     <ClCompile Include="..\src\dos\dos_ioctl.cpp" />
     <ClCompile Include="..\src\dos\dos_keyboard_layout.cpp" />
@@ -295,6 +299,7 @@
     <ClCompile Include="..\src\hardware\mixer.cpp" />
     <ClCompile Include="..\src\hardware\mpu401.cpp" />
     <ClCompile Include="..\src\hardware\nukedopl3.cpp" />
+    <ClCompile Include="..\src\hardware\nukedsc55.cpp" />
     <ClCompile Include="..\src\hardware\pci_bus.cpp" />
     <ClCompile Include="..\src\hardware\pcspeaker.cpp" />
     <ClCompile Include="..\src\hardware\pic.cpp" />
@@ -342,7 +347,12 @@
     <ClCompile Include="..\src\shell\shell.cpp" />
     <ClCompile Include="..\src\shell\shell_batch.cpp" />
     <ClCompile Include="..\src\shell\shell_cmds.cpp" />
-    <ClCompile Include="..\src\shell\shell_misc.cpp" />
+    <ClCompile Include="..\src\shell\shell_misc.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Default</InlineFunctionExpansion>
+      <IntrinsicFunctions Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</IntrinsicFunctions>
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Neither</FavorSizeOrSpeed>
+    </ClCompile>
   </ItemGroup>
   <!-- ============================================ -->
   <!--  Header files                                -->

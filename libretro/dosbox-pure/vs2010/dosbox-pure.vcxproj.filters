@@ -334,6 +334,9 @@
     <ClCompile Include="..\dosbox_pure_libretro.cpp" />
     <ClCompile Include="..\keyb2joypad.cpp" />
     <ClCompile Include="..\src\cpu\core_stubs_xbox.cpp" />
+    <ClCompile Include="..\src\hardware\nukedsc55.cpp">
+      <Filter>src\hardware</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\bios.h">

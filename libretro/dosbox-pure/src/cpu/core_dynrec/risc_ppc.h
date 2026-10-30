@@ -392,7 +392,7 @@ static void gen_and_imm(HostReg reg,Bit32u imm) {
 	}
 
 	IMM_OP(28, reg, HOST_R0, imm); // andi. r0, reg, imm@l
-	IMM_OP(29, reg, reg, imm>16);  // andis. reg, reg, imm@h
+	IMM_OP(29, reg, reg, imm>>16); // andis. reg, reg, imm@h
 	EXT_OP(reg, reg, HOST_R0, 444, 0); // or reg, reg, r0
 }
 

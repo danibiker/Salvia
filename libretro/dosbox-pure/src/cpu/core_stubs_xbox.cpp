@@ -1,9 +1,18 @@
 /*
  *  Xbox 360 build: stubs para los cores que se excluyen del build por
- *  cuestiones de tamano o por errores de compilacion bajo XDK.  Los
- *  ficheros originales son:
+ *  cuestiones de tamano o por errores de compilacion bajo XDK.  El
+ *  fichero original es:
  *    - core_prefetch.cpp  (emulacion de prefetch queue 286/386/486)
- *    - core_full.cpp      (decodificador microcoded, muy lento)
+ *
+ *  core_full.cpp YA NO se sustituye: PageFaultCore (paging.cpp) e
+ *  IOFaultCore (iohandler.cpp) lo usan para ejecutar instrucciones
+ *  anidadas mientras se resuelve un page fault / IO fault, y el core
+ *  normal no sirve como sustituto ahi (probablemente porque guarda su
+ *  estado de decodificacion en variables estaticas y no es reentrante).
+ *  Verificado con una build PPC big-endian en qemu: con el core normal
+ *  en PageFaultCore/IOFaultCore la misma imagen de Win95 da el 0E;
+ *  con core_full arranca bien.  Con el dynrec, Windows 95 terminaba en
+ *  "fatal exception 0E" al arrancar.
  *
  *  Estos cores son referenciados desde:
  *    - cpu.cpp           (seleccion de cpudecoder por config)
@@ -19,7 +28,7 @@
  *  degradacion silenciosa al fallback mas razonable disponible).
  *
  *  Este fichero SOLO debe compilarse en builds Xbox 360 donde
- *  core_prefetch.cpp y core_full.cpp esten excluidos del proyecto.
+ *  core_prefetch.cpp este excluido del proyecto.
  */
 
 #if defined(_XBOX)
@@ -29,23 +38,6 @@
 
 /* Forward declaration del core que SI esta presente en el build. */
 extern Bits CPU_Core_Normal_Run(void);
-
-/* ---------- Stubs de core_full.cpp ---------- */
-
-Bits CPU_Core_Full_Run(void)
-{
-	/* paging.cpp e iohandler.cpp llaman a esto desde dentro del core
-	 * normal/dynrec para resolver page faults o MMIO.  Re-entrar al
-	 * core normal funciona porque es reentrante en el sentido relevante:
-	 * estamos sobre un frame de pila distinto, con CPU_Cycles >= 1. */
-	return CPU_Core_Normal_Run();
-}
-
-void CPU_Core_Full_Init(void)
-{
-	/* La inicializacion del core full construia tablas de decodificacion
-	 * que no necesitamos sin ese core.  Nop. */
-}
 
 /* ---------- Stubs de core_prefetch.cpp ---------- */
 

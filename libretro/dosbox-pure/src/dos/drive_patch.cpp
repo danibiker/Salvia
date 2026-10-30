@@ -1005,7 +1005,7 @@ std::vector<std::string> patchDrive::VariantConflictFiles(int variant_number, bo
 			if (patchDriveImpl::GetPatchSrc(l.IterateLayer->patchzip, ext, orgpath, path, name, patchsrc)) path = patchsrc;
 
 			if (!l.MemoryDrive->FileExists(path)) return; // not modified in zip
-			for (std::string& s : l.Result) if (s == path) return; // already found conflicting
+			for (size_t _ri = 0; _ri != l.Result.size(); _ri++) if (l.Result[_ri] == path) return; // already found conflicting
 			l.Buf.clear();
 			DriveGetFileContent(l.MemoryDrive, path, l.Buf);
 			const size_t sz = l.Buf.size();
@@ -1018,8 +1018,8 @@ std::vector<std::string> patchDrive::VariantConflictFiles(int variant_number, bo
 		Patch_Layer* IterateLayer;
 		std::vector<std::string> Result;
 		std::vector<Bit8u> Buf;
-		Local() : PatchDrive(NULL), MemoryDrive(NULL) {}
-	} l = { ActiveVariantIndex, variant_number - 1 };
+		Local(int prev_variant_index, int variant_index) : PrevVariantIndex(prev_variant_index), VariantIndex(variant_index), PatchDrive(NULL), MemoryDrive(NULL), IterateLayer(NULL) {}
+	} l(ActiveVariantIndex, variant_number - 1);
 
 	if (Drives['C'-'A']) Local::GetDrives(Drives['C'-'A'], l);
 	if (l.PatchDrive && l.MemoryDrive)
