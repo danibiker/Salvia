@@ -1413,6 +1413,7 @@ imageDisk::imageDisk(FILE *imgFile, const char *imgName, Bit32u imgSizeK, bool i
 	#endif
 	discard = NULL;
 	differencing = NULL;
+	vhd = NULL; // must be NULL before sparseVhd::Init, which reads through Read_AbsoluteSector
 	DBP_ASSERT(imgFile->refCtr >= 1);
 	dos_file = imgFile;
 	dos_file->Seek64(&current_fpos, DOS_SEEK_END);
