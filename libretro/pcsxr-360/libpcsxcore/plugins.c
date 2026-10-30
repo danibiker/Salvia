@@ -434,8 +434,9 @@ static ds_input_t s_mtap_slave_input[4];
 /* Bridge entre PSxInputSetVibration (que toma small/big) y el callback
  * del state machine (mismo prototipo).  El state machine no conoce
  * XInput; solo sabe que tiene que entregar (port, small, big). */
-static void plugins_ds_rumble_cb(int port, unsigned char small, unsigned char big) {
-    PSxInputSetVibration(port, small, big);
+static void plugins_ds_rumble_cb(int port, unsigned char small_motor, unsigned char big) {
+    /* [Windows] `small` es un #define de rpcndr.h (windows.h). */
+    PSxInputSetVibration(port, small_motor, big);
 }
 
 /* Inicializa el state machine la primera vez que se llama.  Idempotente.

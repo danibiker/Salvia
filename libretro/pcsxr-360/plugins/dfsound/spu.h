@@ -41,7 +41,7 @@ struct xa_decode;
 typedef struct SPUFreeze SPUFreeze_t;
 typedef struct xa_decode xa_decode_t;
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 #define SPUreadDMA              PEOPS_SPUreadDMA
 #define SPUreadDMAMem           PEOPS_SPUreadDMAMem
 #define SPUwriteDMA             PEOPS_SPUwriteDMA

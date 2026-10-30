@@ -40,6 +40,20 @@ extern s8 *psxH_2;
 #define SWAPu16(v) SWAP16((u16)(v))
 #define SWAPu32(v) SWAP32((u32)(v))
 
+#else
+
+/* [Windows, 2026-10-30] Anfitrion little-endian (x86): la memoria de la PSX ya
+ * esta en el orden del anfitrion, los accesos psxMu16/psxHu32/... no voltean.
+ * #undef por si xbox_soft/swap.h definio antes su SWAP16 (ese es un volteo de
+ * verdad para HOST2BE/BE2HOST, que nadie usa). */
+#undef SWAP16
+#undef SWAP32
+#define SWAP16(x) (x)
+#define SWAP32(x) (x)
+
+#define SWAPu16(v) ((u16)(v))
+#define SWAPu32(v) ((u32)(v))
+
 #endif
 
 

@@ -285,10 +285,10 @@ static void ds_cmd8(ds_state_t *s, uint8_t cmd, int port)
             /* Aplicar rumble usando el mapping previamente configurado
              * por 0x4D.  Si motorMap* == 0xFF, no hay motor mapeado en
              * ese slot — pasar 0 al callback. */
-            uint8_t small = (s->motorMapS == 0xFF) ? 0 : cb[s->motorMapS + 3];
+            uint8_t small_motor = (s->motorMapS == 0xFF) ? 0 : cb[s->motorMapS + 3];
             uint8_t big   = (s->motorMapL == 0xFF) ? 0 : cb[s->motorMapL + 3];
             if (s_rumble_cb)
-                s_rumble_cb(port, small, big);
+                s_rumble_cb(port, small_motor, big);
             break;
         }
 

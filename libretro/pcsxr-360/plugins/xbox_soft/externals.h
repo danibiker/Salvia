@@ -88,8 +88,19 @@
 
 #define __X11_C_
 //X11 render
-#ifndef _XBOX
+/* [Windows, 2026-10-30] En la build Win32 los tipos de Windows tienen que
+ * entrar ANTES de los #define de abajo (BOOL, DWORD, CALLBACK...): en la Xbox
+ * <xtl.h> llega despues y sus typedef sobreviven por casualidad.  Aqui el
+ * `typedef unsigned long DWORD` de windows.h chocaria con `#define DWORD
+ * uint32_t` (en x86 uint32_t es unsigned int). */
+#if defined(PCSXR360_WIN32)
+#include <xtl.h>
+#endif
+#if !defined(_XBOX) && !defined(_MSC_VER)
 #define __inline inline
+#endif
+#ifdef CALLBACK
+#undef CALLBACK
 #endif
 #define CALLBACK
 
@@ -163,7 +174,7 @@ typedef struct SDXTAG
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #define DWORD uint32_t
 #define __int64 long long int
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 typedef struct RECTTAG
 {
  int left;

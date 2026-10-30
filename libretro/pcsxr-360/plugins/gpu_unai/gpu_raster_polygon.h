@@ -30,10 +30,17 @@
 #include "gpu_unai_compat.h"
 
 /* MSVC PPC does not define __BYTE_ORDER__/__ORDER_BIG_ENDIAN__.
- * Force the BE branch in PolyVertex below. */
+ * Force the BE branch in PolyVertex below.
+ *
+ * [Windows, 2026-10-30] MSVC x86 tampoco los define, y forzar BE alli dejaba
+ * u/v y r/g/b leyendo los bytes de relleno (texturas en vetas, tonos raros).
+ * La rama sale ahora de UNAI_HOST_BIG_ENDIAN (gpu_unai_compat.h): 1 en la
+ * Xbox -> igual que antes; 0 en x86 -> la rama LE de upstream. */
+#if UNAI_HOST_BIG_ENDIAN
 #ifndef __BYTE_ORDER__
 #  define __BYTE_ORDER__       1
 #  define __ORDER_BIG_ENDIAN__ 1
+#endif
 #endif
 
 //senquack - NOTE: GPU Unai poly routines have been rewritten/adapted
@@ -46,7 +53,7 @@
 struct PolyVertex {
 	s32 x, y; // Sign-extended 11-bit X,Y coords
 	union {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#if UNAI_HOST_BIG_ENDIAN
 		struct { u8 pad[2], v, u; } tex; // Texture coords (if used)
 #else
 		struct { u8 u, v, pad[2]; } tex; // Texture coords (if used)
@@ -54,7 +61,7 @@ struct PolyVertex {
 		u32 tex_word;
 	};
 	union {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#if UNAI_HOST_BIG_ENDIAN
 		struct { u8 pad, b, g, r; } col; // 24-bit RGB color (if used)
 #else
 		struct { u8 r, g, b, pad; } col; // 24-bit RGB color (if used)

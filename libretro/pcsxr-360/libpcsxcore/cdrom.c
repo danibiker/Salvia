@@ -26,7 +26,7 @@
  * C linkage (C2894/C2733). Incluir <xtl.h> aqui, en contexto C++ puro (fuera de
  * cualquier extern "C"), asienta sus include-guards antes de que plugins.h lo
  * reintente dentro de extern "C". */
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 #include <xtl.h>
 #endif
 

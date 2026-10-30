@@ -40,7 +40,7 @@ typedef long (*NETopen)(unsigned long *);
 typedef long (*SIO1open)(unsigned long *);
 
 #else
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 #include <xtl.h>
 #else
 #include <windows.h>

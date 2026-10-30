@@ -21,7 +21,7 @@ email                : BlackDove@addcom.de
 #include "fps.h"
 #include "gpu.h"
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 #include <xtl.h>
 #endif
 
@@ -70,6 +70,14 @@ void CheckFrameRate(void)
 }
 
 #define TIMEBASE 100000
+
+/* [Windows, 2026-10-30] Windows ya tiene un timeGetTime (mmsystem.h, en
+ * milisegundos).  El de aqui cuenta en 1/TIMEBASE s, y todo este fichero
+ * depende de esas unidades: en Win32 se renombra para no chocar.  En la Xbox
+ * no existe el del sistema y queda igual. */
+#if defined(PCSXR360_WIN32)
+#define timeGetTime fps_timeGetTime
+#endif
 
 unsigned long timeGetTime()
 {

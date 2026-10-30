@@ -97,7 +97,7 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	
 	set NAME[16]=pcsxr-360
 	set SLN[16]=pcsxr-360\360\Xdk\pcsxr\pcsxr.sln
-	set PLAT[16]=Xbox360
+	set PLAT[16]=Both
 	set  CFG[16]=%CONFIG%
 	
 	set NAME[17]=3dox

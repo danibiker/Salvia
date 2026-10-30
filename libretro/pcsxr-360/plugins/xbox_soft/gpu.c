@@ -163,7 +163,7 @@
 #define PCSXR_DIAG_PRIMFUNC_TIMING 1
 #endif
 
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION
 #include <xtl.h>  /* LARGE_INTEGER, QueryPerformanceCounter */
 
 /* Contadores globales para diagnostico desde libpcsxcore/gpu.c
@@ -206,7 +206,7 @@ static char *libraryInfo      = "P.E.Op.S. SoftGL Driver V1.16\nCoded by Pete Be
 static char *libraryName      = "P.E.Op.S. SoftX Driver";
 static char *libraryInfo      = "P.E.Op.S. SoftX Driver V1.18\nCoded by Pete Bernert and the P.E.Op.S. team\n";
 #else
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 static char *libraryName      = "P.E.Op.S. XBOX Soft Driver";
 static char *libraryInfo      = "P.E.Op.S. XBOX Soft Driver V1.18";
 #else
@@ -343,7 +343,7 @@ void CALLBACK GPUdebugSetPC(unsigned long addr)
 #include <time.h>
 time_t tStart;
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUdisplayText(char * pText)             // some debug func
 #else 
 void PEOPS_GPUdisplayText(char * pText)             // some debug func
@@ -444,7 +444,7 @@ void DoTextSnapShot(int iNum)
 {
  FILE *txtfile;char szTxt[256];char * pB;
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
  sprintf(szTxt,"SNAP\\PEOPSSOFT%03d.txt",iNum);
 #else
  sprintf(szTxt,"%s/peopssoft%03d.txt",getenv("HOME"),iNum);
@@ -507,7 +507,7 @@ void CALLBACK GPUmakeSnapshot(void)                    // snapshot of whole vram
  do
   {
    snapshotnr++;
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
    sprintf(filename,"SNAP\\PEOPSSOFT%03d.bmp",snapshotnr);
 #else
    sprintf(filename,"%s/peopssoft%03ld.bmp",getenv("HOME"),snapshotnr);
@@ -545,7 +545,7 @@ void CALLBACK GPUmakeSnapshot(void)                    // snapshot of whole vram
 // INIT, will be called after lib load... well, just do some var init...
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long CALLBACK GPUinit()                                // GPU INIT
 #else 
 long PEOPS_GPUinit()                                // GPU INIT
@@ -679,7 +679,7 @@ long CALLBACK GPUopen(HWND hwndGPU)                    // GPU OPEN
 
 #else
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long GPUopen(unsigned long * disp,char * CapText,char * CfgFile)
 #else 
 long PEOPS_GPUopen(unsigned long * disp,char * CapText,char * CfgFile)
@@ -716,7 +716,7 @@ long PEOPS_GPUopen(unsigned long * disp,char * CapText,char * CfgFile)
 // time to leave...
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long CALLBACK GPUclose()                               // GPU CLOSE
 #else 
 long PEOPS_GPUclose()
@@ -742,7 +742,7 @@ long PEOPS_GPUclose()
 // I shot the sheriff
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long CALLBACK GPUshutdown()                            // GPU SHUTDOWN
 #else 
 long PEOPS_GPUshutdown()
@@ -1027,7 +1027,7 @@ void CALLBACK GPUcursor(int iPlayer,int x,int y)
 // update lace is called evry VSync
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUupdateLace(void)                      // VSYNC
 #else 
 void PEOPS_GPUupdateLace(void)
@@ -1084,7 +1084,7 @@ if(RECORD_RECORDING)
 // process read request from GPU status register
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 unsigned long CALLBACK GPUreadStatus(void)             // READ STATUS
 #else 
 unsigned long PEOPS_GPUreadStatus(void)
@@ -1598,7 +1598,7 @@ void PEOPS_GPUsetDisplayStatusBits(unsigned long gdata)
 // these are always single packet commands.
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUwriteStatus(unsigned long gdata)      // WRITE STATUS
 #else 
 void PEOPS_GPUwriteStatus(unsigned long gdata)
@@ -1746,7 +1746,7 @@ __inline void FinishedVRAMRead(void)
 // core read from vram
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUreadDataMem(unsigned long * pMem, int iSize)
 #else 
 void PEOPS_GPUreadDataMem(unsigned long * pMem, int iSize)
@@ -1814,7 +1814,7 @@ ENDREAD:
 
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 unsigned long CALLBACK GPUreadData(void)
 #else 
 unsigned long PEOPS_GPUreadData(void)
@@ -1900,7 +1900,7 @@ const unsigned char primTableCX[256] =
     0,0,0,0,0,0,0,0
 };
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUwriteDataMem(unsigned long * pMem, int iSize)
 #else
 void PEOPS_GPUwriteDataMem(unsigned long * pMem, int iSize)
@@ -1909,7 +1909,7 @@ void PEOPS_GPUwriteDataMem(unsigned long * pMem, int iSize)
  unsigned char command;
  unsigned long gdata=0;
  int i=0;
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION && PCSXR_DIAG_PRIMFUNC_TIMING
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION && PCSXR_DIAG_PRIMFUNC_TIMING
  /* Per-comando timing: QPC bracket alrededor de primFunc[cmd].
   * Declarado aqui (top del bloque) para C89 strict de VS2010. */
  LARGE_INTEGER prof_t0, prof_t1;
@@ -2003,7 +2003,7 @@ STARTVRAM:
          * antes de hacer el check. */
         if (VRAMWrite.ImagePtr >= psxVuw_eom)
          VRAMWrite.ImagePtr -= iGPUHeight*1024;
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION
         g_xbox_soft_fastpath_words += (unsigned int)fast_words;
 #endif
        }
@@ -2016,7 +2016,7 @@ STARTVRAM:
       {
        if(i>=iSize) {goto ENDVRAM;}
        i++;
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION
        g_xbox_soft_slow_pixel_words++;
 #endif
 
@@ -2133,7 +2133,7 @@ ENDVRAM:
 	DEBUG_print("close",DBG_SDGECKOCLOSE);
 #endif //PEOPS_SDLOG
        gpuDataC=gpuDataP=0;
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION && PCSXR_DIAG_PRIMFUNC_TIMING
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION && PCSXR_DIAG_PRIMFUNC_TIMING
        /* Per-comando profiling de Unai + PEOPS + cualquier primTable.
         * QPC wraps primFunc independientemente de PCSXR_PERF_ENABLED
         * (que solo cubre PEOPS).  Lazy init de la frecuencia QPC.
@@ -2198,7 +2198,7 @@ ENDVRAM:
           (gpuCommand == 0x02 ||
            (gpuCommand >= 0x20 && gpuCommand <= 0x9F)))
         bDoVSyncUpdate = TRUE;
-#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+#if (defined(_XBOX) || defined(PCSXR360_WIN32)) && PCSXR_DIAG_INSTRUMENTATION
        /* Los CONTADORES se quedan siempre: el watchdog de libpcsxcore/gpu.c
         * mira g_xbox_soft_primfunc_calls para saber si el consumidor avanza. */
        g_xbox_soft_primfunc_calls++;
@@ -2226,7 +2226,7 @@ ENDVRAM:
 
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUwriteData(unsigned long gdata)
 #else
 void PEOPS_GPUwriteData(unsigned long gdata)
@@ -2312,7 +2312,7 @@ __inline BOOL CheckForEndlessLoop(unsigned long laddr)
  return FALSE;
 }
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long CALLBACK GPUdmaChain(unsigned long * baseAddrL, unsigned long addr)
 #else 
 long PEOPS_GPUdmaChain(unsigned long * baseAddrL, unsigned long addr)
@@ -2414,7 +2414,7 @@ typedef struct GPUFREEZETAG
 
 ////////////////////////////////////////////////////////////////////////
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 long CALLBACK GPUfreeze(unsigned long ulGetFreezeData,GPUFreeze_t * pF)
 #else 
 long PEOPS_GPUfreeze(unsigned long ulGetFreezeData,GPUFreeze_t * pF)
@@ -2451,7 +2451,7 @@ long PEOPS_GPUfreeze(unsigned long ulGetFreezeData,GPUFreeze_t * pF)
 
 // RESET TEXTURE STORE HERE, IF YOU USE SOMETHING LIKE THAT
 
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(PCSXR360_WIN32)
  GPUwriteStatus(ulStatusControl[0]);
  GPUwriteStatus(ulStatusControl[1]);
  GPUwriteStatus(ulStatusControl[2]);
@@ -3167,7 +3167,7 @@ void CALLBACK GPUsetframelimit(unsigned long option)
 {
  bInitCap = TRUE;
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
  if(option==1)
   {
    UseFrameLimit=1;UseFrameSkip=0;iFrameLimit=2;

@@ -57,7 +57,7 @@ void           SetFixes(void);
 
 /////////////////////////////////////////////////////////////////////////////
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(PCSXR360_WIN32)
 
 #define GPUopen				PEOPS_GPUopen
 #define GPUdisplayText		PEOPS_GPUdisplayText

@@ -5,6 +5,16 @@
 #ifdef _XBOX
 #define SWAP16(x) _byteswap_ushort(x)
 #define SWAP32(x) _byteswap_ulong(x)
+#elif defined(_MSC_VER)
+/* [Windows, 2026-10-30] MSVC en x86: aqui SWAP16/32 solo lo usarian HOST2BE y
+ * BE2HOST (sin uso).  Si psxmem.h ya puso su identidad (little-endian), esa
+ * se queda: es la que necesitan psxMu16 y compania. */
+#ifndef SWAP16
+#define SWAP16(x) _byteswap_ushort(x)
+#endif
+#ifndef SWAP32
+#define SWAP32(x) _byteswap_ulong(x)
+#endif
 #else
 #define SWAP16(x) ({ uint16_t y=(x); (((y)>>8 & 0xff) | ((y)<<8 & 0xff00)); })
 #define SWAP32(x) ({ uint32_t y=(x); (((y)>>24 & 0xfful) | ((y)>>8 & 0xff00ul) | ((y)<<8 & 0xff0000ul) | ((y)<<24 & 0xff000000ul)); })
@@ -69,6 +79,17 @@ static __inline u32 __rlwinm(u32 rs, u32 sh, u32 mb, u32 me)
 #else
 #define GETLE16(X) LE2HOST16(*(uint16_t *)X)
 #define GETLE32(X) LE2HOST32(*(uint32_t *)X)
+
+/* [Windows, 2026-10-30] GETLE16D en little-endian: lectura directa.
+ * Lee dos pixeles de la VRAM en una palabra que BlitScreen16 convierte y
+ * vuelve a escribir entera.  En la Xbox el resultado se escribe big-endian,
+ * y por eso alli se rota (el pixel de la izquierda va en la mitad alta).  En
+ * x86 la escritura es little-endian y el pixel de la izquierda tiene que
+ * quedar en la mitad baja, que es justo como esta en memoria.  Rotar aqui
+ * intercambiaba cada pareja de pixeles (tiras verticales en RGB565). */
+#ifndef GETLE16D
+#define GETLE16D(X) (*(const uint32_t *)(X))
+#endif
 
 #define PUTLE16(X, Y) do{*((uint16_t *)X)=HOST2LE16((uint16_t)Y);}while(0)
 #define PUTLE32(X, Y) do{*((uint32_t *)X)=HOST2LE16((uint32_t)Y);}while(0)

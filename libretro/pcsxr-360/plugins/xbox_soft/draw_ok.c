@@ -28,6 +28,17 @@ email                : BlackDove@addcom.de
 #include "xb_video.h"
 #include "../../libpcsxcore/psxcommon.h"
 
+/* [Windows, 2026-10-30] Lectura de un halfword de la VRAM de la PSX, que
+ * esta en orden little-endian.  En la Xbox (big-endian) es lhbrx, un load con
+ * los bytes al reves en una sola instruccion; en x86 la memoria ya esta en ese
+ * orden y basta una lectura directa.  La build de Xbox genera exactamente el
+ * mismo codigo que antes. */
+#if defined(_XBOX)
+#define VRAM_LE16(p)  __loadshortbytereverse(0, (p))
+#else
+#define VRAM_LE16(p)  (*(const unsigned short *)(p))
+#endif
+
 
 // misc globals
 int            iResX;
@@ -238,7 +249,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
 				unsigned int r5_sh, g5_sh, b5_sh;
 				int dr, dg, db;
 
-				s_vram = __loadshortbytereverse(0, &psxVuw[startxy]);
+				s_vram = VRAM_LE16(&psxVuw[startxy]);
 				s24 = g_psxVuw24[startxy];
 				/* Sanity check con tolerancia de +-1 LSB.
 				 *
@@ -300,14 +311,14 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
 			{					
 				rdest = &destpix[row];
 
-				s =    __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s1 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s2 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s3 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s4 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s5 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s6 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
-				s7 =   __loadshortbytereverse(0,&psxVuw[startxy++]);
+				s =    VRAM_LE16(&psxVuw[startxy++]);
+				s1 =   VRAM_LE16(&psxVuw[startxy++]);
+				s2 =   VRAM_LE16(&psxVuw[startxy++]);
+				s3 =   VRAM_LE16(&psxVuw[startxy++]);
+				s4 =   VRAM_LE16(&psxVuw[startxy++]);
+				s5 =   VRAM_LE16(&psxVuw[startxy++]);
+				s6 =   VRAM_LE16(&psxVuw[startxy++]);
+				s7 =   VRAM_LE16(&psxVuw[startxy++]);
 
 			
 				d =  (((s << 19) & 0xf80000) | ((s << 6) & 0xf800) | ((s >> 7) & 0xf8)) | 0xff000000;

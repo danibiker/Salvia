@@ -59,7 +59,7 @@ typedef struct {
 /* Callback que el state machine invoca cuando el juego envia rumble
  * values via 0x42.  port = 0/1 (puerto PSX), small = digital del DualShock
  * (0=off, !=0=on), big = analog 0..255. */
-typedef void (*ds_rumble_cb_t)(int port, uint8_t small, uint8_t big);
+typedef void (*ds_rumble_cb_t)(int port, uint8_t small_motor, uint8_t big_motor);
 
 /* Inicializa el state machine.  Pasa NULL si no quieres rumble.
  * Idempotente — safe llamar varias veces. */

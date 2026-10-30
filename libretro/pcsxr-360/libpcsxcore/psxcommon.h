@@ -106,7 +106,8 @@ extern boolean use_vm;
 #define strnicmp strncasecmp
 #endif
 
-#ifndef _XBOX
+/* [Windows, 2026-10-30] Es para GCC.  MSVC (Xbox y PC) ya tiene __inline. */
+#if !defined(_XBOX) && !defined(_MSC_VER)
 #define __inline inline
 #endif
 

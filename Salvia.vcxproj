@@ -6883,11 +6883,15 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Win32'">
+    <!-- [Windows, 2026-10-30] Enlaza el pcsxr-360 propio (pcsxr.lib de
+         libretro\pcsxr-360, plataforma Win32, solo interprete), no el
+         pcsx_rearmed.lib de antes.  /MD, igual que pcsxr.lib (este frontend
+         ignora LIBCMT.lib); sin __x86_64__ (esto es x86 de 32 bits). -->
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Full</Optimization>
-      <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;NO_SRAM;WATCH_LOAD_STUCK;EMU_LIB_NAME="$(EMU_LIB_PCSX)";$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
@@ -6896,10 +6900,14 @@
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsxr.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
@@ -6914,11 +6922,15 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_pcsxr_360|Win32'">
+    <!-- [Windows, 2026-10-30] Enlaza el pcsxr-360 propio (pcsxr.lib de
+         libretro\pcsxr-360, plataforma Win32, solo interprete), no el
+         pcsx_rearmed.lib de antes.  /MD, igual que pcsxr.lib (este frontend
+         ignora LIBCMT.lib); sin __x86_64__ (esto es x86 de 32 bits). -->
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
@@ -6929,8 +6941,8 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsxr.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>

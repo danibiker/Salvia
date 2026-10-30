@@ -24,10 +24,12 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -56,6 +58,17 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <!-- [Windows, 2026-10-30] Win32 con la plataforma en la ruta (como xbox64,
+       gambatte, FBNeo): no pisa los .lib de Xbox, que siguen en Release\ y
+       Debug\, donde los buscan pcsxr.vcxproj y Salvia.vcxproj. -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+  </PropertyGroup>
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(ProjectDir)$(Configuration)\</OutDir>
@@ -122,6 +135,62 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RegisterReservation>false</RegisterReservation>
       <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
+      <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <!-- [Windows, 2026-10-30] LAS CONFIGURACIONES Win32 SON LA BUILD DE WINDOWS
+       (antes eran restos de la plantilla, sin opciones).  Mismo patron que
+       libretro/xbox64:
+       - 360\win32 VA LA PRIMERA: sus xtl.h, ppcintrinsics.h y xboxmath.h
+         sustituyen a las del XDK sin tocar los ficheros que las incluyen.
+       - Sin _XBOX, __BIG_ENDIAN__, __BIGENDIAN__, __ppc__ ni __PPC__ (x86 es
+         little-endian).
+       - SOLO INTERPRETE: NOPSXREC deja PSXREC sin definir (r3000a.h,
+         psxmem.h) y libpcsxcore\ppc\*.c (el dynarec PowerPC) no se compila.
+       - /MD tambien en Debug: el Salvia de Windows ignora LIBCMT.lib y enlaza
+         el CRT en DLL (Release_pcsxr_360|Win32 y Debug_pcsxr_360|Win32).  Con
+         /MT faltan los datos del CRT (__pctype de ctype.h). -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>../../win32/;../bzip/src/;../../common/;../../../libpcsxcore/;../../lib/libchdr/include;../../lib/zlib-1.2.5/;../../lib/zstd/lib;../../lib/lzma-19.00/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_LIB;_7ZIP_ST;_DEBUG;WIN32;NOPSXREC;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <ForcedIncludeFiles>pcsxr_win32_pre.h</ForcedIncludeFiles>
+      <CompileAs>Default</CompileAs>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>../../win32/;../bzip/src/;../../common/;../../../libpcsxcore/;../../lib/libchdr/include;../../lib/zlib-1.2.5/;../../lib/zstd/lib;../../lib/lzma-19.00/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_LIB;_7ZIP_ST;NDEBUG;WIN32;NOPSXREC;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <ForcedIncludeFiles>pcsxr_win32_pre.h</ForcedIncludeFiles>
+      <CompileAs>Default</CompileAs>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
     </ClCompile>

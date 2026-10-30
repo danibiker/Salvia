@@ -264,8 +264,13 @@ struct gpu_unai_inner_t {
 	union {
 	  u32 bgr0888;            /* 24 8-bit light for dithered prims */
 	  struct {
-	    /* [XBOX360] PPC is BE → use the BE branch from upstream. */
+	    /* [XBOX360] PPC is BE → use the BE branch from upstream.
+	     * [Windows, 2026-10-30] En x86 la rama LE de upstream. */
+#if UNAI_HOST_BIG_ENDIAN
 	    u8 pad8, b8, g8, r8;
+#else
+	    u8 r8, g8, b8, pad8;
+#endif
 	  };
 	};
 
