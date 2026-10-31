@@ -29,6 +29,9 @@
 #include "libretro/mouse.h"
 #include "libretro/winui.h"
 #include "fmgen/fmg_wrap.h"
+#ifdef MSB_FIRST
+#include "m68000/musashi/m68k.h"
+#endif
 #include "m68000/m68000.h"
 #include "x68k/adpcm.h"
 #include "x68k/fdd.h"

@@ -2,7 +2,7 @@
 
 	m68000.c
 
-	M68000 CPU¥¤¥ó¥¿¥Õ¥§¡¼¥¹´Ø¿ô
+	M68000 CPUï¿½ï¿½ï¿½ó¥¿¥Õ¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¿ï¿½
 
 ******************************************************************************/
 
@@ -279,6 +279,7 @@ static int m68000_RuntimeStateAction(StateMem *sm, int load, int data_only)
         uint32_t c_flag = 0, v_flag = 0, not_z_flag = 0, n_flag = 0;
         uint32_t x_flag = 0, m_flag = 0, s_flag = 0, int_level = 0, stopped = 0;
         int32_t remaining_cycles = 0;
+		int i = 0;
         SFORMAT LegacyMusashiRegs[] = {
             SFVARN(tmp32[0], "M68K_REG_D0"), SFVARN(tmp32[1], "M68K_REG_D1"),
             SFVARN(tmp32[2], "M68K_REG_D2"), SFVARN(tmp32[3], "M68K_REG_D3"),
@@ -299,7 +300,7 @@ static int m68000_RuntimeStateAction(StateMem *sm, int load, int data_only)
         };
         ret = PX68KSS_StateAction(sm, 1, data_only, LegacyMusashiRegs, "MUSASHI_CPU", false);
         if (!ret) return 0;
-        for (int i = 0; i < 8; i++)
+        for (i = 0; i < 8; i++)
         {
             m68k_set_reg((m68k_register_t)(M68K_REG_D0 + i), tmp32[i]);
             m68k_set_reg((m68k_register_t)(M68K_REG_A0 + i), tmp32[8 + i]);
@@ -313,7 +314,7 @@ static int m68000_RuntimeStateAction(StateMem *sm, int load, int data_only)
         m68ki_remaining_cycles = remaining_cycles;
         if (!m68000_use_musashi)
         {
-            for (int i = 0; i < 8; i++)
+            for (i = 0; i < 8; i++)
             {
                 C68k_Set_Reg(&C68K, C68K_D0 + i, tmp32[i]);
                 C68k_Set_Reg(&C68K, C68K_A0 + i, tmp32[8 + i]);
@@ -333,9 +334,8 @@ static int m68000_RuntimeStateAction(StateMem *sm, int load, int data_only)
 int m68000_StateAction(StateMem *sm, int load, int data_only)
 {
 #ifdef HAVE_CPU_RUNTIME
-    return m68000_RuntimeStateAction(sm, load, data_only);
-#endif
-#ifdef HAVE_C68K
+	return m68000_RuntimeStateAction(sm, load, data_only);
+#elif defined (HAVE_C68K)
 	int ret = 0;
 	uint32_t pc = 0;
 	SFORMAT StateRegs[] = 
@@ -389,8 +389,7 @@ int m68000_StateAction(StateMem *sm, int load, int data_only)
 		m68000_set_reg(M68K_PC, pc);
 
 	return ret;
-#endif
-#ifdef HAVE_MUSASHI
+#elif defined (HAVE_MUSASHI)
 	int ret = 0;
 	uint32_t tmp32[20];
 
@@ -544,11 +543,11 @@ void m68k_write_memory_32(uint32_t address, uint32_t data)
 
 
 /******************************************************************************
-	M68000¥¤¥ó¥¿¥Õ¥§¡¼¥¹´Ø¿ô
+	M68000ï¿½ï¿½ï¿½ó¥¿¥Õ¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¿ï¿½
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	CPU½é´ü²½
+	CPUï¿½ï¿½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 #if !defined (HAVE_MUSASHI) || defined (HAVE_CPU_RUNTIME)
 int32_t my_irqh_callback(int32_t level);
@@ -613,7 +612,7 @@ void m68000_init(void)
 
 
 /*--------------------------------------------------------
-	CPU¥ê¥»¥Ã¥È
+	CPUï¿½ê¥»ï¿½Ã¥ï¿½
 --------------------------------------------------------*/
 
 void m68000_reset(void)
@@ -634,7 +633,7 @@ void m68000_reset(void)
 
 
 /*--------------------------------------------------------
-	CPUÄä»ß
+	CPUï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 void m68000_exit(void)
@@ -643,7 +642,7 @@ void m68000_exit(void)
 
 
 /*--------------------------------------------------------
-	CPU¼Â¹Ô
+	CPUï¿½Â¹ï¿½
 --------------------------------------------------------*/
 
 int m68000_execute(int cycles)
@@ -664,7 +663,7 @@ int m68000_execute(int cycles)
 
 
 /*--------------------------------------------------------
-	³ä¤ê¹þ¤ß½èÍý
+	ï¿½ï¿½ï¿½ï¿½ï¿½ß½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 void m68000_set_irq_line(int irqline, int state)
@@ -677,14 +676,14 @@ void m68000_set_irq_line(int irqline, int state)
 #elif defined (HAVE_CYCLONE)
 	m68k.irq = irqline;
 #elif defined (HAVE_C68K)
-	C68k_Set_IRQ(&C68K, irqline);
+	C68k_Set_IRQ(&C68K, irqline, state);
 #elif defined (HAVE_MUSASHI)
 	m68k_set_irq(irqline);
 #endif /* HAVE_C68K */ /* HAVE_MUSASHI */
 }
 
 /*--------------------------------------------------------
-	¥ì¥¸¥¹¥¿¼èÆÀ
+	ï¿½ì¥¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 uint32_t m68000_get_reg(int regnum)
@@ -785,7 +784,7 @@ uint32_t m68000_get_reg(int regnum)
 
 
 /*--------------------------------------------------------
-	¥ì¥¸¥¹¥¿ÀßÄê
+	ï¿½ì¥¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 void m68000_set_reg(int regnum, uint32_t val)
@@ -890,7 +889,7 @@ void m68000_set_reg(int regnum, uint32_t val)
 
 
 /*------------------------------------------------------
-	¥»¡¼¥Ö/¥í¡¼¥É ¥¹¥Æ¡¼¥È
+	ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Æ¡ï¿½ï¿½ï¿½
 ------------------------------------------------------*/
 
 #ifdef SAVE_STATE

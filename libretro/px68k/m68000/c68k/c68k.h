@@ -92,6 +92,42 @@ extern "C" {
 
 #define C68K_INT_ACK_AUTOVECTOR         -1
 
+/* IRQ line states (same names used by the newer C68K core and by irqh.c). */
+#ifndef IRQ_LINE_STATE
+#define IRQ_LINE_STATE
+#define CLEAR_LINE      0       /* clear (a fired, held or pulsed) line */
+#define ASSERT_LINE     1       /* assert an interrupt immediately */
+#define HOLD_LINE       2       /* hold interrupt line until acknowledged */
+#define PULSE_LINE      3       /* pulse interrupt line for one instruction */
+#define IRQ_LINE_NMI    127     /* IRQ line for NMIs */
+#endif
+
+/* Register numbers for C68k_Get_Reg/C68k_Set_Reg, kept identical to the
+ * newer C68K core so the shared m68000.c code compiles with either one. */
+enum
+{
+    C68K_PC = 1,
+    C68K_USP,
+    C68K_MSP,
+    C68K_SR,
+    C68K_D0,
+    C68K_D1,
+    C68K_D2,
+    C68K_D3,
+    C68K_D4,
+    C68K_D5,
+    C68K_D6,
+    C68K_D7,
+    C68K_A0,
+    C68K_A1,
+    C68K_A2,
+    C68K_A3,
+    C68K_A4,
+    C68K_A5,
+    C68K_A6,
+    C68K_A7
+};
+
 #define C68K_RUNNING    0x01
 #define C68K_HALTED     0x02
 #define C68K_WAITING    0x04
@@ -123,7 +159,15 @@ typedef struct {
     uintptr_t BasePC;
     uint32_t Status;
     int32_t IRQLine;
-    
+
+    /* Compatibility state for the newer C68K API used by m68000.c.  This core
+     * tracks the halted flag in Status and acknowledges IRQ lines immediately,
+     * but the shared save-state code needs these as explicit storage. */
+    uint32_t HaltState;
+    int32_t IRQState;
+    int32_t ICount;
+    int32_t ICountBk;
+
     int32_t CycleToDo;  /* 16 bytes aligned */
     int32_t CycleIO;
     int32_t CycleSup;
@@ -157,7 +201,7 @@ int32_t FASTCALL C68k_Reset(c68k_struc *cpu);
  * if >= 0 --> number of extras cycles done */
 int32_t FASTCALL C68k_Exec(c68k_struc *cpu, int32_t cycle);
 
-void FASTCALL C68k_Set_IRQ(c68k_struc *cpu, int32_t level);
+void FASTCALL C68k_Set_IRQ(c68k_struc *cpu, int32_t level, int32_t state);
 
 void    C68k_Set_Fetch(c68k_struc *cpu, uint32_t low_adr, uint32_t high_adr, uintptr_t fetch_adr);
 
@@ -179,6 +223,10 @@ void    C68k_Set_PC(c68k_struc *cpu, uint32_t val);
 void    C68k_Set_SR(c68k_struc *cpu, uint32_t val);
 void    C68k_Set_USP(c68k_struc *cpu, uint32_t val);
 void    C68k_Set_MSP(c68k_struc *cpu, uint32_t val);
+
+/* Unified register access (newer C68K API). */
+uint32_t C68k_Get_Reg(c68k_struc *cpu, int32_t regnum);
+void     C68k_Set_Reg(c68k_struc *cpu, int32_t regnum, uint32_t val);
 
 #ifdef __cplusplus
 }

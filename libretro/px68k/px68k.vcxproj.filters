@@ -34,6 +34,12 @@
     <Filter Include="Source Files\musashi">
       <UniqueIdentifier>{8baa37f1-4c83-46a7-9f80-506e0b5762c6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\midi">
+      <UniqueIdentifier>{712569c2-888c-4931-b299-ede86e65a1f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\m68000\c68k">
+      <UniqueIdentifier>{db4c2da2-85e0-445c-81a2-4346a251f826}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="libretro.c">
@@ -41,12 +47,6 @@
     </ClCompile>
     <ClCompile Include="m68000\m68000.c">
       <Filter>Source Files\m68000</Filter>
-    </ClCompile>
-    <ClCompile Include="m68000\c68k\c68k.c">
-      <Filter>Source Files\c68k</Filter>
-    </ClCompile>
-    <ClCompile Include="m68000\c68k\c68kexec.c">
-      <Filter>Source Files\c68k</Filter>
     </ClCompile>
     <ClCompile Include="x68k\adpcm.c">
       <Filter>Source Files\x68k</Filter>
@@ -227,6 +227,33 @@
     </ClCompile>
     <ClCompile Include="m68000\musashi\softfloat\softfloat.c">
       <Filter>Source Files\musashi</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\zipdisk.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="sc55.c">
+      <Filter>Source Files\midi</Filter>
+    </ClCompile>
+    <ClCompile Include="sc55_libretro.c">
+      <Filter>Source Files\midi</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\c68k\c68k.c">
+      <Filter>Source Files\c68k</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\c68k\c68kexec.c">
+      <Filter>Source Files\c68k</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\formats\zip\rzip_archive.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\encodings\encoding_crc32.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\encodings\encoding_deflate.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\features\features_cpu.c">
+      <Filter>Source Files\libretro</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

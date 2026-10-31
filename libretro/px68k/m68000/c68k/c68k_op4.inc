@@ -6071,6 +6071,7 @@ case 0x4E72:
 		CPU->USP = res;
 	}
 	CPU->Status |= C68K_HALTED;
+	CPU->HaltState = 1;
 	CCnt = 0;
 }
 CCnt -= 4;

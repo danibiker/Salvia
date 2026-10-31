@@ -697,6 +697,10 @@ struct retro_core_option_v2_category option_cats_es[] = {
       "Soportes",
       NULL,
    },
+   { "menu",      
+      "Menú",     
+      "NULL"                           
+   },
    {
       "advanced",
       "Avanzado",
@@ -707,19 +711,19 @@ struct retro_core_option_v2_category option_cats_es[] = {
 };
 
 struct retro_core_option_v2_definition option_defs_es[] = {
-   {
-      "px68k_menufontsize",
-      "Tamaño de fuente del menú",
+    {
+      "px68k_cpu_emulation",
+      "CPU Emulation",
       NULL,
-      NULL,
+      "Selecione el emulador de CPU 68000. Renicie el núcleo después de cambiar esta opción.",
       NULL,
       "system",
       {
-         { "normal", "Normal" },
-         { "large",  "Grande" },
-         { NULL,     NULL },
+         { "C68K (Fast)", "C68K (Rápido)" },
+         { "Musashi (Slower)", "Musashi (Lento)" },
+         { NULL, NULL },
       },
-      "normal"
+      "C68K (Fast)"
    },
    {
       "px68k_cpuspeed",
@@ -832,6 +836,73 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       "Default"
    },
    {
+      "px68k_sc55_emulation",
+      "Roland SC-55 Emulación",
+      NULL,
+      "Uso del sintetizador Roland SC-55 interno en lugar de la salida MIDI de RetroArch. Requiere archivos ROM compatibles con SC-55 en el directorio del sistema o subcarpetas compatibles con PrBoom.",
+      NULL,
+      "audio",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL,       NULL },
+      },
+      "disabled"
+   },
+   {
+      "px68k_sc55_volume",
+      "SC-55 Volumen de emulación",
+      NULL,
+      "Ajusta el volumen del sintetizador Roland SC-55 interno en relación con el audio del PX68K. El 100% es el nivel predeterminado.",
+      NULL,
+      "audio",
+      {
+         { "0", "0%" },
+         { "5", "5%" },
+         { "10", "10%" },
+         { "15", "15%" },
+         { "20", "20%" },
+         { "25", "25%" },
+         { "30", "30%" },
+         { "35", "35%" },
+         { "40", "40%" },
+         { "45", "45%" },
+         { "50", "50%" },
+         { "55", "55%" },
+         { "60", "60%" },
+         { "65", "65%" },
+         { "70", "70%" },
+         { "75", "75%" },
+         { "80", "80%" },
+         { "85", "85%" },
+         { "90", "90%" },
+         { "95", "95%" },
+         { "100", "100%" },
+         { "105", "105%" },
+         { "110", "110%" },
+         { "115", "115%" },
+         { "120", "120%" },
+         { "125", "125%" },
+         { "130", "130%" },
+         { "135", "135%" },
+         { "140", "140%" },
+         { "145", "145%" },
+         { "150", "150%" },
+         { "155", "155%" },
+         { "160", "160%" },
+         { "165", "165%" },
+         { "170", "170%" },
+         { "175", "175%" },
+         { "180", "180%" },
+         { "185", "185%" },
+         { "190", "190%" },
+         { "195", "195%" },
+         { "200", "200%" },
+         { NULL, NULL },
+      },
+      "100"
+   },
+   {
       "px68k_midi_output",
       "Salida MIDI (reinicio)",
       NULL,
@@ -860,6 +931,20 @@ struct retro_core_option_v2_definition option_defs_es[] = {
          { NULL,       NULL },
       },
       "GM"
+   },
+   {
+      "px68k_adpcm_lpf",
+      "Filtro paso-bajo ADPCM",
+      NULL,
+      "Habilita el filtro paso-bajo original de ADPCM.",
+      NULL,
+      "audio",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
    },
    {
       "px68k_adpcm_vol",
@@ -947,6 +1032,37 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       "13"
    },
 #endif
+  {
+      "px68k_mame_names",
+      "Nombres de la lista de software MAME",
+      NULL,
+      "Muestra descripciones en inglés o etiquetas alt_title en japonés del archivo MAME x68k_flop.xml para nombres de archivo ZIP que coincidan en el explorador interno. Requiere MAME/hash/x68k_flop.xml en el directorio del sistema.",
+      NULL,
+      "menu",
+      {
+         { "disabled", NULL },
+         { "english", "Inglés" },
+         { "japanese", "Japonés" },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "px68k_archive_floppies",
+      "Inserción automática de disquetes desde archivo",
+      NULL,
+      "Controla si se inserta automáticamente otro disquete de un archivo ZIP al arrancar o durante los cambios de disco.",
+      NULL,
+      "media",
+      {
+         { "Off",             "Apagado" },
+         { "Always",          "Siempre" },
+         { "Boot Only",       "Solo al arrancar" },
+         { "At Disk Change",  "Al cambiar de disco" },
+         { NULL,               NULL },
+      },
+      "Off"
+   },
    {
       "px68k_disk_drive",
       "Cambio de disco en la unidad",
@@ -1066,19 +1182,34 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       },
       "TRIG1 TRIG2"
    },
-   {
-      "px68k_no_wait_mode",
-      "Modo sin espera",
+  {
+      "px68k_menufontsize",
+      "Tamaño de fuente del menú",
       NULL,
-      "Cuando está [activado], el core se ejecuta lo más rápido posible. Puede provocar desincronización de audio pero permite el avance rápido. Se recomienda dejarlo en [desactivado].",
+      "Establece el tamaño de fuente del menú integrado",
       NULL,
-      "advanced",
+      "menu",
       {
-         { "disabled", NULL },
-         { "enabled",  NULL },
-         { NULL,       NULL },
+         { "normal", NULL },
+         { "large",  NULL },
+         { NULL,     NULL },
       },
-      "disabled"
+      "normal"
+   },
+   {
+      "px68k_menu_lines_jump",
+      "Salto de líneas (con izquierda-derecha)",
+      NULL,
+     "Número de entradas para saltar al presionar Izquierda o Derecha en el menú integrado.",
+      NULL,
+      "menu",
+      {
+         { "5", NULL }, { "10", NULL }, { "15", NULL },
+         { "20", NULL }, { "25", NULL }, { "30", NULL },
+         { "35", NULL }, { "40", NULL }, { "45", NULL },
+         { "50", NULL }, { NULL, NULL },
+      },
+      "10"
    },
    {
       "px68k_frameskip",
@@ -1102,20 +1233,6 @@ struct retro_core_option_v2_definition option_defs_es[] = {
          { NULL,              NULL },
       },
       "Full Frame"
-   },
-   {
-      "px68k_push_video_before_audio",
-      "Priorizar vídeo sobre audio",
-      NULL,
-      "Prioriza reducir la latencia de vídeo frente a la de audio.",
-      NULL,
-      "advanced",
-      {
-         { "disabled", NULL },
-         { "enabled",  NULL },
-         { NULL,       NULL },
-      },
-      "disabled"
    },
    {
       "px68k_adjust_frame_rates",

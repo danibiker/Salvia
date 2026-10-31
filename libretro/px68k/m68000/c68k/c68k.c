@@ -105,15 +105,17 @@ int32_t FASTCALL C68k_Reset(c68k_struc *cpu)
     return cpu->Status;
 }
 
-void FASTCALL C68k_Set_IRQ(c68k_struc *cpu, int32_t level)
+void FASTCALL C68k_Set_IRQ(c68k_struc *cpu, int32_t level, int32_t state)
 {
     cpu->IRQLine = level;
+    cpu->IRQState = state;
     if (cpu->Status & C68K_RUNNING)
     {
         cpu->CycleSup = cpu->CycleIO;
         cpu->CycleIO  = 0;
     }
     cpu->Status &= ~(C68K_HALTED | C68K_WAITING);
+    cpu->HaltState = 0;
 }
 
 /* setting core functions */
@@ -227,4 +229,38 @@ void C68k_Set_MSP(c68k_struc *cpu, uint32_t val)
 {
     if (cpu->flag_S) cpu->A[7] = val;
     else cpu->USP = val;
+}
+
+uint32_t C68k_Get_Reg(c68k_struc *cpu, int32_t regnum)
+{
+    switch (regnum)
+    {
+    case C68K_PC:  return C68k_Get_PC(cpu);
+    case C68K_USP: return C68k_Get_USP(cpu);
+    case C68K_MSP: return C68k_Get_MSP(cpu);
+    case C68K_SR:  return C68k_Get_SR(cpu);
+    default:
+        if (regnum >= C68K_D0 && regnum <= C68K_D7)
+            return C68k_Get_DReg(cpu, (uint32_t)(regnum - C68K_D0));
+        if (regnum >= C68K_A0 && regnum <= C68K_A7)
+            return C68k_Get_AReg(cpu, (uint32_t)(regnum - C68K_A0));
+        return 0;
+    }
+}
+
+void C68k_Set_Reg(c68k_struc *cpu, int32_t regnum, uint32_t val)
+{
+    switch (regnum)
+    {
+    case C68K_PC:  C68k_Set_PC(cpu, val);  break;
+    case C68K_USP: C68k_Set_USP(cpu, val); break;
+    case C68K_MSP: C68k_Set_MSP(cpu, val); break;
+    case C68K_SR:  C68k_Set_SR(cpu, val);  break;
+    default:
+        if (regnum >= C68K_D0 && regnum <= C68K_D7)
+            C68k_Set_DReg(cpu, (uint32_t)(regnum - C68K_D0), val);
+        else if (regnum >= C68K_A0 && regnum <= C68K_A7)
+            C68k_Set_AReg(cpu, (uint32_t)(regnum - C68K_A0), val);
+        break;
+    }
 }

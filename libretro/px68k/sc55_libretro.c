@@ -7,6 +7,8 @@
 #include "sc55.h"
 #include "sc55_libretro.h"
 
+#include <compat/msvc.h>
+
 #ifndef PATH_MAX
 #define PATH_MAX 1024
 #endif

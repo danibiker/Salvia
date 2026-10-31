@@ -12,6 +12,18 @@
 #include <stdint.h>
 #include "common.h"
 
+/* IRQ line states used by the MAME-derived interrupt handling code.  These are
+ * part of the m68000 wrapper API, so define them here for every CPU backend
+ * instead of relying on a particular core's header. */
+#ifndef IRQ_LINE_STATE
+#define IRQ_LINE_STATE
+#define CLEAR_LINE      0       /* clear (a fired, held or pulsed) line */
+#define ASSERT_LINE     1       /* assert an interrupt immediately */
+#define HOLD_LINE       2       /* hold interrupt line until acknowledged */
+#define PULSE_LINE      3       /* pulse interrupt line for one instruction */
+#define IRQ_LINE_NMI    127     /* IRQ line for NMIs */
+#endif
+
 #if defined (HAVE_CYCLONE)
 #include "cyclone.h"
 #endif
