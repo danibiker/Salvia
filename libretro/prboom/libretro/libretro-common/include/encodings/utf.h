@@ -323,8 +323,6 @@ static INLINE int win32_needs_local_encoding(void)
 #endif
 #endif
 
-bool local_to_utf8_string(const char *in, char *s, size_t len);
-
 RETRO_END_DECLS
 
 #endif

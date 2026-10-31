@@ -519,6 +519,21 @@
     <ClCompile Include="..\src\p_ffloor.c">
       <Filter>Source Files\core</Filter>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\retro_dirent.c">
+      <Filter>Header Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\sc55.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\sc55player.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\sc88.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\string\rstrtod.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
   </ItemGroup>
   <!-- ============================================================ -->
   <!-- Header File Filters                                          -->
@@ -830,5 +845,8 @@
     <ClInclude Include="..\libretro\libretro-common\include\compat\fopen_utf8.h">
       <Filter>Header Files\compat</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\libretro\libretro.def" />
   </ItemGroup>
 </Project>

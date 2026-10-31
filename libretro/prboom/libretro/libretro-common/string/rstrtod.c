@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <math.h>
 
 #include <retro_endianness.h>
 #include <string/rstrtod.h>
@@ -1139,7 +1138,7 @@ double rstrtod_len(const char *str, size_t len, size_t *end)
       return 0.0;
 
    if (p.special == 1)
-      return p.negative ? -HUGE_VAL : HUGE_VAL;
+      return rstrtod_bits_to_double(RSTRTOD_U64(0x7FF0000000000000), p.negative);
    if (p.special == 2)
    {
       uint64_t nan_bits = RSTRTOD_U64(0x7FF8000000000000);
@@ -1184,7 +1183,7 @@ float rstrtof_len(const char *str, size_t len, size_t *end)
       return 0.0f;
 
    if (p.special == 1)
-      return p.negative ? -(float)HUGE_VAL : (float)HUGE_VAL;
+      return rstrtod_bits_to_float(0x7F800000u, p.negative);
    if (p.special == 2)
       return rstrtod_bits_to_float(0x7FC00000u, p.negative);
 

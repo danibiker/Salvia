@@ -2570,6 +2570,8 @@ static int retro_vfs_stat_full(const char *path, int64_t *size, int64_t *mtime)
          ret  |= RETRO_VFS_STAT_IS_DIRECTORY;
       if (!(stat_buf.st_mode & S_IWUSR))
          ret  |= RETRO_VFS_STAT_IS_READONLY;
+#elif defined(_XBOX)
+      /* Xbox 360.
        *
        * El CRT del XDK no resuelve _stat64 sobre las rutas del sistema
        * (game:, usb0:, hdd:...), asi que la rama de Windows de abajo devolvia

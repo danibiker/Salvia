@@ -199,6 +199,7 @@
     <!-- LibRetro Interface -->
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_crc32.c" />
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_deflate.c" />
+    <ClCompile Include="..\libretro\libretro-common\file\retro_dirent.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\audio_transfer.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\data_transfer.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\image_transfer.c" />
@@ -216,6 +217,7 @@
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_deflate.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_pipe.c" />
+    <ClCompile Include="..\libretro\libretro-common\string\rstrtod.c" />
     <ClCompile Include="..\libretro\libretro.c" />
     <ClCompile Include="..\libretro\libretro_sound.c" />
     <!-- LibRetro Common -->
@@ -332,6 +334,9 @@
     <ClCompile Include="..\src\r_sky.c" />
     <ClCompile Include="..\src\r_things.c" />
     <ClCompile Include="..\src\r_voxel.c" />
+    <ClCompile Include="..\src\sc55.c" />
+    <ClCompile Include="..\src\sc55player.c" />
+    <ClCompile Include="..\src\sc88.c" />
     <ClCompile Include="..\src\scanner.c" />
     <ClCompile Include="..\src\s_sound.c" />
     <ClCompile Include="..\src\sounds.c" />
