@@ -229,9 +229,15 @@ void psxMemWrite8_2(u32 mem, u8 value) {
 	} else {
 		p = (char *)(psxMemWLUT[t]);
 		if (p != NULL) {
-			*(u8 *)(p + (mem & 0xffff)) = value;
 #ifdef PSXREC
-			psxCpu->Clear((mem & (~3)), 1);
+			/* [2026-10-31] Solo invalidar el codigo recompilado si el byte
+			 * CAMBIA: reescribir lo mismo no cambia ninguna instruccion. */
+			const u8 old = *(u8 *)(p + (mem & 0xffff));
+			*(u8 *)(p + (mem & 0xffff)) = value;
+			if (old != value)
+				psxCpu->Clear((mem & (~3)), 1);
+#else
+			*(u8 *)(p + (mem & 0xffff)) = value;
 #endif
 		} else {
 #ifdef PSXMEM_LOG
@@ -256,9 +262,13 @@ void psxMemWrite16_2(u32 mem, u16 value) {
 	} else {
 		p = (char *)(psxMemWLUT[t]);
 		if (p != NULL) {
-			*(u16 *)(p + (mem & 0xffff)) = SWAPu16(value);
 #ifdef PSXREC
-			psxCpu->Clear((mem & (~3)), 1);
+			const u16 old = *(u16 *)(p + (mem & 0xffff));
+			*(u16 *)(p + (mem & 0xffff)) = SWAPu16(value);
+			if (old != (u16)SWAPu16(value))   /* ver psxMemWrite8_2 */
+				psxCpu->Clear((mem & (~3)), 1);
+#else
+			*(u16 *)(p + (mem & 0xffff)) = SWAPu16(value);
 #endif
 		} else {
 #ifdef PSXMEM_LOG
@@ -284,10 +294,13 @@ void psxMemWrite32_2(u32 mem, u32 value) {
 	} else {
 		p = (char *)(psxMemWLUT[t]);
 		if (p != NULL) {
-			*(u32 *)(p + (mem & 0xffff)) = SWAPu32(value);
 #ifdef PSXREC
-			//printf("Clear32 %08x\n", mem);
-			psxCpu->Clear(mem, 1);
+			const u32 old = *(u32 *)(p + (mem & 0xffff));
+			*(u32 *)(p + (mem & 0xffff)) = SWAPu32(value);
+			if (old != (u32)SWAPu32(value))   /* ver psxMemWrite8_2 */
+				psxCpu->Clear(mem, 1);
+#else
+			*(u32 *)(p + (mem & 0xffff)) = SWAPu32(value);
 #endif
 		} else {
 			if (mem != 0xfffe0130) {

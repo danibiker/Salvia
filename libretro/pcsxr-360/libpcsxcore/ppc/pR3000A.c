@@ -79,7 +79,16 @@ extern u32 gpuReadStatus(void);
 
 #define OFFSET(X,Y) ((u32)(Y)-(u32)(X))
 
-#define RECMEM_SIZE		(12*1024*1024)
+/* [2026-10-31] Cache de codigo: 12 MB, o 24 MB con PGXP completo (los
+ * ganchos en linea de cada LW/LH/SW/SH casi doblan el codigo emitido).  Cuando
+ * se llena, recRecompile lo tira TODO (recReset) y hay que recompilar cada
+ * bloque otra vez: un tiron.  Medido en Colin McRae con PGXP completo: se
+ * llenaba en carrera.  Sale del pool de bram.cpp (32 MB estaticos; con 24 MB
+ * el dynarec usa ~29,3 MB).  Lo fija allocMem (PGXP ya esta decidido). */
+#define RECMEM_SIZE_BASE	(12*1024*1024)
+#define RECMEM_SIZE_PGXP	(24*1024*1024)
+static u32 s_recmem_size = RECMEM_SIZE_BASE;
+#define RECMEM_SIZE		(s_recmem_size)
 
 /* ===========================================================================
  * [FIX SMC] Invalidacion consciente del bloque CONTENEDOR.
@@ -460,15 +469,50 @@ static void ReleaseArgs()
 	}
 }
 
+/* [FIX 2026-10-31] "double mapped psx register" (Colin McRae, ya visto en
+ * agosto, anterior a PGXP y al renderizador HW).  Llegar aqui con
+ * iRegs[reg].reg != -1 quiere decir que el registro PSX dejo de figurar como
+ * mapeado (MapConst: state = ST_CONST tras un DisposeHWReg que no lo solto)
+ * pero un registro fisico SIGUE apuntandolo (flush = FlushPsxReg32,
+ * private = reg).  Antes se mapeaba otro fisico encima y el viejo quedaba
+ * huerfano: al volcarse mas tarde escribia un valor viejo en psxRegs y ademas
+ * borraba el mapeo NUEVO (FlushPsxReg32 pone reg = -1 y state = ST_UNK), y si
+ * GetFreeHWReg elegia justo el huerfano, el volcado se comia el ST_CONST y el
+ * registro se cargaba de memoria en vez de con su constante.
+ *
+ * Ahora, ANTES de buscar un fisico libre, se suelta el huerfano a mano: si
+ * esta sucio y el registro no es constante se vuelca (su valor es el bueno);
+ * si es constante, la constante manda (el fisico se descarta).  No se llama a
+ * FlushPsxReg32 para no tocar el estado (ST_CONST) del registro PSX.  El aviso
+ * sale las primeras veces con el detalle, para encontrar la causa de fondo. */
 static void MapPsxReg32(int reg)
 {
-	int hwreg = GetFreeHWReg();
-	HWRegisters[hwreg].flush = FlushPsxReg32;
-	HWRegisters[hwreg].private = reg;
+	int hwreg;
 
 	if (iRegs[reg].reg != -1) {
-		SysPrintf("error: double mapped psx register");
+		static int s_double_logs = 0;
+		const int old = iRegs[reg].reg;
+		const int owned = (HWRegisters[old].flush == FlushPsxReg32 && HWRegisters[old].private == reg);
+		if (s_double_logs < 8) {
+			s_double_logs++;
+			SysPrintf("[DYNAREC] double mapped psx reg %d: fisico r%d usage=%03X propio=%d const=%d pc=%08X\n",
+				reg, HWRegisters[old].code, HWRegisters[old].usage, owned, IsConst(reg) ? 1 : 0, pc);
+		}
+		if (owned) {
+			if ((HWRegisters[old].usage & HWUSAGE_WRITE) && !IsConst(reg))
+				STW(HWRegisters[old].code, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]), GetHWRegSpecial(PSXREGS));
+			HWRegisters[old].flush = NULL;
+			if (HWRegisters[old].usage & HWUSAGE_HARDWIRED)
+				HWRegisters[old].usage &= ~(HWUSAGE_READ | HWUSAGE_WRITE);
+			else
+				HWRegisters[old].usage = HWUSAGE_NONE;
+		}
+		iRegs[reg].reg = -1;
 	}
+
+	hwreg = GetFreeHWReg();
+	HWRegisters[hwreg].flush = FlushPsxReg32;
+	HWRegisters[hwreg].private = reg;
 
 	iRegs[reg].reg = hwreg;
 	iRegs[reg].state |= ST_MAPPED;
@@ -1215,7 +1259,12 @@ static int allocMem() {
 	if (psxRecLUT==NULL)
 		psxRecLUT = (u32*) malloc(0x010000 * 4);
 
+	s_recmem_size = g_pgxp_memory ? RECMEM_SIZE_PGXP : RECMEM_SIZE_BASE;
 	recMem = (char*) malloc(RECMEM_SIZE);
+	if (recMem == NULL && s_recmem_size != RECMEM_SIZE_BASE) {
+		s_recmem_size = RECMEM_SIZE_BASE;   /* sin sitio: el tamano de siempre */
+		recMem = (char*) malloc(RECMEM_SIZE);
+	}
 	recRAM = (char*) malloc(0x200000);
 	recROM = (char*) malloc(0x080000);
 	if (recRAM == NULL || recROM == NULL || recMem == NULL || psxRecLUT == NULL) {
@@ -1262,6 +1311,17 @@ static void recReset() {
 
 	branch = 0;
 	memset(iRegs, 0, sizeof(iRegs));
+	/* [FIX 2026-10-31] reg = -1 = "sin registro fisico".  El memset lo dejaba
+	 * a 0 (= HWRegisters[0], el fisico de psxRegs), y recRecompile llama aqui
+	 * DESPUES de inicializar iRegs cuando la cache de codigo se llena: el
+	 * bloque que se compilaba justo entonces avisaba "double mapped psx
+	 * register" en cada registro que tocaba (Colin McRae).  Era inocuo
+	 * (MapPsxReg32 lo pisaba), pero es lo que se veia en cada tiron. */
+	{
+		int i;
+		for (i = 0; i < NUM_REGISTERS; i++)
+			iRegs[i].reg = -1;
+	}
 	iRegs[0].state = ST_CONST;
 	iRegs[0].k     = 0;
 }
@@ -1356,10 +1416,92 @@ void recExecuteBlock() {
     execute();
 }
 
+/* ===========================================================================
+ * [traza 2026-10-31] Por que se llena la cache de codigo (Colin McRae la llena
+ * cada minuto, con y sin PGXP).  Cuenta bloques compilados y bytes emitidos, y
+ * las invalidaciones que matan un bloque de verdad (escrituras de la CPU o DMA
+ * sobre codigo ya compilado), con los PC mas recompilados y las direcciones
+ * escritas mas frecuentes.  Sale cada 4 MB emitidos y al llenarse la cache.
+ * RESUELTO: el juego reescribia valores IGUALES sobre su codigo y cada
+ * escritura tiraba el bloque (ahora psxMemWrite*_2 solo invalida si el valor
+ * cambia).  Apagado por defecto; poner a 1 para volver a medir.
+ * =========================================================================== */
+#ifndef PCSXR_DYNAREC_STATS
+#define PCSXR_DYNAREC_STATS 0
+#endif
+
+#if PCSXR_DYNAREC_STATS
+#define DRS_N 64
+static u32 s_drs_bpc[DRS_N], s_drs_bcnt[DRS_N];               /* bloques compilados por PC */
+static u32 s_drs_waddr[DRS_N], s_drs_wcnt[DRS_N], s_drs_wpc[DRS_N]; /* escrituras que matan */
+static u32 s_drs_blocks = 0, s_drs_bytes = 0, s_drs_kills_cpu = 0, s_drs_kills_dma = 0;
+
+static void drs_add(u32 *keys, u32 *cnts, u32 *extra, u32 key, u32 ex)
+{
+	u32 h = ((key >> 2) * 2654435761u) >> 26;     /* 0..63 */
+	u32 i, best = h, bestc = 0xFFFFFFFFu;
+	for (i = 0; i < 8; i++) {
+		u32 j = (h + i) & (DRS_N - 1);
+		if (cnts[j] != 0 && keys[j] == key) { cnts[j]++; if (extra) extra[j] = ex; return; }
+		if (cnts[j] == 0) { keys[j] = key; cnts[j] = 1; if (extra) extra[j] = ex; return; }
+		if (cnts[j] < bestc) { bestc = cnts[j]; best = j; }
+	}
+	keys[best] = key; cnts[best] = 1; if (extra) extra[best] = ex;
+}
+
+static void drs_top(const char *what, const u32 *keys, const u32 *cnts, const u32 *extra)
+{
+	char line[200];
+	int n = 0, k;
+	u32 used[DRS_N];
+	memset(used, 0, sizeof(used));
+	n = sprintf(line, "[DYNAREC]   %s:", what);
+	for (k = 0; k < 6; k++) {
+		u32 i, bi = 0, bc = 0;
+		for (i = 0; i < DRS_N; i++)
+			if (!used[i] && cnts[i] > bc) { bc = cnts[i]; bi = i; }
+		if (bc == 0) break;
+		used[bi] = 1;
+		if (extra)
+			n += sprintf(line + n, " %08X(x%u pc %08X)", keys[bi], bc, extra[bi]);
+		else
+			n += sprintf(line + n, " %08X(x%u)", keys[bi], bc);
+	}
+	pcsxr_log(2, "%s\n", line);
+}
+
+static void drs_dump(const char *why)
+{
+	pcsxr_log(2, "[DYNAREC] %s: bloques=%u emitidos=%u KB invalidaciones cpu=%u dma=%u\n", why,
+		s_drs_blocks, s_drs_bytes >> 10, s_drs_kills_cpu, s_drs_kills_dma);
+	drs_top("PC mas compilados", s_drs_bpc, s_drs_bcnt, NULL);
+	drs_top("escrituras sobre codigo", s_drs_waddr, s_drs_wcnt, s_drs_wpc);
+	memset(s_drs_bcnt, 0, sizeof(s_drs_bcnt));
+	memset(s_drs_wcnt, 0, sizeof(s_drs_wcnt));
+	s_drs_blocks = s_drs_bytes = s_drs_kills_cpu = s_drs_kills_dma = 0;
+}
+#endif
+
 void recClear(u32 mem, u32 size) {
 	u32 ptr = psxRecLUT[mem >> 16];
 
 	if (ptr != NULL) {
+#if PCSXR_DYNAREC_STATS
+		{
+			const u32 *ent = (const u32 *)(ptr + (mem & 0xFFFF));
+			u32 i, killed = 0;
+			for (i = 0; i < size && i < 4096u; i++)
+				if (ent[i]) killed++;
+			if (killed) {
+				if (size <= 4) {
+					s_drs_kills_cpu += killed;
+					drs_add(s_drs_waddr, s_drs_wcnt, s_drs_wpc, mem & ~3u, psxRegs.pc);
+				} else {
+					s_drs_kills_dma += killed;
+				}
+			}
+		}
+#endif
 		/* Invalida los bloques cuya ENTRADA cae en el rango escrito. */
 		memset((void*) (ptr + (mem & 0xFFFF)), 0, size * 4);
 	}
@@ -1381,6 +1523,16 @@ void recClear(u32 mem, u32 size) {
 			for (w = lo; w < off; w += 4) {
 				u32 blen = *(u32 *)(smcLen + w);
 				if (blen && (w + (blen << 2)) > off) {   /* el bloque en w cubre off */
+#if PCSXR_DYNAREC_STATS
+					if (*(u32 *)(recRAM + w)) {
+						if (size <= 4) {
+							s_drs_kills_cpu++;
+							drs_add(s_drs_waddr, s_drs_wcnt, s_drs_wpc, mem & ~3u, psxRegs.pc);
+						} else {
+							s_drs_kills_dma++;
+						}
+					}
+#endif
 					*(u32 *)(recRAM + w) = 0;            /* invalida su puntero de bloque */
 					*(u32 *)(smcLen + w) = 0;            /* y su marcador de longitud */
 				}
@@ -2711,8 +2863,17 @@ static void recRecompile() {
 	iRegs[0].state = ST_CONST;
 	
 	/* if ppcPtr reached the mem limit reset whole mem */
-	if (((u32)ppcPtr - (u32)recMem) >= (RECMEM_SIZE - 0x10000))
+	if (((u32)ppcPtr - (u32)recMem) >= (RECMEM_SIZE - 0x10000)) {
+		/* [traza] Cada vaciado = recompilar todo = tiron: que se vea. */
+		static u32 s_recmem_resets = 0;
+		s_recmem_resets++;
+		pcsxr_log(2, "[DYNAREC] cache de codigo llena (%u MB): se vacia y se recompila (vez %u)\n",
+			(unsigned)(RECMEM_SIZE >> 20), (unsigned)s_recmem_resets);
+#if PCSXR_DYNAREC_STATS
+		drs_dump("al llenarse");
+#endif
 		recReset();
+	}
 
 	ppcAlign(/*32*/4);
 	ptr = ppcPtr;
@@ -2775,6 +2936,14 @@ done:;
 			for (; _wi < _we; _wi++) smcCov[_wi] = 1;
 		}
 	}
+#endif
+
+#if PCSXR_DYNAREC_STATS
+	s_drs_blocks++;
+	s_drs_bytes += (u32)((u8 *)ppcPtr - (u8 *)ptr);
+	drs_add(s_drs_bpc, s_drs_bcnt, NULL, pcold, 0);
+	if (s_drs_bytes >= (4u << 20))
+		drs_dump("4 MB emitidos");
 #endif
 
 	a = (u32)(u8*)ptr;
