@@ -38,10 +38,18 @@ int GVRAM_StateAction(StateMem *sm, int load, int data_only)
 	return ret;
 }
 
+/* Read a 16-bit GVRAM word.  GVRAM is always stored byte-swapped (the ^1
+ * little-endian convention is unconditional in GVRAM_Read/GVRAM_Write, unlike
+ * MEM), so a native *(uint16_t*) load returns the correct value only on
+ * little-endian.  On big-endian we must assemble low|high<<8 explicitly,
+ * otherwise every graphics pixel is read byte-swapped -> the palette-index
+ * nibble comes from the wrong (usually zero) byte -> index 0 -> transparent
+ * -> the whole graphics layer goes invisible (R-Type ground, player-select
+ * menu, etc.).  The two branches were swapped upstream. */
 #ifdef MSB_FIRST
-#define GET_WORD_W8(src) (*(uint16_t *)(src))
-#else
 #define GET_WORD_W8(src) (*(uint8_t *)(src) | *((uint8_t *)(src) + 1) << 8)
+#else
+#define GET_WORD_W8(src) (*(uint16_t *)(src))
 #endif
 
 void GVRAM_Init(void)
@@ -66,6 +74,16 @@ void FASTCALL GVRAM_FastClear(void)
 
 	uint32_t w[2];
 
+	/* This masked read-modify-write touches GVRAM as native 16-bit words,
+	 * but GVRAM is stored byte-swapped, so on big-endian the plane mask
+	 * must be byte-swapped too or the wrong nibble planes get cleared
+	 * (FastClearMask holds byte-asymmetric values like 0xff00 / 0x00ff). */
+#ifdef MSB_FIRST
+	uint16_t clrmask = (uint16_t)((CRTC_FastClrMask >> 8) | (CRTC_FastClrMask << 8));
+#else
+	uint16_t clrmask = CRTC_FastClrMask;
+#endif
+
 	w[0] = h;
 	w[1] = 0;
 
@@ -79,13 +97,13 @@ void FASTCALL GVRAM_FastClear(void)
 		p = (uint16_t *)(GVRAM + offset + ((GrphScrollX[0] & 0x1ff) * 2));
 
 		for (x = 0; x < w[0]; x++) {
-			*p++ &= CRTC_FastClrMask;
+			*p++ &= clrmask;
 		}
 
 		if (w[1] > 0) {
 			p = (uint16_t *)(GVRAM + offset);
 			for (x = 0; x < w[1]; x++) {
-				*p++ &= CRTC_FastClrMask;
+				*p++ &= clrmask;
 			}
 		}
 	}
@@ -407,7 +425,7 @@ void Grp_DrawLine16(void)
 	i = 0;
 	if (x < TextDotX) {
 		for (; i < x; ++i) {
-			v = *srcp++;
+			v = GET_WORD_W8(srcp); srcp++;
 			if (v != 0) {
 				v0 = (v >> 8) & 0xff;
 				v &= 0x00ff;
@@ -422,7 +440,7 @@ void Grp_DrawLine16(void)
 	}
 
 	for (; i < TextDotX; ++i) {
-		v = *srcp++;
+		v = GET_WORD_W8(srcp); srcp++;
 		if (v != 0) {
 			v0 = (v >> 8) & 0xff;
 			v &= 0x00ff;
@@ -658,7 +676,7 @@ void FASTCALL Grp_DrawLine4h(void)
 	x = ((x & 0x1ff) ^ 0x1ff) + 1;
 
 	for (i = 0; i < TextDotX; ++i) {
-		v = *srcp++;
+		v = GET_WORD_W8(srcp); srcp++;
 		*destp++ = GrphPal[(v >> bits) & 0x0f];
 
 		if (--x == 0) {
@@ -884,7 +902,7 @@ void FASTCALL Grp_DrawLine4hSP(void)
 
 	for (i = 0; i < TextDotX; ++i)
    {
-      v = *srcp++ >> bits;
+      v = GET_WORD_W8(srcp) >> bits; srcp++;
       if ((v & 1) == 0)
       {
          Grp_LineBufSP[i]  = 0;

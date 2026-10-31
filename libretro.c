@@ -4,7 +4,9 @@
 #include <ctype.h>
 #include <string.h>
 #include <math.h>
+#ifndef _WIN32
 #include <strings.h>
+#endif
 
 #include <libretro.h>
 #include <libretro_core_options.h>
@@ -15,6 +17,8 @@
 
 #include "libretro/winx68k.h"
 #include "libretro/dosio.h"
+#include "libretro/zipdisk.h"
+#include "sc55_libretro.h"
 #include "libretro/dswin.h"
 #include "libretro/windraw.h"
 #include "libretro/joystick.h"
@@ -59,10 +63,8 @@
 #define MODE_HIGH_ACTUAL 55.46 /* floor((10*100*1000^2 / VSYNC_HIGH)) / 100 */
 #define MODE_NORM_ACTUAL 61.46 /* floor((10*100*1000^2 / VSYNC_NORM)) / 100 */
 #define MODE_HIGH_COMPAT 55.5  /* 31.50 kHz - commonly used  */
-#define MODE_NORM_COMPAT 59.94 /* 15.98 kHz - actual value should be ~61.46 fps. this is lowered to
-                     * reduced the chances of audio stutters due to mismatch
-                     * fps when vsync is used since most monitors are only capable
-                     * of upto 60Hz refresh rate. */
+#define MODE_NORM_COMPAT 60.00 /* Optional frontend-compatible 15 kHz presentation rate.
+                     * Native X68000 CRTC timing remains unchanged. */
 enum
 {
    MODES_ACTUAL,
@@ -85,7 +87,7 @@ uint32_t	VLINE = 0;
 uint32_t	vline = 0;
 
 #define SOUNDRATE 44100.0
-#define SNDSZ round(SOUNDRATE / FRAMERATE)
+/* Audio frame budget is accumulated fractionally to avoid rounding drift. */
 
 static int firstcall          = 1;
 
@@ -133,10 +135,54 @@ int CHANGEAV_TIMING       = 0; /* Separate change of geometry from change of ref
 int VID_MODE              = MODE_NORM; /* what framerate we start in */
 static float FRAMERATE;
 uint32_t libretro_supports_input_bitmasks = 0;
-unsigned int total_usec   = (unsigned int) -1;
 
 static int16_t soundbuf[1024 * 2];
+/* Legacy timer module linkage; no longer used to gate emulated frames. */
+unsigned int total_usec = (unsigned int)-1;
 static int soundbuf_size;
+static double audio_frame_fraction = 0.0;
+/* Experimental FinalBurn-style fixed audio output cadence: the sound
+ * renderer receives enough clock ticks to synthesize the output block
+ * implied by the advertised FPS. Emulated CPU/video clocks are unchanged. */
+static double fb_audio_clock_remainder = 0.0;
+static int fb_audio_last_mode = -1;
+static int fb_audio_last_adjust = -1;
+static int fb_audio_clock(int clock)
+{
+   double ratio, scaled;
+   int result;
+   if (!Config.AdjustFrameRates)
+   {
+      fb_audio_clock_remainder = 0.0;
+      fb_audio_last_mode = VID_MODE;
+      fb_audio_last_adjust = 0;
+      return clock;
+   }
+   if (fb_audio_last_mode != VID_MODE || fb_audio_last_adjust != Config.AdjustFrameRates)
+   {
+      fb_audio_clock_remainder = 0.0;
+      fb_audio_last_mode = VID_MODE;
+      fb_audio_last_adjust = Config.AdjustFrameRates;
+   }
+   ratio = (double)framerates[0][VID_MODE] / (double)framerates[1][VID_MODE];
+   scaled = (double)clock * ratio + fb_audio_clock_remainder;
+   result = (int)scaled;
+   fb_audio_clock_remainder = scaled - (double)result;
+   return result;
+}
+
+static int next_audio_frame_size(void)
+{
+   int frames;
+   if (FRAMERATE <= 0.0f)
+      return 0;
+   audio_frame_fraction += (double)SOUNDRATE / (double)FRAMERATE;
+   frames = (int)audio_frame_fraction;
+   audio_frame_fraction -= frames;
+   if (frames > 1024) frames = 1024;
+   if (frames < 0) frames = 0;
+   return frames;
+}
 
 uint16_t *videoBuffer;
 
@@ -150,6 +196,22 @@ static int menu_mode = menu_out;
 
 static retro_video_refresh_t video_cb;
 static retro_environment_t environ_cb;
+/* Explorer-only setting: no changes to archive paths or disk handling. */
+int px68k_mame_names_mode(void)
+{
+   struct retro_variable var = { "px68k_mame_names", NULL };
+   if (!environ_cb || !environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value) return 0;
+   if (!strcmp(var.value, "japanese")) return 2;
+   if (!strcmp(var.value, "english") || !strcmp(var.value, "enabled")) return 1;
+   return 0;
+}
+
+const char *px68k_mame_names_system_dir(void)
+{
+   return retro_system_directory;
+}
+
+
 static retro_input_poll_t input_poll_cb;
 static retro_set_rumble_state_t rumble_cb;
 retro_input_state_t input_state_cb;
@@ -254,7 +316,9 @@ static bool is_path_absolute(const char* path)
 
 static void extract_basename(char *buf, const char *path, size_t size)
 {
-   const char *base = strrchr(path, '/');
+   const char *base;
+   char *ext;
+   base = strrchr(path, '/');
    if (!base)
       base = strrchr(path, '\\');
    if (!base)
@@ -266,7 +330,7 @@ static void extract_basename(char *buf, const char *path, size_t size)
    strncpy(buf, base, size - 1);
    buf[size - 1] = '\0';
 
-   char *ext = strrchr(buf, '.');
+   ext = strrchr(buf, '.');
    if (ext)
       *ext = '\0';
 }
@@ -297,6 +361,11 @@ static bool libretro_supports_option_categories = 0;
 
 void midi_out_short_msg(size_t msg)
 {
+   if (px68k_sc55_enabled())
+   {
+      px68k_sc55_midi_short(msg);
+      return;
+   }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
    {
       midi_cb.write(msg         & 0xFF, 0); /* status byte */
@@ -307,6 +376,11 @@ void midi_out_short_msg(size_t msg)
 
 void midi_out_long_msg(uint8_t *s, size_t len)
 {
+   if (px68k_sc55_enabled())
+   {
+      px68k_sc55_midi_long(s, len);
+      return;
+   }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
    {
       int i;
@@ -315,8 +389,18 @@ void midi_out_long_msg(uint8_t *s, size_t len)
    }
 }
 
+/* A non-NULL handle is required by x68k/midi.c before it will dispatch
+ * MIDI bytes. Use a private sentinel for the internal synthesizer: no
+ * external MIDI handle is involved in this case. */
+static int px68k_sc55_midi_handle;
+
 int midi_out_open(void **phmo)
 {
+   if (px68k_sc55_enabled())
+   {
+      if (phmo) *phmo = &px68k_sc55_midi_handle;
+      return 0;
+   }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
    {
       *phmo = &midi_cb;
@@ -356,6 +440,29 @@ static void update_variable_midi_interface(int running)
    }
 }
 
+/* Stop notes that may outlive the emulated frame stream in a physical or
+ * software MIDI destination. This is deliberately an output-side panic: it
+ * does not modify the emulated MIDI board state, so normal save states and
+ * Run-Ahead state restoration remain unchanged. */
+static void midi_output_panic(void)
+{
+   unsigned ch;
+
+   if (!Config.MIDI_SW)
+      return;
+
+   for (ch = 0; ch < 16; ch++)
+   {
+      /* Release sustain, then stop held notes and any remaining voices. */
+      midi_out_short_msg(((size_t)0 << 16) | ((size_t)64 << 8) | (0xB0 | ch));
+      midi_out_short_msg(((size_t)0 << 16) | ((size_t)123 << 8) | (0xB0 | ch));
+      midi_out_short_msg(((size_t)0 << 16) | ((size_t)120 << 8) | (0xB0 | ch));
+   }
+
+   if (libretro_supports_midi_output && midi_cb.output_enabled())
+      midi_cb.flush();
+}
+
 static void midi_interface_init(void)
 {
    libretro_supports_midi_output = 0;
@@ -384,6 +491,14 @@ static void update_variable_disk_drive_swap(void)
 
 static bool set_eject_state(bool ejected)
 {
+   /* Refresh the active drive from the px68k_disk_drive option here too, not
+    * only in get_eject_state(): the frontend's swap sequence is
+    * set_eject_state(true) -> set_image_index() -> set_eject_state(false)
+    * and may never call get_eject_state(), so without this the disk change
+    * would keep targeting the previous drive (default FDD1) and choosing the
+    * drive from the option would have no effect. */
+   update_variable_disk_drive_swap();
+
    if (disk.index == disk.total_images)
       return true; /* Frontend is trying to set "no disk in tray" */
 
@@ -407,6 +522,25 @@ static bool get_eject_state(void)
    return !disk.inserted[disk.cur_drive];
 }
 
+/* Controls automatic pairing of floppy images from a ZIP archive.
+ * 0 = Always, 1 = Boot Only, 2 = At Disk Change, 3 = Off. */
+static int get_archive_floppy_mode(void)
+{
+   struct retro_variable var = { "px68k_archive_floppies", NULL };
+
+   if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "Boot Only"))
+         return 1;
+      if (!strcmp(var.value, "At Disk Change"))
+         return 2;
+      if (!strcmp(var.value, "Always"))
+         return 0;
+   }
+
+   return 3; /* default: Off */
+}
+
 static unsigned get_image_index(void)
 {
    return disk.index;
@@ -421,6 +555,96 @@ static bool set_image_index(unsigned index)
 static unsigned get_num_images(void)
 {
    return disk.total_images;
+}
+
+/* Fills the Disk Control table with up to MAX_DISKS floppy members of a
+ * ZIP, in sorted order starting at member @first, and keeps the archive's
+ * slot from being recycled while the table refers to it. */
+static int zip_fill_disk_table(int slot, int first)
+{
+   unsigned old_total = disk.total_images;
+   int total          = px68k_zip_count(slot, 0);
+   int n              = 0;
+   int i;
+
+   for (i = first; i < total && n < MAX_DISKS; i++)
+   {
+      const char *name = px68k_zip_name(slot, 0, i);
+      if (!name || !px68k_zip_make_virtual_path(slot, name, disk.path[n],
+               sizeof(disk.path[n])))
+         break;
+      snprintf(disk.label[n], sizeof(disk.label[n]), "%s", name);
+      n++;
+   }
+   for (i = n; i < (int)old_total && i < MAX_DISKS; i++)
+   {
+      disk.path[i][0]  = '\0';
+      disk.label[i][0] = '\0';
+   }
+   disk.total_images = (unsigned)n;
+   px68k_zip_pin(slot);
+   return n;
+}
+
+/* Keep the internal PX68K file menu and RetroArch Disk Control backed by the
+ * same ZIP member list. The table holds MAX_DISKS members, so for a larger
+ * set it is the window holding the chosen disk and the one after it. */
+void px68k_disk_menu_sync_zip(int slot, const char *member, int drive)
+{
+   int total, selected = -1, first = 0, count, i;
+
+   if (drive < 0 || drive > 1 || !member || !*member)
+      return;
+
+   total = px68k_zip_count(slot, 0);
+   for (i = 0; i < total; i++)
+   {
+      const char *name = px68k_zip_name(slot, 0, i);
+      if (name && !strcmp(name, member))
+      {
+         selected = i;
+         break;
+      }
+   }
+   if (selected < 0)
+      return;
+
+   if (selected > MAX_DISKS - 2)
+      first = selected - (MAX_DISKS - 2);
+   if (total > MAX_DISKS && first > total - MAX_DISKS)
+      first = total - MAX_DISKS;
+   if ((count = zip_fill_disk_table(slot, first)) <= 0)
+      return;
+   selected -= first;
+
+   disk.index     = (unsigned)selected;
+   disk.cur_drive = (disk_drive)drive;
+   FDD_SetFD(drive, disk.path[selected], 0);
+   snprintf(Config.FDDImage[drive], sizeof(Config.FDDImage[drive]), "%s",
+         disk.path[selected]);
+   disk.inserted[drive] = true;
+
+   /* Boot Only pairs disks only during initial ZIP launch. At Disk Change
+    * pairs on manual insertion but not at boot. Off never pairs a second disk. */
+   {
+      int archive_mode = get_archive_floppy_mode();
+      if (drive == FDD0 && archive_mode != 1 && archive_mode != 3)
+      {
+         if (selected + 1 < count)
+         {
+            FDD_SetFD(FDD1, disk.path[selected + 1], 0);
+            snprintf(Config.FDDImage[FDD1], sizeof(Config.FDDImage[FDD1]), "%s",
+                  disk.path[selected + 1]);
+            disk.inserted[FDD1] = true;
+         }
+         else
+         {
+            FDD_EjectFD(FDD1);
+            Config.FDDImage[FDD1][0] = '\0';
+            disk.inserted[FDD1] = false;
+         }
+      }
+   }
 }
 
 static bool add_image_index(void)
@@ -610,6 +834,9 @@ static void parse_cmdline(const char *argv)
                 *... do something with the word ... */
                for (c2 = 0, p2 = start_of_word; p2 < p; p2++, c2++)
                   ARGUV[ARGUC][c2] = (unsigned char) *p2;
+               ARGUV[ARGUC][c2] = '\0'; /* terminate: ARGUV is reused across
+                                         * loads, a shorter token would keep
+                                         * the previous game's path tail */
 
                ARGUC++;
 
@@ -624,6 +851,7 @@ static void parse_cmdline(const char *argv)
                 *... do something with the word ... */
                for (c2 = 0, p2 = start_of_word; p2 <p; p2++, c2++)
                   ARGUV[ARGUC][c2] = (unsigned char) *p2;
+               ARGUV[ARGUC][c2] = '\0'; /* terminate (see IN_STRING above) */
 
                ARGUC++;
 
@@ -640,6 +868,8 @@ static bool read_m3u(const char *file)
    unsigned index = 0;
    char line[MAX_PATH];
    char name[MAX_PATH];
+   char *carriage_return;
+   char *newline;
    FILE *f = fopen(file, "r");
 
    if (!f)
@@ -650,11 +880,11 @@ static bool read_m3u(const char *file)
       if (line[0] == '#')
          continue;
 
-      char *carriage_return = strchr(line, '\r');
+      carriage_return = strchr(line, '\r');
       if (carriage_return)
          *carriage_return = '\0';
 
-      char *newline = strchr(line, '\n');
+      newline = strchr(line, '\n');
       if (newline)
          *newline = '\0';
 
@@ -824,8 +1054,14 @@ entry point) */
    {
 		p1 = (uint16_t *)(&IPL[i]);
 		p2 = p1 + 1;
-		/* xxx: works only for little endian guys */
+		/* IPL still holds the raw (unswapped) ROM bytes here.  The SCSI
+		 * boot pointer word 0x00fc reads as 0xfc00 through a 16-bit load
+		 * on little-endian but as 0x00fc on big-endian. */
+#ifdef MSB_FIRST
+		if (*p1 == 0x00fc && *p2 == 0x0000)
+#else
 		if (*p1 == 0xfc00 && *p2 == 0x0000)
+#endif
       {
 			scsi = 1;
 			break;
@@ -872,11 +1108,18 @@ static int WinX68k_LoadROMs(void)
    /* if SCSI IPL, SCSI BIOS is established around $fc0000 */
 	WinX68k_SCSICheck();
 
+	/* The CPU fetches opcodes from IPL via *(uint16_t*)PC, which is a
+	 * native load.  On little-endian the ROM (stored MSB-first) must be
+	 * byte-swapped so those loads yield the correct 68000 words; on
+	 * big-endian the raw ROM order is already correct, so skip the swap
+	 * (doing it would feed the CPU byte-swapped opcodes -> no boot). */
+#ifndef MSB_FIRST
 	for (i = 0; i < 0x40000; i += 2) {
 		tmp = IPL[i];
 		IPL[i] = IPL[i + 1];
 		IPL[i + 1] = tmp;
 	}
+#endif
 
 	fp = file_open_c((char *)FONTFILE);
 	if (fp == 0)
@@ -910,24 +1153,15 @@ void WinX68k_Reset(void)
 {
    OPM_Reset();
 
-#if defined (HAVE_CYCLONE)
    m68000_reset();
+   /* Reset vector byte order follows the ROM layout used by this platform. */
+#ifdef MSB_FIRST
+   m68000_set_reg(M68K_A7, (IPL[0x30000]<<24)|(IPL[0x30001]<<16)|(IPL[0x30002]<<8)|IPL[0x30003]);
+   m68000_set_reg(M68K_PC, (IPL[0x30004]<<24)|(IPL[0x30005]<<16)|(IPL[0x30006]<<8)|IPL[0x30007]);
+#else
    m68000_set_reg(M68K_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
    m68000_set_reg(M68K_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
-#elif defined (HAVE_C68K)
-   C68k_Reset(&C68K);
-#if 0
-   C68k_Set_Reg(&C68K, C68K_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
-   C68k_Set_Reg(&C68K, C68K_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
 #endif
-   C68k_Set_AReg(&C68K, 7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
-   C68k_Set_PC(&C68K, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
-#elif defined (HAVE_MUSASHI)
-   m68k_pulse_reset();
-
-   m68k_set_reg(M68K_REG_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
-   m68k_set_reg(M68K_REG_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
-#endif /* HAVE_C68K */ /* HAVE_MUSASHI */
 
    Memory_Init();
    CRTC_Init();
@@ -1000,7 +1234,7 @@ static int pmain(int argc, char *argv[])
    {
       WinX68k_Cleanup();
       WinDraw_Cleanup();
-      exit (1);
+      return 1;
    }
 
    /* before moving to WinDraw_Init() */
@@ -1023,7 +1257,7 @@ static int pmain(int argc, char *argv[])
    SRAM_Init();
    /* FIXME: actually, this sets initial register values rather than suppose to set soft-reset values */
    WinX68k_Reset();
-   Timer_Init();
+
 
    MIDI_Init();
    MIDI_SetMimpiMap(Config.ToneMapFile);	/* ToneMap file usage */
@@ -1037,6 +1271,22 @@ static int pmain(int argc, char *argv[])
    DSound_Play();
 
    /* apply defined command line settings */
+   /* Detach any disk/HD image inherited from a previously loaded game.
+    * With save_fdd_path / save_hdd_path enabled, LoadConfig() above
+    * restored the previous game's FDD/HD images from the .ini (and the
+    * global Config keeps them across loads anyway).  If we only overwrote
+    * the single slot this game provides, a floppy game would still boot
+    * the previous game's HDD image (SASI/SCSI boots before FDD), or keep
+    * its second floppy in drive 1.  Clear everything first so ONLY the
+    * media set from this game's command line below stays attached.
+    * Skipped for argc==0 (no content) to preserve standalone behaviour. */
+   if (argc >= 2)
+   {
+      int _d;
+      for (_d = 0; _d < 2;  _d++) Config.FDDImage[_d][0] = '\0';
+      for (_d = 0; _d < 16; _d++) Config.HDImage[_d][0]  = '\0';
+   }
+
    if(argc == 3 && argv[1][0] == '-' && argv[1][1] == 'h')
       strcpy(Config.HDImage[0], argv[2]);
    else
@@ -1224,6 +1474,42 @@ static void update_variables(int running)
 
    update_variable_midi_interface(running);
 
+#ifdef HAVE_CPU_RUNTIME
+   /* CPU implementation is selected at boot; changing it requires a core restart. */
+   if (!running)
+   {
+      struct retro_variable cpu_var = { "px68k_cpu_emulation", NULL };
+      int use_musashi = 0;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &cpu_var) && cpu_var.value &&
+            !strcmp(cpu_var.value, "Musashi (Slower)"))
+         use_musashi = 1;
+      m68000_set_emulation(use_musashi);
+   }
+#endif
+
+   /* The internal SC-55 is an alternative MIDI destination, independent of
+    * RetroArch's external MIDI interface. Search the same roots as PrBoom and
+    * apply the SC-55-only gain independently of the PX68K audio volume. */
+   {
+      struct retro_variable sc55_var;
+      struct retro_variable sc55_volume_var;
+      int sc55_enabled = 0;
+      int sc55_volume = 100;
+      sc55_var.key = "px68k_sc55_emulation";
+      sc55_var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &sc55_var) && sc55_var.value &&
+            !strcmp(sc55_var.value, "enabled"))
+         sc55_enabled = 1;
+      sc55_volume_var.key = "px68k_sc55_volume";
+      sc55_volume_var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &sc55_volume_var) && sc55_volume_var.value)
+         sc55_volume = atoi(sc55_volume_var.value);
+      px68k_sc55_set_volume(sc55_volume);
+      px68k_sc55_configure(sc55_enabled, retro_system_directory, retro_content_directory);
+      if (sc55_enabled && px68k_sc55_enabled())
+         Config.MIDI_SW = 1;
+   }
+
    strcpy(key, "px68k_joytype");
    var.key = key;
    for (i = 0; i < 2; i++)
@@ -1315,6 +1601,12 @@ static void update_variables(int running)
          opt_analog = true;
    }
 
+   /* Read on every variable update: ADPCM_Update checks this each audio block. */
+   var.key   = "px68k_adpcm_lpf";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      Config.Sound_LPF = strcmp(var.value, "disabled") != 0;
+
    var.key    = "px68k_adpcm_vol";
    var.value  = NULL;
 
@@ -1367,6 +1659,18 @@ static void update_variables(int running)
          Config.MenuFontSize = 0;
       else
          Config.MenuFontSize = 1;
+   }
+
+   if (Config.MenuLinesJump < 5 || Config.MenuLinesJump > 50)
+      Config.MenuLinesJump = 10;
+
+   var.key    = "px68k_menu_lines_jump";
+   var.value  = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      int jump = atoi(var.value);
+      if (jump >= 5 && jump <= 50 && jump % 5 == 0)
+         Config.MenuLinesJump = jump;
    }
 
    var.key    = "px68k_joy1_select";
@@ -1457,16 +1761,6 @@ static void update_variables(int running)
          Config.VbtnSwap = 1;
    }
 
-   var.key    = "px68k_no_wait_mode";
-   var.value  = NULL;
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "disabled"))
-         Config.NoWaitMode = 0;
-      else if (!strcmp(var.value, "enabled"))
-         Config.NoWaitMode = 1;
-   }
 
    var.key    = "px68k_frameskip";
    var.value  = NULL;
@@ -1512,16 +1806,6 @@ static void update_variables(int running)
          CHANGEAV_TIMING = CHANGEAV_TIMING || Config.AdjustFrameRates != temp;
    }
 
-   var.key   = "px68k_audio_desync_hack";
-   var.value = NULL;
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "disabled"))
-         Config.AudioDesyncHack = 0;
-      else if (!strcmp(var.value, "enabled"))
-         Config.AudioDesyncHack = 1;
-   }
 
    var.key   = "px68k_text_off";
    var.value = NULL;
@@ -1572,8 +1856,10 @@ void retro_get_system_info(struct retro_system_info *info)
    info->library_name     = "PX68K";
    info->library_version  = PX68K_VERSION GIT_VERSION;
    info->need_fullpath    = true;
-   info->valid_extensions = "dim|img|d88|88d|hdm|dup|2hd|xdf|hdf|cmd|m3u";
-   info->block_extract    = false;
+   info->valid_extensions = "dim|img|d88|88d|hdm|dup|2hd|xdf|hdf|cmd|m3u|zip";
+   /* The core reads ZIPs itself: left to the frontend, an archive is
+    * unpacked and only its first disk image is passed on. */
+   info->block_extract    = true;
 }
 
 
@@ -1584,26 +1870,6 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    struct retro_system_timing timing = { FRAMERATE, SOUNDRATE };
    info->geometry                    = geom;
    info->timing                      = timing;
-}
-
-static void frame_time_cb(retro_usec_t usec)
-{
-   total_usec += usec;
-   /* -1 is reserved as an error code for unavailable a la stdlib clock() */
-   if (total_usec == (unsigned int) -1)
-      total_usec = 0;
-}
-
-static void setup_frame_time_cb(void)
-{
-   struct retro_frame_time_callback cb;
-
-   cb.callback   = frame_time_cb;
-   cb.reference  = ceil(1000000 / FRAMERATE);
-   if (!environ_cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &cb))
-      total_usec = (unsigned int) -1;
-   else if (total_usec == (unsigned int) -1)
-      total_usec = 0;
 }
 
 /* TODO/FIXME - implement savestates */
@@ -1713,6 +1979,12 @@ bool retro_unserialize(const void *data, size_t size)
    StateMem st;
    bool ret = false;
 
+   /* RetroArch also calls retro_unserialize() repeatedly for Run-Ahead.
+    * Those restores are speculative frame rewinds, not user-requested loads;
+    * silencing MIDI here would cut off music during normal gameplay. */
+   if (!UsingFastSavestates())
+      midi_output_panic();
+
    st.data           = (uint8_t*)data;
    st.loc            = 0;
    st.len            = size;
@@ -1729,8 +2001,58 @@ bool retro_unserialize(const void *data, size_t size)
 void retro_cheat_reset(void) { }
 void retro_cheat_set(unsigned index, bool enabled, const char *code) { }
 
+/* Mounts a ZIP's floppies (or, without any, its first HDF) through the
+ * same px68k command line an M3U or HDF launch builds. */
+static int load_zip_content(const char *path)
+{
+   char cmdline[MAX_PATH * 2 + 32];
+   const char *name;
+   int slot = px68k_zip_register_archive(path);
+   int count;
+
+   if (slot < 0)
+      return 0;
+
+   if ((count = zip_fill_disk_table(slot, 0)) > 0)
+   {
+      int archive_mode = get_archive_floppy_mode();
+      int pair         = count > 1 && archive_mode != 2 && archive_mode != 3;
+
+      disk.index       = 0;
+      disk.inserted[0] = true;
+      disk.inserted[1] = pair ? true : false;
+      snprintf(RPATH, sizeof(RPATH), "%s", disk.path[0]);
+      if (pair)
+         snprintf(cmdline, sizeof(cmdline), "px68k \"%s\" \"%s\"",
+               disk.path[0], disk.path[1]);
+      else
+         snprintf(cmdline, sizeof(cmdline), "px68k \"%s\"", disk.path[0]);
+      parse_cmdline(cmdline);
+      return 1;
+   }
+
+   if (!(name = px68k_zip_name(slot, 1, 0))
+         || !px68k_zip_make_virtual_path(slot, name, RPATH, sizeof(RPATH))
+         || !px68k_zip_preload(RPATH))
+   {
+      RPATH[0] = '\0';
+      return 0;
+   }
+
+   snprintf(cmdline, sizeof(cmdline), "px68k -h \"%s\"", RPATH);
+   parse_cmdline(cmdline);
+   return 1;
+}
+
+static int is_zip_path(const char *path)
+{
+   size_t len = strlen(path);
+   return len >= 4 && !strcasecmp(path + len - 4, ".zip");
+}
+
 bool retro_load_game(const struct retro_game_info *info)
 {
+   px68k_zip_reset();
    no_content = 1;
    RPATH[0] = '\0';
 
@@ -1738,8 +2060,18 @@ bool retro_load_game(const struct retro_game_info *info)
    {
       const char *full_path = info->path;
       no_content            = 0;
-      strcpy(RPATH, full_path);
       extract_directory(base_dir, info->path, sizeof(base_dir));
+      if (is_zip_path(full_path))
+      {
+         if (!load_zip_content(full_path))
+         {
+            if (log_cb)
+               log_cb(RETRO_LOG_ERROR, "[PX68K] ZIP contains no supported floppy or HDF images, or could not be read.\n");
+            return false;
+         }
+      }
+      else
+         snprintf(RPATH, sizeof(RPATH), "%s", full_path);
 
       if (!retro_load_game_internal(RPATH))
          return false;
@@ -1761,8 +2093,52 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info
 
 void retro_unload_game(void)
 {
+   int _d;
+
    RPATH[0]    = '\0';
-   firstcall   = 0;
+
+   /* Release the current content's floppy media before anything else.
+    * retro_unload_game must return all 4 drives to the same clean state as
+    * a fresh core boot; leaving it only to retro_deinit meant that when the
+    * frontend reloads content (especially a multi-disk m3u) the disk image
+    * buffers leaked and stale disks stayed "inserted" in FDD0..3.
+    *   - FDD_Cleanup() ejects+frees every drive/format (DIM/D88/XDF), with
+    *     write-back for modified images (idempotent: X_Eject no-ops on an
+    *     already-empty drive, so a later retro_deinit->FDD_Cleanup is safe).
+    *   - FDD_Init() zeroes the FDD hardware struct and the image pointers.
+    *   - Config FDD/HD paths are cleared so nothing is re-mounted from a
+    *     stale slot. */
+   audio_buffer_reset();
+   FDD_Cleanup();
+   FDD_Init();
+   for (_d = 0; _d < 2;  _d++) Config.FDDImage[_d][0] = '\0';
+   for (_d = 0; _d < 16; _d++) Config.HDImage[_d][0]  = '\0';
+   px68k_zip_reset();
+
+   /* Re-arm the one-shot machine boot so the NEXT content load runs
+    * pre_main() again (m68000_init + WinX68k_LoadROMs + WinX68k_Reset)
+    * against freshly allocated buffers.  Salvia does
+    * retro_unload_game() + retro_deinit() + retro_init() + retro_load_game()
+    * between games; retro_deinit() frees MEM/IPL/FONT (WinX68k_Cleanup)
+    * and retro_load_game() malloc's them again at new addresses.
+    * Leaving firstcall at 0 skipped the re-boot, so the C68K fetch table
+    * kept pointing at the previous (now freed) MEM -> access violation in
+    * C68k_Exec on the first retro_run() of the second game.
+    * ARGUC/PARAMCOUNT are one-shot accumulators as well: reset them so the
+    * next command line is parsed and rebuilt from scratch instead of being
+    * appended after the previous game's arguments. */
+   firstcall   = 1;
+   ARGUC       = 0;
+   PARAMCOUNT  = 0;
+   /* pre_main() decides whether the content came from a cmd/m3u (use the
+    * parsed ARGUV) or is a single file (use RPATH) with
+    *   Only1Arg = strcmp(ARGUV[0], "px68k") ? 1 : 0;
+    * A cmd/m3u load leaves ARGUV[0] == "px68k".  A following single .dim/.hdf
+    * never runs parse_cmdline, so without clearing it the stale "px68k" makes
+    * Only1Arg 0 while ARGUC is 0 -> no options are built -> pmain() gets no
+    * disk and the second game boots with an empty drive.  Clear ARGUV[0] so a
+    * single-file load is detected correctly (a real cmd/m3u rewrites it). */
+   ARGUV[0][0] = '\0';
 }
 
 unsigned retro_get_region(void)
@@ -1821,6 +2197,7 @@ void retro_init(void)
    else
       /* make retro_save_directory the same in case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY is not implemented by the frontend */
       retro_save_directory = retro_system_directory;
+   px68k_zip_set_save_directory(retro_save_directory);
    
    /* If browse directory is defined use it for StartDir config */
    if (environ_cb(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY, &browse_dir) && browse_dir)
@@ -1837,7 +2214,7 @@ void retro_init(void)
       strcpy(retro_browse_conf, retro_browse_directory);
 
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
-      exit(0);
+      return;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble) && rumble.set_rumble_state)
       rumble_cb = rumble.set_rumble_state;
@@ -1867,11 +2244,12 @@ void retro_init(void)
    memset(Core_old_Key_State, 0, sizeof(Core_old_Key_State));
 
    FRAMERATE = framerates[Config.AdjustFrameRates][VID_MODE];
-   setup_frame_time_cb();
+
 }
 
 void retro_deinit(void)
 {
+   audio_buffer_reset();
    SRAM_UpdateBoot();
 
    OPM_Cleanup();
@@ -1886,10 +2264,12 @@ void retro_deinit(void)
    CDROM_Cleanup();
 #endif
    MIDI_Cleanup();
+   px68k_sc55_shutdown();
    WinX68k_Cleanup();
    WinDraw_Cleanup();
 
    SaveConfig();
+   px68k_zip_reset();
    libretro_supports_input_bitmasks    = 0;
    libretro_supports_midi_output       = 0;
    libretro_supports_option_categories = 0;
@@ -1897,6 +2277,7 @@ void retro_deinit(void)
 
 void retro_reset(void)
 {
+   audio_buffer_reset();
    WinX68k_Reset();
    if (Config.MIDI_SW && Config.MIDI_Reset)
 	   MIDI_Reset();
@@ -2103,6 +2484,8 @@ static void handle_retrok(void)
          retroh    = 600;
          CHANGEAV  = 1;
          menu_mode = menu_enter;
+         midi_output_panic();
+         audio_buffer_reset();
          DSound_Stop();
       }
       else
@@ -2110,6 +2493,7 @@ static void handle_retrok(void)
          CHANGEAV  = 1;
          retrow    = oldrw;
          retroh    = oldrh;
+         audio_buffer_reset();
          DSound_Play();
          menu_mode = menu_out;
       }
@@ -2257,13 +2641,7 @@ static void WinX68k_Exec(void)
       }
 
       {
-#if defined (HAVE_CYCLONE)
          m68000_execute(n);
-#elif defined (HAVE_C68K)
-         C68k_Exec(&C68K, n);
-#elif defined (HAVE_MUSASHI)
-         m68k_execute(n);
-#endif /* HAVE_C68K */ /* HAVE_MUSASHI */
          m          = (n-m68000_ICountBk);
          ClkUsed   += m*10;
          usedclk    = ClkUsed/clkdiv;
@@ -2281,7 +2659,7 @@ static void WinX68k_Exec(void)
 
       if (clk_count >= clk_next)
       {
-         MIDI_DelayOut((Config.MIDIAutoDelay)?(Config.BufferSize*5):Config.MIDIDelay);
+         /* MIDI output is now paced by the emulated 31.25-kbit/s UART in MIDI_Timer. */
          MFP_TimerA();
          if ((MFP[MFP_AER] & 0x40) && (vline == CRTC_IntLine))
             MFP_Int(1);
@@ -2324,7 +2702,7 @@ static void WinX68k_Exec(void)
             MouseIntCnt = 0;
             SCC_IntCheck();
          }
-         DSound_Send0(clk_line);
+         DSound_Send0(fb_audio_clock(clk_line));
 
          vline++;
          clk_next  = (clk_total*(vline+1))/VLINE_TOTAL;
@@ -2373,6 +2751,15 @@ void retro_run(void)
    int mouse_x, mouse_y, mouse_l, mouse_r;
    bool updated    = false;
    static bool mbL = false, mbR = false;
+   static uint32_t midi_last_run_time = 0;
+   uint32_t midi_now = timeGetTime();
+
+   /* RetroArch can stop calling retro_run while paused. On resume, silence
+    * voices left active by the external MIDI device. The threshold is much
+    * longer than a normal frame and does not affect rapid Run-Ahead replays. */
+   if (midi_last_run_time && (uint32_t)(midi_now - midi_last_run_time) > 250)
+      midi_output_panic();
+   midi_last_run_time = midi_now;
 
    if (firstcall)
    {
@@ -2380,47 +2767,23 @@ void retro_run(void)
       firstcall     = 0;
       /* Initialization done */
       update_variables(0);
-      soundbuf_size = SNDSZ;
+      audio_frame_fraction = 0.0;
+      soundbuf_size = next_audio_frame_size();
+      audio_buffer_reset();
       return;
    }
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
       update_variables(1);
 
-   if (CHANGEAV || CHANGEAV_TIMING)
-   {
-      if (CHANGEAV_TIMING)
-      {
-         struct retro_system_av_info system_av_info;
-         retro_get_system_av_info(&system_av_info);
-         FRAMERATE                            = framerates[Config.AdjustFrameRates][VID_MODE];
-         system_av_info.timing.fps            = FRAMERATE;
-         environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &system_av_info);
-         setup_frame_time_cb();
-         CHANGEAV_TIMING                      = 0;
-         CHANGEAV                             = 0;
-      }
-      if (CHANGEAV)
-      {
-         struct retro_system_av_info system_av_info;
-         system_av_info.geometry.base_width   = retrow;
-         system_av_info.geometry.base_height  = retroh;
-         system_av_info.geometry.aspect_ratio = (float)4.0/3.0;
-         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &system_av_info);
-         CHANGEAV                             = 0;
-      }
-      soundbuf_size                           = SNDSZ;
-   }
-
+   /* Process frontend AV changes after emulation, immediately before
+    * video_cb(), so dimensions correspond to the frame being submitted. */
    input_poll_cb();
    rumble_frames();
 
    FDD_IsReading = 0;
 
-   if (     (menu_mode == menu_out)
-         && (  Config.AudioDesyncHack
-            || Config.NoWaitMode
-            || Timer_GetCount()))
+   if (menu_mode == menu_out)
    {
       Joystick_Update(0, -1, 0);
       Joystick_Update(0, -1, 1);
@@ -2505,24 +2868,54 @@ void retro_run(void)
       menu_mode = menu_in;
       if (ret == WUM_MENU_END)
       {
+         audio_buffer_reset();
          DSound_Play();
          menu_mode = menu_out;
       }
    }
 
-   if (Config.AudioDesyncHack)
+   /* The paused internal menu must not advance any synthesizer. */
+   if (soundbuf_size < 0) soundbuf_size = 0;
+   if (soundbuf_size > (int)(sizeof(soundbuf) / (2 * sizeof(soundbuf[0]))))
+      soundbuf_size = (int)(sizeof(soundbuf) / (2 * sizeof(soundbuf[0])));
+   if (menu_mode != menu_out)
+      memset(soundbuf, 0, (size_t)soundbuf_size * 4);
+   else
    {
-      int nsamples = audio_samples_avail();
-      if (nsamples > soundbuf_size)
-         audio_samples_discard(nsamples - soundbuf_size);
+      raudio_callback(soundbuf, NULL, soundbuf_size << 2);
+      px68k_sc55_mix(soundbuf, (size_t)soundbuf_size);
    }
-   raudio_callback(soundbuf, NULL, soundbuf_size << 2);
 
    if (libretro_supports_midi_output && midi_cb.output_enabled())
       midi_cb.flush();
 
    audio_batch_cb((const int16_t*)soundbuf, soundbuf_size);
    /* TODO/FIXME - hardcoded pitch here */
+   if (CHANGEAV || CHANGEAV_TIMING)
+   {
+      struct retro_system_av_info av;
+      if (CHANGEAV_TIMING)
+      {
+         FRAMERATE = framerates[Config.AdjustFrameRates][VID_MODE];
+         audio_frame_fraction = 0.0;
+         retro_get_system_av_info(&av);
+         environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
+
+         CHANGEAV_TIMING = 0;
+         CHANGEAV = 0;
+      }
+      else
+      {
+         struct retro_game_geometry geom;
+         geom.base_width = retrow;
+         geom.base_height = retroh;
+         geom.max_width = 800;
+         geom.max_height = 600;
+         geom.aspect_ratio = 4.0f / 3.0f;
+         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geom);
+         CHANGEAV = 0;
+      }
+   }
+   soundbuf_size = next_audio_frame_size();
    video_cb(videoBuffer, retrow, retroh, /*retrow*/ 800 << 1);
 }
-

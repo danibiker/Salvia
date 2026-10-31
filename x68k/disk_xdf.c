@@ -15,6 +15,9 @@ void XDF_Init(void)
 
 	for (drv=0; drv<4; drv++) {
 		XDFCur[drv] = 0;
+		/* Free any image still held so re-init never leaks the buffer
+		 * (XDFImg is always 0 or a valid malloc). */
+		if (XDFImg[drv]) free(XDFImg[drv]);
 		XDFImg[drv] = 0;
 		memset(XDFFile[drv], 0, MAX_PATH);
 	}

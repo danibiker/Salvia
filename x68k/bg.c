@@ -277,14 +277,53 @@ void FASTCALL BG_Write(uint32_t adr, uint8_t data)
 	}
 }
 
+#pragma pack(push, 1)
 struct SPRITECTRLTBL {
 	uint16_t	sprite_posx;
 	uint16_t	sprite_posy;
 	uint16_t	sprite_ctrl;
+	/* The priority (PRW) lives in the LOW byte of the 16-bit word at
+	 * offset +6.  Sprite_Regs is stored native on big-endian (the ^1
+	 * swap in BG_Write is little-endian only), so that low byte is at
+	 * physical offset 7 on big-endian and 6 on little-endian.  Order the
+	 * byte pair accordingly, otherwise sprite_ply reads the always-zero
+	 * high byte on big-endian and (sprite_ply & 3) never matches the
+	 * requested priority -> no hardware sprites are ever drawn. */
+#ifdef MSB_FIRST
+	uint8_t	dummy;
+	uint8_t	sprite_ply;
+#else
 	uint8_t	sprite_ply;
 	uint8_t	dummy;
+#endif
 } __attribute__ ((packed));
+#pragma pack(pop)
 typedef struct SPRITECTRLTBL SPRITECTRLTBL_T;
+
+/* Return nonzero when a hardware sprite covers this emulated scanline.
+ * Keep the coordinate conversion identical to Sprite_DrawLineMcr() so the
+ * renderer's dirty-line fast path can be bypassed only where sprites draw. */
+int BG_SpriteOnLine(uint32_t vlinebg)
+{
+	SPRITECTRLTBL_T *sct = (SPRITECTRLTBL_T *)Sprite_Regs;
+	int n;
+
+	for (n = 127; n >= 0; --n)
+	{
+		uint32_t y, x;
+		x = (sct[n].sprite_posx + BG_HAdjust) & 0x3ff;
+		if (x >= TextDotX + 16)
+			continue;
+		y = sct[n].sprite_posy & 0x3ff;
+		y -= vlinebg;
+		y += BG_VLINE;
+		y = -y;
+		y += 16;
+		if (y <= 15)
+			return 1;
+	}
+	return 0;
+}
 
 static INLINE void Sprite_DrawLineMcr(int pri)
 {

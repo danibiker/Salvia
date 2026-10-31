@@ -37,6 +37,7 @@ struct retro_core_option_v2_category option_cats_us[] = {
    { "audio",     "Audio",    "Change sound volumes and midi output type."                            },
    { "input",     "Input",    "Change controller types and button mapping."                           },
    { "media",     "Media",    "Change floppy disk media swapping options."                            },
+   { "menu",      "Menu",     "Configure the built-in menu and navigation."                           },
    { "advanced",  "Advanced", "Change system-related advanced options for performance or aesthetics." },
    { NULL,        NULL,       NULL },
 };
@@ -48,18 +49,18 @@ struct retro_core_option_v2_definition option_defs_us[] = {
     * Adding more variables and rearranging them is safe. */
 
    {
-      "px68k_menufontsize",
-      "Menu Font Size",
+      "px68k_cpu_emulation",
+      "CPU Emulation",
       NULL,
-      "Sets the built-in menu font size",
+      "Select the 68000 CPU emulator. Restart the core after changing this option.",
       NULL,
       "system",
       {
-         { "normal", NULL },
-         { "large",  NULL },
-         { NULL,     NULL },
+         { "C68K (Fast)", NULL },
+         { "Musashi (Slower)", NULL },
+         { NULL, NULL },
       },
-      "normal"
+      "C68K (Fast)"
    },
    {
       "px68k_cpuspeed",
@@ -172,6 +173,73 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "Default"
    },
    {
+      "px68k_sc55_emulation",
+      "Roland SC-55 Emulation",
+      NULL,
+      "Use the internal Roland SC-55 synthesizer instead of RetroArch MIDI output. Requires compatible SC-55 ROM files in the System Directory or PrBoom-compatible subfolders.",
+      NULL,
+      "audio",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL,       NULL },
+      },
+      "disabled"
+   },
+   {
+      "px68k_sc55_volume",
+      "SC-55 Emulation Volume",
+      NULL,
+      "Adjust the volume of the internal Roland SC-55 synthesizer relative to the PX68K audio. 100% is the default level.",
+      NULL,
+      "audio",
+      {
+         { "0", "0%" },
+         { "5", "5%" },
+         { "10", "10%" },
+         { "15", "15%" },
+         { "20", "20%" },
+         { "25", "25%" },
+         { "30", "30%" },
+         { "35", "35%" },
+         { "40", "40%" },
+         { "45", "45%" },
+         { "50", "50%" },
+         { "55", "55%" },
+         { "60", "60%" },
+         { "65", "65%" },
+         { "70", "70%" },
+         { "75", "75%" },
+         { "80", "80%" },
+         { "85", "85%" },
+         { "90", "90%" },
+         { "95", "95%" },
+         { "100", "100%" },
+         { "105", "105%" },
+         { "110", "110%" },
+         { "115", "115%" },
+         { "120", "120%" },
+         { "125", "125%" },
+         { "130", "130%" },
+         { "135", "135%" },
+         { "140", "140%" },
+         { "145", "145%" },
+         { "150", "150%" },
+         { "155", "155%" },
+         { "160", "160%" },
+         { "165", "165%" },
+         { "170", "170%" },
+         { "175", "175%" },
+         { "180", "180%" },
+         { "185", "185%" },
+         { "190", "190%" },
+         { "195", "195%" },
+         { "200", "200%" },
+         { NULL, NULL },
+      },
+      "100"
+   },
+   {
       "px68k_midi_output",
       "MIDI Output (Restart)",
       NULL,
@@ -200,6 +268,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL,       NULL },
       },
       "GM"
+   },
+   {
+      "px68k_adpcm_lpf",
+      "ADPCM Low-Pass Filter",
+      NULL,
+      "Enable the original ADPCM low-pass filter.",
+      NULL,
+      "audio",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
    },
    {
       "px68k_adpcm_vol",
@@ -287,6 +369,37 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "13"
    },
 #endif
+   {
+      "px68k_mame_names",
+      "MAME Software List Names",
+      NULL,
+      "Show English descriptions or Japanese alt_title labels from MAME x68k_flop.xml for matching ZIP filenames in the internal explorer. Requires MAME/hash/x68k_flop.xml in the system directory.",
+      NULL,
+      "menu",
+      {
+         { "disabled", NULL },
+         { "english", "English" },
+         { "japanese", "Japanese" },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "px68k_archive_floppies",
+      "Auto Insert Floppies from Archive",
+      NULL,
+      "Controls whether another floppy from a ZIP archive is inserted automatically at boot or during disk changes.",
+      NULL,
+      "media",
+      {
+         { "Off",             NULL },
+         { "Always",          NULL },
+         { "Boot Only",       NULL },
+         { "At Disk Change",  NULL },
+         { NULL,               NULL },
+      },
+      "Off"
+   },
    {
       "px68k_disk_drive",
       "Swap Disks on Drive",
@@ -376,18 +489,33 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "TRIG1 TRIG2"
    },
    {
-      "px68k_no_wait_mode",
-      "No Wait Mode",
+      "px68k_menufontsize",
+      "Menu Font Size",
       NULL,
-      "When set to [enabled], core runs as fast as possible. Can cause audio desync. Setting this [disabled] is recommended.",
+      "Sets the built-in menu font size",
       NULL,
-      "advanced",
+      "menu",
       {
-         { "disabled", NULL},
-         { "enabled",  NULL},
-         { NULL,       NULL },
+         { "normal", NULL },
+         { "large",  NULL },
+         { NULL,     NULL },
       },
-      "disabled"
+      "normal"
+   },
+   {
+      "px68k_menu_lines_jump",
+      "Lines Jump (with left-right)",
+      NULL,
+      "Number of entries to jump when pressing Left or Right in the built-in menu.",
+      NULL,
+      "menu",
+      {
+         { "5", NULL }, { "10", NULL }, { "15", NULL },
+         { "20", NULL }, { "25", NULL }, { "30", NULL },
+         { "35", NULL }, { "40", NULL }, { "45", NULL },
+         { "50", NULL }, { NULL, NULL },
+      },
+      "10"
    },
    {
       "px68k_frameskip",
@@ -413,24 +541,10 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "Full Frame"
    },
    {
-      "px68k_push_video_before_audio",
-      "Push Video before Audio",
-      NULL,
-      "Prioritize reducing video latency over audio latency and/or stuttering.",
-      NULL,
-      "advanced",
-      {
-         { "disabled", NULL},
-         { "enabled",  NULL},
-         { NULL,       NULL },
-      },
-      "disabled"
-   },
-   {
       "px68k_adjust_frame_rates",
       "Adjust Frame Rates",
       NULL,
-      "For compatibility with modern displays, slightly adjust frame rates reported to frontend in order to reduce the chances of audio stuttering.  Disable to use actual frame rates.",
+      "For compatibility with modern displays, changes the 15KHz mode from 61.46 to 60Hz. Disable to get the real machine timing.",
       NULL,
       "advanced",
       {
@@ -441,24 +555,10 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "enabled"
    },
    {
-      "px68k_audio_desync_hack",
-      "Audio Desync Hack",
-      NULL,
-      "Prevents audio from desynchronizing by simply discarding any audio samples generated past the requested amount per frame slice.  Forces 'No Wait Mode' to [enabled], use appropriate frontend settings to properly throttle content.",
-      NULL,
-      "advanced",
-      {
-         { "disabled", NULL},
-         { "enabled",  NULL},
-         { NULL,       NULL },
-      },
-      "disabled"
-   },
-   {
       "px68k_text_off",
       "Text Off",
       NULL,
-      "TODO:",
+      "Disables the text layer, used for characters, text overlays, and some interface elements.",
       NULL,
       "advanced",
       {
@@ -472,7 +572,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "px68k_grp_off",
       "Grp Off",
       NULL,
-      "TODO:",
+      "Disables the graphics layer, typically used for bitmap graphics and backgrounds.",
       NULL,
       "advanced",
       {
@@ -486,7 +586,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "px68k_sp_off",
       "SP/BG Off",
       NULL,
-      "TODO:",
+      "Disables the sprite and tile-based background layers, commonly used for game characters, objects, and scrolling backgrounds.",
       NULL,
       "advanced",
       {

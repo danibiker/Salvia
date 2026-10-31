@@ -1,7 +1,9 @@
 #ifndef	__NP2_WIN32EMUL_H__
 #define	__NP2_WIN32EMUL_H__
 
+#ifndef _MSC_VER
 #include <sys/param.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -15,8 +17,18 @@
 #define FASTCALL
 #endif
 
+#ifdef _MSC_VER
+#include <compat/msvc.h>
+#endif
+
 #ifndef	MAX_PATH
+#if defined(MAXPATHLEN)
 #define	MAX_PATH	MAXPATHLEN
+#elif defined(PATH_MAX)
+#define	MAX_PATH	PATH_MAX
+#else
+#define	MAX_PATH	512
+#endif
 #endif
 
 /*

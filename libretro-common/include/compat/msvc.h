@@ -25,6 +25,21 @@
 
 #ifdef _MSC_VER
 
+#ifdef _WIN32
+#ifndef strcasecmp
+#define	strcasecmp(s1, s2)		_stricmp((s1), (s2))
+#endif
+#ifndef strncasecmp
+#define	strncasecmp(s1, s2, n)	_strnicmp((s1), (s2), (n))
+#endif
+#endif
+
+#ifndef	MAXPATHLEN
+#define	MAXPATHLEN	PATH_MAX
+#endif
+
+#define __attribute__(x)
+
 #ifdef __cplusplus
 extern "C"  {
 #endif
@@ -88,6 +103,7 @@ typedef int ssize_t;
 /* roundf and va_copy is available since MSVC 2013 */
 #if _MSC_VER < 1800
 #define roundf(in) (in >= 0.0f ? floorf(in + 0.5f) : ceilf(in - 0.5f))
+#define round(in) ((in) >= 0.0 ? floor((in) + 0.5) : ceil((in) - 0.5))
 #define va_copy(x, y) ((x) = (y))
 #endif
 

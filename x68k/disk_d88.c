@@ -4,7 +4,7 @@
 #include "fdd.h"
 #include "disk_d88.h"
 
-/* セクター部 (16 Bytes) */
+/* ?????????? (16 Bytes) */
 typedef struct {
 	uint8_t	c;
 	uint8_t	h;
@@ -34,7 +34,17 @@ void D88_Init(void)
 	int drv, trk;
 
 	for (drv=0; drv<4; drv++) {
-		for (trk=0; trk<164; trk++) D88Trks[drv][trk] = 0;
+		for (trk=0; trk<164; trk++) {
+			/* Free any held sector list so re-init never leaks the nodes
+			 * (D88 stores each track as a malloc'd D88_SECTINFO chain). */
+			D88_SECTINFO *si = D88Trks[drv][trk];
+			while (si) {
+				D88_SECTINFO *next = si->next;
+				free(si);
+				si = next;
+			}
+			D88Trks[drv][trk] = 0;
+		}
 		memset(&D88Head[drv], 0, sizeof(D88_HEADER));
 		memset(D88File[drv], 0, MAX_PATH);
 	}
@@ -46,6 +56,34 @@ void D88_Cleanup(void)
 	int drv;
 	for (drv=0; drv<4; drv++) D88_Eject(drv);
 }
+
+/* D88 images are stored little-endian on disk, and the header / sector-header
+ * structs are read/written straight from file with file_lread/file_lwrite.
+ * On big-endian the multi-byte fields (fd_size, trackp[], sectors, size) must
+ * be swapped to/from host order or track offsets and sector sizes come out
+ * garbage and the disk fails to load.  16-bit swaps are their own inverse, so
+ * one helper serves both read (LE->host) and write (host->LE) directions. */
+#ifdef MSB_FIRST
+static uint16_t d88_bswap16(uint16_t v) { return (uint16_t)((v >> 8) | (v << 8)); }
+static uint32_t d88_bswap32(uint32_t v)
+{
+	return (v >> 24) | ((v >> 8) & 0xff00) | ((v << 8) & 0xff0000) | (v << 24);
+}
+static void d88_header_swap(D88_HEADER *h)
+{
+	int i;
+	h->fd_size = d88_bswap32(h->fd_size);
+	for (i = 0; i < 164; i++) h->trackp[i] = d88_bswap32(h->trackp[i]);
+}
+static void d88_sector_swap(D88_SECTOR *s)
+{
+	s->sectors = d88_bswap16(s->sectors);
+	s->size    = d88_bswap16(s->size);
+}
+#else
+#define d88_header_swap(h)  ((void)0)
+#define d88_sector_swap(s)  ((void)0)
+#endif
 
 
 int D88_SetFD(int drv, char* filename)
@@ -64,6 +102,7 @@ int D88_SetFD(int drv, char* filename)
    }
 	file_seek(fp, 0, FSEEK_SET);
 	if ( file_lread(fp, &D88Head[drv], sizeof(D88_HEADER))!=sizeof(D88_HEADER) ) goto d88_set_error;
+	d88_header_swap(&D88Head[drv]);
 
 	if ( D88Head[drv].protect )
 		FDD_SetReadOnly(drv);
@@ -79,6 +118,7 @@ int D88_SetFD(int drv, char* filename)
          file_seek(fp, (size_t)ptr, FSEEK_SET);
          for (sct=0; sct<d88s.sectors; sct++) {
             if ( file_lread(fp, &d88s, sizeof(D88_SECTOR))!=sizeof(D88_SECTOR) ) goto d88_set_error;
+            d88_sector_swap(&d88s);
             si = (D88_SECTINFO*)malloc(sizeof(D88_SECTINFO)+d88s.size);
             if ( !si ) goto d88_set_error;
             if ( sct ) {
@@ -128,11 +168,17 @@ int D88_Eject(int drv)
             }
          }
          D88Head[drv].fd_size = pos;
+         d88_header_swap(&D88Head[drv]);   /* host -> little-endian for the file */
          file_lwrite(fp, &D88Head[drv], sizeof(D88_HEADER));
+         d88_header_swap(&D88Head[drv]);   /* back to host order */
          for (trk=0; trk<164; trk++) {
             D88_SECTINFO *si = D88Trks[drv][trk];
             while ( si ) {
-               file_lwrite(fp, &si->sect, sizeof(D88_SECTOR)+si->sect.size);
+               /* length uses the host-order size; swap only for the write */
+               size_t seclen = sizeof(D88_SECTOR) + si->sect.size;
+               d88_sector_swap(&si->sect);
+               file_lwrite(fp, &si->sect, seclen);
+               d88_sector_swap(&si->sect);
                si = si->next;
             }
             D88Trks[drv][trk] = 0;

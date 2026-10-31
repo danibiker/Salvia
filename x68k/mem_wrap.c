@@ -33,7 +33,7 @@ uint8_t *FONT;
 
 uint32_t BusErrFlag       = 0;
 uint32_t BusErrHandling   = 0;
-static uint32_t BusErrAdr = 0;
+uint32_t BusErrAdr = 0;
 
 /* forward declarations */
 static void wm_opm(uint32_t addr, uint8_t val);
@@ -169,7 +169,18 @@ static uint8_t rm_main(uint32_t addr)
 {
 	addr &= 0x00ffffff;
 	if (addr < 0x00c00000) /* Use RAM upto 12MB */
+	{
+		/* Must match the byte order used by the writer (wm_cnt): native
+		 * on big-endian, byte-swapped on little-endian.  Upstream leaves
+		 * this read unconditionally swapped, which is inconsistent with
+		 * the MSB_FIRST write path -> every RAM byte reads its neighbour
+		 * on big-endian (Xbox 360) and the machine never boots. */
+#ifdef MSB_FIRST
+		return MEM[addr];
+#else
 		return MEM[addr ^ 1];
+#endif
+	}
 	else if (addr < 0x00e00000)
 		return GVRAM_Read(addr);
 	return MemReadTable[(addr >> 13) & 0xff](addr);
@@ -182,7 +193,14 @@ static uint8_t rm_font(uint32_t addr)
 
 static uint8_t rm_ipl(uint32_t addr)
 {
+	/* IPL is stored native on big-endian (see WinX68k_LoadROMs: the
+	 * byte-swap pass is skipped there for MSB_FIRST), so the data read
+	 * must not swap either. */
+#ifdef MSB_FIRST
+	return IPL[addr & 0x3ffff];
+#else
 	return IPL[(addr & 0x3ffff) ^ 1];
+#endif
 }
 
 static uint8_t rm_opm(uint32_t addr)
@@ -406,13 +424,7 @@ cpu_readmem24_dword(uint32_t addr)
  */
 void Memory_Init(void)
 {
-#if defined (HAVE_CYCLONE)
 	cpu_setOPbase24((uint32_t)m68000_get_reg(M68K_PC));
-#elif defined (HAVE_C68K)
-	cpu_setOPbase24((uint32_t)C68k_Get_PC(&C68K));
-#elif defined (HAVE_MUSASHI)
-	cpu_setOPbase24((uint32_t)m68k_get_reg(NULL, M68K_REG_PC));
-#endif /* HAVE_C68K */ /* HAVE_MUSASHI */
 }
 
 void 

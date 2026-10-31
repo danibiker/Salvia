@@ -47,8 +47,8 @@ void Pal_SetColor(void)
 	int r         = 5;
 	int g         = 5;
 	int b         = 5;
-	Pal_R         = Pal_G = Pal_B = 0;
 	uint16_t TempMask = 0;
+	Pal_R         = Pal_G = Pal_B = 0;
 	for (bit=0x8000; bit; bit>>=1)
 	{
 		if ( (WinDraw_Pal16R&bit)&&(r) )
