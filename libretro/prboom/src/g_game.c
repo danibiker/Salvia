@@ -2078,9 +2078,9 @@ void G_LoadGame(int slot, dbool   command)
 
 static void G_LoadGameErr(const char *msg)
 {
-  Z_Free(savebuffer);                // Free the savegame buffer
+  free(savebuffer);                  // Free the savegame buffer
   /* Null the globals here so callers (G_DoLoadGame's error paths)
-   * can fall through to their trailing Z_Free(savebuffer) without
+   * can fall through to their trailing free(savebuffer) without
    * causing a double-free.  Matches the post-save pattern in
    * G_DoSaveGame / G_DoSaveGameToBuffer where savebuffer/save_p
    * are nulled together. */
@@ -2329,7 +2329,7 @@ void G_DoLoadGame(void)
   }
 
   // done
-  Z_Free (savebuffer);
+  free(savebuffer);
   savebuffer = NULL;
   save_p     = NULL;
 }
@@ -3468,7 +3468,9 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
        return NULL;
      }
    }
-   else if (U_mapinfo.mapcount)
+   /* A translated ZDoom MAPINFO is not a UMAPINFO lump: the wad's own
+    * demos were recorded on engines that never read it. */
+   else if (U_mapinfo.mapcount && !U_mapinfo.translated)
    {
      I_Error("UMAPINFO loaded but trying to play a demo recorded without it");
      return NULL;
@@ -3775,6 +3777,35 @@ void doom_printf(const char *s, ...)
 #endif
   va_end(v);
   players[consoleplayer].message = msg;  // set new message
+}
+
+/* Demo playback position, for savestates.
+ *
+ * demobuffer and demo_p are static here, and nothing outside this file
+ * could see how far the demo had been read.  A state taken during
+ * playback therefore restored the world but not the read head, so the
+ * demo carried on from wherever it had got to rather than from the
+ * point the state was taken -- which is what run-ahead and rewind do to
+ * every frame of the attract loop.
+ *
+ * The offset is only meaningful against the same lump the state was
+ * taken from; a restore that does not fit the demo now loaded is
+ * ignored rather than pointing the read head somewhere arbitrary.
+ */
+uint32_t G_DemoReadOffset(void)
+{
+  if (!demoplayback || !demobuffer || !demo_p || demo_p < demobuffer)
+    return 0;
+  return (uint32_t)(demo_p - demobuffer);
+}
+
+void G_SetDemoReadOffset(uint32_t offset)
+{
+  if (!demoplayback || !demobuffer || offset == 0)
+    return;
+  if (demolength > 0 && offset > (uint32_t)demolength)
+    return;
+  demo_p = demobuffer + offset;
 }
 
 /* G_Deinit

@@ -293,7 +293,12 @@ static const struct adam7_pass rpng_passes[] = {
 
 static INLINE uint32_t rpng_dword_be(const uint8_t *buf)
 {
-   return (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | (buf[3] << 0);
+   /* Each byte promotes to int, so a leading byte >= 0x80 shifted left by
+    * 24 overflows a 32-bit signed int.  That is undefined behavior, and
+    * UBSan flags it on the chunk-header path for any chunk whose length
+    * or type byte has the high bit set.  Widen to uint32_t first. */
+   return  ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16)
+         | ((uint32_t)buf[2] <<  8) | ((uint32_t)buf[3] <<  0);
 }
 
 static INLINE uint16_t rpng_word_be(const uint8_t *buf)
@@ -3162,6 +3167,20 @@ bool rpng_iterate_image(rpng_t *rpng)
          if (!rpng_process_ihdr(&rpng->ihdr))
             return false;
 
+         /* PNG only defines compression and filter method 0, and
+          * interlace methods 0 (none) and 1 (Adam7).  In particular,
+          * the decode path treats every non-zero interlace value as
+          * Adam7 while the buffer setup only treats 1 as Adam7. */
+         if (   rpng->ihdr.compression != 0
+             || rpng->ihdr.filter      != 0
+             || rpng->ihdr.interlace    > 1)
+         {
+#if defined(DEBUG) || defined(RPNG_TEST)
+            fprintf(stderr, "[RPNG] Error in line %d.\n", __LINE__);
+#endif
+            return false;
+         }
+
          if (rpng->ihdr.width == 0 || rpng->ihdr.height == 0)
             return false;
 
@@ -3205,14 +3224,6 @@ bool rpng_iterate_image(rpng_t *rpng)
 #endif
                )
                return false;
-         }
-
-         if (rpng->ihdr.compression != 0)
-         {
-#if defined(DEBUG) || defined(RPNG_TEST)
-            fprintf(stderr, "[RPNG] Error in line %d.\n", __LINE__);
-#endif
-            return false;
          }
 
          rpng->flags   |= RPNG_FLAG_HAS_IHDR;

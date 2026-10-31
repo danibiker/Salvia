@@ -1,7 +1,7 @@
-/* Copyright  (C) 2010-2020 The RetroArch team
+/* Copyright  (C) 2010-2026 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
- * The following license statement only applies to this file (retro_assert.h).
+ * The following license statement only applies to this file (video_color.h).
  * ---------------------------------------------------------------------------------------
  *
  * Permission is hereby granted, free of charge,
@@ -20,16 +20,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __RETRO_ASSERT_H
-#define __RETRO_ASSERT_H
+#ifndef __LIBRETRO_SDK_FORMAT_VIDEO_COLOR_H__
+#define __LIBRETRO_SDK_FORMAT_VIDEO_COLOR_H__
 
-#include <assert.h>
+#include <stdint.h>
 
-#ifdef RARCH_INTERNAL
-#include <stdio.h>
-#define retro_assert(cond) ((void)( (cond) || (printf("Assertion failed at %s:%d.\n", __FILE__, __LINE__), abort(), 0) ))
-#else
-#define retro_assert(cond) assert(cond)
-#endif
+/* RGB and white xy coordinates in 1/50000 units; luminance in 1/10000
+ * cd/m2. Present bits 0..7 name xy values, 8 max, 9 min; zero is valid. */
+typedef struct video_mastering_display
+{
+   uint32_t luminance_max, luminance_min;
+   unsigned present;
+   uint16_t chromaticity[8];
+} video_mastering_display_t;
+
+#define VIDEO_MASTERING_DISPLAY_COMPLETE 0x3ffu
+
+/* Source ISO/IEC 23001-8 code points, not the converted output space.
+ * Zero means absent; code point 2 means unspecified. Range is 0 absent,
+ * 1 limited, 2 full. MaxCLL/MaxFALL are cd/m2; zero means absent. */
+typedef struct video_color_metadata
+{
+   video_mastering_display_t mastering;
+   unsigned primaries, transfer, matrix, range;
+   unsigned max_cll, max_fall;
+} video_color_metadata_t;
 
 #endif

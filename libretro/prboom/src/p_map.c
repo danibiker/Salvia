@@ -471,7 +471,7 @@ dbool PIT_CheckLine (line_t* ld)
         if (numspechit >= spechit_max)
         {
           spechit_max = spechit_max ? spechit_max * 2 : 8;
-          spechit = realloc(spechit, sizeof *spechit * spechit_max);
+          spechit = Z_Realloc(spechit, sizeof *spechit * spechit_max, PU_STATIC, 0);
         }
         spechit[numspechit++] = ld;
       }
@@ -554,7 +554,7 @@ dbool PIT_CheckLine (line_t* ld)
       // 1/11/98 killough: remove limit on lines hit, by array doubling
       if (numspechit >= spechit_max) {
         spechit_max = spechit_max ? spechit_max*2 : 8;
-	spechit = realloc(spechit,sizeof *spechit*spechit_max); // killough
+	spechit = Z_Realloc(spechit,sizeof *spechit*spechit_max, PU_STATIC, 0); // killough
       }
       spechit[numspechit++] = ld;
       // e6y: Spechits overrun emulation code
@@ -3024,7 +3024,11 @@ void P_RadiusAttackHexen(mobj_t *spot, mobj_t *source, int damage,
 
   fixed_t dist;
 
-  dist = (distance+MAXRADIUS)<<FRACBITS;
+  /* Vanilla shifts MAXRADIUS (already 32<<FRACBITS) a second time, which
+   * overflows int; the term wraps to zero and every port has in practice
+   * computed distance<<FRACBITS here since 1993, and demos depend on
+   * that. Keep those bits exactly and just make the wrap defined. */
+  dist = (fixed_t)((uint32_t)(distance+MAXRADIUS)<<FRACBITS);
   yh = (spot->y + dist - bmaporgy)>>MAPBLOCKSHIFT;
   yl = (spot->y - dist - bmaporgy)>>MAPBLOCKSHIFT;
   xh = (spot->x + dist - bmaporgx)>>MAPBLOCKSHIFT;

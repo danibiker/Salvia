@@ -94,6 +94,11 @@
 #include "u_mapinfo.h"
 #include "u_decorate.h"
 #include "u_zmapinfo.h"
+#include "u_ztextures.h"
+#include "u_brightmap.h"
+#include "u_dynlight.h"
+#include "u_voxel.h"
+#include "u_decaldef.h"
 
 void GetFirstMap(int *ep, int *map); // Ty 08/29/98 - add "-warp x" functionality
 static void D_PageDrawer(void);
@@ -267,11 +272,12 @@ void D_Display (void)
    *
    * Running wipe_StartScreen here, between the previous frame's
    * I_FinishUpdate (which restored screens[0].data to the
-   * persistent screen_buf and -- as part of the same #183 fix --
-   * snapshotted the just-presented frame into screen_buf) and this
-   * frame's I_StartDisplay, means screens[0] still points at
-   * screen_buf with the previous frame's pixels in it.  Capturing
-   * from there yields the correct wipe-start content.
+   * persistent screen_buf, and carries the just-presented frame
+   * into it on the frames a melt can follow) and this frame's
+   * I_StartDisplay, means screens[0] still points at screen_buf
+   * with the previous frame's pixels in it.  Capturing from there
+   * yields the correct wipe-start content, and I_WipeSourceValid
+   * reports whether that content is there to capture.
    *
    * The fallback (non-direct-render) path is unaffected: there
    * screens[0].data is always screen_buf, and screen_buf is the
@@ -279,7 +285,12 @@ void D_Display (void)
    * I_StartDisplay and after-I_StartDisplay readings return the
    * same content. */
   if ((wipe = gamestate != wipegamestate))
-    wipe_StartScreen();
+  {
+    if (I_WipeSourceValid())
+      wipe_StartScreen();
+    else
+      wipe = 0;
+  }
 
   if (!I_StartDisplay())
     return;
@@ -455,7 +466,10 @@ void I_SafeExit(int rc)
 //  DEMO LOOP
 //
 
-static int  demosequence;         // killough 5/2/98: made static
+/* -1 is "before the first entry": D_StartTitle sets it, D_DoomDeinit
+ * restores it, and a session that goes straight to -playdemo without a
+ * title screen starts from the same place. */
+static int  demosequence = -1;    // killough 5/2/98: made static
 static int  pagetic;
 static const char *pagename; // CPhipps - const
 dbool bfgedition = 0;
@@ -1787,6 +1801,7 @@ bool D_DoomMainSetup(void)
       lprintf(LO_INFO,"U_ParseZMapInfo: Translating ZDoom MAPINFO.\n");
       data = (const char *)W_CacheLumpNum(p);
       U_ParseZMapInfo(data, W_LumpLength(p));
+      U_mapinfo.translated = 1;
     }
   }
 
@@ -1942,6 +1957,8 @@ void D_DoomLoop(void)
 //foward decl
 void M_QuitDOOM(int choice);
 
+extern dbool quit_pressed;
+
 void D_DoomDeinit(void)
 {
   lprintf(LO_INFO,"D_DoomDeinit:\n");
@@ -1990,6 +2007,12 @@ void D_DoomDeinit(void)
   advancedemo  = FALSE;
   demosequence = -1;
   pagetic      = 0;
+  /* -playdemo sets singledemo so the demo it was given is the only one
+   * that plays.  Nothing clears it, so once a session loads a .lmp,
+   * D_AdvanceDemo is a no-op for the rest of the process and every later
+   * session's title screen sits on its first page instead of running the
+   * demo sequence. */
+  singledemo   = FALSE;
   I_InitGraphicsShutdown();
 
   M_QuitDOOM(0);
@@ -2011,9 +2034,28 @@ void D_DoomDeinit(void)
   I_ShutdownSound();
   I_ShutdownMusic();
   U_FreeMapInfo();
+  U_FreeLanguage();
+  U_ZTexturesFree();
+  U_FreeBrightmaps();
+  U_FreeDynLights();
+  U_FreeVoxels();
+  U_FreeDecalDefs();
+  U_FreeDecorate();
+  ST_ResetFace();
+  R_ResetComposedPalette();
+  R_ResetComposedPaletteTC();
   D_FreeBEXTables();
   M_FreeDefaults();
   W_ReleaseAllWads();
+
+  /* Latches the next session has to open with, not inherit:
+   * M_QuitDOOM above records a quit request, and the tic counters
+   * belong to the run that produced them. */
+  quit_pressed = false;
+  has_exited   = 0;
+  gametic      = 0;
+  basetic      = 0;
+  maketic      = 0;
 }
 
 //

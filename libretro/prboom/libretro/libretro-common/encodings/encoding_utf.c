@@ -20,6 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <retro_posix_source.h>
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -348,7 +350,7 @@ size_t utf8cpy(char *s, size_t len, const char *in, size_t chars)
    if (!in || !len)
       return 0;
 
-   while (*sb && chars-- > 0)
+   while ((size_t)(sb - sb_org) < len - 1 && *sb && chars-- > 0)
    {
       /* Stepping over continuation bytes stops at the terminator by
        * itself, so a truncated sequence cannot overrun the buffer. */
@@ -784,6 +786,34 @@ char* utf8_to_local_string_alloc(const char *str)
       return strdup(str); /* Assume string needs no modification if not on Windows */
 #endif
    return NULL;
+}
+
+/**
+ * local_to_utf8_string:
+ *
+ * The guard is the one in local_to_utf8_string_alloc() below: where it
+ * resolves to a plain copy there is nothing to convert, so there is
+ * nothing to allocate either.
+ **/
+bool local_to_utf8_string(const char *in, char *s, size_t len)
+{
+   if (!s || !len)
+      return false;
+   s[0] = '\0';
+   if (!in || !*in)
+      return true;
+#if defined(_WIN32) && !defined(_XBOX) && !defined(UNICODE)
+   {
+      char *tmp = mb_to_mb_string_alloc(in, CODEPAGE_LOCAL, CODEPAGE_UTF8);
+      if (!tmp)
+         return false;
+      strlcpy(s, tmp, len);
+      free(tmp);
+   }
+#else
+   strlcpy(s, in, len);
+#endif
+   return true;
 }
 
 /**

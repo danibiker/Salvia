@@ -1517,10 +1517,6 @@ void D_BuildBEXTables(void)
     * before anything reads or edits them. */
    dsda_InitTables();
 
-   // moved from ProcessDehFile, then we don't need the static int i
-   for (i = 0; i < NUMSTATES; i++)  // remember what they start as for deh xref
-     deh_codeptr[i] = states[i].action;
-
    for(i = 0; i < NUMSPRITES; i++)
       deh_spritenames[i] = strdup(sprnames[i]);
    deh_spritenames[NUMSPRITES] = NULL;
@@ -1554,6 +1550,27 @@ static int   deh_holdstringlen = 128;
  * forever because Z_Close only runs at retro_deinit, not between
  * content loads.
  */
+/* Built-in cheat sequences displaced by a DEHACKED lump, kept so the
+ * next wad set starts from the engine's own table. */
+static const char **deh_cheat_orig;
+static int          deh_cheat_orig_count;
+
+static void deh_SaveCheatOrig(int idx)
+{
+  if (!deh_cheat_orig)
+  {
+    int n;
+    for (n = 0; cheat[n].cheat; n++)
+      ;
+    deh_cheat_orig = calloc(n, sizeof(*deh_cheat_orig));
+    if (!deh_cheat_orig)
+      return;
+    deh_cheat_orig_count = n;
+  }
+  if (idx >= 0 && idx < deh_cheat_orig_count && !deh_cheat_orig[idx])
+    deh_cheat_orig[idx] = cheat[idx].cheat;
+}
+
 void D_FreeBEXTables(void)
 {
    int i;
@@ -1579,6 +1596,32 @@ void D_FreeBEXTables(void)
    free(deh_holdstring);
    deh_holdstring    = NULL;
    deh_holdstringlen = 128;
+
+   /* Put every substituted string back to the engine's own, so a wad
+    * set that ships no DEHACKED text reads as the engine wrote it. */
+   for (i = 0; i < (int)deh_numstrlookup; i++)
+   {
+      if (!deh_strlookup[i].orig)
+         continue;
+      if (*deh_strlookup[i].ppstr != deh_strlookup[i].orig)
+         free((void *)*deh_strlookup[i].ppstr);
+      *deh_strlookup[i].ppstr = deh_strlookup[i].orig;
+      deh_strlookup[i].orig   = NULL;
+   }
+
+   for (i = 0; i < deh_cheat_orig_count; i++)
+   {
+      if (!deh_cheat_orig[i])
+         continue;
+      if (cheat[i].cheat != deh_cheat_orig[i])
+         free((void *)cheat[i].cheat);
+      cheat[i].cheat = deh_cheat_orig[i];
+   }
+   free(deh_cheat_orig);
+   deh_cheat_orig       = NULL;
+   deh_cheat_orig_count = 0;
+
+   M_ResetCheats();
 }
 
 // ====================================================================
@@ -2167,34 +2210,42 @@ static void deh_procThing(DEHFILE *fpin, FILE* fpout, char *line)
             }
           }
 
-          // the MF_COUNTKILL flag used to be indicative of the Mobj being a
-          // monster, but this is no longer true after the logic for monsters_infight
-          // that don't count towards limit was dehardcoded.
-          // Let's make sure that any actor that has MF_COUNTKILL is considered
-          // a monster, avoid incompatibility with older DEH files
-          if (value & MF_COUNTKILL)
-            value |= MF_ISMONSTER;
-
-          deh_log(
-#ifdef PSX
-                    "Result  =  0x%016llx\n"
-                    "Current    0x%016llx\n",
-#else
-                    "Result  =  0x%016"PRIX64"\n"
-                    "Current    0x%016"PRIX64"\n",
-#endif
-                    value, mobjinfo[indexnum].flags);
-
-          // Each "Bits" field can use any mnemonic, but it won't overwrite the values
-          // from fields outside of the corresponding ones, this way a wad can keep using "Bits"
-          // for setting values in "Bits2" without affecting the default values that might be
-          // configured in the future.
-          if (key[4] == '2')
-            value = (mobjinfo[indexnum].flags & 0x00000000FFFFFFFF)|value; // Bits2
-          else
-            value = (mobjinfo[indexnum].flags & 0xFFFFFFFF00000000)|value; // Bits
         }
+
+        /* Both forms end the same way.  A numeric value names only its
+         * own half of the flags, exactly as a mnemonic list does, so the
+         * other half -- where the behaviours vanilla ties to a thing's
+         * type live (splash immunity, full-volume sounds, the lost
+         * soul's rules) -- has to survive it. */
+
+        // the MF_COUNTKILL flag used to be indicative of the Mobj being a
+        // monster, but this is no longer true after the logic for monsters_infight
+        // that don't count towards limit was dehardcoded.
+        // Let's make sure that any actor that has MF_COUNTKILL is considered
+        // a monster, avoid incompatibility with older DEH files
+        if (value & MF_COUNTKILL)
+          value |= MF_ISMONSTER;
+
+        deh_log(
+#ifdef PSX
+                  "Result  =  0x%016llx\n"
+                  "Current    0x%016llx\n",
+#else
+                  "Result  =  0x%016"PRIX64"\n"
+                  "Current    0x%016"PRIX64"\n",
+#endif
+                  value, mobjinfo[indexnum].flags);
+
+        // Each "Bits" field can use any mnemonic, but it won't overwrite the values
+        // from fields outside of the corresponding ones, this way a wad can keep using "Bits"
+        // for setting values in "Bits2" without affecting the default values that might be
+        // configured in the future.
+        if (key[4] == '2')
+          value = (mobjinfo[indexnum].flags & 0x00000000FFFFFFFF)|value; // Bits2
+        else
+          value = (mobjinfo[indexnum].flags & 0xFFFFFFFF00000000)|value; // Bits
       }
+
       setMobjInfoValue(indexnum, ix, value);
       {
         deh_log(
@@ -2878,6 +2929,7 @@ static void deh_procCheat(DEHFILE *fpin, FILE* fpout, char *line) // done
           cheat[i].deh_modified = TRUE;
                 }
 #endif
+                deh_SaveCheatOrig(iy);
                 cheat[iy].cheat = strdup(p);
                 deh_log(
                                    "Assigned new cheat '%s' to cheat '%s'at index %d\n",
