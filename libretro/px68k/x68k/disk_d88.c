@@ -4,7 +4,7 @@
 #include "fdd.h"
 #include "disk_d88.h"
 
-/* ���������� (16 Bytes) */
+/* ?????????? (16 Bytes) */
 typedef struct {
 	uint8_t	c;
 	uint8_t	h;

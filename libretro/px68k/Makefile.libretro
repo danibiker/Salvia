@@ -2,7 +2,7 @@
 DEBUG = 0
 USE_LIBRETRO_VFS = 1
 
-GIT_VERSION := " $(shell git rev-parse --short HEAD)"
+GIT_VERSION := " $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 SPACE :=
 SPACE := $(SPACE) $(SPACE)
@@ -13,6 +13,10 @@ filter_out2 = $(call filter_out1,$(call filter_out1,$1))
 unixpath = $(subst \,/,$1)
 unixcygpath = /$(subst :,,$(call unixpath,$1))
 C68K := 1
+
+# Build both CPU emulators and select between them at runtime by default.
+# Override with CPU_RUNTIME=0 to use the legacy single-backend build.
+CPU_RUNTIME ?= 1
 
 ifeq ($(platform),)
 	platform = unix

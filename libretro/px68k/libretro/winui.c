@@ -28,6 +28,7 @@
  * -------------------------------------------------------------------------- */
 
 #include <stdint.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include <errno.h>
 #ifndef _WIN32
@@ -65,6 +66,7 @@
 #include "mercury.h"
 #include "tvram.h"
 #include "winui.h"
+#include "zipdisk.h"
 
 #include "fmg_wrap.h"
 
@@ -88,6 +90,68 @@ int mkey_y     = 0;
 int mkey_pos   = 0;
 
 struct menu_flist mfl;
+
+/* Navigation history shared by filesystem folders and ZIP archives. A ZIP is
+ * treated as a directory node: entering it pushes the containing directory and
+ * selected item; '..' pops that exact frame and restores the selection.
+ * ZIPs do not nest, so a drive never holds more than one frame; the
+ * headroom only keeps a stale entry harmless. */
+#define MFL_NAV_DEPTH 4
+struct mfl_nav_frame
+{
+   char dir[MAX_PATH];
+   char selected[MAX_PATH];
+   int ptr;
+   int y;
+};
+static struct mfl_nav_frame mfl_nav[2][MFL_NAV_DEPTH];
+static int mfl_nav_depth[2];
+static char mfl_nav_restore[2][MAX_PATH];
+static const char mfl_slash[2] = { SLASH, '\0' };
+
+static void menu_nav_push(int drv, const char *selected)
+{
+   int d;
+   struct mfl_nav_frame *f;
+   if (drv < 0 || drv >= 2) return;
+   d = mfl_nav_depth[drv];
+   if (d >= MFL_NAV_DEPTH) d = MFL_NAV_DEPTH - 1;
+   f = &mfl_nav[drv][d];
+   snprintf(f->dir, sizeof(f->dir), "%s", mfl.dir[drv]);
+   snprintf(f->selected, sizeof(f->selected), "%s", selected ? selected : "");
+   f->ptr = mfl.ptr;
+   f->y = mfl.y;
+   if (mfl_nav_depth[drv] < MFL_NAV_DEPTH)
+      mfl_nav_depth[drv]++;
+}
+
+static int menu_nav_pop(int drv)
+{
+   struct mfl_nav_frame *f;
+   int i, idx = -1;
+   if (drv < 0 || drv >= 2 || mfl_nav_depth[drv] <= 0)
+      return 0;
+   f = &mfl_nav[drv][--mfl_nav_depth[drv]];
+   snprintf(mfl_nav_restore[drv], sizeof(mfl_nav_restore[drv]), "%s", f->selected);
+   snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", f->dir);
+   mfl.ptr = f->ptr;
+   mfl.y = f->y;
+   /* The list can be reordered or truncated, so restore by filename first. */
+   if (f->selected[0])
+      for (i = 0; i < mfl.num; i++)
+         if (!strcmp(mfl.name[i], f->selected)) { idx = i; break; }
+   if (idx >= 0)
+   {
+      mfl.ptr = idx >= WinDraw_ExplorerRows() ? idx - WinDraw_ExplorerRows() + 1 : 0;
+      mfl.y = idx - mfl.ptr;
+   }
+   else if (mfl.ptr < 0 || mfl.ptr >= mfl.num || mfl.y < 0 || mfl.ptr + mfl.y >= mfl.num)
+   {
+      mfl.ptr = 0;
+      mfl.y = 0;
+   }
+   return 1;
+}
 
 extern char base_dir[MAX_PATH];
 
@@ -159,286 +223,373 @@ static void upper(char *s)
    }
 }
 
-static void switch_mfl(int a, int b)
+/* Dynamically sized directory index. Navigation uses indices and never scans
+ * the filesystem during cursor movement, including accelerated 50-line jumps. */
+static void menu_list_clear(void)
 {
-   /* exchange 2 values in mfl list */
-   char name_tmp[MAX_PATH];
-   char type_tmp;
-
-   strcpy(name_tmp, mfl.name[a]);
-   type_tmp    = mfl.type[a];
-
-   strcpy(mfl.name[a], mfl.name[b]);
-   mfl.type[a] = mfl.type[b];
-
-   strcpy(mfl.name[b], name_tmp);
-   mfl.type[b] = type_tmp;
+   int i;
+   for (i = 0; i < mfl.num; ++i)
+      free(mfl.name[i]);
+   free(mfl.name);
+   free(mfl.type);
+   mfl.name = NULL;
+   mfl.type = NULL;
+   mfl.capacity = 0;
+   mfl.num = 0;
 }
 
+static int menu_list_add(const char *name, char type)
+{
+   char **names;
+   char *types;
+   char *copy;
+   int cap;
+   if (mfl.num == mfl.capacity)
+   {
+      cap = mfl.capacity ? mfl.capacity * 2 : 256;
+      if (cap <= mfl.capacity) return 0;
+      names = (char **)realloc(mfl.name, (size_t)cap * sizeof(char *));
+      if (!names) return 0;
+      mfl.name = names;
+      types = (char *)realloc(mfl.type, (size_t)cap * sizeof(char));
+      if (!types) return 0;
+      mfl.type = types;
+      mfl.capacity = cap;
+   }
+   copy = (char *)malloc(strlen(name) + 1);
+   if (!copy) return 0;
+   strcpy(copy, name);
+   mfl.name[mfl.num] = copy;
+   mfl.type[mfl.num] = type;
+   ++mfl.num;
+   return 1;
+}
+
+struct menu_sort_entry { char *name; char type; };
+static int menu_sort_compare(const void *aa, const void *bb)
+{
+   const struct menu_sort_entry *a = (const struct menu_sort_entry *)aa;
+   const struct menu_sort_entry *b = (const struct menu_sort_entry *)bb;
+   if (!strcmp(a->name, "..")) return -1;
+   if (!strcmp(b->name, "..")) return 1;
+   if (a->type != b->type) return (int)b->type - (int)a->type;
+   return strcasecmp(a->name, b->name);
+}
+static void menu_list_sort(void)
+{
+   struct menu_sort_entry *entries;
+   int i;
+   if (mfl.num < 2) return;
+   entries = (struct menu_sort_entry *)malloc((size_t)mfl.num * sizeof(*entries));
+   if (!entries) return;
+   for (i = 0; i < mfl.num; ++i)
+   {
+      entries[i].name = mfl.name[i];
+      entries[i].type = mfl.type[i];
+   }
+   qsort(entries, (size_t)mfl.num, sizeof(*entries), menu_sort_compare);
+   for (i = 0; i < mfl.num; ++i)
+   {
+      mfl.name[i] = entries[i].name;
+      mfl.type[i] = entries[i].type;
+   }
+   free(entries);
+}
+
+static void menu_nav_restore_cursor(int drv)
+{
+   int i;
+   if (drv < 0 || drv >= 2) return;
+   if (mfl_nav_restore[drv][0])
+      for (i = 0; i < mfl.num; i++)
+         if (!strcmp(mfl.name[i], mfl_nav_restore[drv]))
+         {
+            mfl.ptr = i >= WinDraw_ExplorerRows() ? i - WinDraw_ExplorerRows() + 1 : 0;
+            mfl.y = i - mfl.ptr;
+            mfl_nav_restore[drv][0] = '\0';
+            return;
+         }
+   if (mfl.ptr < 0 || mfl.ptr >= mfl.num || mfl.y < 0 || mfl.ptr + mfl.y >= mfl.num)
+      mfl.ptr = mfl.y = 0;
+   mfl_nav_restore[drv][0] = '\0';
+}
+
+static int menu_name_is_zip(const char *name)
+{
+   const char *dot = name ? strrchr(name, '.') : NULL;
+   if (!dot || strlen(dot) != 4)
+      return 0;
+   return (tolower((unsigned char)dot[1]) == 'z' &&
+           tolower((unsigned char)dot[2]) == 'i' &&
+           tolower((unsigned char)dot[3]) == 'p');
+}
+
+static int menu_create_zip_flist(int drv)
+{
+   int slot, count, i;
+   if (!px68k_zip_is_browse_path(mfl.dir[drv]))
+      return 0;
+   slot = px68k_zip_browse_slot(mfl.dir[drv]);
+   menu_list_clear();
+   if (slot < 0) return 1;
+   if (!menu_list_add("..", 1)) return 1;
+   count = px68k_zip_count(slot, 0);
+   for (i = 0; i < count; ++i)
+      if (!menu_list_add(px68k_zip_name(slot, 0, i), 0)) break;
+   mfl.ptr = 0;
+   mfl.y = 0;
+   return 1;
+}
+
+/* Directory enumeration is spread over menu frames. ZIP enumeration and the
+ * boot-time navigation stack reconstruction remain synchronous. */
 #ifdef USE_LIBRETRO_VFS
-static void menu_create_flist(int v)
-{
-	int drv;
-	int i, a;
-	DIRH *dp;
-
-	/* file extension of FD image */
-	char support[] = "D8888DHDMDUP2HDDIMXDFIMG";
-
-	drv = WinUI_get_drv_num(mkey_y);
-
-	if (drv < 0)
-	{
-		return;
-	}
-
-	/* set current directory when FDD is ejected */
-	if (v == 1)
-	{
-		if (drv < 2)
-		{
-			FDD_EjectFD(drv);
-			Config.FDDImage[drv][0] = '\0';
-		}
-		else
-		{
-			Config.HDImage[drv - 2][0] = '\0';
-		}
-		/* retain last directory used upon eject */
-      /* strcpy(mfl.dir[drv], cur_dir_str); */
-		return;
-	}
-
-	if (drv >= 2)
-	{
-		strcpy(support, "HDF");
-	}
-
-	/* This routine gets file lists. */
-	dp = wrap_vfs_opendir(mfl.dir[drv]);
-
-	/* xxx check if dp is null... */
-	if (!dp)
-	{
-		char tmp[PATH_MAX];
-		/* failed to open StartDir, use rom folder as default */
-		/* TODO: check for path more early */
-		sprintf(tmp, "%s%c", base_dir, SLASH);
-		strcpy(mfl.dir[drv], tmp);
-		/* re-open folder */
-		dp = wrap_vfs_opendir(mfl.dir[drv]);
-	}
-
-	/* xxx You can get only MFL_MAX files. */
-	for (i = 0; i < MFL_MAX; i++)
-	{
-		char ent_name[MAX_PATH];
-		const char *n;
-		int st_mode = 0;
-		int st_size = 0;
-
-		if (!(wrap_vfs_readdir(dp)))
-			break;
-
-		n = dp->d_name;
-		strcpy(ent_name, mfl.dir[drv]);
-		strcat(ent_name, n);
-		st_mode = wrap_vfs_stat(ent_name, &st_size);
-
-		if (!(st_mode & STAT_IS_DIRECTORY))
-		{
-			char *p;
-			char ext[4];
-			int len = strlen(n);
-
-			/* Check extension if this is file. */
-			if (len < 4 || *(n + len - 4) != '.')
-			{
-				i--;
-				continue;
-			}
-			strcpy(ext, n + len - 3);
-			upper(ext);
-			p = strstr(support, ext);
-			if (p == NULL || (p - support) % 3 != 0)
-			{
-				i--;
-				continue;
-			}
-		}
-		else
-		{
-			if (!strcmp(n, "."))
-			{
-				i--;
-				continue;
-			}
-
-			/* You can't go up over current directory. */
-			if (!strcmp(n, "..") && !strcmp(mfl.dir[drv], cur_dir_str))
-			{
-				i--;
-				continue;
-			}
-		}
-
-		strcpy(mfl.name[i], n);
-		/* set 1 if this is directory */
-		mfl.type[i] = (st_mode & STAT_IS_DIRECTORY) ? 1 : 0;
-#ifdef DEBUG
-		p6logd("%s 0x%x\n", n, buf.st_mode);
+static DIRH *menu_scan_dir;
+#else
+#include <dirent.h>
+static DIR *menu_scan_dir;
 #endif
-	}
+static int menu_scan_active;
+static int menu_scan_drv;
+static int menu_scan_restore_ptr, menu_scan_restore_y;
+static char menu_scan_support[32];
 
-	wrap_vfs_closedir(dp);
-
-	strcpy(mfl.name[i], "");
-	mfl.num = i;
-	mfl.ptr = 0;
-
-	/* Sorting mfl!
-	 * Folder first, than files
-	 * buble sort glory */
-	for (a = 0; a < i - 1; a++)
-	{
-		int b;
-		for (b = a + 1; b < i; b++)
-		{
-			if (mfl.type[a] < mfl.type[b])
-				switch_mfl(a, b);
-			if ((mfl.type[a] == mfl.type[b]) && (strcasecmp(mfl.name[a], mfl.name[b]) > 0))
-				switch_mfl(a, b);
-		}
-	}
+static void menu_scan_close(void)
+{
+   if (menu_scan_dir)
+   {
+#ifdef USE_LIBRETRO_VFS
+      wrap_vfs_closedir(menu_scan_dir);
+#else
+      closedir(menu_scan_dir);
+#endif
+      menu_scan_dir = NULL;
+   }
+   menu_scan_active = 0;
 }
 
-#else /* !USE_LIBRETRO_VFS */
+/* Returns nonzero while more directory entries remain. */
+static int menu_scan_step(int budget)
+{
+   int count = 0;
+   while (menu_scan_active && count < budget)
+   {
+      const char *n;
+      char path[MAX_PATH];
+      int is_dir = 0;
+      int len;
+      char ext[4];
+      char *p;
+#ifdef USE_LIBRETRO_VFS
+      int st_size = 0;
+      int mode;
+      if (!wrap_vfs_readdir(menu_scan_dir)) break;
+      n = menu_scan_dir->d_name;
+#else
+      struct dirent *dent = readdir(menu_scan_dir);
+      struct stat st;
+      if (!dent) break;
+      n = dent->d_name;
+#endif
+      ++count;
+      if (!strcmp(n, ".") || !strcmp(n, "..")) continue;
+      len = (int)strlen(n);
+      if (len >= 4 && n[len - 4] == '.')
+      {
+         memcpy(ext, n + len - 3, 3);
+         ext[3] = '\0';
+         upper(ext);
+         p = strstr(menu_scan_support, ext);
+         if (p && (p - menu_scan_support) % 3 == 0)
+         {
+            /* Accepted file extension: still check whether it's a directory. */
+         }
+         else p = NULL;
+      }
+      else p = NULL;
+      /* A stat is needed for directories, including those without a supported
+       * extension. Avoid path buffer overflow for unusually long names. */
+      if (strlen(mfl.dir[menu_scan_drv]) + (size_t)len >= sizeof(path)) continue;
+      snprintf(path, sizeof(path), "%s%s", mfl.dir[menu_scan_drv], n);
+#ifdef USE_LIBRETRO_VFS
+      mode = wrap_vfs_stat(path, &st_size);
+      is_dir = !!(mode & STAT_IS_DIRECTORY);
+#else
+      if (stat(path, &st) != 0) continue;
+      is_dir = S_ISDIR(st.st_mode) ? 1 : 0;
+#endif
+      if (!is_dir && !p) continue;
+      if (!menu_list_add(n, (char)is_dir)) break;
+   }
+   if (menu_scan_active && count < budget)
+   {
+      menu_scan_close();
+      menu_list_sort();
+      {
+         int had_nav_restore = mfl_nav_restore[menu_scan_drv][0] != 0;
+         if (had_nav_restore)
+            menu_nav_restore_cursor(menu_scan_drv);
+         else
+         {
+            /* Restore the saved filesystem cursor only AFTER the completed
+             * directory has been sorted. The caller may have restored mfl.ptr
+             * while scanning, so checking whether it is zero is unreliable. */
+            int idx = menu_scan_restore_ptr + menu_scan_restore_y;
+            int rows = WinDraw_ExplorerRows();
+            if (idx >= 0 && idx < mfl.num)
+            {
+               mfl.ptr = menu_scan_restore_ptr;
+               mfl.y = menu_scan_restore_y;
+               if (mfl.ptr < 0) mfl.ptr = 0;
+               if (mfl.ptr > idx) mfl.ptr = idx;
+               if (rows < 1) rows = 1;
+               if (mfl.y < 0 || mfl.y >= rows)
+               {
+                  mfl.ptr = idx >= rows ? idx - rows + 1 : 0;
+                  mfl.y = idx - mfl.ptr;
+               }
+            }
+            else
+               mfl.ptr = mfl.y = 0;
+         }
+      }
+   }
+   return menu_scan_active;
+}
 
-#include <dirent.h>
-#include <sys/stat.h>
 static void menu_create_flist(int v)
 {
-   DIR *dp;
-   int i, len;
-   int a, b;
-   struct dirent *dent;
-   struct stat buf;
-   char *n, ext[4], *p;
-   char ent_name[MAX_PATH];
-   /* file extension of FD image */
-   char support[] = "D8888DHDMDUP2HDDIMXDFIMG";
-   int drv        = WinUI_get_drv_num(mkey_y);
-
-   if (drv < 0)
-      return;
-
-   /* set current directory when FDD is ejected */
+   int drv = WinUI_get_drv_num(mkey_y);
+   if (drv < 0) return;
    if (v == 1)
    {
+      menu_scan_close();
       if (drv < 2)
       {
          FDD_EjectFD(drv);
          Config.FDDImage[drv][0] = '\0';
       }
-      else
-         Config.HDImage[drv - 2][0] = '\0';
-      /* retain last directory used upon eject */
-      /* strcpy(mfl.dir[drv], cur_dir_str); */
+      else Config.HDImage[drv - 2][0] = '\0';
       return;
    }
-
-   if (drv >= 2)
-      strcpy(support, "HDF");
-
-   /* This routine gets file lists. */
-   dp = opendir(mfl.dir[drv]);
-
-   /* xxx check if dp is null... */
-   if (!dp)
+   menu_scan_close();
+   if (drv < 2 && menu_create_zip_flist(drv)) return;
+   menu_scan_drv = drv;
+   menu_scan_restore_ptr = mfl.ptr;
+   menu_scan_restore_y = mfl.y;
+   snprintf(menu_scan_support, sizeof(menu_scan_support), "%s",
+         drv >= 2 ? "HDF" : "D8888DHDMDUP2HDDIMXDFIMGZIP");
+   menu_list_clear();
+#ifdef USE_LIBRETRO_VFS
+   menu_scan_dir = wrap_vfs_opendir(mfl.dir[drv]);
+#else
+   menu_scan_dir = opendir(mfl.dir[drv]);
+#endif
+   if (!menu_scan_dir)
    {
-      char tmp[PATH_MAX];
-      /* failed to open StartDir, use rom folder as default */
-      /* TODO: check for path more early */
-      snprintf(tmp, sizeof(tmp), "%s%c", base_dir, SLASH);
-      strcpy(mfl.dir[drv], tmp);
-      /* re-open folder */
-      dp = opendir(mfl.dir[drv]);
+      snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s%c", base_dir, SLASH);
+#ifdef USE_LIBRETRO_VFS
+      menu_scan_dir = wrap_vfs_opendir(mfl.dir[drv]);
+#else
+      menu_scan_dir = opendir(mfl.dir[drv]);
+#endif
    }
-
-   /* xxx You can get only MFL_MAX files. */
-   for (i = 0 ; i < MFL_MAX; i++)
-   {
-      dent = readdir(dp);
-      if (!dent)
-         break;
-      n = dent->d_name;
-      strcpy(ent_name, mfl.dir[drv]);
-      strcat(ent_name, n);
-      stat(ent_name, &buf);
-
-      if (!S_ISDIR(buf.st_mode))
-      {
-         /* Check extension if this is file. */
-         len = strlen(n);
-         if (len < 4 || *(n + len - 4) != '.')
-         {
-            i--;
-            continue;
-         }
-         strcpy(ext, n + len - 3);
-         upper(ext);
-         p = strstr(support, ext);
-         if (!p || (p - support) % 3 != 0)
-         {
-            i--;
-            continue;
-         }
-      }
-      else
-      {
-         if (!strcmp(n, "."))
-         {
-            i--;
-            continue;
-         }
-
-         /* You can't go up over current directory. */
-         if (     !strcmp(n, "..")
-               && !strcmp(mfl.dir[drv], cur_dir_str))
-         {
-            i--;
-            continue;
-         }
-      }
-
-      strcpy(mfl.name[i], n);
-      /* set 1 if this is directory */
-      mfl.type[i] = S_ISDIR(buf.st_mode)? 1 : 0;
-   }
-
-   closedir(dp);
-
-   strcpy(mfl.name[i], "");
-   mfl.num = i;
-   mfl.ptr = 0;
-
-   /* Sorting mfl!
-    * Folder first, than files
-    * buble sort glory */
-   for (a=0; a<i-1; a++)
-   {
-      for (b=a+1; b<i; b++)
-      {
-         if (mfl.type[a]<mfl.type[b])
-            switch_mfl(a, b);
-         if (     (mfl.type[a] == mfl.type[b]) 
-               && (strcasecmp(mfl.name[a], mfl.name[b]) > 0))
-            switch_mfl(a, b);
-      }
-   }
+   mfl.ptr = mfl.y = 0;
+   if (!menu_scan_dir) return;
+   if (strcmp(mfl.dir[drv], cur_dir_str)) menu_list_add("..", 1);
+   menu_scan_active = 1;
 }
 
+/* Only the boot-time stack reconstruction needs a synchronous listing. */
+static void menu_create_flist_sync(void)
+{
+   while (menu_scan_active) menu_scan_step(1024);
+}
+
+
+/* Rebuild the legacy filesystem cursor stack for a path reached implicitly at
+ * boot. Normally this stack is populated by entering each directory in the
+ * browser. A boot-mounted archive skips those steps, so leaving its parent
+ * directory otherwise restores stale cursor positions on subsequent '..'. */
+static void menu_seed_legacy_folder_stack(int drv, const char *folder_path)
+{
+   char path[MAX_PATH];
+   char current[MAX_PATH];
+   char saved_dir[MAX_PATH];
+   char *components[MAX_PATH / 2];
+   int count = 0, i;
+   char *p;
+   size_t len;
+
+   if (drv < 0 || drv >= 4 || !folder_path || !folder_path[0]) return;
+   snprintf(saved_dir, sizeof(saved_dir), "%s", mfl.dir[drv]);
+   snprintf(path, sizeof(path), "%s", folder_path);
+   len = strlen(path);
+   while (len > 0 && (path[len - 1] == '/' || path[len - 1] == '\\'))
+      path[--len] = '\0';
+
+   current[0] = '\0';
+   p = path;
+#ifdef _WIN32
+   if (p[0] && p[1] == ':') {
+      current[0] = p[0]; current[1] = ':'; current[2] = SLASH; current[3] = '\0';
+      p += 2;
+   } else
 #endif
+   if (*p == '/' || *p == '\\') {
+      current[0] = SLASH; current[1] = '\0';
+      p++;
+   }
+   while (*p == '/' || *p == '\\') p++;
+   while (*p) {
+      char *start = p;
+      size_t n;
+      while (*p && *p != '/' && *p != '\\') p++;
+      n = (size_t)(p - start);
+      if (n && !(n == 1 && start[0] == '.')) {
+         if (count >= (int)(sizeof(components) / sizeof(components[0]))) { mfl.stackptr = 0; snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", saved_dir); return; }
+         components[count++] = start;
+         if (*p) *p++ = '\0';
+      } else if (*p) p++;
+      while (*p == '/' || *p == '\\') p++;
+   }
+
+   mfl.stackptr = 0;
+   for (i = 0; i < count; i++) {
+      int j, found = -1;
+      size_t clen;
+      if (!current[0]) snprintf(current, sizeof(current), ".%c", SLASH);
+      else {
+         len = strlen(current);
+         if (current[len - 1] != '/' && current[len - 1] != '\\')
+            strncat(current, mfl_slash, sizeof(current) - strlen(current) - 1);
+      }
+      snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", current);
+      menu_create_flist(0);
+      menu_create_flist_sync();
+      for (j = 0; j < mfl.num; j++)
+         if (mfl.type[j] && !strcmp(mfl.name[j], components[i])) { found = j; break; }
+      if (found < 0 || mfl.stackptr >= 256) {
+         mfl.stackptr = 0;
+         snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", saved_dir);
+         return;
+      }
+      mfl.ptr = found >= WinDraw_ExplorerRows() ? found - WinDraw_ExplorerRows() + 1 : 0;
+      mfl.y = found - mfl.ptr;
+      mfl.stack[0][mfl.stackptr] = mfl.ptr;
+      mfl.stack[1][mfl.stackptr] = mfl.y;
+      mfl.stackptr = (mfl.stackptr + 1) % 256;
+      clen = strlen(current);
+      if (clen + strlen(components[i]) + 2 >= sizeof(current)) {
+         mfl.stackptr = 0;
+         snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", saved_dir);
+         return;
+      }
+      strcat(current, components[i]);
+      strncat(current, mfl_slash, sizeof(current) - strlen(current) - 1);
+   }
+   snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", saved_dir);
+}
 
 struct _menu_func {
 	void (*func)(int v);
@@ -544,9 +695,18 @@ int WinUI_Menu(int first)
       WinDraw_DrawMenu(menu_state, mkey_pos, mkey_y, mval_y);
    }
 
+   /* Advance one bounded batch each frame; the menu continues to redraw. */
+   if (menu_scan_active)
+   {
+      menu_scan_step(256);
+      if (menu_state == MS_FILE) mfile_redraw = 1;
+   }
    cursor0 = mkey_y;
    joy     = get_joy_downstate();
    reset_joy_downstate();
+
+   if (menu_scan_active && menu_state == MS_FILE)
+      joy |= JOY_UP | JOY_DOWN | JOY_LEFT | JOY_RIGHT | JOY_TRG1;
 
    if (!(joy & JOY_UP))
    {
@@ -605,10 +765,10 @@ int WinUI_Menu(int first)
             }
             break;
          case MS_FILE:
-            if (mfl.y == 13)
+            if (mfl.y >= WinDraw_ExplorerRows() - 1)
             {
-               if (mfl.ptr + 14 < mfl.num
-                     && mfl.ptr < MFL_MAX - 13)
+               if (mfl.ptr + WinDraw_ExplorerRows() < mfl.num
+                     && mfl.ptr < mfl.num - WinDraw_ExplorerRows())
                   mfl.ptr++;
             }
             else if (mfl.y + 1 < mfl.num)
@@ -627,7 +787,7 @@ int WinUI_Menu(int first)
          case MS_VALUE:
             if (mval_y[mkey_y] > 0)
             {
-               mval_y[mkey_y]-=10;
+               mval_y[mkey_y]-=Config.MenuLinesJump;
                if (mval_y[mkey_y]<0)
                   mval_y[mkey_y] = 0;
 
@@ -643,14 +803,14 @@ int WinUI_Menu(int first)
             {
                if (mfl.ptr > 0)
                {
-                  mfl.ptr-=10;
+                  mfl.ptr-=Config.MenuLinesJump;
                   if (mfl.ptr < 0 )
                      mfl.ptr = 0;
                }
             }
             else
             {
-               mfl.y-=10;
+               mfl.y-=Config.MenuLinesJump;
                if (mfl.y<0)
                {
                   if (mfl.ptr > 0)
@@ -672,7 +832,7 @@ int WinUI_Menu(int first)
          case MS_KEY:
             break;
          case MS_VALUE:
-            for (ii = 0; ii<10; ii++)
+            for (ii = 0; ii<Config.MenuLinesJump; ii++)
             {
                if (menu_items[mkey_y][mval_y[mkey_y] + 1][0] != '\0')
                {
@@ -686,12 +846,12 @@ int WinUI_Menu(int first)
             }
             break;
          case MS_FILE:
-            for (ii=0; ii<10; ii++)
+            for (ii=0; ii<Config.MenuLinesJump; ii++)
             {
-               if (mfl.y == 13)
+               if (mfl.y >= WinDraw_ExplorerRows() - 1)
                {
-                  if (mfl.ptr + 14 < mfl.num
-                        && mfl.ptr < MFL_MAX - 13)
+                  if (mfl.ptr + WinDraw_ExplorerRows() < mfl.num
+                        && mfl.ptr < mfl.num - WinDraw_ExplorerRows())
                      mfl.ptr++;
                } else if (mfl.y + 1 < mfl.num)
                   mfl.y++;
@@ -729,7 +889,57 @@ int WinUI_Menu(int first)
             {
                if (mval_y[mkey_y] == 0)
                {
-                  /* go file_mode */
+                  /* Start in the archive containing the currently inserted
+                   * floppy, rather than StartDir, when that floppy is a ZIP
+                   * member. This makes changing disks from the internal menu
+                   * open the same archive's member list. */
+                  if (drv < 2 && px68k_is_zip_virtual_path(Config.FDDImage[drv]))
+                  {
+                     int slot = px68k_zip_virtual_slot(Config.FDDImage[drv]);
+                     if (slot >= 0)
+                     {
+                        char archive_path[MAX_PATH];
+                        snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]),
+                              "zipbrowse://%d", slot);
+                        /* Seed the same navigation stack used by ordinary
+                         * folders, so '..' returns to the archive's parent
+                         * and selects the archive itself. */
+                        mfl_nav_depth[drv] = 0;
+                        if (px68k_zip_get_archive_path(slot, archive_path,
+                                 sizeof(archive_path)))
+                        {
+                           char *slash = strrchr(archive_path, '/');
+                           char *backslash = strrchr(archive_path, '\\');
+                           char archive_name[MAX_PATH];
+                           if (!slash || (backslash && backslash > slash))
+                              slash = backslash;
+                           archive_name[0] = '\0';
+                           if (slash)
+                           {
+                              snprintf(archive_name, sizeof(archive_name), "%s", slash + 1);
+                              if (slash == archive_path)
+                                 slash[1] = '\0';
+                              else
+                              {
+                                 *slash = '\0';
+                                 strncat(archive_path, mfl_slash,
+                                       sizeof(archive_path) - strlen(archive_path) - 1);
+                              }
+                              snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", archive_path);
+                              menu_nav_push(drv, archive_name);
+                              snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "zipbrowse://%d", slot);
+                           }
+                        }
+                        mfl.ptr = 0;
+                        mfl.y = 0;
+                        /* The boot path bypasses normal directory entry, so
+                         * seed the original filesystem stack from the archive
+                         * parent path. Keep the ZIP-specific frame above. */
+                        menu_seed_legacy_folder_stack(drv, archive_path);
+                     }
+                  }
+                  /* Refresh the file list for the selected drive/path. */
+                  menu_func[mkey_y].func(0);
                   menu_state     = MS_FILE;
                   menu_redraw    = 0; /* reset */
                   mfile_redraw   = 1;
@@ -748,25 +958,92 @@ int WinUI_Menu(int first)
             if ((drv = WinUI_get_drv_num(mkey_y)) < 0)
                break;
             y = mfl.ptr + mfl.y;
-            /* file loaded */
-            if (mfl.type[y])
+
+            /* A ZIP's '..' is handled exactly like a filesystem folder's '..'. */
+            if (drv < 2 && px68k_zip_is_browse_path(mfl.dir[drv]) &&
+                !strcmp(mfl.name[y], ".."))
             {
-               /* directory operation */
-               if (!strcmp(mfl.name[y], ".."))
+               if (menu_nav_pop(drv))
                {
-                  shortcut_dir(drv);
-                  mfl.stack[0][mfl.stackptr] = mfl.stack[1][mfl.stackptr] = 0;
-                  mfl.stackptr               = (mfl.stackptr - 1) % 256;
-                  mfl.ptr                    = mfl.stack[0][mfl.stackptr];
-                  mfl.y                      = mfl.stack[1][mfl.stackptr];
+                  /* Filesystem parent scans asynchronously. Keep the saved ZIP
+                   * filename until the scan finishes and sorting is complete. */
+                  menu_func[mkey_y].func(0);
                }
                else
                {
-                  strncat(mfl.dir[drv], mfl.name[y], sizeof(mfl.dir[drv]) - 1);
+                  /* No parent frame (e.g. a stale browse path): return safely
+                   * to the configured start directory instead of corrupting the cursor. */
+                  snprintf(mfl.dir[drv], sizeof(mfl.dir[drv]), "%s", cur_dir_str);
+                  mfl.ptr = mfl.y = 0;
+                  menu_func[mkey_y].func(0);
+               }
+               mfile_redraw = 1;
+               break;
+            }
+
+            /* Selecting a ZIP opens its internal floppy-image list. */
+            if (drv < 2 && !px68k_zip_is_browse_path(mfl.dir[drv]) &&
+                !mfl.type[y] && menu_name_is_zip(mfl.name[y]))
+            {
+               char archive_path[MAX_PATH];
+               int slot;
+               snprintf(archive_path, sizeof(archive_path), "%s%s", mfl.dir[drv], mfl.name[y]);
+               slot = px68k_zip_register_archive(archive_path);
+               if (slot >= 0)
+               {
+                  menu_nav_push(drv, mfl.name[y]);
+                  snprintf(mfl.dir[drv], MAX_PATH, "zipbrowse://%d", slot);
+                  mfl.ptr = 0;
+                  mfl.y = 0;
+                  menu_func[mkey_y].func(0);
+                  mfile_redraw = 1;
+               }
+               break;
+            }
+
+            /* file loaded */
+            if (mfl.type[y])
+            {
+               /* Keep the original PX68K navigation stack for real filesystem
+                * directories. The ZIP-specific history is only for entering
+                * and leaving an archive; mixing both stacks causes the cursor
+                * to reset when going up more than one directory level. */
+               if (!strcmp(mfl.name[y], ".."))
+               {
+                  /* Remember the child directory by name before leaving it.
+                   * The parent is loaded incrementally, so numeric cursor
+                   * positions alone cannot reliably restore the selection. */
+                  {
+                     char child[MAX_PATH];
+                     size_t end = strlen(mfl.dir[drv]);
+                     size_t start;
+                     while (end > 0 && (mfl.dir[drv][end - 1] == '/' ||
+                                        mfl.dir[drv][end - 1] == '\\')) --end;
+                     start = end;
+                     while (start > 0 && mfl.dir[drv][start - 1] != '/' &&
+                            mfl.dir[drv][start - 1] != '\\') --start;
+                     if (end > start && end - start < sizeof(child))
+                     {
+                        memcpy(child, mfl.dir[drv] + start, end - start);
+                        child[end - start] = '\0';
+                        snprintf(mfl_nav_restore[drv],
+                              sizeof(mfl_nav_restore[drv]), "%s", child);
+                     }
+                  }
+                  shortcut_dir(drv);
+                  mfl.stack[0][mfl.stackptr] = mfl.stack[1][mfl.stackptr] = 0;
+                  mfl.stackptr = (mfl.stackptr - 1) % 256;
+                  if (mfl.stackptr < 0) mfl.stackptr += 256;
+                  mfl.ptr = mfl.stack[0][mfl.stackptr];
+                  mfl.y = mfl.stack[1][mfl.stackptr];
+               }
+               else
+               {
+                  strncat(mfl.dir[drv], mfl.name[y], sizeof(mfl.dir[drv]) - strlen(mfl.dir[drv]) - 1);
 #ifdef _WIN32
-                  strcat(mfl.dir[drv], "\\");
+                  strncat(mfl.dir[drv], "\\", sizeof(mfl.dir[drv]) - strlen(mfl.dir[drv]) - 1);
 #else
-                  strcat(mfl.dir[drv], "/");
+                  strncat(mfl.dir[drv], "/", sizeof(mfl.dir[drv]) - strlen(mfl.dir[drv]) - 1);
 #endif
                   mfl.stack[0][mfl.stackptr] = mfl.ptr;
                   mfl.stack[1][mfl.stackptr] = mfl.y;
@@ -781,12 +1058,31 @@ int WinUI_Menu(int first)
                if (strlen(mfl.name[y]) != 0)
                {
                   char tmpstr[MAX_PATH];
-                  strcpy(tmpstr, mfl.dir[drv]);
-                  strcat(tmpstr, mfl.name[y]);
+                  int zip_slot = -1;
+                  if (drv < 2 && px68k_zip_is_browse_path(mfl.dir[drv]))
+                  {
+                     zip_slot = px68k_zip_browse_slot(mfl.dir[drv]);
+                     if (zip_slot < 0 || !px68k_zip_make_virtual_path(zip_slot, mfl.name[y], tmpstr, sizeof(tmpstr)))
+                        break;
+                  }
+                  else
+                  {
+                     snprintf(tmpstr, sizeof(tmpstr), "%s%s", mfl.dir[drv], mfl.name[y]);
+                  }
                   if (drv < 2)
                   {
-                     FDD_SetFD(drv, tmpstr, 0);
-                     strcpy(Config.FDDImage[drv], tmpstr);
+                     if (zip_slot >= 0)
+                     {
+                        /* Update both the emulator drives and RetroArch's
+                         * Disk Control table/index from the same ZIP list. */
+                        px68k_disk_menu_sync_zip(zip_slot, mfl.name[y], drv);
+                     }
+                     else
+                     {
+                        FDD_SetFD(drv, tmpstr, 0);
+                        strncpy(Config.FDDImage[drv], tmpstr, sizeof(Config.FDDImage[drv]) - 1);
+                        Config.FDDImage[drv][sizeof(Config.FDDImage[drv]) - 1] = '\0';
+                     }
                   }
                   else
                      strcpy(Config.HDImage[drv - 2], tmpstr);
@@ -794,6 +1090,11 @@ int WinUI_Menu(int first)
                menu_state  = MS_KEY;
                menu_redraw = 1;
             }
+            /* Preserve the original PX68K cursor restoration after the list
+             * refresh. menu_create_flist() resets mfl.ptr, so without this
+             * the saved parent-folder cursor is lost on the next '..'.
+             * ZIP entry/exit paths above handle their own filename-based
+             * restoration and intentionally bypass this block. */
             mfl.ptr = mfl.stack[0][mfl.stackptr];
             mfl.y = mfl.stack[1][mfl.stackptr];
             break;
@@ -814,6 +1115,7 @@ int WinUI_Menu(int first)
       switch (menu_state)
       {
          case MS_FILE:
+            menu_scan_close();
             menu_state  = MS_VALUE;
             /* reset position of file cursor */
             mfl.y       = 0;

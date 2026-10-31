@@ -57,7 +57,7 @@ void WinDraw_Init(void)
 	WinDraw_Pal16G = 0x07e0;
 	WinDraw_Pal16B = 0x001f;
 
-	ScrBuf         = malloc(800 * 600 * 2);
+	ScrBuf         = (uint16_t *)calloc(800 * 600, sizeof(uint16_t));
 }
 
 void WinDraw_Cleanup(void)
@@ -88,8 +88,11 @@ void FASTCALL WinDraw_Draw(void)
 
 	if (CHANGEAV==1)
 	{
-		retrow=TextDotX;
-		retroh=TextDotY;
+		/* Clamp only frontend presentation dimensions; do not alter CRTC state. */
+        retrow = TextDotX > 800 ? 800 : TextDotX;
+        retroh = TextDotY > 600 ? 600 : TextDotY;
+        if (!retrow) retrow = 1;
+        if (!retroh) retroh = 1;
 	}
 
 	videoBuffer = (uint16_t*)ScrBuf;
@@ -323,10 +326,38 @@ void WinDraw_DrawLine(void)
 {
 	int opaq, ton=0, gon=0, bgon=0, tron=0, pron=0, tdrawed=0;
 
-	if(VLINE==(uint32_t)-1)
-		return;
+	/* CRTC registers may contain transitional values while software changes
+     * video modes. Never let these values index beyond the host framebuffer
+     * or the 1024-entry dirty-line table. Preserve the emulated registers. */
+    if (!ScrBuf || VLINE >= 600 || VLINE >= 1024 ||
+        TextDotX == 0 || TextDotX > FULLSCREEN_WIDTH)
+        return;
+
+	/* Redraw clean scanlines only when a hardware sprite actually covers them.
+	 * This preserves the dirty-line fast path on the rest of the screen while
+	 * avoiding stale sprite pixels in games that update sprites without
+	 * reliably invalidating every affected scanline. */
 	if (!TextDirtyLine[VLINE])
-		return;
+	{
+		if (!((VCReg2[1] & 0x40) && (BG_Regs[8] & 2) &&
+		      !(BG_Regs[0x11] & 2) && Debug_Sp))
+			return;
+
+		{
+			int s1 = (((BG_Regs[0x11] & 4) ? 2 : 1) -
+			          ((BG_Regs[0x11] & 16) ? 1 : 0));
+			int s2 = (((CRTC_Regs[0x29] & 4) ? 2 : 1) -
+			          ((CRTC_Regs[0x29] & 16) ? 1 : 0));
+			uint32_t sprite_line = VLINE;
+			sprite_line <<= s1;
+			sprite_line >>= s2;
+			if (!(BG_Regs[0x11] & 16))
+				sprite_line -= ((BG_Regs[0x0f] >> s1) -
+				                (CRTC_Regs[0x0d] >> s2));
+			if (!BG_SpriteOnLine(sprite_line))
+				return;
+		}
+	}
 
 	TextDirtyLine[VLINE] = 0;
 
@@ -355,7 +386,7 @@ void WinDraw_DrawLine(void)
 		{
 			if ( (VCReg2[0]&0x10)&&(VCReg2[1]&1) )
 			{
-				Grp_DrawLine4SP((VCReg1[1]   )&3/*, 1*/);			/* È¾Æ©ÌÀ¤Î²¼½àÈ÷ */
+				Grp_DrawLine4SP((VCReg1[1]   )&3/*, 1*/);			/* È¾Æ©ï¿½ï¿½Î²ï¿½ï¿½ï¿½ï¿½ */
 				pron = tron = 1;
 			}
 			opaq = 1;
@@ -392,15 +423,26 @@ void WinDraw_DrawLine(void)
 		break;
 	case 1:	
 	case 2:	
+		/* 256-colour GRP enable pairing (XEiJ-style, test 23):
+		 * VC R2 bits 0/1 enable the first 8-bit GRP layer (OR), and
+		 * bits 2/3 enable the second (OR). Each layer combines two
+		 * 4-bit GVRAM planes. Previously PX68K checked only bit 0
+		 * (0x01) for the first layer and bit 2 (0x04) for the second.
+		 * This fixes missing graphics in Etoile Princesse and passed
+		 * our Dracula, Gradius II and SSF2 regression scenes.
+		 * The alternative is to restore the original 0x01/0x04
+		 * checks if hardware evidence contradicts paired-bit OR.
+		 * Keep priority ordering, transparency and blending unchanged.
+		 */
 		opaq = 1; /* 256 colors */
-		if ( (VCReg1[1]&3) <= ((VCReg1[1]>>4)&3) ) /* Æ±¤¸ÃÍ¤Î»þ¤Ï¡¢GRP0¤¬Í¥Àè¡Ê¥É¥é¥¹¥Ô¡Ë */
+		if ( (VCReg1[1]&3) <= ((VCReg1[1]>>4)&3) ) /* Æ±ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½Ï¡ï¿½GRP0ï¿½ï¿½Í¥ï¿½ï¿½ï¿½É¥é¥¹ï¿½Ô¡ï¿½*/
 		{
-			if ( (VCReg2[0]&0x10)&&(VCReg2[1]&1) )
+			if ( (VCReg2[0]&0x10)&&(VCReg2[1]&0x03) )
 			{
-				Grp_DrawLine8SP(0); /* È¾Æ©ÌÀ¤Î²¼½àÈ÷ */
+				Grp_DrawLine8SP(0); /* È¾Æ©ï¿½ï¿½Î²ï¿½ï¿½ï¿½ï¿½ */
 				tron = pron = 1;
 			}
-			if (VCReg2[1]&4)
+			if (VCReg2[1]&0x0c)
 			{
 				if ( ((VCReg2[0]&0x1e)==0x1e)&&(tron) )
 					Grp_DrawLine8TR(1, 1);
@@ -411,7 +453,7 @@ void WinDraw_DrawLine(void)
 				opaq = 0;
 				gon=1;
 			}
-			if (VCReg2[1]&1)
+			if (VCReg2[1]&0x03)
 			{
 				if ( (VCReg2[0]&0x14)!=0x14 )
 				{
@@ -422,12 +464,12 @@ void WinDraw_DrawLine(void)
 		}
 		else
 		{
-			if ( (VCReg2[0]&0x10)&&(VCReg2[1]&1) )
+			if ( (VCReg2[0]&0x10)&&(VCReg2[1]&0x03) )
 			{
-				Grp_DrawLine8SP(1); /* È¾Æ©ÌÀ¤Î²¼½àÈ÷ */
+				Grp_DrawLine8SP(1); /* È¾Æ©ï¿½ï¿½Î²ï¿½ï¿½ï¿½ï¿½ */
 				tron = pron = 1;
 			}
-			if (VCReg2[1]&4)
+			if (VCReg2[1]&0x0c)
 			{
 				if ( ((VCReg2[0]&0x1e)==0x1e)&&(tron) )
 					Grp_DrawLine8TR(0, 1);
@@ -438,7 +480,7 @@ void WinDraw_DrawLine(void)
 				opaq = 0;
 				gon=1;
 			}
-			if (VCReg2[1]&1)
+			if (VCReg2[1]&0x03)
 			{
 				if ( (VCReg2[0]&0x14)!=0x14 )
 				{
@@ -468,7 +510,7 @@ void WinDraw_DrawLine(void)
 
 
 	if ( ((VCReg1[0]&0x30)>>2) < (VCReg1[0]&0x0c) )
-	{						/* BG¤ÎÊý¤¬¾å */
+	{						/* BGï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½*/
 		if ((VCReg2[1]&0x20)&&(Debug_Text))
 		{
 			Text_DrawLine(1);
@@ -491,7 +533,7 @@ void WinDraw_DrawLine(void)
 		}
 	}
 	else
-	{						/* Text¤ÎÊý¤¬¾å */
+	{						/* Textï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½*/
 		if ((VCReg2[1]&0x40)&&(BG_Regs[8]&2)&&(!(BG_Regs[0x11]&2))&&(Debug_Sp))
 		{
 			int s1, s2;
@@ -512,7 +554,7 @@ void WinDraw_DrawLine(void)
 				int i;
 				for (i = 16; i < TextDotX + 16; ++i)
 					BG_LineBuf[i] = TextPal[0];
-			} else {		/* 20010120 ¡Êàèàá¿§¡Ë */
+			} else {		/* 20010120 ï¿½ï¿½ï¿½á¿§ï¿½ï¿½*/
 				memset(&BG_LineBuf[16], 0, TextDotX * 2);
 			}
 			memset(Text_TrFlag, 0, TextDotX+16);
@@ -528,12 +570,12 @@ void WinDraw_DrawLine(void)
 
 	opaq = 1;
 
-	/* Pri = 2 or 3¡ÊºÇ²¼°Ì¡Ë¤ËÀßÄê¤µ¤ì¤Æ¤¤¤ë²èÌÌ¤òÉ½¼¨
-	 * ¥×¥é¥¤¥ª¥ê¥Æ¥£¤¬Æ±¤¸¾ì¹ç¤Ï¡¢GRP<SP<TEXT¡©¡Ê¥É¥é¥¹¥Ô¡¢ÅíÅÁ¡¢YsIIIÅù¡Ë
+	/* Pri = 2 or 3ï¿½ÊºÇ²ï¿½ï¿½Ì¡Ë¤ï¿½ï¿½ê¤µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	 * ï¿½×¥é¥¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ±ï¿½ï¿½ï¿½ï¿½ï¿½Ï¡ï¿½GRP<SP<TEXTï¿½ï¿½ï¿½Ê¥É¥é¥¹ï¿½Ô¡ï¿½ï¿½ï¿½ï¿½ï¿½YsIIIï¿½ï¿½ï¿½
 
-	 * Grp¤è¤êText¤¬¾å¤Ë¤¢¤ë¾ì¹ç¤ËText¤È¤ÎÈ¾Æ©ÌÀ¤ò¹Ô¤¦¤È¡¢SP¤Î¥×¥é¥¤¥ª¥ê¥Æ¥£¤â
-	 * Text¤Ë°ú¤­¤º¤é¤ì¤ë¡©¡Ê¤Ä¤Þ¤ê¡¢Grp¤è¤ê²¼¤Ë¤¢¤Ã¤Æ¤âSP¤¬É½¼¨¤µ¤ì¤ë¡©¡Ë
-	 * KnightArms¤È¤«¤ò¸«¤ë¤È¡¢È¾Æ©ÌÀ¤Î¥Ù¡¼¥¹¥×¥ì¡¼¥ó¤Ï°ìÈÖ¾å¤Ë¤Ê¤ë¤ß¤¿¤¤¡Ä¡£
+	 * Grpï¿½ï¿½Textï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Textï¿½È¤ï¿½ï¿½Æ©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½SPï¿½Î¥×¥é¥¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	 * Textï¿½Ë°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¡©ï¿½Ê¤Ä¤Þ¤ê¡¢Grpï¿½ï¿½ï¿½ï¿½ï¿½Ë¤ï¿½ï¿½Ã¤Æ¤ï¿½Pï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	 * KnightArmsï¿½È¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¾Æ©ï¿½ï¿½Î¥Ù¡ï¿½ï¿½ï¿½ï¿½×¥ì¡¼ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½Ê¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¡ï¿½
 	 */
 
 	if ( (VCReg1[0]&0x02) )
@@ -577,7 +619,7 @@ void WinDraw_DrawLine(void)
 		tdrawed = 1;
 	}
 
-	/* Pri = 1¡Ê2ÈÖÌÜ¡Ë¤ËÀßÄê¤µ¤ì¤Æ¤¤¤ë²èÌÌ¤òÉ½¼¨ */
+	/* Pri = 1ï¿½ï¿½ï¿½ï¿½ï¿½Ë¤ï¿½ï¿½ê¤µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	if ( ((VCReg1[0]&0x03)==0x01)&&(gon) )
 	{
 		WinDraw_DrawGrpLine(opaq);
@@ -621,16 +663,18 @@ void WinDraw_DrawLine(void)
 		if ( ((VCReg2[0]&0x5d)==0x1d)&&(!(VCReg1[0]&0x03))&&(tron) )
 			WinDraw_DrawTextLineTR(opaq);
 		else
-			/* FIXME: Verify corrent td param here. Games like Overdriver
-			 * expect a td value of 1 here, yet the condition
-			 * ((VCReg1[0]&0x30)>=0x10) returns 0 for this game causing
-			 * grp > text. See stage 2 of the game. */
-			WinDraw_DrawTextLine(opaq, ((VCReg1[0]&0x30)>=0x10));
+			/* Keep text transparency testing enabled at this priority.
+			 * Overdriver stage 2 needs td=1 to composite the water
+			 * with the GRP mountains and rain. The previous condition,
+			 * ((VCReg1[0] & 0x30) >= 0x10), selected td=0 there and
+			 * obscured the GRP scene. Revisit this choice if a game
+			 * demonstrates different hardware behaviour. */
+			WinDraw_DrawTextLine(opaq, 1);
 		opaq = 0;
 		tdrawed = 1;
 	}
 
-	/* Pri = 0¡ÊºÇÍ¥Àè¡Ë¤ËÀßÄê¤µ¤ì¤Æ¤¤¤ë²èÌÌ¤òÉ½¼¨ */
+	/* Pri = 0ï¿½Êºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ê¤µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	if ( (!(VCReg1[0]&0x03))&&(gon) )
 	{
 		WinDraw_DrawGrpLine(opaq);
@@ -664,13 +708,13 @@ void WinDraw_DrawLine(void)
 		opaq = 0;
 	}
 
-	/* ÆÃ¼ì¥×¥é¥¤¥ª¥ê¥Æ¥£»þ¤Î¥°¥é¥Õ¥£¥Ã¥¯ */
-	if ( ((VCReg2[0]&0x5c)==0x14)&&(pron) )	/* ÆÃ¼ìPri»þ¤Ï¡¢ÂÐ¾Ý¥×¥ì¡¼¥ó¥Ó¥Ã¥È¤Ï°ÕÌ£¤¬Ìµ¤¤¤é¤·¤¤¡Ê¤Ä¤¤¤ó¤Ó¡¼¡Ë */
+	/* ï¿½ï¿½ï¿½ï¿½é¥¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¥ï¿½ */
+	if ( ((VCReg2[0]&0x5c)==0x14)&&(pron) )	/* ï¿½ï¿½ï¿½riï¿½ï¿½ï¿½Ï¡ï¿½ï¿½ï¿½Ý¥×¥ì¡¼ï¿½ï¿½ï¿½Ã¥È¤Ï°ï¿½ï¿½ï¿½ï¿½Ìµï¿½ï¿½ï¿½é¤·ï¿½ï¿½ï¿½Ê¤Ä¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½*/
 	{
 		WinDraw_DrawPriLine();
 	}
-	else if ( ((VCReg2[0]&0x5d)==0x1c)&&(tron) )	/* È¾Æ©ÌÀ»þ¤ËÁ´¤Æ¤¬Æ©ÌÀ¤Ê¥É¥Ã¥È¤ò¥Ï¡¼¥Õ¥«¥é¡¼¤ÇËä¤á¤ë */
-	{						/* ¡ÊAQUALES¡Ë */
+	else if ( ((VCReg2[0]&0x5d)==0x1c)&&(tron) )	/* È¾Æ©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¤ï¿½Æ©ï¿½ï¿½Ê¥É¥Ã¥È¤ï¿½ï¿½ï¿½ï¿½Õ¥ï¿½ï¿½é¡¼ï¿½ï¿½ï¿½ï¿½ï¿½*/
+	{						/* ï¿½ï¿½QUALESï¿½ï¿½*/
 #define _DL_SUB(SUFFIX)                                    \
 	{                                                      \
 		w = Grp_LineBufSP[i];                              \
@@ -692,7 +736,7 @@ void WinDraw_DrawLine(void)
 	}
 }
 
-/********** menu ´ØÏ¢¥ë¡¼¥Á¥ó **********/
+/********** menu ï¿½ï¿½ï¿½ï¿½ë¡¼ï¿½ï¿½ï¿½ï¿½**********/
 
 struct _px68k_menu
 {
@@ -705,7 +749,7 @@ struct _px68k_menu
 	int mfs;      /* menu font size; */
 } p6m;
 
-/* sjis¢ªjis¥³¡¼¥ÉÊÑ´¹ */
+/* sjisï¿½ï¿½jisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½ */
 static uint16_t sjis2jis(uint16_t w)
 {
 	uint8_t wh = w / 256;
@@ -726,8 +770,8 @@ static uint16_t sjis2jis(uint16_t w)
 	return (wh * 256 + wl);
 }
 
-/* JIS¥³¡¼¥É¤«¤é0 origin¤Îindex¤ËÊÑ´¹¤¹¤ë */
-/* ¤¿¤À¤·0x2921-0x2f7e¤ÏX68K¤ÎROM¾å¤Ë¤Ê¤¤¤Î¤ÇÈô¤Ð¤¹ */
+/* JISï¿½ï¿½ï¿½ï¿½ï¿½É¤ï¿½ï¿½ï¿½ originï¿½ï¿½ndexï¿½ï¿½Ñ´ï¿½ï¿½ï¿½ï¿½ï¿½*/
+/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½0x2921-0x2f7eï¿½ï¿½68Kï¿½ï¿½OMï¿½ï¿½ï¿½Ê¤ï¿½ï¿½Î¤ï¿½ï¿½ï¿½ï¿½ */
 static uint16_t jis2idx(uint16_t jc)
 {
 	if (jc >= 0x3000)
@@ -741,10 +785,13 @@ static uint16_t jis2idx(uint16_t jc)
 
 #define isHankaku(s) ((s) >= 0x20 && (s) <= 0x7e || (s) >= 0xa0 && (s) <= 0xdf)
 #define MENU_WIDTH 800
+#ifndef PX68K_MENU_VERSION
+#define PX68K_MENU_VERSION "0.15+"
+#endif
 
 /* fs : font size : 16 or 24
- * È¾³ÑÊ¸»ú¤Î¾ì¹ç¤Ï16bit¤Î¾å°Ì8bit¤Ë¥Ç¡¼¥¿¤òÆþ¤ì¤Æ¤ª¤¯¤³¤È
- * (È¾³ÑorÁ´³Ñ¤ÎÈ½ÃÇ¤¬¤Ç¤­¤ë¤è¤¦¤Ë)
+ * È¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¾ï¿½ï¿½ï¿½6bitï¿½Î¾ï¿½8bitï¿½Ë¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ * (È¾ï¿½ï¿½rï¿½ï¿½ï¿½Ñ¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 static uint32_t get_font_addr(uint16_t sjis, int fs)
 {
@@ -752,7 +799,7 @@ static uint32_t get_font_addr(uint16_t sjis, int fs)
 	uint8_t jhi;
 	int fsb; /* file size in bytes */
 
-	/* È¾³ÑÊ¸»ú */
+	/* È¾ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	if (isHankaku(sjis >> 8)) {
 		switch (fs) {
 		case 8:
@@ -766,7 +813,7 @@ static uint32_t get_font_addr(uint16_t sjis, int fs)
 		}
 	}
 
-	/* Á´³ÑÊ¸»ú */
+	/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	if (fs == 16)
 		fsb = 2 * 16;
 	else if (fs == 24)
@@ -778,19 +825,19 @@ static uint32_t get_font_addr(uint16_t sjis, int fs)
 	j_idx = (uint32_t)jis2idx(jis);
 	jhi   = (uint8_t)(jis >> 8);
 
-	/* Èó´Á»ú */
+	/* ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	if (jhi >= 0x21 && jhi <= 0x28)
 		return  ((fs == 16)? 0x0 : 0x40000) + j_idx * fsb;
-	/* Âè°ì¿å½à/ÂèÆó¿å½à */
+	/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 	else if (jhi >= 0x30 && jhi <= 0x74)
 		return  ((fs == 16)? 0x5e00 : 0x4d380) + j_idx * fsb;
-	/* ¤³¤³¤Ë¤¯¤ë¤³¤È¤Ï¤Ê¤¤¤Ï¤º */
+	/* ï¿½ï¿½ï¿½ï¿½ï¿½Ë¤ï¿½ï¿½ë¤³ï¿½È¤Ï¤Ê¤ï¿½ï¿½Ï¤ï¿½ */
 	return -1;
 }
 
 /* RGB565 */
 
-/* ¥­¥ã¥é¥¯¥¿Ê¸»ú¤ÎºÂÉ¸ (²£¼´¤Ï1ºÂÉ¸¤¬È¾³ÑÊ¸»úÉý¤Ë¤Ê¤ë) */
+/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¸ï¿½ï¿½ï¿½Îºï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¤Ê¤ï¿½ */
 static void set_mlocateC(int x, int y)
 {
 	p6m.ml_x = x * p6m.mfs / 2, p6m.ml_y = y * p6m.mfs;
@@ -802,9 +849,9 @@ static uint16_t *get_ml_ptr(void)
 	return p6m.mlp;
 }
 
-/* ¡¦È¾³ÑÊ¸»ú¤Î¾ì¹ç¤Ï16bit¤Î¾å°Ì8bit¤Ë¥Ç¡¼¥¿¤òÆþ¤ì¤Æ¤ª¤¯¤³¤È
- *   (È¾³ÑorÁ´³Ñ¤ÎÈ½ÃÇ¤¬¤Ç¤­¤ë¤è¤¦¤Ë)
- * ¡¦É½¼¨¤·¤¿Ê¬cursor¤ÏÀè¤Ë°ÜÆ°¤¹¤ë
+/* ï¿½ï¿½È¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¾ï¿½ï¿½ï¿½6bitï¿½Î¾ï¿½8bitï¿½Ë¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ *   (È¾ï¿½ï¿½rï¿½ï¿½ï¿½Ñ¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ * ï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¬cursorï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 static void draw_char(uint16_t sjis)
 {
@@ -818,7 +865,7 @@ static void draw_char(uint16_t sjis)
 	if (f < 0)
 		return;
 
-	/* h=8¤ÏÈ¾³Ñ¤Î¤ß */
+	/* h=8ï¿½ï¿½ï¿½ï¿½Ñ¤Î¤ï¿½*/
 	w = (h == 8)? 8 : (isHankaku(sjis >> 8)? h / 2 : h);
 
 	for (i = 0; i < h; i++) {
@@ -850,8 +897,8 @@ static void draw_str(char *cp)
 
 	for (i = 0; i < len; i++) {
 		if (isHankaku(*s)) {
-			/* ºÇ½é¤Î8bit¤ÇÈ¾Á´³Ñ¤òÈ½ÃÇ¤¹¤ë¤Î¤ÇÈ¾³Ñ¤Î¾ì¹ç¤Ï
-			 * ¤¢¤é¤«¤¸¤á8bitº¸¥·¥Õ¥È¤·¤Æ¤ª¤¯ */
+			/* ï¿½Ç½ï¿½8bitï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¤Î¾ï¿½ï¿½ï¿½
+			 * ï¿½ï¿½ï¿½é¤«ï¿½ï¿½ï¿½ï¿½bitï¿½ï¿½ï¿½ï¿½ï¿½Õ¥È¤ï¿½ï¿½Æ¤ï¿½ï¿½ï¿½ */
 			draw_char((uint16_t)*s << 8);
 			s++;
 		} else {
@@ -860,7 +907,7 @@ static void draw_str(char *cp)
 			s += 2;
 			i++;
 		}
-		/* 8x8ÉÁ²è(¥½¥Õ¥È¥­¡¼¥Ü¡¼¥É¤ÎFUNC¥­¡¼¤ÏÊ¸»úÉý¤ò½Ì¤á¤ë) */
+		/* 8x8ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¥È¥ï¿½ï¿½ï¿½ï¿½Ü¡ï¿½ï¿½É¤ï¿½UNCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½) */
 		if (p6m.mfs == 8) {
 			p6m.ml_x -= 3;
 		}
@@ -885,178 +932,617 @@ char menu_item_desc[][60] = {
 	"Change / Eject HDD 1"
 };
 
+/* Draw the menu frames in pixels so their width does not depend on font size. */
+static void menu_line(int x0, int y0, int x1, int y1, uint16_t color)
+{
+   int x, y;
+   if (x0 == x1)
+      for (y = y0; y <= y1; ++y)
+         menu_buffer[y * MENU_WIDTH + x0] = color;
+   else
+      for (x = x0; x <= x1; ++x)
+         menu_buffer[y0 * MENU_WIDTH + x] = color;
+}
+
+static void menu_box(int x0, int y0, int x1, int y1, uint16_t color)
+{
+   menu_line(x0, y0, x1, y0, color);
+   menu_line(x0, y1, x1, y1, color);
+   menu_line(x0, y0, x0, y1, color);
+   menu_line(x1, y0, x1, y1, color);
+}
+
+/* Limit paths by displayed glyph width, keeping Shift-JIS pairs intact. */
+static void menu_path_fit(char *dst, size_t capacity, const char *src, int pixels)
+{
+   size_t n = 0;
+   int used = 0;
+   const unsigned char *p = (const unsigned char *)src;
+   while (*p && n + 2 < capacity)
+   {
+      int half = isHankaku(*p);
+      int bytes = half ? 1 : 2;
+      int width = half ? p6m.mfs / 2 : p6m.mfs;
+      if (used + width > pixels || (!half && !p[1]))
+         break;
+      dst[n++] = (char)*p++;
+      if (bytes == 2)
+         dst[n++] = (char)*p++;
+      used += width;
+   }
+   dst[n] = '\0';
+}
+
+/* Preserve the URI scheme and filename, spending only the required width
+ * on shortening directory components. Work in complete Shift-JIS glyphs. */
+static int menu_text_pixels(const char *s)
+{
+   int pixels = 0;
+   const unsigned char *p = (const unsigned char *)s;
+   while (*p)
+   {
+      if (isHankaku(*p)) { pixels += p6m.mfs / 2; ++p; }
+      else if (p[1]) { pixels += p6m.mfs; p += 2; }
+      else break;
+   }
+   return pixels;
+}
+
+/* Fit a path exactly in pixels. Keep the URI prefix and final filename;
+ * remove the minimum amount of parent-directory text, one glyph at a time. */
+static void menu_path_compact(char *dst, size_t cap, const char *src, int pixels)
+{
+   char work[PATH_MAX];
+   size_t prefix = 0, len;
+   if (!cap) return;
+   dst[0] = 0;
+   if (!strncmp(src, "zip://", 6)) prefix = 6;
+   else if (!strncmp(src, "file://", 7)) prefix = 7;
+   len = strlen(src);
+   if (len >= sizeof(work)) { menu_path_fit(dst, cap, src, pixels); return; }
+   memcpy(work, src, len + 1);
+   while (menu_text_pixels(work) > pixels)
+   {
+      char *last = strrchr(work + prefix, '/');
+      size_t i = prefix, best = 0, bestlen = 0;
+      if (!last) break;
+      /* Choose the longest remaining parent; preserve its first glyph and
+       * shorten its end. The three dots count against the width budget. */
+      while (work + i < last)
+      {
+         size_t j = i;
+         while (work[j] && work[j] != '/') ++j;
+         if (work + j > last) break;
+         if (j - i > bestlen && j - i > 4)
+         { best = i; bestlen = j - i; }
+         i = j + 1;
+      }
+      if (!bestlen) break;
+      {
+         size_t end = best + bestlen;
+         size_t cut = end - 1;
+         /* Avoid splitting a Shift-JIS character. */
+         size_t k = best;
+         while (k < cut)
+         {
+            size_t step = isHankaku((unsigned char)work[k]) ? 1 : 2;
+            if (k + step >= cut) { cut = k; break; }
+            k += step;
+         }
+         /* If already abbreviated, extend the existing ellipsis leftward. */
+         if (end >= best + 3 && !memcmp(work + end - 3, "...", 3))
+         {
+            cut = end - 3;
+            k = best;
+            while (k < cut)
+            {
+               size_t step = isHankaku((unsigned char)work[k]) ? 1 : 2;
+               if (k + step >= cut) { cut = k; break; }
+               k += step;
+            }
+         }
+         if (cut <= best) break;
+         memmove(work + cut + 3, work + end, strlen(work + end) + 1);
+         memcpy(work + cut, "...", 3);
+      }
+   }
+   if (menu_text_pixels(work) <= pixels)
+      menu_path_fit(dst, cap, work, pixels);
+   else
+   {
+      /* Extremely long final filenames: preserve the extension and tail. */
+      const char *tail = strrchr(work + prefix, '/');
+      const char *name = tail ? tail + 1 : work + prefix;
+      int budget = pixels - (int)(prefix * (p6m.mfs / 2)) - 3 * (p6m.mfs / 2);
+      size_t n = strlen(name);
+      if (budget > 0)
+      {
+         size_t start = n;
+         int used = 0;
+         while (start && used + p6m.mfs / 2 <= budget)
+         { --start; used += p6m.mfs / 2; }
+         snprintf(work, sizeof(work), "%.*s...%s", (int)prefix, src, name + start);
+      }
+      menu_path_fit(dst, cap, work, pixels);
+   }
+}
+
+/* Prefer recognizable filename prefixes in filesystem directories; preserve
+ * the old suffix-oriented display for ZIP archive members. */
+static void menu_explorer_fit(char *dst, size_t cap, const char *src,
+                              int pixels, int in_zip)
+{
+   size_t n = strlen(src);
+   int chars = pixels / (p6m.mfs / 2);
+   if (menu_text_pixels(src) <= pixels)
+   { menu_path_fit(dst, cap, src, pixels); return; }
+   if (chars > 6 && n > (size_t)chars)
+   {
+      size_t keep = (size_t)chars - 3;
+      if (in_zip)
+         snprintf(dst, cap, "...%s", src + n - keep);
+      else
+         snprintf(dst, cap, "%.*s...", (int)keep, src);
+   }
+   else menu_path_fit(dst, cap, src, pixels);
+}
+
+/* Split a displayed path into two pixel-bounded lines at a glyph boundary.
+ * Prefer a nearby directory separator or space, without losing characters. */
+static const char *menu_wrap_line(char *dst, size_t cap, const char *src,
+                                  int pixels)
+{
+   const unsigned char *p = (const unsigned char *)src;
+   const unsigned char *break_at = NULL;
+   const unsigned char *end = p;
+   int width = 0;
+   size_t count;
+   while (*end)
+   {
+      int half = isHankaku(*end);
+      int step = half ? 1 : 2;
+      int glyph_width = half ? p6m.mfs / 2 : p6m.mfs;
+      if (!half && !end[1]) break;
+      if (width + glyph_width > pixels) break;
+      if (half && (*end == '/' || *end == ' ')) break_at = end + 1;
+      width += glyph_width;
+      end += step;
+   }
+   if (*end && break_at && break_at > p + (end - p) / 2 &&
+       menu_text_pixels((const char *)break_at) <= pixels)
+      end = break_at;
+   count = (size_t)(end - p);
+   if (count >= cap) count = cap - 1;
+   memcpy(dst, src, count);
+   dst[count] = 0;
+   return src + count;
+}
+
 void WinDraw_DrawMenu(int menu_state, int mkey_pos, int mkey_y, int *mval_y)
 {
-	int i, drv;
-	char tmp[256];
+   int i, drv, fs, margin, left, right, separator, text_x, path_x, available;
+   int title_top, main_top, main_bottom, help_top, help_bottom;
+   int row_top, row_y, row_height, row_selected;
+   char tmp[PATH_MAX], line[PATH_MAX];
 
-	p6m.sbp     = menu_buffer;
-	p6m.mfs     = Config.MenuFontSize ? 24 : 16;
+   p6m.sbp = menu_buffer;
+   p6m.mfs = Config.MenuFontSize ? 24 : 16;
+   fs = p6m.mfs;
+   margin = fs / 2;
+   left = margin;
+   right = MENU_WIDTH - margin - 1;
+   separator = left + fs * 5;
+   text_x = left + fs;
+   path_x = separator + fs / 2;
+   available = right - margin - path_x;
+   title_top = margin;
+   main_top = 4 * fs + margin;
+   /* SYSTEM uses one line; each of the four drives uses two lines. */
+   main_bottom = main_top + 14 * fs;
+   help_top = main_bottom + fs;
+   help_bottom = help_top + 3 * fs;
 
-	/* ¥¿¥¤¥È¥ë */
-	p6m.mcolor  = 0x07ff; /* cyan */
-	set_mlocateC(0, 0);
-	draw_str(twaku_str);
-	set_mlocateC(0, 1);
-	draw_str(twaku2_str);
-	set_mlocateC(0, 2);
-	draw_str(twaku3_str);
+   /* Redraw the complete frame to remove text from the previous selection. */
+   memset(menu_buffer, 0, sizeof(menu_buffer));
+   p6m.mbcolor = 0;
+   menu_box(left, title_top, right, title_top + 3 * fs, 0x07ff);
+   menu_box(left, main_top, right, main_bottom, 0xffe0);
+   menu_line(separator, main_top, separator, main_bottom, 0xffe0);
+   menu_box(left, help_top, right, help_bottom, 0x07ff);
 
-	p6m.mcolor  = 0xffff;
-	set_mlocateC(2, 1);
-        strcpy(tmp, title_str);
-        strcat(tmp, PX68KVERSTR);
-	draw_str(tmp);
+   p6m.mcolor = 0xffff;
+   set_mlocateC(0, 1);
+   p6m.ml_x = text_x;
+   snprintf(tmp, sizeof(tmp), "SWITCH for PX68K Version %s", PX68K_MENU_VERSION);
+   if ((int)strlen(tmp) * (fs / 2) > right - text_x - margin)
+      tmp[(right - text_x - margin) / (fs / 2)] = '\0';
+   draw_str(tmp);
 
-	
-	p6m.mcolor  = 0xffff; /* ¿¿¤óÃæ */
+   row_top = main_top;
+   for (i = 0; i < 5; ++i)
+   {
+      row_height = (i == 0) ? 2 * fs : 3 * fs;
+      row_y = row_top + fs / 2;
+      row_selected = i == mkey_y - mkey_pos;
+      p6m.mcolor = 0xffff;
+      p6m.mbcolor = 0;
+      if (menu_state == MS_KEY && row_selected)
+      {
+         p6m.mcolor = 0;
+         p6m.mbcolor = 0xffe0;
+      }
+      p6m.ml_y = row_y;
+      p6m.ml_x = text_x;
+      draw_str(menu_item_key[i + mkey_pos]);
+      p6m.mcolor = 0xffff;
+      p6m.mbcolor = 0;
+      if ((menu_state == MS_VALUE || menu_state == MS_HWJOY_SET) && row_selected)
+      {
+         p6m.mcolor = 0;
+         p6m.mbcolor = 0xffe0;
+      }
+      p6m.ml_y = row_y;
+      p6m.ml_x = path_x;
+      drv = WinUI_get_drv_num(i + mkey_pos);
+      if (drv >= 0 && mval_y[i + mkey_pos] == 0)
+      {
+         const char *path = drv < 2 ? Config.FDDImage[drv] : Config.HDImage[drv - 2];
+         if (!path[0])
+            draw_str(" -- no disk --");
+         else
+         {
+            const char *remaining;
+            if (!strncmp(cur_dir_str, path, cur_dir_slen))
+               path += cur_dir_slen;
+            /* Keep the complete path when it fits on two lines. */
+            if (menu_text_pixels(path) <= available * 2 &&
+                strlen(path) < sizeof(tmp))
+               strcpy(tmp, path);
+            else
+               menu_path_compact(tmp, sizeof(tmp), path, available * 2);
+            remaining = menu_wrap_line(line, sizeof(line), tmp, available);
+            draw_str(line);
+            if (*remaining)
+            {
+               p6m.ml_y = row_y + fs;
+               p6m.ml_x = path_x;
+               menu_path_fit(line, sizeof(line), remaining, available);
+               draw_str(line);
+            }
+         }
+      }
+      else
+         draw_str(menu_items[i + mkey_pos][mval_y[i + mkey_pos]]);
+      row_top += row_height;
+      if (i < 4)
+         menu_line(left, row_top, right, row_top, 0xffe0);
+   }
+   p6m.mcolor = 0xffff;
+   p6m.mbcolor = 0;
+   p6m.ml_y = help_top + fs / 2;
+   p6m.ml_x = text_x;
+   draw_str(menu_item_desc[mkey_y]);
+   videoBuffer = (uint16_t *)menu_buffer;
+}
 
-	/* ¿¿¤óÃæÏÈ */
-	p6m.mcolor  = 0xffe0; /* yellow */
-	set_mlocateC(1, 4);
-	draw_str(waku_str);
-	for (i = 5; i < 10; i++)
-	{
-		set_mlocateC(1, i);
-		draw_str(waku2_str);
-	}
-	set_mlocateC(1, 10);
-	draw_str(waku3_str);
+/* Number of explorer rows available without an expanded filename. */
+/* Optional MAME software-list labels. Original filenames remain authoritative. */
+#include "mame_utf8_sjis.h"
+extern int px68k_mame_names_mode(void);
+extern const char *px68k_mame_names_system_dir(void);
 
-	/* ¥¢¥¤¥Æ¥à/¥­¡¼¥ï¡¼¥É */
-	p6m.mcolor = 0xffff;
-	for (i = 0; i < 5; i++)
-	{
-		set_mlocateC(3, 5 + i);
-		if (menu_state == MS_KEY && i == (mkey_y - mkey_pos))
-		{
-			p6m.mcolor  = 0x0;
-			p6m.mbcolor = 0xffe0;
-		}
-		else
-		{
-			p6m.mcolor  = 0xffff;
-			p6m.mbcolor = 0x0;
-		}
-		draw_str(menu_item_key[i + mkey_pos]);
-	}
+typedef struct mame_label_entry {
+   char *shortname;
+   char *description;
+   char *japanese;
+   struct mame_label_entry *next;
+} mame_label_entry;
+static mame_label_entry *mame_labels[1024];
+static int mame_labels_loaded;
+static char mame_labels_dir[4096];
 
-	/* ¥¢¥¤¥Æ¥à/¸½ºßÃÍ */
-	p6m.mcolor  = 0xffff;
-	p6m.mbcolor = 0x0;
-	for (i = 0; i < 5; i++)
-	{
-		if (       (menu_state == MS_VALUE 
-               || menu_state == MS_HWJOY_SET)
-               && i == (mkey_y - mkey_pos))
-		{
-			p6m.mcolor  = 0x0;
-			p6m.mbcolor = 0xffe0;
-		}
-		else
-		{
-			p6m.mcolor  = 0xffff;
-			p6m.mbcolor = 0x0;
-		}
-		set_mlocateC(17, 5 + i);
+static unsigned mame_label_hash(const char *s)
+{
+   unsigned h = 5381;
+   while (*s) h = ((h << 5) + h) ^ (unsigned char)*s++;
+   return h % 1024;
+}
 
-		drv = WinUI_get_drv_num(i + mkey_pos);
-		if (drv >= 0  && mval_y[i + mkey_pos] == 0)
-		{
-			char *p;
-			char ptr[PATH_MAX];
-			if (drv < 2)
-				p = Config.FDDImage[drv];
-			else
-				p = Config.HDImage[drv - 2];
+static void mame_labels_clear(void)
+{
+   int i;
+   for (i = 0; i < 1024; ++i)
+   {
+      mame_label_entry *e = mame_labels[i];
+      while (e)
+      {
+         mame_label_entry *next = e->next;
+         free(e->shortname);
+         free(e->description);
+         free(e->japanese);
+         free(e);
+         e = next;
+      }
+      mame_labels[i] = NULL;
+   }
+}
 
-			if (p[0] == '\0')
-				draw_str(" -- no disk --");
-			else
-			{
-				/* ÀèÆ¬¤Î¥«¥ì¥ó¥È¥Ç¥£¥ì¥¯¥È¥êÌ¾¤òÉ½¼¨¤·¤Ê¤¤ */
-				if (!strncmp(cur_dir_str, p, cur_dir_slen))
-					strncpy(ptr, p + cur_dir_slen, sizeof(ptr));
-				else
-					strncpy(ptr, p, sizeof(ptr));
-				ptr[40] = '\0';
-				draw_str(ptr);
-			}
-		} else {
-			draw_str(menu_items[i + mkey_pos][mval_y[i + mkey_pos]]);
-		}
-	}
+static char *mame_label_dup(const char *s, size_t n)
+{
+   char *r = (char *)malloc(n + 1);
+   if (r) { memcpy(r, s, n); r[n] = 0; }
+   return r;
+}
 
-	/* ²¼ÏÈ */
-	p6m.mcolor  = 0x07ff; /* cyan */
-	p6m.mbcolor = 0x0;
-	set_mlocateC(0, 11);
-	draw_str(swaku_str);
-	set_mlocateC(0, 12);
-	draw_str(swaku2_str);
-	set_mlocateC(0, 13);
-	draw_str(swaku3_str);
+static void mame_label_decode(char *s)
+{
+   char *r = s, *w = s;
+   while (*r)
+   {
+      if (*r == '&')
+      {
+         const char *entity[] = { "&amp;", "&lt;", "&gt;", "&quot;", "&apos;" };
+         const char chars[] = { '&', '<', '>', '"', '\'' };
+         int i;
+         for (i = 0; i < 5; ++i)
+            if (!strncmp(r, entity[i], strlen(entity[i]))) break;
+         if (i < 5) { *w++ = chars[i]; r += strlen(entity[i]); continue; }
+      }
+      *w++ = *r++;
+   }
+   *w = 0;
+}
 
-	/* ¥­¥ã¥×¥·¥ç¥ó */
-	p6m.mcolor  = 0xffff;
-	p6m.mbcolor = 0x0;
-	set_mlocateC(2, 12);
-	draw_str(menu_item_desc[mkey_y]);
+/* Convert UTF-8 MAME metadata into the Shift-JIS expected by draw_str(). */
+static unsigned short mame_unicode_sjis(unsigned u)
+{
+   size_t lo = 0, hi = sizeof(mame_unicode_map)/sizeof(mame_unicode_map[0]);
+   if (u >= 0x20 && u <= 0x7e) return (unsigned short)u;
+   if (u >= 0xff61 && u <= 0xff9f) return (unsigned short)(0xa1 + u - 0xff61);
+   while (lo < hi)
+   {
+      size_t mid = lo + (hi-lo)/2;
+      if (mame_unicode_map[mid].unicode < u) lo = mid+1;
+      else hi = mid;
+   }
+   if (lo < sizeof(mame_unicode_map)/sizeof(mame_unicode_map[0]) && mame_unicode_map[lo].unicode == u)
+      return mame_unicode_map[lo].sjis;
+   return (unsigned short)'?';
+}
 
-	videoBuffer=(uint16_t*)menu_buffer;
+static char *mame_utf8_to_sjis(const char *src)
+{
+   size_t len = strlen(src), i = 0, out = 0;
+   char *dst = (char *)malloc(len*2 + 1);
+   if (!dst) return NULL;
+   while (i < len)
+   {
+      unsigned c = (unsigned char)src[i++], u = c;
+      unsigned short sj;
+      int more = 0, j, valid = 1;
+      if (c >= 0xc2 && c <= 0xdf) { u = c & 31; more = 1; }
+      else if (c >= 0xe0 && c <= 0xef) { u = c & 15; more = 2; }
+      else if (c >= 0xf0 && c <= 0xf4) { u = c & 7; more = 3; }
+      else if (c >= 0x80) { u = '?'; }
+      for (j = 0; j < more; ++j)
+      {
+         unsigned char b = (unsigned char)src[i];
+         if (!b || (b & 0xc0) != 0x80) { valid = 0; break; }
+         u = (u << 6) | (b & 63);
+         ++i;
+      }
+      if (!valid || (more == 1 && u < 0x80) || (more == 2 && u < 0x800) ||
+          (more == 3 && u < 0x10000) || (u >= 0xd800 && u <= 0xdfff)) u = '?';
+      sj = mame_unicode_sjis(u);
+      if (sj > 0xff) { dst[out++] = (char)(sj >> 8); dst[out++] = (char)(sj & 255); }
+      else dst[out++] = (char)sj;
+   }
+   dst[out] = 0;
+   return dst;
+}
 
+static void mame_labels_load(void)
+{
+   const char *dir = px68k_mame_names_system_dir();
+   char path[4096], line[8192], shortname[256];
+   mame_label_entry *current = NULL;
+   FILE *f;
+   if (!dir || !*dir) return;
+   if (mame_labels_loaded && !strcmp(mame_labels_dir, dir)) return;
+   mame_labels_clear();
+   mame_labels_loaded = 1;
+   snprintf(mame_labels_dir, sizeof(mame_labels_dir), "%s", dir);
+   if (strlen(dir) + 24 >= sizeof(path)) return;
+   snprintf(path, sizeof(path), "%s/MAME/hash/x68k_flop.xml", dir);
+   f = fopen(path, "rb");
+   if (!f) return;
+   shortname[0] = 0;
+   while (fgets(line, sizeof(line), f))
+   {
+      char *a, *b;
+      a = strstr(line, "<software ");
+      if (a)
+      {
+         a = strstr(a, "name=\"");
+         shortname[0] = 0;
+         current = NULL;
+         if (a)
+         {
+            a += 6; b = strchr(a, '"');
+            if (b && (size_t)(b-a) < sizeof(shortname))
+            { memcpy(shortname, a, (size_t)(b-a)); shortname[b-a] = 0; }
+         }
+      }
+      a = strstr(line, "<description>");
+      if (a && shortname[0])
+      {
+         a += 13; b = strstr(a, "</description>");
+         if (b && b > a && b-a < 1024)
+         {
+            unsigned h = mame_label_hash(shortname);
+            mame_label_entry *e = (mame_label_entry *)calloc(1, sizeof(*e));
+            if (e)
+            {
+               e->shortname = mame_label_dup(shortname, strlen(shortname));
+               e->description = mame_label_dup(a, (size_t)(b-a));
+               if (e->shortname && e->description)
+               {
+                  mame_label_decode(e->description);
+                  { char *converted = mame_utf8_to_sjis(e->description);
+                    if (converted) { free(e->description); e->description = converted; }
+                    else { free(e->description); e->description = mame_label_dup(shortname, strlen(shortname)); } }
+                  current = e;
+                  e->next = mame_labels[h]; mame_labels[h] = e;
+               }
+               else { free(e->shortname); free(e->description); free(e); }
+            }
+         }
+         shortname[0] = 0;
+      }
+      a = strstr(line, "<info ");
+      if (a && current && strstr(a, "name=\"alt_title\""))
+      {
+         a = strstr(a, "value=\"");
+         if (a)
+         {
+            a += 7; b = strchr(a, '"');
+            if (b && b > a && b-a < 1024)
+            {
+               char *raw = mame_label_dup(a, (size_t)(b-a));
+               if (raw)
+               {
+                  char *converted;
+                  mame_label_decode(raw);
+                  converted = mame_utf8_to_sjis(raw);
+                  if (converted) { free(current->japanese); current->japanese = converted; }
+                  free(raw);
+               }
+            }
+         }
+      }
+      if (strstr(line, "</software>")) { shortname[0] = 0; current = NULL; }
+   }
+   fclose(f);
+}
+
+static const char *mame_explorer_name(const char *name, int directory)
+{
+   size_t n;
+   char key[256];
+   unsigned h;
+   mame_label_entry *e;
+   static char result[2048];
+   int mode = px68k_mame_names_mode();
+   if (directory || !mode) return name;
+   n = strlen(name);
+   if (n <= 4 || n >= sizeof(key) + 4 || strcasecmp(name+n-4, ".zip")) return name;
+   mame_labels_load();
+   n -= 4;
+   if (n >= sizeof(key)) return name;
+   memcpy(key, name, n); key[n] = 0;
+   h = mame_label_hash(key);
+   for (e = mame_labels[h]; e; e = e->next)
+      if (!strcmp(e->shortname, key))
+      {
+         snprintf(result, sizeof(result), "%s.zip", (mode == 2 && e->japanese && *e->japanese) ? e->japanese : e->description);
+         return result;
+      }
+   return name;
+}
+
+int WinDraw_ExplorerRows(void)
+{
+   int fs = Config.MenuFontSize ? 24 : 16;
+   return (600 - 2 * fs - fs) / fs;
 }
 
 void WinDraw_DrawMenufile(struct menu_flist *mfl)
 {
-	int i;
-	char ptr[PATH_MAX];
+   int i, fs = p6m.mfs;
+   int margin = fs / 2;
+   int left = margin, right = MENU_WIDTH - margin - 1;
+   int top = fs, bottom = 600 - fs;
+   int text_x = left + fs / 2;
+   int available = right - margin - text_x - fs / 2;
+   int rows = WinDraw_ExplorerRows();
+   int preview = 0, preview_rows = 0;
+   int selected;
+   char ptr[PATH_MAX];
 
-   /* 0xf800 - red */
-	/* 0xf81f - magenta */
-
-	/* bottom frame */
-
-	p6m.mcolor  = 0xffff;
-	p6m.mbcolor = 0x1; /* 0 means transparent */
-	set_mlocateC(1, 1);
-	draw_str(swaku_str);
-	for (i = 2; i < 16; i++)
+   selected = mfl->ptr + mfl->y;
+   if (selected >= 0 && selected < mfl->num)
    {
-		set_mlocateC(1, i);
-		draw_str(swaku2_str);
-	}
-	set_mlocateC(1, 16);
-	draw_str(swaku3_str);
+      const char *name = mame_explorer_name(mfl->name[selected], mfl->type[selected]);
+      int directory = mfl->type[selected];
+      menu_explorer_fit(ptr, sizeof(ptr), name, available - (directory ? fs : 0),
+                        (!strncmp(mfl->dir[0], "zipbrowse://", 12) ||
+                         !strncmp(mfl->dir[1], "zipbrowse://", 12)));
+      preview = strcmp(ptr, name) != 0;
+   }
+   /* Only shortened selections consume preview space. */
+   if (preview)
+   {
+      preview_rows = 3;
+      rows -= preview_rows + 1;
+   }
+   if (rows < 1) rows = 1;
+   /* Keep the selected absolute index while adapting the scroll window. */
+   if (selected >= mfl->num) selected = mfl->num - 1;
+   if (selected < 0) selected = 0;
+   if (selected < mfl->ptr) mfl->ptr = selected;
+   if (selected >= mfl->ptr + rows) mfl->ptr = selected - rows + 1;
+   if (mfl->ptr < 0) mfl->ptr = 0;
+   mfl->y = selected - mfl->ptr;
 
-	for (i = 0; i < 14; i++)
-	{
-		if (i + 1 > mfl->num)
-			break;
-		if (i == mfl->y)
-		{
-			p6m.mcolor  = 0x0;
-			p6m.mbcolor = 0xffff;
-		}
-		else
-		{
-			p6m.mcolor  = 0xffff;
-			p6m.mbcolor = 0x1;
-		}
-		/* enclose directory in '[ ]' */
-		set_mlocateC(3, i + 2);
-		if (mfl->type[i + mfl->ptr])
-         draw_str("[");
-		strncpy(ptr, mfl->name[i + mfl->ptr], sizeof(ptr));
-		ptr[56] = '\0';
-		draw_str(ptr);
-		if (mfl->type[i + mfl->ptr])
-         draw_str("]");
-	}
-
-	p6m.mbcolor = 0x0; /* switch back to transparent mode */
-
-	videoBuffer=(uint16_t*)menu_buffer;
+   memset(menu_buffer, 0, sizeof(menu_buffer));
+   menu_box(left, top, right, bottom, 0xffff);
+   for (i = 0; i < rows && i + mfl->ptr < mfl->num; ++i)
+   {
+      const char *name = mame_explorer_name(mfl->name[i + mfl->ptr], mfl->type[i + mfl->ptr]);
+      int directory = mfl->type[i + mfl->ptr];
+      p6m.mcolor = (i == mfl->y) ? 0 : 0xffff;
+      p6m.mbcolor = (i == mfl->y) ? 0xffff : 0x1;
+      set_mlocateC(0, i + 2);
+      p6m.ml_x = text_x;
+      if (directory) draw_str("[");
+      menu_explorer_fit(ptr, sizeof(ptr), name, available - (directory ? fs : 0),
+                        (!strncmp(mfl->dir[0], "zipbrowse://", 12) ||
+                         !strncmp(mfl->dir[1], "zipbrowse://", 12)));
+      draw_str(ptr);
+      if (directory) draw_str("]");
+   }
+   if (preview && selected < mfl->num)
+   {
+      const unsigned char *scan = (const unsigned char *)mame_explorer_name(mfl->name[selected], mfl->type[selected]);
+      int row = (bottom / fs) - preview_rows;
+      int maxrow = row + preview_rows - 1;
+      int x = text_x;
+      int limit = right - margin;
+      char piece[3];
+      p6m.mcolor = 0xffff;
+      p6m.mbcolor = 0;
+      menu_line(left + 1, row * fs - fs / 2, right - 1, row * fs - fs / 2, 0xffff);
+      while (*scan && row <= maxrow)
+      {
+         int bytes = isHankaku(*scan) ? 1 : (scan[1] ? 2 : 1);
+         int width = bytes == 1 ? fs / 2 : fs;
+         if (x + width > limit)
+         {
+            row++;
+            x = text_x;
+            if (row > maxrow) break;
+         }
+         piece[0] = (char)*scan++;
+         if (bytes == 2) piece[1] = (char)*scan++;
+         piece[bytes] = '\0';
+         set_mlocateC(0, row);
+         p6m.ml_x = x;
+         draw_str(piece);
+         x = p6m.ml_x;
+      }
+   }
+   p6m.mbcolor = 0;
+   videoBuffer = (uint16_t *)menu_buffer;
 }
 
 void WinDraw_ClearMenuBuffer(void)

@@ -89,6 +89,20 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       "normal"
    },
    {
+      "px68k_cpu_emulation",
+      "CPU Emulation",
+      NULL,
+      "Select the 68000 CPU emulator. Restart the core after changing this option.",
+      NULL,
+      "system",
+      {
+         { "C68K (Fast)", NULL },
+         { "Musashi (Slower)", NULL },
+         { NULL, NULL },
+      },
+      "C68K (Fast)"
+   },
+   {
       "px68k_cpuspeed",
       "Vitesse du CPU",
       NULL,
@@ -199,6 +213,73 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       "Default"
    },
    {
+      "px68k_sc55_emulation",
+      "Roland SC-55 Emulation",
+      NULL,
+      "Use the internal Roland SC-55 synthesizer instead of RetroArch MIDI output. Requires compatible SC-55 ROM files in the System Directory or PrBoom-compatible subfolders.",
+      NULL,
+      "audio",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL,       NULL },
+      },
+      "disabled"
+   },
+   {
+      "px68k_sc55_volume",
+      "SC-55 Emulation Volume",
+      NULL,
+      "Adjust the volume of the internal Roland SC-55 synthesizer relative to the PX68K audio. 100% is the default level.",
+      NULL,
+      "audio",
+      {
+         { "0", "0%" },
+         { "5", "5%" },
+         { "10", "10%" },
+         { "15", "15%" },
+         { "20", "20%" },
+         { "25", "25%" },
+         { "30", "30%" },
+         { "35", "35%" },
+         { "40", "40%" },
+         { "45", "45%" },
+         { "50", "50%" },
+         { "55", "55%" },
+         { "60", "60%" },
+         { "65", "65%" },
+         { "70", "70%" },
+         { "75", "75%" },
+         { "80", "80%" },
+         { "85", "85%" },
+         { "90", "90%" },
+         { "95", "95%" },
+         { "100", "100%" },
+         { "105", "105%" },
+         { "110", "110%" },
+         { "115", "115%" },
+         { "120", "120%" },
+         { "125", "125%" },
+         { "130", "130%" },
+         { "135", "135%" },
+         { "140", "140%" },
+         { "145", "145%" },
+         { "150", "150%" },
+         { "155", "155%" },
+         { "160", "160%" },
+         { "165", "165%" },
+         { "170", "170%" },
+         { "175", "175%" },
+         { "180", "180%" },
+         { "185", "185%" },
+         { "190", "190%" },
+         { "195", "195%" },
+         { "200", "200%" },
+         { NULL, NULL },
+      },
+      "100"
+   },
+   {
       "px68k_midi_output",
       "MIDI Output (Restart)",
       NULL,
@@ -227,6 +308,20 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
          { NULL,       NULL },
       },
       "GM"
+   },
+   {
+      "px68k_adpcm_lpf",
+      "Filtre passe-bas ADPCM",
+      NULL,
+      "Active le filtre passe-bas ADPCM original. Le changement est immédiat, sans redémarrage du cœur.",
+      NULL,
+      "audio",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
    },
    {
       "px68k_adpcm_vol",
@@ -314,6 +409,22 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       "13"
    },
 #endif
+   {
+      "px68k_archive_floppies",
+      "Insertion automatique des disquettes archivées",
+      NULL,
+      "Contrôle l'insertion automatique d'une autre disquette d'une même archive ZIP au démarrage ou lors d'un changement de disquette.",
+      NULL,
+      "media",
+      {
+         { "Off",             "Désactivé" },
+         { "Always",          "Toujours" },
+         { "Boot Only",       "Démarrage uniquement" },
+         { "At Disk Change",  "Au changement de disquette" },
+         { NULL,               NULL },
+      },
+      "Off"
+   },
    {
       "px68k_disk_drive",
       "Échange de disques sur le lecteur",

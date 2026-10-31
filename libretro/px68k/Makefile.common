@@ -13,22 +13,31 @@ INCFLAGS 		+= -I$(CORE_DIR)/x68k \
 SOURCES_C 		+= \
 				$(CORE_DIR)/m68000/m68000.c
 
+ifeq ($(CPU_RUNTIME),1)
+FLAGS += -DHAVE_M68000 -DHAVE_MUSASHI -DHAVE_CPU_RUNTIME
+SOURCES_C += \
+                $(CORE_DIR)/m68000/m68k/c68k.c \
+                $(CORE_DIR)/m68000/m68k/c68kexec.c \
+                $(CORE_DIR)/m68000/musashi/m68kcpu.c \
+                $(CORE_DIR)/m68000/musashi/m68kops.c \
+                $(CORE_DIR)/m68000/musashi/softfloat/softfloat.c
+else
 ifeq ($(CYCLONE),1)
-FLAGS 			+= -DHAVE_CYCLONE
-SOURCES_S 		+= \
-				$(CORE_DIR)/m68000/cyclone.s
+FLAGS += -DHAVE_CYCLONE
+SOURCES_S += $(CORE_DIR)/m68000/cyclone.s
+else
+ifeq ($(M68000),1)
+FLAGS += -DHAVE_M68000
+SOURCES_C += $(CORE_DIR)/m68000/m68k/c68k.c $(CORE_DIR)/m68000/m68k/c68kexec.c
 else
 ifeq ($(C68K),1)
-FLAGS 			+= -DHAVE_C68K -DC68K_NO_JUMP_TABLE
-SOURCES_C 		+= \
-				$(CORE_DIR)/m68000/c68k/c68k.c \
-				$(CORE_DIR)/m68000/c68k/c68kexec.c
+FLAGS += -DHAVE_C68K -DC68K_NO_JUMP_TABLE
+SOURCES_C += $(CORE_DIR)/m68000/c68k/c68k.c $(CORE_DIR)/m68000/c68k/c68kexec.c
 else
-FLAGS 			+= -DHAVE_MUSASHI
-SOURCES_C 		+= \
-				$(CORE_DIR)/m68000/musashi/m68kcpu.c \
-				$(CORE_DIR)/m68000/musashi/m68kops.c \
-				$(CORE_DIR)/m68000/musashi/softfloat/softfloat.c
+FLAGS += -DHAVE_MUSASHI
+SOURCES_C += $(CORE_DIR)/m68000/musashi/m68kcpu.c $(CORE_DIR)/m68000/musashi/m68kops.c $(CORE_DIR)/m68000/musashi/softfloat/softfloat.c
+endif
+endif
 endif
 endif
 
@@ -69,7 +78,10 @@ SOURCES_C 		+= \
 				$(CORE_DIR)/libretro/dosio.c \
 				$(CORE_DIR)/libretro/fake.c \
 				$(CORE_DIR)/libretro/peace.c \
+				$(CORE_DIR)/libretro/zipdisk.c \
 				$(CORE_DIR)/libretro/state.c \
+				$(CORE_DIR)/sc55.c \
+				$(CORE_DIR)/sc55_libretro.c \
 				$(CORE_DIR)/libretro.c
 
 SOURCES_CXX 	+= \
@@ -84,7 +96,6 @@ ifeq ($(USE_LIBRETRO_VFS),1)
 SOURCES_C 		+= \
 				$(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
 				$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
-				$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
 				$(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c \
 				$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
 				$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
@@ -94,10 +105,18 @@ SOURCES_C 		+= \
 				$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 				$(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
 				$(LIBRETRO_COMM_DIR)/string/stdstring.c \
-				$(LIBRETRO_COMM_DIR)/time/rtime.c \
 				$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
 ifdef _MSC_VER
 SOURCES_C 		+= \
 				$(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c
 endif
 endif
+
+# ZIP content: libretro-common's zlib-free zip reader and its link closure.
+SOURCES_C 		+= \
+				$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+				$(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
+				$(LIBRETRO_COMM_DIR)/encodings/encoding_deflate.c \
+				$(LIBRETRO_COMM_DIR)/features/features_cpu.c \
+				$(LIBRETRO_COMM_DIR)/formats/zip/rzip_archive.c \
+				$(LIBRETRO_COMM_DIR)/time/rtime.c
