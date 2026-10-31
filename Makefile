@@ -263,6 +263,14 @@ else ifeq ($(platform), ps2)
    CC = mips64r5900el-ps2-elf-gcc$(EXE_EXT)
    AR = mips64r5900el-ps2-elf-ar$(EXE_EXT)
    CFLAGS += -DHAVE_STRLWR -DPS2 -G0 -ffast-math -DABGR1555 -DNO_FAST_SQRT
+   # retro_atomic.h's EE backend masks interrupts around a read-modify-write
+   # through ps2sdk's DIntr()/EIntr(), so it needs <kernel.h>; this build has
+   # no ps2sdk include path, and the header names FORCE_VOLATILE as the
+   # escape hatch for exactly that.  Sound here because the EE has one core
+   # and this target builds with no threads at all -- the two lines below
+   # belong together, and giving PS2 threads means putting ps2sdk on the
+   # include path and dropping this define in the same change.
+   CFLAGS += -DRETRO_ATOMIC_FORCE_VOLATILE
    STATIC_LINKING = 1
    HAVE_LOW_MEMORY = 1
    # rthreads pulls in ps2sdkapi.h, which is not on the include path here,
@@ -700,6 +708,16 @@ ifneq ($(LIBS),)
 LIBS += -lpthread
 endif
 endif
+endif
+endif
+
+# memmap.c's shared-memory regions call shm_open and shm_unlink, which glibc
+# before 2.34 and uClibc keep in librt; with --no-undefined the shared-object
+# link has to request it.  Bionic and Darwin carry them in libc and have no
+# librt, so only the glibc and uClibc targets ask for it.
+ifneq ($(STATIC_LINKING), 1)
+ifneq (,$(filter $(platform),unix gcw0))
+LIBS += -lrt
 endif
 endif
 

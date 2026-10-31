@@ -18,6 +18,7 @@
 #include <streams/file_stream.h>
 #include <vfs/vfs_hybrid.h>
 #include <vfs/vfs_implementation.h>
+#include <retro_dirent.h>
 #include <array/rbuf.h>
 #include <compat/strl.h>
 
@@ -103,12 +104,25 @@ static bool sw_fb_checked        = false;
 static unsigned char *direct_fb_data  = NULL;
 static unsigned int   direct_fb_pitch = 0;
 
-/* True only while we are inside retro_run.  retro_load_game
- * calls D_DoomLoop a few times during init, but the frontend's
- * video driver isn't fully wired up at that point and
- * GET_CURRENT_SOFTWARE_FRAMEBUFFER can crash with a nullptr deref
- * inside the frontend's video pipeline.  Skip SW FB acquisition
- * outside retro_run; render to screen_buf instead. */
+/* Wipe source state.  A melt reads the previously presented frame, which
+ * under direct render lives in a frontend buffer we no longer own, so it
+ * is snapshotted into screen_buf -- a whole-frame read out of memory the
+ * frontend picked, 16 MB a frame at 2560x1600 in a 32-bit format.  Taking
+ * it only when a melt can actually follow keeps the direct path's point,
+ * which is that the frame is never copied at all.
+ *
+ * wipe_src_hold frames of snapshotting are armed by anything that can
+ * lead to a gamestate change; wipe_src_valid says whether screen_buf
+ * currently holds the last presented frame, and D_Display asks before it
+ * starts a melt. */
+static int            wipe_src_hold   = 0;
+static int            wipe_src_valid  = 0;
+
+/* True only while we are inside retro_run.  Drawing and every
+ * frontend video call belong to retro_run and to nothing else: a
+ * frontend is free to keep its video driver torn down for the whole
+ * of retro_load_game, so both the software-framebuffer request and
+ * the refresh callback are gated on this. */
 static bool in_retro_run = false;
 
 /* Set by the in-game Aspect Ratio menu item; consumed at a safe
@@ -673,21 +687,28 @@ void retro_set_rumble_touch(unsigned intensity, float duration)
  *
  * On Windows the literal-name path_is_valid() succeeds regardless
  * of casing (NTFS / FAT are case-insensitive at the OS layer), so
- * the fallback never fires there.  retro_vfs_opendir_impl handles
- * platform differences internally; this code path is
- * platform-portable. */
+ * the fallback never fires there.
+ *
+ * The walk goes through retro_dirent, not the local implementation
+ * behind it.  vfs_hybrid installs itself over dirent at
+ * retro_set_environment, and on a sandboxed platform the content the
+ * user picked is reachable only through the frontend's VFS -- called
+ * directly, the local implementation opens nothing there and this
+ * fallback silently does not happen on exactly the platform whose
+ * users need it.  Plain paths still go local-first through the hybrid,
+ * so desktop behaviour and cost are unchanged. */
 static char *find_in_dir_case_insensitive(const char *dir,
                                           const char *wfname,
                                           const char *ext)
 {
-   libretro_vfs_implementation_dir *dh;
+   struct RDIR *dh;
    char *want;
    char *match = NULL;
    size_t want_len;
 
    if (!dir || !wfname)
       return NULL;
-   dh = retro_vfs_opendir_impl(dir, false);
+   dh = retro_opendir(dir);
    if (!dh)
       return NULL;
 
@@ -695,16 +716,16 @@ static char *find_in_dir_case_insensitive(const char *dir,
    want = malloc(want_len + 1);
    if (!want)
    {
-      retro_vfs_closedir_impl(dh);
+      retro_closedir(dh);
       return NULL;
    }
    strcpy(want, wfname);
    if (ext && *ext)
       strcat(want, ext);
 
-   while (retro_vfs_readdir_impl(dh))
+   while (retro_readdir(dh))
    {
-      const char *de = retro_vfs_dirent_get_name_impl(dh);
+      const char *de = retro_dirent_get_name(dh);
       if (de && !strcasecmp(de, want))
       {
          match = malloc(strlen(dir) + 1 + strlen(de) + 1);
@@ -714,7 +735,7 @@ static char *find_in_dir_case_insensitive(const char *dir,
       }
    }
    free(want);
-   retro_vfs_closedir_impl(dh);
+   retro_closedir(dh);
    return match;
 }
 
@@ -1338,6 +1359,80 @@ static void update_audio_samplerate(void)
    I_SetSoundRate(chosen);
 }
 
+/* Version-1 HDR presentation block.  The caller-zeroed, versioned struct
+ * is the contract, so every field is set before the call. */
+static void I_InitHDRMetadata(struct retro_hdr_metadata *m)
+{
+   unsigned i;
+   m->version           = 1;
+   m->size              = sizeof(*m);
+   m->output_mode       = 0;
+   m->source_formats    = 0;
+   m->paper_white_nits  = 0.0f;
+   m->max_nits          = 0.0f;
+   m->min_nits          = 0.0f;
+   m->expand_gamut      = 0;
+   m->max_cll           = 0.0f;
+   m->max_fall          = 0.0f;
+   m->color_primaries   = 0;
+   m->transfer_function = 0;
+   m->passthrough       = false;
+   m->tonemap_operator  = 0;
+   for (i = 0; i < sizeof(m->reserved) / sizeof(m->reserved[0]); i++)
+      m->reserved[i] = 0;
+}
+
+static bool I_QueryHDRMetadata(struct retro_hdr_metadata *m)
+{
+   I_InitHDRMetadata(m);
+   return environ_cb
+       && environ_cb(RETRO_ENVIRONMENT_GET_HDR_METADATA, m);
+}
+
+/* Internal resolution that fills the display: the panel's native size from
+ * GET_DISPLAY_METADATA, mapped onto the 320x200 grid in steps of 32x20.
+ * A 320x200 frame is shown 4:3, so n steps cover 32n x 24n panel pixels;
+ * the larger n that fits both panel axes wins, and the aspect-ratio
+ * selector widens from that 4:3 reference as for any listed size.  False
+ * when the frontend does not report the geometry. */
+static bool I_AutoResolution(unsigned *w, unsigned *h)
+{
+   struct retro_display_metadata d;
+   unsigned i, n;
+
+   d.version              = 1;
+   d.size                 = sizeof(d);
+   d.geo.native_width     = 0;
+   d.geo.native_height    = 0;
+   d.geo.width_mm         = 0;
+   d.geo.height_mm        = 0;
+   d.geo.refresh_min_mHz  = 0;
+   d.geo.refresh_max_mHz  = 0;
+   I_InitHDRMetadata(&d.hdr);
+   d.caps.peak_nits          = 0.0f;
+   d.caps.min_nits           = 0.0f;
+   d.caps.max_frame_avg_nits = 0.0f;
+   for (i = 0; i < sizeof(d.caps.primaries_xy) / sizeof(d.caps.primaries_xy[0]); i++)
+      d.caps.primaries_xy[i] = 0;
+   d.caps.supported_eotf_mask = 0;
+   d.caps.edid_gamma_x100     = 0;
+   d.caps.capability_source   = 0;
+
+   if (!environ_cb
+         || !environ_cb(RETRO_ENVIRONMENT_GET_DISPLAY_METADATA, &d)
+         || !d.geo.native_width || !d.geo.native_height)
+      return false;
+
+   n = d.geo.native_height / 24;
+   if (d.geo.native_width / 32 < n)
+      n = d.geo.native_width / 32;
+   if (n < 10)
+      n = 10;
+   *w = 32 * n;
+   *h = 20 * n;
+   return true;
+}
+
 /*
  * I_NegotiatePixelFormat
  *
@@ -1346,8 +1441,8 @@ static void update_audio_samplerate(void)
  * SCREENPITCH and before any surface, palette or lookup table is built --
  * SURFACE_PIXEL_DEPTH is derived from the result.
  *
- * The 30-bit path is gated on RETRO_ENVIRONMENT_GET_SCREEN_10BPC_CAPABLE
- * rather than on SET_PIXEL_FORMAT alone.  SET_PIXEL_FORMAT accepts
+ * The 30-bit path is gated on the HDR10 bit of source_formats from
+ * RETRO_ENVIRONMENT_GET_HDR_METADATA rather than on SET_PIXEL_FORMAT alone.  SET_PIXEL_FORMAT accepts
  * XRGB2101010 unconditionally and the frontend silently narrows the frame
  * to 8 bits when the active video driver cannot present a 10-bit surface,
  * so acceptance says nothing about what reaches the display.  Worse, that
@@ -1356,9 +1451,9 @@ static void update_audio_samplerate(void)
  * measurably worse output than just rendering 24-bit.  Query the real
  * capability and drop to 24-bit when it is not there.
  *
- * An older frontend that does not recognise the call returns false, which
- * the libretro contract defines as "no guarantee of native 10-bit" -- the
- * safe default, and the same branch we take for a non-capable driver.
+ * A frontend that does not recognise the call returns false, which is
+ * treated as "no guarantee of native 10-bit" -- the safe default, and the
+ * same branch we take for a non-capable driver.
  */
 static void I_NegotiatePixelFormat(void)
 {
@@ -1381,9 +1476,9 @@ static void I_NegotiatePixelFormat(void)
       /* HDR10 output is only worth attempting when the frontend can present
        * a 10-bit source end to end; PQ samples narrowed to 8 bits, or shown
        * on an SDR path, look badly wrong rather than merely coarse. */
-      bool tenbit = false;
-      if (!environ_cb(RETRO_ENVIRONMENT_GET_SCREEN_10BPC_CAPABLE, &tenbit)
-            || !tenbit)
+      struct retro_hdr_metadata hdr;
+      if (!I_QueryHDRMetadata(&hdr)
+            || !(hdr.source_formats & RETRO_HDR_SOURCE_FORMAT_HDR10_2101010))
       {
          want = VID_MODE8888;
          if (log_cb)
@@ -1396,19 +1491,10 @@ static void I_NegotiatePixelFormat(void)
       {
          /* Absolute luminance means the core has to know where the user
           * puts SDR white; everything ordinary is mapped there. */
-         float nits = 0.0f;
-         if (environ_cb(RETRO_ENVIRONMENT_GET_HDR_PAPER_WHITE_NITS, &nits)
-               && nits > 0.0f)
-            vid_paper_white_nits = nits;
-         else
-            vid_paper_white_nits = 200.0f;
-         {
-            unsigned gamut = VID_GAMUT_ACCURATE;
-            if (environ_cb(RETRO_ENVIRONMENT_GET_HDR_EXPAND_GAMUT, &gamut))
-               vid_expand_gamut = (int)gamut;
-            else
-               vid_expand_gamut = VID_GAMUT_ACCURATE;
-         }
+         vid_paper_white_nits = (hdr.paper_white_nits > 0.0f)
+                              ? hdr.paper_white_nits : 200.0f;
+         vid_expand_gamut     = (int)hdr.expand_gamut;
+         vid_max_nits         = (hdr.max_nits > 0.0f) ? hdr.max_nits : 0.0f;
 
          var.key   = "prboom-hdr_emissive";
          var.value = NULL;
@@ -1418,6 +1504,7 @@ static void I_NegotiatePixelFormat(void)
             if      (!strcmp(var.value, "off")) vid_emit_class = VID_EMIT_NONE;
             else if (!strcmp(var.value, "4x"))  vid_emit_class = VID_EMIT_4X;
             else if (!strcmp(var.value, "8x"))  vid_emit_class = VID_EMIT_8X;
+            else if (!strcmp(var.value, "auto")) vid_emit_class = VID_EMIT_AUTO;
             else                                vid_emit_class = VID_EMIT_2X;
          }
          if (log_cb)
@@ -1429,9 +1516,9 @@ static void I_NegotiatePixelFormat(void)
              * the log there is no way to tell a core that read the setting
              * from one built before the setting existed. */
             log_cb(RETRO_LOG_INFO,
-                   "Color Format: HDR10, paper white %.0f nits, emissive "
-                   "%.0fx, colour boost %s.\n",
-                   vid_paper_white_nits, vid_emit_scale[vid_emit_class],
+                   "Color Format: HDR10, paper white %.0f nits, peak %.0f "
+                   "nits, emissive %.1fx, colour boost %s.\n",
+                   vid_paper_white_nits, vid_max_nits, VID_EmitScale(),
                    gamut_name[vid_expand_gamut & 3]);
          }
       }
@@ -1542,7 +1629,23 @@ static void update_variables(bool startup)
       var.key = "prboom-resolution";
       var.value = NULL;
 
-      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value
+            && !strcmp(var.value, "auto"))
+      {
+         unsigned aw = 320, ah = 200;
+         if (I_AutoResolution(&aw, &ah))
+         {
+            if (log_cb)
+               log_cb(RETRO_LOG_INFO, "Resolution: auto, %ux%u from the "
+                     "display.\n", aw, ah);
+         }
+         else if (log_cb)
+            log_cb(RETRO_LOG_INFO, "Resolution: auto, display size not "
+                  "reported, using 320x200.\n");
+         SCREENWIDTH  = aw;
+         SCREENHEIGHT = ah;
+      }
+      else if (var.value)
       {
          char str[100];
          char *sep;
@@ -1567,6 +1670,45 @@ static void update_variables(bool startup)
          if (sep)
             SCREENHEIGHT = strtoul(sep + 1, NULL, 0);
 #endif
+      }
+
+      if (var.value)
+      {
+         /* The menu only offers sizes the renderer supports, but an options
+          * file can hold anything.  Above MAX_SCREENWIDTH x MAX_SCREENHEIGHT
+          * the renderer's fixed-size tables overflow (3840x2160 crashed on
+          * load), so scale an oversized request down to fit, keeping its
+          * shape; anything unreadable or below 320x200 gets 320x200. */
+         if (SCREENWIDTH < 320 || SCREENHEIGHT < 200)
+         {
+            if (log_cb)
+               log_cb(RETRO_LOG_WARN, "Resolution \"%s\" not usable, using 320x200.\n", var.value);
+            SCREENWIDTH  = 320;
+            SCREENHEIGHT = 200;
+         }
+         else if (SCREENWIDTH > MAX_SCREENWIDTH || SCREENHEIGHT > MAX_SCREENHEIGHT)
+         {
+            unsigned long w = SCREENWIDTH, h = SCREENHEIGHT;
+            /* the tighter of the two limits decides the scale */
+            if ((unsigned long)MAX_SCREENWIDTH * h <= (unsigned long)MAX_SCREENHEIGHT * w)
+            {
+               SCREENWIDTH  = MAX_SCREENWIDTH;
+               SCREENHEIGHT = (int)((h * MAX_SCREENWIDTH / w) & ~1UL);
+            }
+            else
+            {
+               SCREENHEIGHT = MAX_SCREENHEIGHT;
+               SCREENWIDTH  = (int)((w * MAX_SCREENHEIGHT / h) & ~1UL);
+            }
+            if (SCREENWIDTH < 320)
+               SCREENWIDTH = 320;
+            if (SCREENHEIGHT < 200)
+               SCREENHEIGHT = 200;
+            if (log_cb)
+               log_cb(RETRO_LOG_WARN, "Resolution \"%s\" is above the %dx%d maximum, using %ux%u.\n",
+                     var.value, MAX_SCREENWIDTH, MAX_SCREENHEIGHT, SCREENWIDTH, SCREENHEIGHT);
+         }
+         SCREENPITCH = (SCREENWIDTH * SURFACE_PIXEL_DEPTH);
 
          if (log_cb)
             log_cb(RETRO_LOG_DEBUG, "Got size: %u x %u.\n", SCREENWIDTH, SCREENHEIGHT);
@@ -1674,8 +1816,7 @@ void I_SafeExit(int rc);
 static void I_PollHDRPaperWhite(void)
 {
    static unsigned counter = 0;
-   float    nits  = 0.0f;
-   unsigned gamut = (unsigned)vid_expand_gamut;
+   struct retro_hdr_metadata hdr;
    int      dirty = 0;
 
    if (!VID_HDR)
@@ -1684,25 +1825,38 @@ static void I_PollHDRPaperWhite(void)
       return;
    counter = 0;
 
-   if (environ_cb(RETRO_ENVIRONMENT_GET_HDR_PAPER_WHITE_NITS, &nits)
-         && nits > 0.0f && nits != vid_paper_white_nits)
+   if (!I_QueryHDRMetadata(&hdr))
+      return;
+
+   if (hdr.paper_white_nits > 0.0f
+         && hdr.paper_white_nits != vid_paper_white_nits)
    {
       if (log_cb)
          log_cb(RETRO_LOG_INFO,
                 "HDR paper white changed: %.0f -> %.0f nits; rebuilding "
-                "colour tables.\n", vid_paper_white_nits, nits);
-      vid_paper_white_nits = nits;
+                "colour tables.\n", vid_paper_white_nits,
+                hdr.paper_white_nits);
+      vid_paper_white_nits = hdr.paper_white_nits;
       dirty = 1;
    }
 
-   if (environ_cb(RETRO_ENVIRONMENT_GET_HDR_EXPAND_GAMUT, &gamut)
-         && (int)gamut != vid_expand_gamut)
+   if (hdr.max_nits > 0.0f && hdr.max_nits != vid_max_nits)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_INFO,
+                "HDR peak changed: %.0f -> %.0f nits; rebuilding colour "
+                "tables.\n", vid_max_nits, hdr.max_nits);
+      vid_max_nits = hdr.max_nits;
+      dirty = 1;
+   }
+
+   if ((int)hdr.expand_gamut != vid_expand_gamut)
    {
       if (log_cb)
          log_cb(RETRO_LOG_INFO,
                 "HDR colour boost changed: %d -> %u; rebuilding colour "
-                "tables.\n", vid_expand_gamut, gamut);
-      vid_expand_gamut = (int)gamut;
+                "tables.\n", vid_expand_gamut, hdr.expand_gamut);
+      vid_expand_gamut = (int)hdr.expand_gamut;
       dirty = 1;
    }
 
@@ -1842,21 +1996,50 @@ static char* remove_extension(char *buf, const char *path, size_t size)
   return base + 1;
 }
 
-static wadinfo_t get_wadinfo(const char *path)
+/* Reads the wad header, and reports the file's size through *size so the
+ * caller can hold the header's claims against it.  I_Error only reports,
+ * so a short read has to leave a zeroed header behind rather than the
+ * stack it started on: the caller's "identification[0] == 0" test reads
+ * uninitialised bytes otherwise, and passes on most of them. */
+static wadinfo_t get_wadinfo(const char *path, int64_t *size)
 {
    wadinfo_t header;
    RFILE* fp = filestream_open(path,
 		   RETRO_VFS_FILE_ACCESS_READ,
 		   RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+   memset(&header, 0, sizeof(header));
+   if (size)
+      *size = 0;
+
    if (fp)
    {
+      if (size)
+         *size = filestream_get_size(fp);
       if(rfread(&header, sizeof(header), 1, fp) != 1)
+      {
          I_Error("get_wadinfo: error reading file header");
+         memset(&header, 0, sizeof(header));
+      }
       filestream_close(fp);
    }
-   else
-      memset(&header, 0, sizeof(header));
    return header;
+}
+
+/* Does the lump directory the header describes lie inside the file?
+ * Rejecting a malformed one at load time matters because W_AddFile runs
+ * after the wad has been paired with an IWAD: left to it, the broken
+ * file contributes no lumps, the paired IWAD supplies everything, and
+ * the core reports success for content it never read. */
+static bool wad_directory_fits(const wadinfo_t *header, int64_t size)
+{
+   int numlumps    = LONG(header->numlumps);
+   int infotableofs = LONG(header->infotableofs);
+
+   if (numlumps < 0 || infotableofs < (int)sizeof(*header))
+      return false;
+   return (int64_t)infotableofs
+        + (int64_t)numlumps * (int64_t)sizeof(filelump_t) <= size;
 }
 
 /* True if the WAD at `path` contains a PLAYPAL lump.  PLAYPAL is the
@@ -2147,7 +2330,7 @@ static entry_kind_t classify_entry(const char *path)
       if (!strcasecmp(ext, "deh") || !strcasecmp(ext, "bex"))
          return ENTRY_DEH;
    }
-   header = get_wadinfo(path);
+   header = get_wadinfo(path, NULL);
    if (header.identification[0] == 0)
       return ENTRY_INVALID;
    if (header.identification[0] == 'P' && header.identification[1] == 'K' &&
@@ -2263,7 +2446,6 @@ static int parse_m3u_playlist(const char *m3u_path,
 
 bool retro_load_game(const struct retro_game_info *info)
 {
-   unsigned i;
    int argc = 0;
    char **argv = load_argv;
 
@@ -2309,6 +2491,7 @@ bool retro_load_game(const struct retro_game_info *info)
    if (info && info->path)
    {
       wadinfo_t header;
+      int64_t wad_size = 0;
       char *deh, *extension, *baseconfig;
 
       char name_without_ext[1023];
@@ -2418,11 +2601,21 @@ bool retro_load_game(const struct retro_game_info *info)
       }
       else
       {
-         header = get_wadinfo(info->path);
+         header = get_wadinfo(info->path, &wad_size);
          // header.identification is static array, always non-NULL, but it might be empty if it couldn't be read
          if(header.identification[0] == 0)
          {
             I_Error("retro_load_game: couldn't read WAD header from '%s'", info->path);
+            goto failed;
+         }
+         if((!strncmp(header.identification, "IWAD", 4)
+          || !strncmp(header.identification, "PWAD", 4))
+          && !wad_directory_fits(&header, wad_size))
+         {
+            I_Error("retro_load_game: '%s' claims %d lumps at offset %d, "
+                    "which its %lld bytes cannot hold", info->path,
+                    LONG(header.numlumps), LONG(header.infotableofs),
+                    (long long)wad_size);
             goto failed;
          }
          if(!strncmp(header.identification, "IWAD", 4))
@@ -2664,7 +2857,7 @@ bool retro_load_game(const struct retro_game_info *info)
     * settled.  Sizing this at MAX_SCREENWIDTH*MAX_SCREENHEIGHT instead
     * would charge every session for a resolution it did not pick: 16MB
     * at 32bpp to hold a 320x200 frame that needs 273KB. */
-   screen_buf = (unsigned char*)malloc(SURFACE_PIXEL_DEPTH * I_MaxAspectWidth() * SCREENHEIGHT);
+   screen_buf = (unsigned char*)calloc(1, SURFACE_PIXEL_DEPTH * I_MaxAspectWidth() * SCREENHEIGHT);
    if (!screen_buf)
       goto failed;
 
@@ -2719,10 +2912,6 @@ bool retro_load_game(const struct retro_game_info *info)
     * the first frame is presented. */
    I_ApplyAspectRatio();
 
-   // Run few cycles to finish init.
-   for (i = 0; i < 3; i++)
-     D_DoomLoop();
-
    cheats_enabled      = true;
    cheats_pending      = false;
    cheats_pending_list = NULL;
@@ -2762,6 +2951,8 @@ failed:
       free(screen_buf);
       screen_buf = NULL;
    }
+   wipe_src_valid = 0;
+   wipe_src_hold  = 0;
    /* Roll back any partial init D_DoomMainSetup did before
     * failing.  Critically: if IdentifyVersion ran (D_AddFile
     * appended an entry to wadfiles[]) but a later step failed,
@@ -2817,6 +3008,16 @@ void retro_unload_game(void)
    if (screen_buf)
       free(screen_buf);
    screen_buf = NULL;
+
+   /* The latch describes screen_buf's contents, so it has to go down
+    * with the buffer: the next session allocates a fresh screen_buf
+    * holding no frame anyone has seen, and its opening gamestate
+    * differs from the wipegamestate D_DoomDeinit resets to, so
+    * D_Display asks on the very first frame whether a melt source
+    * exists.  Left set, the answer is yes and the session melts from
+    * whatever the new allocation happens to contain. */
+   wipe_src_valid = 0;
+   wipe_src_hold  = 0;
 
    /* Release the strdup'd argv slots from retro_load_game.
     * Without this, every content load leaks ~8-12 strdups
@@ -2936,6 +3137,10 @@ struct extra_serialize {
   uint8_t  gamekeydown[NUMKEYS];
   uint32_t music_state_size;
   uint8_t  music_state[MUSIC_STATE_RESERVED];
+  /* How far the demo has been read, when one is playing.  Without it a
+   * load restores the world and leaves the read head alone, so playback
+   * resumes from the wrong place. */
+  uint32_t demo_offset;
 };
 
 size_t retro_serialize_size(void)
@@ -3029,6 +3234,7 @@ bool retro_serialize(void *data_, size_t size)
     size_t n = I_MusicSerialize(extra->music_state, sizeof extra->music_state);
     extra->music_state_size = (uint32_t)n;
   }
+  extra->demo_offset = G_DemoReadOffset();
   return true;
 }
 
@@ -3084,6 +3290,8 @@ bool retro_unserialize(const void *data_, size_t size)
      if (extra->music_state_size > 0 &&
          extra->music_state_size <= sizeof extra->music_state)
         (void)I_MusicUnserialize(extra->music_state, extra->music_state_size);
+
+     G_SetDemoReadOffset(extra->demo_offset);
   }
 
   return true;
@@ -3707,52 +3915,98 @@ static void I_UpdateVideoMode(void)
 
    V_AllocScreens();
 
+   /* The screens are new memory, so anything caching what was drawn
+    * into them has to stretch again. */
+   ST_InvalidateBackground();
+
    R_InitBuffer(SCREENWIDTH, SCREENHEIGHT);
+}
+
+/* Is a melt close enough to be worth carrying a start screen for?
+ *
+ * TryRunTics steps at most one G_Ticker per retro_run, so the gamestate
+ * flip that makes the next frame melt is processed from a gameaction that
+ * is already pending by the time this frame finishes -- or from the
+ * advancedemo step, which sets one before the ticker runs.  Reading those
+ * here therefore sees every transition one frame ahead of the melt that
+ * follows it, which is exactly the frame whose pixels the melt wants.
+ *
+ * A few frames of hold follow each trigger so a transition that settles
+ * over more than one ticker still finds its source, and I_WipeSourceValid
+ * keeps a miss from melting stale pixels.  Snapshotting a frame nothing
+ * ends up asking for costs one copy; that is the cheap direction. */
+static int I_WipeSnapshotWanted(void)
+{
+   if (   gameaction != ga_nothing
+       || advancedemo
+       || gamestate  != wipegamestate)
+      wipe_src_hold = 3;
+   else if (wipe_src_hold > 0)
+      wipe_src_hold--;
+
+   return wipe_src_hold > 0;
+}
+
+/* Does screen_buf hold the last presented frame?  Always true while the
+ * renderer draws into it; under direct render, true only on the frames
+ * the snapshot above was taken.  D_Display asks before starting a melt
+ * and draws the transition plainly when the answer is no, which is the
+ * right failure: a missing melt reads as a cut, melting from a frame the
+ * player never saw reads as corruption. */
+dbool I_WipeSourceValid(void)
+{
+   return wipe_src_valid ? true : false;
 }
 
 void I_FinishUpdate (void)
 {
-   if (!video_cb)
+   /* The refresh callback belongs to retro_run.  Startup advances
+    * tics without drawing, so nothing should reach here outside a
+    * run; the gate keeps that true for any path that grows a
+    * D_Display call later. */
+   if (!video_cb || !in_retro_run)
      return;
 
    if (direct_fb_data)
    {
-      /* Issue #183: snapshot the finished frame into the
-       * persistent screen_buf.  D_Display's wipe_StartScreen runs
-       * BEFORE the next I_StartDisplay rebinds screens[0] to a
-       * fresh frontend FB; at that point screens[0].data is
-       * screen_buf, so capturing from it gives the wipe the
-       * correct previous-frame source.  Without this copy, under
-       * direct-render screen_buf is never written -- the renderer
-       * is bypassing it on every frame -- and wipe_StartScreen
-       * (whether called here or after I_StartDisplay) sees
-       * uninitialised buffer content.
+      /* Issue #183: the melt's start screen is the previously presented
+       * frame, and under direct render the renderer wrote that frame into
+       * a frontend buffer which is invalid once retro_run returns, so it
+       * is snapshotted into the persistent screen_buf.  D_Display's
+       * wipe_StartScreen runs BEFORE the next I_StartDisplay rebinds
+       * screens[0] to a fresh frontend FB; at that point screens[0].data
+       * is screen_buf, so capturing from there gives the melt the right
+       * source.
        *
-       * The snapshot MUST happen before video_cb.  Here the
-       * mapping is provably live (the renderer just wrote the
-       * frame through it); after video_cb it may not be.
-       * RetroArch's Vulkan driver services deferred swapchain
-       * work inside the frame call (vulkan_frame ->
-       * vulkan_check_swapchain -> vulkan_deinit_textures), which
-       * unmaps and frees the per-frame staging texture backing
-       * this very pointer whenever a resize / swapchain
-       * invalidation is pending (rotation, split view, menu
-       * driver churn).  Desktop drivers typically keep the freed
-       * suballocation's pages resident so a stale read only
-       * returns garbage, but MoltenVK backs each VkDeviceMemory
-       * with its own MTLBuffer and vkFreeMemory really unmaps:
-       * reading direct_fb_data after video_cb segfaults inside
-       * memcpy on iOS (five identical TestFlight crash reports,
-       * _platform_memmove reading SCREENPITCH*SCREENHEIGHT =
-       * 0x1f400 bytes from an unmapped source under retro_run).
+       * The snapshot MUST happen before video_cb.  Here the mapping is
+       * provably live (the renderer just wrote the frame through it);
+       * after video_cb it may not be.  RetroArch's Vulkan driver services
+       * deferred swapchain work inside the frame call (vulkan_frame ->
+       * vulkan_check_swapchain -> vulkan_deinit_textures), which unmaps
+       * and frees the per-frame staging texture backing this very pointer
+       * whenever a resize / swapchain invalidation is pending (rotation,
+       * split view, menu driver churn).  Desktop drivers typically keep
+       * the freed suballocation's pages resident so a stale read only
+       * returns garbage, but MoltenVK backs each VkDeviceMemory with its
+       * own MTLBuffer and vkFreeMemory really unmaps: reading
+       * direct_fb_data after video_cb segfaults inside memcpy on iOS
+       * (five identical TestFlight crash reports, _platform_memmove
+       * reading SCREENPITCH*SCREENHEIGHT = 0x1f400 bytes from an unmapped
+       * source under retro_run).
        *
-       * Cost: one read + one write of SCREENPITCH*SCREENHEIGHT
-       * bytes per frame.  ~128 KB at 320x200 RGB565.  At 35 Hz
-       * that's ~4.5 MB/s of cache-friendly streaming memcpy;
-       * trivial on any platform that can run a software Doom
-       * renderer at all. */
-      memcpy(screen_buf, direct_fb_data,
-             SCREENPITCH * SCREENHEIGHT);
+       * Cost when taken: one read + one write of SCREENPITCH*SCREENHEIGHT
+       * bytes, 128 KB at 320x200 RGB565 and 16 MB at 2560x1600 in a
+       * 32-bit format, and the read side comes out of whatever memory the
+       * frontend handed back.  I_WipeSnapshotWanted keeps that off the
+       * frames where no melt can follow. */
+      if (I_WipeSnapshotWanted())
+      {
+         memcpy(screen_buf, direct_fb_data,
+                SCREENPITCH * SCREENHEIGHT);
+         wipe_src_valid = 1;
+      }
+      else
+         wipe_src_valid = 0;
       /* Direct-render: the renderer wrote pixels straight into
        * the frontend's buffer in place; just hand it back.  Per
        * libretro.h the pointer must match exactly what
@@ -3776,7 +4030,10 @@ void I_FinishUpdate (void)
    /* Fallback path: frontend doesn't support the SW FB API, or
     * returned a non-RGB565 buffer or a mismatched pitch this
     * frame.  Hand video_cb our heap buffer; the frontend will
-    * copy/convert internally. */
+    * copy/convert internally.  screen_buf is the render target
+    * here, so it holds this frame the moment it is presented and
+    * a melt starting next frame needs no snapshot at all. */
+   wipe_src_valid = 1;
    video_cb(screen_buf, SCREENWIDTH, SCREENHEIGHT, SCREENPITCH);
 }
 
@@ -3924,10 +4181,8 @@ dbool   I_StartDisplay(void)
    /* Direct-render acquisition.  libretro.h: the buffer returned
     * from GET_CURRENT_SOFTWARE_FRAMEBUFFER is valid only until
     * retro_run returns, so do this once per frame and unbind in
-    * I_FinishUpdate.  retro_load_game runs D_DoomLoop a few times
-    * during init before the frontend's video pipeline is fully up
-    * -- the in_retro_run gate skips acquisition during that
-    * window. */
+    * I_FinishUpdate.  The in_retro_run gate keeps the request
+    * inside the window where the frontend guarantees a buffer. */
    direct_fb_data  = NULL;
    direct_fb_pitch = 0;
 
@@ -4051,6 +4306,29 @@ dbool HasTrailingSlash(const char* dn)
  * Given a file name, search for it in g_wad_dir first, then the system folder
  * and then scan the parent folders of g_wad_dir.
  */
+int I_SearchDir(int index, char *out, size_t len)
+{
+   const char *system_dir = NULL;
+
+   if (index == 0)
+   {
+      if (!g_wad_dir[0] || strlen(g_wad_dir) + 1 > len)
+         return 0;
+      strcpy(out, g_wad_dir);
+      return 1;
+   }
+   if (index > 2
+         || !environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir)
+         || !system_dir || !system_dir[0]
+         || strlen(system_dir) + 8 > len)
+      return 0;
+   if (index == 1)
+      sprintf(out, "%s%c%s", system_dir, DIR_SLASH, "prboom");
+   else
+      strcpy(out, system_dir);
+   return 1;
+}
+
 char* I_FindFile(const char* wfname, const char* ext)
 {
    char *p, *dir, *system_dir, *prboom_system_dir;
@@ -4066,8 +4344,13 @@ char* I_FindFile(const char* wfname, const char* ext)
     * routes them through I_FindFile when it locates the IWAD.
     * Mirror what FindFileInDir does with the optional extension:
     * append `ext` if supplied. */
+   /* The same holds for a relative path that already names its folder
+    * ("nerve/doom2.wad" when content was loaded as nerve/nerve.wad from
+    * the command line): it is relative to the working directory, and
+    * prefixing g_wad_dir ("nerve") doubles the folder. */
    if (wfname && (wfname[0] == '/' || wfname[0] == '\\' ||
-                  (wfname[0] && wfname[1] == ':')))
+                  (wfname[0] && wfname[1] == ':') ||
+                  strchr(wfname, '/') || strchr(wfname, '\\')))
    {
       size_t need = strlen(wfname) + (ext ? strlen(ext) : 0) + 1;
       char *abs = malloc(need);
@@ -4079,7 +4362,7 @@ char* I_FindFile(const char* wfname, const char* ext)
          if (path_is_valid(abs))
          {
             if (log_cb)
-               log_cb(RETRO_LOG_DEBUG, "I_FindFile: using absolute path %s\n", abs);
+               log_cb(RETRO_LOG_DEBUG, "I_FindFile: using path as given %s\n", abs);
             return abs;
          }
          free(abs);

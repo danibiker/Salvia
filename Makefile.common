@@ -29,6 +29,7 @@ SOURCES_C := $(LIBRETRO_DIR)/libretro.c \
 				 $(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 				 $(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
 				 $(LIBRETRO_COMM_DIR)/string/stdstring.c \
+				 $(LIBRETRO_COMM_DIR)/string/rstrtod.c \
 				 $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
 				 $(LIBRETRO_COMM_DIR)/file/file_path.c \
 				 $(LIBRETRO_COMM_DIR)/file/file_path_io.c \
@@ -162,6 +163,9 @@ SOURCES_C += $(CORE_DIR)/am_map.c \
 				 $(CORE_DIR)/oplplayer.c \
 				 $(CORE_DIR)/flplayer.c \
 				 $(CORE_DIR)/libretro_midiout.c \
+				 $(CORE_DIR)/sc55.c \
+				 $(CORE_DIR)/sc55player.c \
+				 $(CORE_DIR)/sc88.c \
 				 $(CORE_DIR)/midifile.c \
 				 $(CORE_DIR)/madplayer.c \
 				 $(CORE_DIR)/modplayer.c \
@@ -256,19 +260,10 @@ else
 # renderer falls back to the single-threaded path with the core option
 # forced off.
 ifneq ($(HAVE_THREADS), 0)
-SOURCES_C += $(LIBRETRO_COMM_DIR)/rthreads/rthreads.c
+SOURCES_C += $(LIBRETRO_COMM_DIR)/rthreads/rthreads.c \
+	$(LIBRETRO_COMM_DIR)/rthreads/retro_eventcount.c
 INCFLAGS  += -DHAVE_THREADS
 endif
 
-# rthreads frees a thread's argument block on the spawned thread, and
-# rthreads.h drags in windows.h on Win32; both are incompatible with the zone
-# allocator macros that z_zone.h force-includes everywhere, so it opts out.  Applied
-# with `override` so a command-line CFLAGS (sanitizer or profiling build)
-# cannot silently drop it.  r_rendermt.c is the only prboom translation unit
-# that includes the threading headers -- see src/r_rendermt.h.
-$(LIBRETRO_COMM_DIR)/rthreads/rthreads.o: override CFLAGS += -DZ_ZONE_NO_ALLOC_OVERRIDE
-$(CORE_DIR)/r_rendermt.o:                   override CFLAGS += -DZ_ZONE_NO_ALLOC_OVERRIDE
-
-INCFLAGS += -include z_zone.h
 endif
 

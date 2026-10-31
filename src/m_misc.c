@@ -37,6 +37,7 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <errno.h>
 #ifdef _MSC_VER
 #include <io.h>
@@ -94,6 +95,8 @@ extern dbool   r_wigglefix;
  * M_WriteFile
  *
  * killough 9/98: rewritten to use filestream and to flash disk icon
+ *
+ * The buffer comes from malloc() and is the caller's to free().
  */
 
 dbool   M_WriteFile(char const *name, void *source, int length)
@@ -123,16 +126,25 @@ int M_ReadFile(char const *name, uint8_t **buffer)
 {
    RFILE *fp;
 
+   *buffer = NULL;
    if ((fp = filestream_open(name,
 				   RETRO_VFS_FILE_ACCESS_READ,
 				   RETRO_VFS_FILE_ACCESS_HINT_NONE)))
    {
       int64_t length = filestream_get_size(fp);
-      *buffer = Z_Malloc(length, PU_STATIC, 0);
-      if (filestream_read(fp, *buffer, length) >= 0)
+      /* C library, not the zone: every caller releases the buffer with
+       * free().  At least one byte, so an empty file still hands back a
+       * buffer the caller may free. */
+      if (length >= 0 && length < INT_MAX
+            && (*buffer = (uint8_t*)malloc(length ? (size_t)length : 1)))
       {
-         filestream_close(fp);
-         return length;
+         if (filestream_read(fp, *buffer, length) == length)
+         {
+            filestream_close(fp);
+            return (int)length;
+         }
+         free(*buffer);
+         *buffer = NULL;
       }
       filestream_close(fp);
    }
@@ -291,19 +303,15 @@ default_t defaults[] =
   {"Sound settings",{NULL},{0},UL,UL,def_none,ss_none, NULL, NULL},
   {"pitched_sounds",{&pitched_sounds, NULL},{0, NULL},0,1, // killough 2/21/98
    def_bool,ss_gen, NULL, NULL}, // enables variable pitch in sound effects (from id's original code)
-  {"sfx_volume",{&snd_SfxVolume, NULL},{8, NULL},0,15, def_int,ss_none, NULL, NULL},
-  {"music_volume",{&snd_MusicVolume, NULL},{8, NULL},0,15, def_int,ss_none, NULL, NULL},
+  {"sfx_volume",{&snd_SfxVolume, NULL},{15, NULL},0,15, def_int,ss_none, NULL, NULL},
+  {"music_volume",{&snd_MusicVolume, NULL},{15, NULL},0,15, def_int,ss_none, NULL, NULL},
   {"mus_pause_opt",{&mus_pause_opt, NULL},{2, NULL},0,2, // CPhipps - music pausing
    def_int, ss_none, NULL, NULL}, // 0 = kill music when paused, 1 = pause music, 2 = let music continue
   {"mus_load_external", {&mus_load_external, NULL},  {2, NULL},0,2,
     def_int,ss_gen, NULL, NULL}, // 0 = never load external music files, 1 = always load it, 2 = only from iwads
   {"midi_player", {&midi_player, NULL}, {1, NULL}, 0,
-#ifdef HAVE_LIBFLUIDSYNTH
-   3,
-#else
-   2,
-#endif
-   def_int, ss_gen, NULL, NULL}, // 0 = off, 1 = Adlib (OPL), [2 = Fluidsynth if built], last = libretro raw MIDI
+   MIDI_PLAYER_LIBRETRO,
+   def_int, ss_gen, NULL, NULL}, // 0 = off, 1 = Adlib (OPL), 2 = SC55, 3 = SC88, [4 = Fluidsynth if built], last = libretro raw MIDI
   {"snd_channels",{&default_numChannels, NULL},{0, NULL},0,2,
    def_int,ss_gen, NULL, NULL}, // number of audio events simultaneously // killough
 
