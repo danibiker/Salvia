@@ -143,8 +143,12 @@
  * instrumentacion de PEOPS_GPUwriteDataMem (counters per-cmd + QPC
  * bracket) se elimina por completo del binario.  Coste runtime cero
  * en release.  Para enable: /D PCSXR_DIAG_INSTRUMENTATION=1. */
+/* OJO: TIENE QUE VALER LO MISMO QUE EN libpcsxcore/gpu.h: alli se USAN los
+ * contadores que aqui se DEFINEN.  Si uno vale 1 y el otro 0 -> LNK2001
+ * g_xbox_soft_* al enlazar Salvia.  Este fichero no incluye aquella cabecera
+ * (tiene su propio gpu.h), asi que al cambiarlo hay que cambiar los dos. */
 #ifndef PCSXR_DIAG_INSTRUMENTATION
-#define PCSXR_DIAG_INSTRUMENTATION 0
+#define PCSXR_DIAG_INSTRUMENTATION 1
 #endif
 
 /* Sub-interruptor: cronometrar CADA primitiva GP0 con QueryPerformanceCounter.
@@ -184,6 +188,7 @@ volatile uint64_t     g_xbox_soft_qpc_freq = 0;
 #endif
 #include "../gpu_duck/gpu_duck_c_api.h"
 #include "../gpu_unai/gpu_unai_c_api.h"
+#include "../../libpcsxcore/pgxp.h"
 #include "peops_prof.h"
 
 ////////////////////////////////////////////////////////////////////////
@@ -244,6 +249,11 @@ char              szDebugText[512];
 unsigned long     ulStatusControl[256];      
 
 static unsigned   long gpuDataM[256];
+/* [PGXP] Direccion de RAM de la que vino cada palabra de gpuDataM
+ * (0xFFFFFFFF = no vino de RAM: escritura de la CPU al puerto GP0).  La
+ * lee el driver de SwanStation para buscar la posicion con decimales de cada
+ * vertice (pgxp.c, PGXP_GetPreciseVertex).  Solo se rellena con PGXP. */
+unsigned int g_gpu_data_addr[256];
 static unsigned   char gpuCommand = 0;
 static long       gpuDataC = 0;
 static long       gpuDataP = 0;
@@ -1701,6 +1711,18 @@ void PEOPS_GPUwriteStatus(unsigned long gdata)
 
 __inline void FinishedVRAMWrite(void)
 {
+ /* [2026-10-30] SwanStation HW: la carga (LoadImage) acaba de escribir el
+  * rectangulo en psxVuw; subirlo a la VRAM de la GPU, con la mascara vigente.
+  *
+  * OJO: aqui tambien se llega SIN LoadImage.  GP1(04)=2 (direccion de DMA
+  * CPU->GPU) pone DataWriteMode=DR_VRAMTRANSFER con VRAMWrite a cero, y el
+  * siguiente bloque de DMA acaba en FinishedVRAMWrite sin escribir nada.
+  * Antes un ancho/alto 0 se tomaba como 1024x512 y se subia la psxVuw entera
+  * (vieja) encima de todo lo dibujado por la GPU, dos veces por frame:
+  * pantalla negra.  Con 0 no se sube nada (xbox_soft tampoco copia nada). */
+ if (duck_hw_enabled && VRAMWrite.Width > 0 && VRAMWrite.Height > 0)
+  duck_hw_upload_rect((unsigned)VRAMWrite.x, (unsigned)VRAMWrite.y,
+                      (unsigned)VRAMWrite.Width, (unsigned)VRAMWrite.Height, 1);
 /*
 // NEWX
  if(!PSXDisplay.Interlaced && UseFrameSkip)            // stupid frame skipping
@@ -2097,6 +2119,7 @@ ENDVRAM:
          gpuDataC = primTableCX[command];
          gpuCommand = command;
          PUTLE32(&gpuDataM[0], gdata);
+         if (g_pgxp_enabled) g_gpu_data_addr[0] = PGXP_RamAddrOf(pMem - 1);
          gpuDataP = 1;
         }
        else continue;
@@ -2104,6 +2127,7 @@ ENDVRAM:
      else
       {
        PUTLE32(&gpuDataM[gpuDataP], gdata);
+       if (g_pgxp_enabled) g_gpu_data_addr[gpuDataP & 255] = PGXP_RamAddrOf(pMem - 1);
        if(gpuDataC>128)
         {
          if((gpuDataC==254 && gpuDataP>=3) ||
@@ -2438,6 +2462,9 @@ long PEOPS_GPUfreeze(unsigned long ulGetFreezeData,GPUFreeze_t * pF)
   {
    pF->ulStatus=lGPUstatusRet;
    memcpy(pF->ulControl,ulStatusControl,256*sizeof(unsigned long));
+   /* [2026-10-30] SwanStation HW: la VRAM buena esta en la GPU. */
+   if (duck_hw_enabled)
+    duck_hw_readback_rect(0, 0, 1024, 512);
    memcpy(pF->psxVRam,  psxVub,         1024*iGPUHeight*2); //done in Misc.c
 
    return 1;
@@ -2448,6 +2475,10 @@ long PEOPS_GPUfreeze(unsigned long ulGetFreezeData,GPUFreeze_t * pF)
  lGPUstatusRet=pF->ulStatus;
  memcpy(ulStatusControl,pF->ulControl,256*sizeof(unsigned long));
  memcpy(psxVub,         pF->psxVRam,  1024*iGPUHeight*2); //done in Misc.c
+ /* [2026-10-30] SwanStation HW: subir la VRAM cargada a la GPU (sin mascara:
+  * los pixeles traen su propio bit). */
+ if (duck_hw_enabled)
+  duck_hw_upload_rect(0, 0, 1024, 512, 0);
 
 // RESET TEXTURE STORE HERE, IF YOU USE SOMETHING LIKE THAT
 

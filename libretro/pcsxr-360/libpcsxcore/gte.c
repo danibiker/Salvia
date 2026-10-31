@@ -24,6 +24,7 @@
 */
 #include "gte.h"
 #include "psxmem.h"
+#include "pgxp.h"
 
 static __inline u32 MFC2(int reg) {
 	switch (reg) {
@@ -151,38 +152,50 @@ static __inline void CTC2(u32 value, int reg) {
 	psxRegs.CP2C.r[reg] = value;
 }
 
+/* [PGXP] Cada transferencia mueve tambien la sombra con decimales (pgxp.c).
+ * Las llaman el interprete y el dynarec (CP2_FUNC, con psxRegs.code puesto). */
 void gteMFC2() {
+	u32 v;
 	if (!_Rt_) return;
-	psxRegs.GPR.r[_Rt_] = MFC2(_Rd_);
+	v = MFC2(_Rd_);
+	psxRegs.GPR.r[_Rt_] = v;
+	if (g_pgxp_enabled) PGXP_CPU_MFC2(psxRegs.code, v, v);
 }
 
 void gteCFC2() {
+	u32 v;
 	if (!_Rt_) return;
-	psxRegs.GPR.r[_Rt_] = psxRegs.CP2C.r[_Rd_];
+	v = psxRegs.CP2C.r[_Rd_];
+	psxRegs.GPR.r[_Rt_] = v;
+	if (g_pgxp_enabled) PGXP_CPU_CFC2(psxRegs.code, v, v);
 }
 
 void gteMTC2() {
-	MTC2(psxRegs.GPR.r[_Rt_], _Rd_);
+	const u32 v = psxRegs.GPR.r[_Rt_];
+	MTC2(v, _Rd_);
+	if (g_pgxp_enabled) PGXP_CPU_MTC2(psxRegs.code, v, v);
 }
 
 void gteCTC2() {
-	CTC2(psxRegs.GPR.r[_Rt_], _Rd_);
+	const u32 v = psxRegs.GPR.r[_Rt_];
+	CTC2(v, _Rd_);
+	if (g_pgxp_enabled) PGXP_CPU_CTC2(psxRegs.code, v, v);
 }
 
 #define _oB_ (psxRegs.GPR.r[_Rs_] + _Imm_)
 
 void gteLWC2() {
-//if(use_vm){
-//	MTC2(psxMemRead32(_oB_), _Rt_);}
-//else{
-	MTC2(psxMemRead32_2(_oB_), _Rt_);//}//teste
+	const u32 a = _oB_;
+	const u32 v = psxMemRead32_2(a);
+	MTC2(v, _Rt_);
+	if (g_pgxp_enabled) PGXP_CPU_LWC2(psxRegs.code, v, a);
 }
 
 void gteSWC2() {
-//if(use_vm){
-//	psxMemWrite32(_oB_, MFC2(_Rt_));}
-//else{
-	psxMemWrite32_2(_oB_, MFC2(_Rt_));//}//teste
+	const u32 a = _oB_;
+	const u32 v = MFC2(_Rt_);
+	psxMemWrite32_2(a, v);
+	if (g_pgxp_enabled) PGXP_CPU_SWC2(psxRegs.code, v, a);
 }
 
 void gteMVMVA() {
@@ -214,6 +227,13 @@ void gteNCLIP() {
 	GTE_LOG("GTE NCLIP\n");
 #endif
 	gteFLAG = 0;
+
+	/* [PGXP] Con decimales: las caras casi de canto no se descartan por un
+	 * redondeo (gte.cpp de upstream, Execute_NCLIP_PGXP). */
+	if (g_pgxp_enabled && g_pgxp_culling && PGXP_GTE_NCLIP_valid(gteSXY0, gteSXY1, gteSXY2)) {
+		gteMAC0 = (s32)PGXP_GTE_NCLIP();
+		return;
+	}
 
 	gteMAC0 = F((s64)gteSX0 * (gteSY1 - gteSY2) +
 				gteSX1 * (gteSY2 - gteSY0) +

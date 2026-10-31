@@ -25,6 +25,7 @@
 #include "r3000a.h"
 #include "gpu.h"	/* PCSXR_DIAG_INSTRUMENTATION */
 #include "gte.h"
+#include "pgxp.h"
 #include "psxhle.h"
 #include <process.h>
 
@@ -706,8 +707,12 @@ __inline void doBranch(u32 tar) {
 * Arithmetic with immediate operand                      *
 * Format:  OP rt, rs, immediate                          *
 *********************************************************/
-void psxADDI() 	{ if (!_Rt_) return; _rRt_ = _u32(_rRs_) + _Imm_ ; }		// Rt = Rs + Im 	(Exception on Integer Overflow)
-void psxADDIU() { if (!_Rt_) return; _rRt_ = _u32(_rRs_) + _Imm_ ; }		// Rt = Rs + Im
+/* [PGXP] addiu/addu con un sumando 0 son el "move" del compilador: la sombra
+ * con decimales viaja con el valor (cpu_core.cpp de upstream, modo memoria). */
+#define PGXP_MOVE_I() if (g_pgxp_memory && _Imm_ == 0) PGXP_CPU_MOVE(((u32)_Rt_ << 8) | (u32)_Rs_, _u32(_rRs_))
+#define PGXP_MOVE_R() if (g_pgxp_memory && _u32(_rRt_) == 0) PGXP_CPU_MOVE(((u32)_Rd_ << 8) | (u32)_Rs_, _u32(_rRs_))
+void psxADDI() 	{ if (!_Rt_) return; PGXP_MOVE_I(); _rRt_ = _u32(_rRs_) + _Imm_ ; }		// Rt = Rs + Im 	(Exception on Integer Overflow)
+void psxADDIU() { if (!_Rt_) return; PGXP_MOVE_I(); _rRt_ = _u32(_rRs_) + _Imm_ ; }		// Rt = Rs + Im
 void psxANDI() 	{ if (!_Rt_) return; _rRt_ = _u32(_rRs_) & _ImmU_; }		// Rt = Rs And Im
 void psxORI() 	{ if (!_Rt_) return; _rRt_ = _u32(_rRs_) | _ImmU_; }		// Rt = Rs Or  Im
 void psxXORI() 	{ if (!_Rt_) return; _rRt_ = _u32(_rRs_) ^ _ImmU_; }		// Rt = Rs Xor Im
@@ -718,8 +723,8 @@ void psxSLTIU() { if (!_Rt_) return; _rRt_ = _u32(_rRs_) < ((u32)_Imm_); }		// R
 * Register arithmetic                                    *
 * Format:  OP rd, rs, rt                                 *
 *********************************************************/
-void psxADD()	{ if (!_Rd_) return; _rRd_ = _u32(_rRs_) + _u32(_rRt_); }	// Rd = Rs + Rt		(Exception on Integer Overflow)
-void psxADDU() 	{ if (!_Rd_) return; _rRd_ = _u32(_rRs_) + _u32(_rRt_); }	// Rd = Rs + Rt
+void psxADD()	{ if (!_Rd_) return; PGXP_MOVE_R(); _rRd_ = _u32(_rRs_) + _u32(_rRt_); }	// Rd = Rs + Rt		(Exception on Integer Overflow)
+void psxADDU() 	{ if (!_Rd_) return; PGXP_MOVE_R(); _rRd_ = _u32(_rRs_) + _u32(_rRt_); }	// Rd = Rs + Rt
 void psxSUB() 	{ if (!_Rd_) return; _rRd_ = _u32(_rRs_) - _u32(_rRt_); }	// Rd = Rs - Rt		(Exception on Integer Overflow)
 void psxSUBU() 	{ if (!_Rd_) return; _rRd_ = _u32(_rRs_) - _u32(_rRt_); }	// Rd = Rs - Rt
 void psxAND() 	{ if (!_Rd_) return; _rRd_ = _u32(_rRs_) & _u32(_rRt_); }	// Rd = Rs And Rt
@@ -912,6 +917,7 @@ void psxLB() {
 
 	if (_Rt_) {
 	_i32(_rRt_) = (signed char)psxMemRead8_2(_oB_);
+	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
 	} else {
 	psxMemRead8_2(_oB_);
 	}
@@ -932,6 +938,7 @@ void psxLBU() {
 
 	if (_Rt_) {
 	_u32(_rRt_) = psxMemRead8_2(_oB_);
+	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
 	} else {
 	psxMemRead8_2(_oB_);
 	}
@@ -951,7 +958,9 @@ void psxLH() {
 #endif
 
 	if (_Rt_) {
-	_i32(_rRt_) = (short)psxMemRead16_2(_oB_);
+	const u32 a = _oB_;
+	_i32(_rRt_) = (short)psxMemRead16_2(a);
+	if (g_pgxp_memory) PGXP_CPU_LHx(psxRegs.code, _u32(_rRt_), a);
 	} else {
 	psxMemRead16_2(_oB_);
 	}
@@ -971,7 +980,9 @@ void psxLHU() {
 #endif
 
 	if (_Rt_) {
-	_u32(_rRt_) = psxMemRead16_2(_oB_);
+	const u32 a = _oB_;
+	_u32(_rRt_) = psxMemRead16_2(a);
+	if (g_pgxp_memory) PGXP_CPU_LHx(psxRegs.code, _u32(_rRt_), a);
 	} else {
 	psxMemRead16_2(_oB_);
 	}
@@ -991,7 +1002,9 @@ void psxLW() {
 #endif
 
 	if (_Rt_) {
-	_u32(_rRt_) = psxMemRead32_2(_oB_);
+	const u32 a = _oB_;
+	_u32(_rRt_) = psxMemRead32_2(a);
+	if (g_pgxp_memory) PGXP_CPU_LW(psxRegs.code, _u32(_rRt_), a);
 	} else {
 	psxMemRead32_2(_oB_);
 	}
@@ -1023,6 +1036,7 @@ void psxLWL() {
 	if (!_Rt_) return;
 	_u32(_rRt_) =	( _u32(_rRt_) & LWL_MASK[shift]) | 
 					( mem << LWL_SHIFT[shift]);
+	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
 
 	/*
 	Mem = 1234.  Reg = abcd
@@ -1060,6 +1074,7 @@ void psxLWR() {
 	if (!_Rt_) return;
 	_u32(_rRt_) =	( _u32(_rRt_) & LWR_MASK[shift]) | 
 					( mem >> LWR_SHIFT[shift]);
+	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
 
 	/*
 	Mem = 1234.  Reg = abcd
@@ -1074,17 +1089,20 @@ void psxLWR() {
 void psxSB() {
 	u32 a = _oB_, v = _u8(_rRt_);
 	psxMemWrite8_2(a, (u8)v);
+	if (g_pgxp_memory) PGXP_CPU_SB(psxRegs.code, v, a);
 }
 
 void psxSH() {
 	u32 a = _oB_, v = _u16(_rRt_);
 	psxMemWrite16_2(a, (u16)v);
+	if (g_pgxp_memory) PGXP_CPU_SH(psxRegs.code, v, a);
 }
 
 void psxSW() {
 	u32 a = _oB_, v = _u32(_rRt_);
 	diag_rdidx_note(a, v);
 	psxMemWrite32_2(a, v);
+	if (g_pgxp_memory) PGXP_CPU_SW(psxRegs.code, v, a);
 }
 
 
@@ -1100,6 +1118,7 @@ void psxSWL() {
 	mem = psxMemRead32_2(addr & ~3);
 
 	psxMemWrite32_2(addr & ~3,  (_u32(_rRt_) >> SWL_SHIFT[shift]) |(  mem & SWL_MASK[shift]) );//}//teste
+	if (g_pgxp_memory) PGXP_CPU_InvalidateMem(addr);
 	/*
 	Mem = 1234.  Reg = abcd
 
@@ -1122,6 +1141,7 @@ void psxSWR() {
 	mem = psxMemRead32_2(addr & ~3);
 
 	psxMemWrite32_2(addr & ~3,  (_u32(_rRt_) << SWR_SHIFT[shift]) | (  mem & SWR_MASK[shift]) );//}//teste
+	if (g_pgxp_memory) PGXP_CPU_InvalidateMem(addr);
 
 	/*
 	Mem = 1234.  Reg = abcd

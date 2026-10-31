@@ -1,0 +1,295 @@
+pcsxr-360 -- renderizador hardware D3D9 "SwanStation HW"
+=========================================================
+FASE 0: inventario y decisiones.  2026-10-30.
+
+Objetivo acordado con el usuario
+--------------------------------
+- Fases 1-3 ahora: PC (Win32) a x1 sin filtros; luego Xbox 360 (EDRAM,
+  Resolve, hilo); luego true color y filtros, siempre a x1.
+- Fase 4 (opcional, despues): x2 y PGXP.
+
+Referencia upstream
+-------------------
+D:\develop\Github\xbox360\project\backups\swanstation\src\core
+  gpu_hw.h / gpu_hw.cpp            1547 lineas  (logica comun de lotes)
+  gpu_hw_d3d11.h / .cpp            2263 lineas  (recursos y draws D3D11)
+  gpu_hw_shadergen.cpp             1824 lineas  (HLSL/GLSL generado)
+
+No se porta linea a linea.  Esta version de SwanStation esta muy modificada
+(casi todo es una rama en tiempo de ejecucion sobre un cbuffer), usa C++17
+y D3D11.  Se escribe un backend nuevo y compacto que sigue el DISENO de
+DuckStation/SwanStation, con estas piezas tomadas casi tal cual:
+
+  gpu_hw.cpp:585-672   DrawLine: linea -> quad (2 triangulos)
+  gpu_hw.cpp:674-1063  LoadVertices: poligono/rectangulo/linea a vertices de
+                       lote, recorte por MAX_PRIMITIVE_WIDTH/HEIGHT,
+                       rectangulos partidos por pagina de textura de 256
+  gpu_hw.cpp:1153      IncludeVRAMDirtyRectangle
+  gpu_hw.cpp:1343-1475 DispatchRenderCommand: cuando se vacia el lote; la
+                       pagina de textura/CLUT que toca el rectangulo sucio
+                       obliga a refrescar la textura de lectura
+  gpu_hw.cpp:1477      FlushRender: dos pasadas (solo opacos / solo
+                       semitransparentes) cuando hace falta
+  gpu_hw.h:338         profundidad del primitivo = 1 - n/65535
+  gpu_hw.h:372         NeedsTwoPassRendering
+  gpu_hw_d3d11.cpp:941 estados: sin culling, scissor, profundidad
+                       ALWAYS / GREATER_EQUAL (comprobar mascara) / LESS
+                       (PGXP), mezcla ONE + factor, REV_SUBTRACT para B-F
+  gpu_hw_d3d11.cpp:1797 DrawBatchVertices: eleccion de mezcla y profundidad
+  gpu_hw_d3d11.cpp:2101 UpdateVRAMReadTexture: copia del rect sucio
+  gpu_hw_d3d11.cpp:2126 UpdateDepthBufferFromMaskBit
+  gpu_hw_shadergen.cpp:117  VS de lotes
+  gpu_hw_shadergen.cpp:745  FS de lotes (muestreo 4/8/16 bpp, CLUT, ventana
+                            de textura, dithering, mascara, premultiplicado)
+  gpu_hw_shadergen.cpp:1245 FS de salida (15 y 24 bits)
+  gpu_hw_shadergen.cpp:1478 FS de escritura de VRAM (UpdateVRAM)
+  gpu_hw_shadergen.cpp:1553 FS de copia de VRAM
+  gpu_hw_shadergen.cpp:1664 FS de profundidad desde el bit de mascara
+
+Esquema de la mascara (sin stencil, igual que upstream)
+-------------------------------------------------------
+- Cada pixel escribe oDepth = bit_de_mascara * z_del_primitivo.
+- z baja con cada primitivo que COMPRUEBA mascara (1 - n/65535).
+- Comprobar mascara = test GREATEREQUAL: falla sobre pixeles enmascarados
+  escritos antes (su z es mayor), pasa sobre los no enmascarados (z = 0).
+- Al agotar el contador se reconstruye la profundidad desde el alfa de la
+  VRAM (pasada de solo profundidad) y n vuelve a 1.
+- ps_3_0 tiene oDepth, en PC y en Xenos (xbox64 ya lo usa).
+
+D3D9 / Shader Model 3: lo que no hay y como se resuelve
+--------------------------------------------------------
+1. Sin enteros ni operaciones de bits en las shaders.
+   - La pagina de textura y la CLUT se decodifican en la CPU al montar el
+     vertice y van como atributos float (el VS de upstream lo hacia con
+     desplazamientos).
+   - Texel de 16 bits = round(r*31) + round(g*31)*32 + round(b*31)*1024 +
+     round(a)*32768: exacto en float (< 2^24).
+   - Indice de 4/8 bits = floor(valor / 16^sub) mod 16 (o 256^sub mod 256).
+   - Ventana de textura: AND de 5 bits con un bucle de 5 iteraciones sobre
+     floor/fmod; solo si el juego la usa (rama por constante bool).
+   - Dithering: matriz 4x4 en una textura de 4x4 con muestreo puntual y
+     envoltura, indexada por VPOS/4 (ps_3_0 no indexa constantes con un
+     valor calculado).
+2. Sin mezcla de doble fuente.
+   - El factor de destino solo depende del modo de transparencia (0,5 o 1),
+     asi que es CONSTANTE POR LOTE: D3DRS_BLENDFACTOR.
+   - El origen va premultiplicado en la shader (0,5 / 1 / 1 / 0,25).
+   - El alfa (bit de mascara) se escribe aparte:
+     SEPARATEALPHABLENDENABLE con ONE/ZERO.
+   - Texturizado + transparencia = siempre dos pasadas (solo opacos sin
+     mezcla, luego solo semitransparentes con mezcla), que es lo que hace
+     upstream sin dual-source (camino GLES, gpu_hw.h:372).
+   - Filtros que exigen dual-source: fuera (igual que GLES).  Fase 3.
+3. Sin copia de recurso a recurso con caja (CopySubresourceRegion).
+   - PC: StretchRect de la VRAM (textura render target) a la textura de
+     lectura.  Xbox: Resolve desde la EDRAM (fase 2).
+4. Media texel / medio pixel.
+   - D3D9 tiene los centros de pixel en enteros; D3D10+ en .5.  Upstream
+     suma 0,5 a x1 para centrar el vertice: en D3D9 eso se compensa con
+     -0,5, o sea, desplazamiento neto 0.  Va como constante (Xenos tiene
+     D3DRS_HALFPIXELOFFSET; fase 2).
+   - Muestreo puntual siempre en el centro: (i + 0,5) / tamano.
+
+Encaje en pcsxr-360 (lo que ya existe)
+--------------------------------------
+- plugins/gpu_duck/gpu_duck_driver.cpp traduce cada paquete GP0 a
+  GPUBackendDraw{Polygon,Rectangle,Line}Command con las coordenadas YA
+  desplazadas (cook_xy), y Fill/Copy a FillVRAM/CopyVRAM del backend.
+  -> El nuevo backend hereda de GPUBackend (gpu_duck_gpu_backend.h), igual
+     que GPU_SW_Backend.  No hace falta la clase GPU de upstream.
+- LoadImage (0xA0) y StoreImage (0xC0) NO pasan por el backend: xbox_soft
+  (gpu.c, GPUwriteDataMem/GPUreadDataMem) escribe y lee psxVuw.  Con un
+  renderizador hardware psxVuw deja de ser la verdad.  Enganches:
+    * xbox_soft/gpu.c  FinishedVRAMWrite: sube el rect de psxVuw a la GPU.
+    * gpu_duck_driver.cpp duck_primStoreImage: baja el rect de la GPU a
+      psxVuw antes de que xbox_soft lo lea.
+    * xbox_soft/gpu.c  GPUfreeze: bajar todo antes de guardar, subir todo
+      despues de cargar.
+    * xbox_soft/draw_ok.c DoBufferSwap: en vez de BlitScreen, la pasada de
+      salida a la textura que ve Salvia (mismos Range/DisplayPosition).
+- Hilos: en PC el hilo de GPU de libpcsxcore/gpu.c se desactiva con este
+  renderizador (gpuDmaThreadInit) y todo el trabajo D3D9 ocurre dentro de
+  retro_run.  En Xbox, desde 2026-10-31, SI se usa (ver "Hilo de GPU en
+  Xbox" al final).  El del SPU no se toca.
+
+Contrato con Salvia (el mismo que xbox64)
+-----------------------------------------
+- environment 30002: el device del frontend.  30003: nuestra textura, con
+  ancho y alto; se vuelve a llamar cuando cambia la resolucion de la PSX
+  (en PC el quad de Salvia muestrea la textura entera).
+- video_cb(RETRO_HW_FRAME_BUFFER_VALID, w, h, 0) si hubo imagen nueva;
+  NULL si no (repetir).
+- Al terminar el trabajo del frame: devolver render target 0 al back
+  buffer del frontend, depth NULL, y su estado (state block en PC).
+- PC: BeginScene/EndScene alrededor de nuestro trabajo.
+- retro_unload_game: 30003 con NULL ANTES de liberar la textura.
+
+Fase 2 (Xbox), anotado para no olvidarlo
+----------------------------------------
+- EDRAM a x1: color 1024x512 = 410 tiles + Z 410 = 820; detras de un back
+  buffer de 720p (720 tiles) = 1540 de 2048.  Cabe.
+- La VRAM vive en la EDRAM entre frames: colocarla DETRAS del back buffer
+  (VIDEO_EDRAM_MANUAL de xbox64) y ojo con quien la borra a proposito.
+- Resolve escribe tileado: la textura de lectura y la de salida se declaran
+  tileadas (D3DFMT_A8R8G8B8, no LIN).
+- Subidas: psxVuw es little-endian; formato de 16 bits con el orden de
+  bytes correcto o conversion en CPU.
+- Lectura a CPU: ~20 MB/s.  Solo el rect pedido.
+
+Fase 1 (PC): resultado
+----------------------
+- Funciona (Crash Bandicoot).  La pantalla negra era FinishedVRAMWrite
+  subiendo 1024x512 con VRAMWrite a cero: GP1(04)=2 pone el modo de
+  transferencia sin LoadImage (xbox_soft/gpu.c, ver el comentario alli).
+- Diagnostico pesado detras de DUCK_HW_DIAG (0 por defecto); tambien las
+  trazas de "present:", "copia" y "lectura a CPU" (2026-10-31).
+- Medidor [DUCK-HW/PERF] detras de DUCK_HW_PERF y contadores periodicos
+  ("N fr", "cortes", "prims") detras de DUCK_HW_STATS: los dos a 0 por
+  defecto desde 2026-10-31 (PERF mete dos QueryPerformanceCounter por
+  primitiva).  El volcado con L3+R3 ([DUCK-DUMP]) sigue disponible.
+
+Fase 2 (Xbox 360): lo que se ha hecho
+-------------------------------------
+- DUCK_HW_D3D9 tambien con _XBOX.  Ramas `#if defined(_XBOX)` en
+  gpu_duck_hw_d3d9.cpp; el resumen esta en la cabecera de ese fichero.
+- VRAM, su Z y la superficie de salida (640x512) en la EDRAM, detras del
+  back buffer si caben; si no, base 0.
+- m_read_tex (tileada, destino de Resolve) es la verdad entre llamadas:
+  Unbind resuelve lo sucio; Bind repinta color + Z (desde el bit de
+  mascara) con m_ps_depth.  No depende de que nadie respete la EDRAM.
+- Salida: se pinta en la EDRAM y se resuelve a la textura de Salvia.
+- Subidas: anillo de 4 texturas LIN_A1R5G5B5, palabras con la vuelta dada.
+- Lectura a CPU: Resolve + BlockUntilIdle + D3DXLoadSurfaceFromSurface a
+  una LIN_A8R8G8B8, con la vuelta dada al escribir psxVuw.
+- Lotes: anillo de 3 vertex buffers bloqueados (como xbox64).
+- Estados: VIEWPORTENABLE a TRUE, Hi-Z apagada; fuera los que la consola
+  no tiene.  Al desligar se devuelven mezcla, Z y samplers.
+- No probado en la consola cuando se escribio: comprobado solo con un
+  -fsyntax-only contra una imitacion de la API del XDK.
+
+MGS / FIFA 99: transparencias (resuelto)
+----------------------------------------
+- Sintoma: sombra de Snake en cuadrado y parpadeando, vaho oscuro, luz con
+  cuadrado, barras de cine que se desvanecian a saltos; lineas del campo y
+  sombras de FIFA 99 parpadeando.
+- Causa: la cache de estados usaba 0xFFFFFFFF como "sin valor" del
+  BLENDFACTOR, que es justo el factor de B+F, B-F y B+F/4.  Tras invalidar
+  la cache esos modos no lo ponian y se quedaba el 0x80808080 del ultimo
+  lote B/2+F/2.  Ahora "sin valor" es HW_BF_NONE (0).
+- Como se vio: en el volcado, el indice 0 de la CLUT de la sombra es 0x8000
+  (negro semitransparente): con B-F no cambia nada, y el cuadrado salia a la
+  mitad de brillo -> el destino se estaba multiplicando por 0,5.
+
+Fase 3: true color y filtros a x1
+---------------------------------
+- Opciones (en caliente; se recompilan los 7 shaders de lotes al empezar
+  el frame siguiente, ApplyRenderOptions):
+    pcsxr360_true_color        auto/enabled = activado en SwanStation HW.
+    pcsxr360_hw_texture_filter Nearest, Bilinear, JINC2, xBR.
+- True color (gpu_hw_shadergen.cpp u_true_color): el lote calcula y
+  escribe 8 bits por canal; el dithering se ignora (gpu_hw.cpp:1380); los
+  rellenos guardan los 24 bits (gpu_hw.cpp:1072).  La salida ya leia la
+  VRAM de 8 bits tal cual; la lectura a CPU redondea a 5 bits.
+- Filtros (WriteBatchTextureFilter): limites de u/v por vertice
+  (ComputePolygonUVLimits; en los rectangulos, el de cada trozo).
+  Diferencias a proposito:
+    * Siempre "alfa binario": D3D9 no tiene dual-source para mezclar los
+      bordes con el destino sin perder el bit de mascara del alfa.
+    * Las cuentas de beetle-psx suponen centros de texel en n+0,5 y
+      muestreo por floor; aqui el centro esta en n y se redondea, asi que se
+      calcula con coords + 0,5 y se muestrea el texel entero.  Copiado tal
+      cual, el bilineal mezclaba al 50 % los sprites 1:1 con el texel de al
+      lado y JINC2/xBR repetian texels.
+- La ventana de textura pasa a una version vectorial sin rama (win2): mismo
+  resultado, mucho menos codigo por muestra (los filtros muestrean 4, 16 y
+  21 texels).
+- Si un filtro no compila (p. ej. demasiadas instrucciones en la consola),
+  el log lo dice y se sigue sin filtro; si true color no compila, a 15 bits.
+- Comprobado sin GPU: los 32 shaders de lote pasan el frontal HLSL de
+  glslang (--hlsl-dx9-compatible); el compilador de D3DX puede diferir.
+
+Fase 4: PGXP (modo memoria)
+---------------------------
+- libpcsxcore/pgxp.c / pgxp.h: modo memoria de SwanStation (pgxp.cpp), en
+  C89 y sin suponer little-endian (las banderas por componente con
+  desplazamientos).  Sombra de 2 MB de RAM + scratchpad: ~10 MB, solo si
+  esta activo.
+- Opciones: pcsxr360_pgxp = disabled / lite / enabled (restart; solo con
+  SwanStation HW).  "lite" (g_pgxp_memory = 0): solo la GTE y sus
+  transferencias (MFC2/MTC2/LWC2/SWC2), sin ganchos en LW/SW/LH/SH ni en los
+  move; en la Xbox la sombra de 10 MB no cabe en la cache y cada carga o
+  escritura de la CPU la tocaba.  "enabled" = modo memoria completo.
+  pcsxr360_pgxp_culling y pcsxr360_pgxp_texture_correction (en caliente).
+- Ganchos:
+    GTE    gte_divider.c RTPS/RTPT (x, y con decimales y w = SZ, con el
+           limite SZ >= H/2 del divisor y el widescreen); gte.c NCLIP,
+           MFC2/MTC2/CFC2/CTC2/LWC2/SWC2.
+    CPU    psxinterpreter.c LW/LH/LHU/SW/SH (copian la sombra), LB/LBU/SB
+           y LWL/LWR/SWL/SWR (invalidan), addiu/addu con 0 (move).
+    Dynarec  pR3000A.c: el acceso rapido de siempre + UNA llamada a C
+           despues (PGXP_RecLW/LH/LHU/SW/SH), en el punto donde el camino
+           lento ya llama a psxMemRead/Write; direccion y valor van por
+           PGXP_rec_slot.  Los move: PGXP_RecMove (copia sin validar).
+           (La 1a version usaba la funcion del interprete con todos los
+           registros volcados: demasiado lenta en la Xbox.)  LB/LBU/SB no
+           avisan (solo invalidarian; la sombra se valida por valor).
+    GPU    xbox_soft/gpu.c guarda la direccion de RAM de cada palabra del
+           paquete (g_gpu_data_addr); el driver busca la sombra de la palabra
+           de posicion de cada vertice (PGXP_GetPreciseVertex) y pasa px/py/pw
+           en GPUBackendDrawPolygonCommand.
+    HW     posiciones con decimales; w en el VS (perspectiva en u/v); color
+           por w y la PS divide (lineal en pantalla, como upstream sin
+           "color correction"); u/v limitadas al poligono; rectangulo sucio
+           un pixel mas ancho.
+- Cache de vertices (2026-10-31, solo lite): en lite un vertice copiado con
+  LW/SW (vertice compartido) salia con enteras y su vecino con decimales:
+  lineas negras entre poligonos.  Cada vertice de RTPS/RTPT se apunta en una
+  tabla de 512x512 (4 MB) por su posicion entera; si la busqueda por
+  direccion falla, la GPU busca ahi por la palabra SXY.  Coste en la CPU: una
+  escritura por vertice transformado.  Log: "[PGXP] ... cache=1".
+  Solo da x/y, NO la w: con la w, Tomb Raider II deformaba las paredes en
+  abanico (otro punto proyectado en el mismo pixel traia otra profundidad).
+  Un poligono con un vertice de la cache sale con textura afin.
+  Medido antes en Tomb Raider II (Xbox, run por frame): sin PGXP 8,1 ms,
+  lite 8,3 ms, full 16,0 ms.  El seguimiento de memoria tiene que ir en el
+  hilo de la CPU (ve cada carga/escritura en su momento); la busqueda ya va
+  en el hilo de GPU.
+- Filtro del modo completo (2026-10-31): el dynarec mira en linea un bit por
+  palabra de RAM (PGXP_mem_bits, 64 KB) y uno por registro (PGXP_reg_bits)
+  antes de llamar a C: carga de una palabra sin sombra -> solo baja el bit
+  del registro; escritura de un registro sin sombra -> solo baja el bit de
+  la palabra.  Asi solo llegan a C (y a la sombra de 10 MB) los accesos que
+  pueden llevar una coordenada.  El bit a 0 manda: MemGet / RegSrc anulan la
+  sombra al leerla y la busqueda de la GPU lo comprueba.  Los "move" siguen
+  llamando a C (PGXP_RecMove, ahora solo copia si el bit de rs esta a 1).
+- No portado: modo CPU, buffer de profundidad PGXP,
+  "preserve projection precision", tolerancia (upstream: -1 por defecto).
+
+Hilo de GPU en Xbox (2026-10-31)
+--------------------------------
+- Motivo: intro de GT2 en Xbox, ~4,4 ms por frame de renderizador (parseo
+  GP0 de xbox_soft + driver + lotes + llamadas D3D) en el hilo de la
+  emulacion, encima de ~12 ms de emulacion: 16,5 ms, el borde de 60 fps.
+  Unai va bien porque rasteriza en el hilo de GPU.
+- El device D3D9 lo usa UN hilo a la vez; en Xbox solo el que lo tiene
+  (AcquireThreadOwnership / ReleaseThreadOwnership, envueltas en
+  duck_hw_thread_acquire / release).  Testigo en libpcsxcore/gpu.c
+  (s_hw_owner):
+    * el hilo principal lo tiene en reposo (entre frames, tras cada drain);
+    * lo suelta al encolar (ring_push / gp1q_push), antes de publicar;
+    * el consumidor lo coge al ver trabajo y lo devuelve con el ring vacio
+      cuando el principal lo pide (hw_main_take, dentro de ring_drain) o
+      antes de dormir (Sleep(1)), para que el drain no espere a despertarlo;
+    * ring_drain() acaba siempre con el device en el principal; retro_run
+      llama a gpuSync() antes de duck_hw_frame_begin y de duck_hw_frame_end.
+- PGXP: el plugin lee la COPIA del ring, asi que ring_push apunta la
+  direccion de RAM de cada palabra (s_ring_ram, solo con PGXP) y
+  PGXP_RamAddrOf la traduce (gpuRingRamAddrOf).  La sombra la sigue
+  escribiendo la CPU emulada en paralelo: si la palabra ya se reescribio, el
+  valor no coincide y ese vertice sale sin decimales.
+- Traza: hw_check_owner (Bind, FlushRender) avisa una vez en el log si se
+  toca el device desde un hilo que no lo tiene.  [DUCK-HW/PERF] saca
+  "hilo-gpu own=N/fr" (cambios de dueno por frame); prims y flush pasan a ser
+  tiempo del hilo de GPU, en paralelo con la emulacion.
+- PC sigue igual: DUCK_HW_GPU_THREAD 0.  La opcion de hilos del core
+  (g_pcsxr_threading_enabled) lo desactiva tambien en Xbox.

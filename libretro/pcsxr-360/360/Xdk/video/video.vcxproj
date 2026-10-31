@@ -159,7 +159,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>../../win32/;../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../win32/;../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>LIBRETRO;_LIB;_DEBUG;WIN32;NOPSXREC;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <ForcedIncludeFiles>pcsxr_win32_pre.h</ForcedIncludeFiles>
@@ -179,7 +179,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>../../win32/;../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../win32/;../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>LIBRETRO;_LIB;NDEBUG;WIN32;NOPSXREC;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <ForcedIncludeFiles>pcsxr_win32_pre.h</ForcedIncludeFiles>
@@ -211,6 +211,7 @@
     <ClCompile Include="..\..\..\plugins\xbox_soft\xb_video.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp" />
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_hw_d3d9.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.cpp" />
     <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c">
       <ExcludedFromBuild>true</ExcludedFromBuild>

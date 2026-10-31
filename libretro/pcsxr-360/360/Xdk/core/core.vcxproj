@@ -222,6 +222,7 @@
     <ClInclude Include="..\..\..\libpcsxcore\decode_xa.h" />
     <ClInclude Include="..\..\..\libpcsxcore\gpu.h" />
     <ClInclude Include="..\..\..\libpcsxcore\gte.h" />
+    <ClInclude Include="..\..\..\libpcsxcore\pgxp.h" />
     <ClInclude Include="..\..\..\libpcsxcore\mdec.h" />
     <ClInclude Include="..\..\..\libpcsxcore\misc.h" />
     <ClInclude Include="..\..\..\libpcsxcore\plugins.h" />
@@ -245,6 +246,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\libpcsxcore\cdrom.c" />
     <ClCompile Include="..\..\..\libpcsxcore\gte_divider.c" />
+    <ClCompile Include="..\..\..\libpcsxcore\pgxp.c" />
     <ClCompile Include="..\..\..\libpcsxcore\ppc\ppc.c">
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>

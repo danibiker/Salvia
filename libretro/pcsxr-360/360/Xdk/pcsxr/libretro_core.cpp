@@ -46,6 +46,7 @@ extern "C" {
 #include "plugins.h"
 #include "misc.h"
 #include "psxmem.h"
+#include "pgxp.h"   /* [PGXP] g_pgxp_*, PGXP_Init/Shutdown */
 #include "cheat.h"  /* motor de cheats GameShark de PCSX-R (ClearAllCheats/AddCheat/ApplyCheats) */
 #include "sio.h"
 #include "spu.h"  /* SPUirq, SPUschedule (cycle-driven SPU event handlers) */
@@ -140,6 +141,42 @@ extern int      duck_gpu_enabled;
  * gpu_duck_driver.cpp esta dentro de `extern "C" { }`, asi que aqui
  * tenemos que matchearlo para que el linker resuelva el simbolo. */
 extern "C" void duck_true_color_set_active(int active);
+
+/* [2026-10-30] Renderizador hardware D3D9 "SwanStation HW"
+ * (plugins/gpu_duck/gpu_duck_hw_d3d9.cpp; diseno en HW_D3D9_FASE0.txt).
+ * Dibuja con el device de Salvia y le entrega una textura, igual que xbox64:
+ * environments 30002 (device) y 30003 (textura) + RETRO_HW_FRAME_BUFFER_VALID. */
+extern "C" int  duck_hw_enabled;
+/* [fase 3] Opciones del renderizador HW, en caliente (gpu_duck_hw_d3d9.cpp):
+ * true color (de pcsxr360_true_color) y filtro de texturas
+ * (pcsxr360_hw_texture_filter: 0 nearest, 1 bilineal, 2 JINC2, 3 xBR). */
+extern "C" int  g_duck_hw_true_color;
+extern "C" int  g_duck_hw_texture_filter;
+extern "C" int  duck_hw_available(void);
+extern "C" void duck_hw_set_logger(void (*fn)(int level, const char* msg));
+extern "C" void duck_hw_set_device(void* device);
+extern "C" void duck_hw_frame_begin(void);
+extern "C" void duck_hw_frame_end(void);
+extern "C" int  duck_hw_take_frame(void** texture, unsigned* width, unsigned* height, int* changed);
+extern "C" void duck_hw_release_output(void);
+extern "C" void duck_hw_arm_dump(void);
+
+#define RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE   30002  /* IDirect3DDevice9 ** */
+#define RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE  30003  /* salvia_d3d_texture * */
+
+/* TIENE QUE SER IDENTICA A LA DE src/salvia.cpp (y a la de xbox64). */
+struct salvia_d3d_texture
+{
+    void     *texture;
+    unsigned  width;
+    unsigned  height;
+};
+
+static void duck_hw_log_adapter(int level, const char* msg)
+{
+    static const enum retro_log_level lv[4] = { RETRO_LOG_DEBUG, RETRO_LOG_INFO, RETRO_LOG_WARN, RETRO_LOG_ERROR };
+    pcsxr_log(lv[(level < 0) ? 0 : ((level > 3) ? 3 : level)], "%s", msg);
+}
 
 /* Async CD-ROM prefetch (port integro pcsx_rearmed: cdrom-async.c).
  * La opcion pcsxr360_cdrom_prefetch mapea a cdra_set_buf_count(): N buffers
@@ -341,7 +378,8 @@ void retro_set_environment(retro_environment_t cb) {
             "pcsxr360_gpu_renderer",
             "GPU Renderer (restart core to apply)", "GPU Renderer (restart to apply)",
             NULL, NULL, "video",
-            { { "Unai", NULL }, { "Peops", NULL }, { "SwanStation", NULL }, { NULL, NULL } },
+            { { "Unai", NULL }, { "Peops", NULL }, { "SwanStation", NULL },
+              { "SwanStation HW", "SwanStation HW (Direct3D 9)" }, { NULL, NULL } },
             "Unai"
         },
         {
@@ -375,10 +413,59 @@ void retro_set_environment(retro_environment_t cb) {
          * ShadePixel. */
         {
             "pcsxr360_true_color",
-            "True Color 24-bit (SwanStation + XRGB8888 only)", "True Color 24-bit (SwanStation+XRGB8888)",
-            NULL, NULL, "video",
+            "True Color 24-bit (SwanStation + XRGB8888, SwanStation HW)", "True Color 24-bit",
+            "SwanStation (software): solo con Pixel Format = XRGB8888. "
+            "SwanStation HW: dibuja con 8 bits por canal en la GPU (sin bandas; "
+            "el dithering se ignora). auto = activado en SwanStation HW.",
+            NULL, "video",
             { { "auto", NULL }, { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
             "auto"
+        },
+        /* [fase 3] Filtro de texturas del renderizador SwanStation HW (en la
+         * GPU, por shader).  Los de upstream en su variante de "alfa binario":
+         * D3D9 no tiene dual-source blending para los bordes suaves.  Cambia
+         * en caliente (recompila los shaders de lotes al empezar el frame). */
+        {
+            "pcsxr360_hw_texture_filter",
+            "Texture Filtering (SwanStation HW only)", "Texture Filtering (SwanStation HW)",
+            "Filtro de las texturas en la GPU, solo con el renderizador SwanStation HW. "
+            "Nearest = sin filtro (como la PSX). Bilinear = suavizado. "
+            "JINC2 = suavizado mas nitido. xBR = reescalado de bordes (el mas caro).",
+            NULL, "video",
+            { { "Nearest", "Nearest (off)" }, { "Bilinear", NULL }, { "JINC2", NULL }, { "xBR", NULL },
+              { NULL, NULL } },
+            "Nearest"
+        },
+        /* [PGXP] Geometria con decimales y texturas con perspectiva (solo
+         * SwanStation HW).  Restart: el dynarec decide al recompilar si las
+         * cargas/escrituras pasan por el gancho de PGXP. */
+        {
+            "pcsxr360_pgxp",
+            "PGXP (SwanStation HW only, restart core to apply)", "PGXP (SwanStation HW, restart to apply)",
+            "Geometria con decimales: sin temblor de vertices ni huecos entre poligonos. "
+            "Solo con el renderizador SwanStation HW. Lite = lo que sale de la GTE, mas una "
+            "cache de vertices por posicion (sin perspectiva en las copias), casi sin coste. "
+            "Full = sigue tambien las copias por la CPU, como upstream: perspectiva completa.",
+            NULL, "video",
+            { { "disabled", NULL }, { "lite", "Lite (GTE only, fast)" }, { "enabled", "Full (memory tracking)" },
+              { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_pgxp_culling",
+            "PGXP Culling", "PGXP Culling",
+            "Descarte de caras (NCLIP) con decimales: menos poligonos que desaparecen de canto.",
+            NULL, "video",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
+        },
+        {
+            "pcsxr360_pgxp_texture_correction",
+            "PGXP Texture Correction", "PGXP Texture Correction",
+            "Texturas con perspectiva correcta (sin el 'baile' de las texturas de la PSX).",
+            NULL, "video",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
         },
         {
             "pcsxr360_widescreen",
@@ -1052,42 +1139,68 @@ static void check_game_fixes(void) {
         if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_tc) && var_tc.value)
             tc_mode = var_tc.value;
 
+        /* Renderizador elegido, leido DIRECTAMENTE de la core option (no de
+         * duck_gpu_enabled): en el arranque check_game_fixes() corre ANTES de
+         * check_gpu_renderer_initial_only() y el global todavia vale 0.
+         * Leyendo la option funciona en todos los timing paths. */
+        struct retro_variable var_renderer = { "pcsxr360_gpu_renderer", NULL };
+        const char* renderer = NULL;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_renderer) && var_renderer.value)
+            renderer = var_renderer.value;
+        const int is_swanstation    = (renderer && strcmp(renderer, "SwanStation") == 0);
+        const int is_swanstation_hw = (renderer && strcmp(renderer, "SwanStation HW") == 0);
+
         int want_tc = 0;
         if (tc_mode && strcmp(tc_mode, "enabled") == 0) {
             want_tc = 1;
         } else if (tc_mode && strcmp(tc_mode, "disabled") == 0) {
             want_tc = 0;
         } else {
-            /* "auto" (or default): habilitar si SwanStation + XRGB8888.
-             *
-             * IMPORTANTE: leemos pcsxr360_gpu_renderer DIRECTAMENTE de la
-             * core option, NO usamos `duck_gpu_enabled`.  Razon: en el
-             * arranque, check_game_fixes() corre ANTES de check_gpu_
-             * renderer_initial_only(), asi que duck_gpu_enabled todavia
-             * es 0 (su valor de inicializacion estatica) en este punto.
-             * Si nos basaramos en el global, el modo auto nunca activaria
-             * true-color al boot, solo despues de un toggle manual de la
-             * libretro option (que dispara variable-update y la re-evalua
-             * cuando ya hay state).  Leyendo la option directamente
-             * funciona en todos los timing paths. */
+            /* "auto" (or default): habilitar si SwanStation + XRGB8888. */
             struct retro_variable var_pf = { "pcsxr360_pixel_format", NULL };
             const char* pf = NULL;
             if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_pf) && var_pf.value)
                 pf = var_pf.value;
             const int is_xrgb = (pf && strcmp(pf, "XRGB8888") == 0);
-
-            struct retro_variable var_renderer = { "pcsxr360_gpu_renderer", NULL };
-            const char* renderer = NULL;
-            if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_renderer) && var_renderer.value)
-                renderer = var_renderer.value;
-            const int is_swanstation = (renderer && strcmp(renderer, "SwanStation") == 0);
-
             want_tc = (is_swanstation && is_xrgb) ? 1 : 0;
         }
+
+        /* [fase 3] SwanStation HW: true color en la GPU.  "auto" = activado:
+         * su salida es siempre una textura de 32 bits, el formato de pixel no
+         * pinta nada.  El buffer paralelo de 24 bits es del renderizador
+         * software y con el HW no se usa: no se aloca. */
+        g_duck_hw_true_color = (tc_mode && strcmp(tc_mode, "disabled") == 0) ? 0 : 1;
+        if (is_swanstation_hw)
+            want_tc = 0;
         duck_true_color_set_active(want_tc);
         pcsxr_log(RETRO_LOG_INFO,
-            "[TrueColor] mode=%s -> active=%d\n",
-            tc_mode ? tc_mode : "(unset/auto)", want_tc);
+            "[TrueColor] mode=%s -> active=%d hw=%d\n",
+            tc_mode ? tc_mode : "(unset/auto)", want_tc, g_duck_hw_true_color);
+    }
+
+    /* [fase 3] Filtro de texturas de SwanStation HW (en caliente). */
+    {
+        struct retro_variable var_tf = { "pcsxr360_hw_texture_filter", NULL };
+        int f = 0;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_tf) && var_tf.value) {
+            if (strcmp(var_tf.value, "Bilinear") == 0)   f = 1;
+            else if (strcmp(var_tf.value, "JINC2") == 0) f = 2;
+            else if (strcmp(var_tf.value, "xBR") == 0)   f = 3;
+        }
+        g_duck_hw_texture_filter = f;
+    }
+
+    /* [PGXP] Culling y correccion de texturas: en caliente.  El motor
+     * (pcsxr360_pgxp) es init-only: check_pgxp_initial_only(). */
+    {
+        struct retro_variable var_pc = { "pcsxr360_pgxp_culling", NULL };
+        struct retro_variable var_pt = { "pcsxr360_pgxp_texture_correction", NULL };
+        g_pgxp_culling = 1;
+        g_pgxp_texture_correction = 1;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_pc) && var_pc.value)
+            g_pgxp_culling = (strcmp(var_pc.value, "disabled") == 0) ? 0 : 1;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_pt) && var_pt.value)
+            g_pgxp_texture_correction = (strcmp(var_pt.value, "disabled") == 0) ? 0 : 1;
     }
 
     /* (GPU renderer selector intentionally NOT re-applied here — see
@@ -1114,11 +1227,31 @@ static void check_gpu_renderer_initial_only(void) {
      * its primFunc dispatch table accordingly. */
     duck_gpu_enabled = 0;
     unai_gpu_enabled = 0;
+    duck_hw_enabled  = 0;
 
     struct retro_variable var = { "pcsxr360_gpu_renderer", NULL };
     if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
         if      (strcmp(var.value, "SwanStation") == 0) duck_gpu_enabled = 1;
         else if (strcmp(var.value, "Unai") == 0) unai_gpu_enabled = 1;
+        else if (strcmp(var.value, "SwanStation HW") == 0) {
+            /* [2026-10-30] El mismo driver de SwanStation con el backend
+             * Direct3D 9.  Si la plataforma no lo tiene o el frontend no da
+             * device, se queda en SwanStation software: el juego arranca. */
+            duck_gpu_enabled = 1;
+            duck_hw_set_logger(duck_hw_log_adapter);
+            if (duck_hw_available()) {
+                void *dev = NULL;
+                if (environ_cb(RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE, &dev) && dev) {
+                    duck_hw_set_device(dev);
+                    duck_hw_enabled = 1;
+                } else {
+                    pcsxr_log(RETRO_LOG_WARN, "[DUCK-HW] el frontend no da device D3D9 (env %d): SwanStation software\n",
+                              RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE);
+                }
+            } else {
+                pcsxr_log(RETRO_LOG_WARN, "[DUCK-HW] no disponible en esta plataforma: SwanStation software\n");
+            }
+        }
     }
 
     if (unai_gpu_enabled) {
@@ -1135,6 +1268,26 @@ static void check_gpu_renderer_initial_only(void) {
         gpu_unai_config_ext.pixel_skip      = 0;
         gpu_unai_config_ext.old_renderer    = 0;
     }
+}
+
+/* [PGXP] Motor de PGXP, una vez por arranque: solo con SwanStation HW (el
+ * renderizador software no usa las posiciones con decimales) y antes de
+ * EmuInit (el dynarec mira g_pgxp_enabled al recompilar). */
+static void check_pgxp_initial_only(void) {
+    struct retro_variable var = { "pcsxr360_pgxp", NULL };
+    int want = 0;
+    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        want = (strcmp(var.value, "enabled") == 0) ? 2 : ((strcmp(var.value, "lite") == 0) ? 1 : 0);
+    g_pgxp_enabled = (want && duck_hw_enabled) ? 1 : 0;
+    g_pgxp_memory = (want == 2 && g_pgxp_enabled) ? 1 : 0;
+    if (PGXP_Init() != 0)
+        pcsxr_log(RETRO_LOG_WARN, "[PGXP] sin memoria para la sombra de la RAM: PGXP apagado\n");
+    if (!g_pgxp_enabled)
+        g_pgxp_memory = 0;
+    if (want && !duck_hw_enabled)
+        pcsxr_log(RETRO_LOG_INFO, "[PGXP] pedido pero el renderizador no es SwanStation HW: apagado\n");
+    pcsxr_log(RETRO_LOG_INFO, "[PGXP] activo=%d modo=%s (culling=%d texturas=%d cache=%d)\n", g_pgxp_enabled,
+              g_pgxp_memory ? "full" : "lite", g_pgxp_culling, g_pgxp_texture_correction, g_pgxp_vertex_cache);
 }
 
 /* Snapshot the helper-threads choice ONCE at core init, before the
@@ -2070,6 +2223,15 @@ static int emu_setup(void) {
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] check_threading_initial_only\n");
     check_threading_initial_only();
 
+	/* [2026-10-30] El renderizador se elige ANTES de gpuDmaThreadInit: con
+	 * "SwanStation HW" gpuDmaThreadInit tiene que saberlo.  En PC no se usa el
+	 * hilo de GPU con HW; en Xbox si, pasando la propiedad del device D3D9
+	 * entre hilos (2026-10-31, ver libpcsxcore/gpu.c).  Antes se elegia mas
+	 * abajo y el hilo ya estaba corriendo: pantalla negra con sonido. */
+	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] check_gpu_renderer_initial_only\n");
+    check_gpu_renderer_initial_only();
+    check_pgxp_initial_only();
+
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] gpuDmaThreadInit\n");
     gpuDmaThreadInit();
 
@@ -2094,8 +2256,8 @@ static int emu_setup(void) {
      * because that runs on every libretro variable-update notification,
      * and flipping duck_gpu_enabled mid-session would dispatch to the
      * duck primTable while s_driver is still NULL. */
-	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] check_gpu_renderer_initial_only\n");
-    check_gpu_renderer_initial_only();
+    /* [2026-10-30] check_gpu_renderer_initial_only() ya se llamo antes de
+     * gpuDmaThreadInit (arriba). */
 
     pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling EmuInit...\n");
     if (EmuInit() == -1) {
@@ -2244,6 +2406,9 @@ static void emu_teardown(void) {
     Config.CpuRunning = 0;
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] gpuDmaThreadShutdown\n");
     gpuDmaThreadShutdown();
+    PGXP_Shutdown();   /* [PGXP] libera la sombra de la RAM */
+    g_pgxp_enabled = 0;
+    g_pgxp_memory = 0;
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD2_close\n");
     if (PAD2_close) PAD2_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD1_close\n");
@@ -2883,6 +3048,16 @@ void retro_unload_game(void) {
     check_analog_saturation();
     g_db_guncon_ratiox100 = -1;
     check_guncon_calibration();
+    /* [2026-10-30] SwanStation HW: retirar nuestra textura del frontend ANTES
+     * de soltarla (si no, su quad muestrearia memoria muerta en el menu). */
+    if (duck_hw_enabled && environ_cb) {
+        struct salvia_d3d_texture t;
+        t.texture = NULL;
+        t.width   = 0;
+        t.height  = 0;
+        environ_cb(RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE, &t);
+        duck_hw_release_output();
+    }
     emu_teardown();
 }
 
@@ -3047,6 +3222,21 @@ void retro_run(void) {
 
     RR_SET_SEC(RR_SEC_INPUT_POLL);
     poll_libretro_input();
+
+    /* [2026-10-30] L3 + R3 arma el volcado del renderizador SwanStation HW
+     * del frame siguiente (comandos de GPU al log + VRAM antes/despues en
+     * BMP), como el volcado de texturas de xbox64.  Solo en el flanco: con
+     * los dos sticks pulsados no se vuelca en cada frame.  Depende de que
+     * Salvia mapee L3/R3 a RETRO_DEVICE_ID_JOYPAD_L3/R3 en el puerto 0. */
+    if (duck_hw_enabled && input_state_cb)
+    {
+        static int s_l3r3_prev = 0;
+        const int now = (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3) &&
+                         input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3)) ? 1 : 0;
+        if (now && !s_l3r3_prev)
+            duck_hw_arm_dump();
+        s_l3r3_prev = now;
+    }
 #if PCSXR_PERF_ENABLED
     QueryPerformanceCounter(&t_after_sync);
     perf_acc_sync += perf_us(t_start, t_after_sync);
@@ -3064,6 +3254,14 @@ void retro_run(void) {
      * o el dynarec (skipear no ayuda y solo causa flicker). */
     gpu_wait_ticks = 0;
     frame_done = 0;
+    /* [2026-10-30] SwanStation HW: a partir de aqui el trabajo de GPU dibuja
+     * con el device de Salvia; duck_hw_frame_end se lo devuelve abajo.
+     * [2026-10-31] Con hilo de GPU (Xbox) el device tiene que estar en este
+     * hilo: gpuSync lo recupera si lo tenia el hilo de GPU (no deberia, ya se
+     * recupero al final del frame anterior; con el ring vacio no cuesta nada). */
+    if (duck_hw_enabled)
+        gpuSync();
+    duck_hw_frame_begin();
     RR_SET_SEC(RR_SEC_CPU_EXEC);
 #if PCSXR_DIAG_INSTRUMENTATION
     diag_trace_mark(DIAG_TR_RUN_IN);
@@ -3121,7 +3319,35 @@ void retro_run(void) {
      *    nos ahorramos el envio.
      *  - Frame normal: video_cb(pPsxScreen) tal cual. */
     RR_SET_SEC(RR_SEC_VIDEO_CB);
-    if (was_skipping_this_frame) {
+    if (duck_hw_enabled) {
+        /* [2026-10-30] SwanStation HW: devolver el device al frontend y
+         * entregarle la textura.  Si cambio de tamano se le vuelve a dar
+         * (env 30003): su quad la muestrea entera.  Sin imagen nueva
+         * (frameskip, sin VSync en este frame) -> NULL = repetir. */
+        void *tex = NULL;
+        unsigned tw = 0, th = 0;
+        int changed = 0;
+        int ready;
+        /* [2026-10-31] Hilo de GPU: esperar a que termine lo encolado y
+         * recuperar el device antes de cerrar el frame y devolverselo a
+         * Salvia (ver "HILO DE GPU CON EL RENDERIZADOR HARDWARE" en
+         * libpcsxcore/gpu.c).  Sin hilo es un no-op. */
+        gpuSync();
+        duck_hw_frame_end();
+        ready = duck_hw_take_frame(&tex, &tw, &th, &changed);
+        if (changed && tex && environ_cb) {
+            struct salvia_d3d_texture t;
+            t.texture = tex;
+            t.width   = tw;
+            t.height  = th;
+            if (!environ_cb(RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE, &t))
+                pcsxr_log(RETRO_LOG_ERROR, "[DUCK-HW] el frontend no acepta la textura (env %d)\n",
+                          RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE);
+        }
+        if (video_cb)
+            video_cb((ready && tex) ? RETRO_HW_FRAME_BUFFER_VALID : NULL, tw ? tw : (unsigned)display_width,
+                     th ? th : (unsigned)display_height, 0);
+    } else if (was_skipping_this_frame) {
         if (video_cb)
             video_cb(NULL, display_width, display_height, 0);
     } else if (video_cb) {

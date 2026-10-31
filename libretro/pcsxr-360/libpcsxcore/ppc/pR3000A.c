@@ -22,6 +22,7 @@
 #include "reguse.h"
 #include "../r3000a.h"
 #include "../psxhle.h"
+#include "../pgxp.h"
 #include "../../360/Xdk/pcsxr/bram.h"
 
 #define malloc balloc
@@ -1075,6 +1076,107 @@ static void rec##f() { \
 	iRet(); \
 }
 
+/* [PGXP] Con PGXP activo (se decide al cargar el juego, "restart to apply":
+ * el codigo ya recompilado no cambia) el recompilador avisa a pgxp.c de las
+ * cargas/escrituras de 16 y 32 bits y de los "move", como el de upstream en
+ * modo memoria.
+ *
+ * La primera version llamaba a la funcion del INTERPRETE para cada una de
+ * esas instrucciones (volcando todos los registros): en la Xbox iba
+ * demasiado lento.  Ahora el acceso sigue siendo el rapido de siempre y solo
+ * se anade UNA llamada a C justo despues, en el mismo punto donde el camino
+ * lento ya llama a psxMemRead/Write (los registros volatiles ya estan
+ * volcados por preMemRead/preMemWrite): la direccion (y el valor, al
+ * escribir) se guardan antes en PGXP_rec_slot.  LB/LBU/SB no avisan: solo
+ * invalidarian, y la sombra se valida por valor de todas formas.
+ * Con PGXP "lite" (g_pgxp_memory = 0) no se emite nada de esto: solo quedan
+ * los ganchos de la GTE, que ya son llamadas a C (CP2_FUNC). */
+/* [PGXP] Filtro en linea (2026-10-31): el modo completo costaba el doble de
+ * CPU en la Xbox porque CADA LW/LH/LHU/SW/SH llamaba a C y tocaba la sombra
+ * de 10 MB.  Ahora el codigo recompilado mira antes un bit (PGXP_mem_bits por
+ * palabra de RAM, PGXP_reg_bits por registro; ver pgxp.c) y solo llama a C
+ * si la sombra puede valer.  Si no:
+ *   carga     -> bit del registro destino a 0 (su sombra deja de valer);
+ *   escritura -> bit de la palabra a 0.
+ * Se emite despues del acceso (B_DST(done)): preMemRead/preMemWrite ya
+ * volcaron r3-r12, asi que r4-r9 son libres aqui; en la carga r3 lleva el
+ * valor leido y no se toca.  La direccion se guardo en PGXP_rec_slot[0]
+ * antes del acceso.  El CALLFunc de aqui no emite ReleaseArgs con efecto: ya
+ * lo hizo el del camino lento, mas arriba. */
+#ifndef ANDC
+#define ANDC(REG_DST, REG1, REG2) \
+	{int _r1 = (REG1), _r2 = (REG2); int _d = (REG_DST); \
+        INSTR = (0x7C000078 | (_r1 << 21) | (_d << 16) | (_r2 << 11));}
+#endif
+#ifndef STWX
+#define STWX(REG_SRC, REG, REG_OFF) \
+	{int _s = (REG_SRC), _r = (REG), _o = (REG_OFF); \
+        INSTR = (0x7C00012E | (_s << 21) | (_r << 16) | (_o << 11));}
+#endif
+
+/* r5 = ea  ->  r6 = desplazamiento en bytes de la palabra del mapa,
+ *              r4 = &PGXP_mem_bits[0], r7/r8 = numero de bit (0..31). */
+static void emitPgxpMemBitAddr(int bitreg)
+{
+	RLWINM(6, 5, 27, 16, 29);           /* r6 = ((ea >> 7) & 3FFFh) * 4 */
+	LIW(4, (u32)PGXP_mem_bits);
+	RLWINM(bitreg, 5, 30, 27, 31);      /* bit = (ea >> 2) & 31 */
+}
+
+static void emitPgxpLoadHook(u32 hook)
+{
+	u32 *skip, *end;
+	LIW(4, (u32)&PGXP_rec_slot[0]);
+	LWZ(5, 0, 4);                       /* r5 = ea */
+	emitPgxpMemBitAddr(7);
+	LWZX(6, 4, 6);                      /* r6 = palabra del mapa */
+	SRW(6, 6, 7);
+	ANDI_(6, 6, 1);
+	BEQ_L(skip);                        /* la palabra no tiene sombra */
+	LIW(4, (u32)psxRegs.code);
+	CALLFunc(hook);                     /* r3 = valor -> gancho -> r3 */
+	B_L(end);
+	B_DST(skip);
+	LIW(4, (u32)&PGXP_reg_bits);        /* bit del registro destino a 0 */
+	LWZ(5, 0, 4);
+	LIW(6, ~(1u << _Rt_));
+	AND(5, 5, 6);
+	STW(5, 0, 4);
+	B_DST(end);
+}
+
+static void emitPgxpStoreHook(u32 hook)
+{
+	u32 *call, *end;
+	const u32 rt = _Rt_;
+	const u32 sh = (32u - rt) & 31u;    /* variable: el macro no pone parentesis */
+	LIW(4, (u32)&PGXP_reg_bits);
+	LWZ(5, 0, 4);
+	RLWINM_(5, 5, sh, 31, 31);          /* bit rt -> bit 0, cr0 */
+	BNE_L(call);                        /* el registro puede tener sombra -> C */
+	LIW(4, (u32)&PGXP_rec_slot[0]);     /* si no: bit de la palabra a 0 */
+	LWZ(5, 0, 4);                       /* r5 = ea */
+	emitPgxpMemBitAddr(8);
+	LWZX(7, 4, 6);
+	LI(9, 1);
+	SLW(9, 9, 8);
+	ANDC(7, 7, 9);
+	STWX(7, 4, 6);
+	B_L(end);
+	B_DST(call);
+	LIW(3, (u32)psxRegs.code);
+	CALLFunc(hook);
+	B_DST(end);
+}
+
+static void emitPgxpMove(u32 rd_rs)
+{
+	ReserveArgs(1);
+	InvalidateCPURegs();
+	LIW(3, rd_rs);
+	CALLFunc((u32)PGXP_RecMove);
+}
+
 #define REC_BRANCH(f) \
 void psx##f(); \
 static void rec##f() { \
@@ -1333,6 +1435,7 @@ static void recBASIC() {
 static void recADDIU() {
     // Rt = Rs + Im
     if (!_Rt_) return;
+    if (g_pgxp_memory && _Imm_ == 0) emitPgxpMove(((u32)_Rt_ << 8) | (u32)_Rs_);
 
     if (IsConst(_Rs_)) {
         MapConst(_Rt_, iRegs[_Rs_].k + _Imm_);
@@ -1451,6 +1554,8 @@ static void recLUI() {
 static void recADDU() {
     // Rd = Rs + Rt 
     if (!_Rd_) return;
+    if (g_pgxp_memory && (_Rt_ == 0 || (IsConst(_Rt_) && iRegs[_Rt_].k == 0)))
+        emitPgxpMove(((u32)_Rd_ << 8) | (u32)_Rs_);
 
     if (IsConst(_Rs_) && IsConst(_Rt_)) {
         MapConst(_Rd_, iRegs[_Rs_].k + iRegs[_Rt_].k);
@@ -1727,7 +1832,12 @@ enum { FML_LB, FML_LBU, FML_LH, FML_LHU, FML_LW };
 static void emitFastLoad(u32 func, int kind)
 {
 	u32 *slow1, *slow2, *notHW, *done;
+	const int pgxp = g_pgxp_memory && kind != FML_LB && kind != FML_LBU;
 	preMemRead();                       /* ARG1(r3) = ea ; vuelca r0-r12 */
+	if (pgxp) {                         /* [PGXP] guardar ea (r4 = scratch) */
+		LIW(4, (u32)&PGXP_rec_slot[0]);
+		STW(3, 0, 4);
+	}
 	SRWI(4, 3, 16);                     /* r4 = t = ea >> 16 */
 	RLWINM(5, 4, 0, 19, 31);            /* r5 = t & 0x1fff */
 	CMPLWI(5, 0x1f80);                  /* banco scratchpad/HW (0x1f80/0x9f80/0xbf80)? */
@@ -1754,6 +1864,9 @@ static void emitFastLoad(u32 func, int kind)
 	B_DST(slow2);
 	CALLFunc(func);                     /* r3 = psxMemReadN_2(ea) */
 	B_DST(done);
+	if (pgxp) {                         /* [PGXP] r3 = valor -> (filtro) gancho -> r3 */
+		emitPgxpLoadHook(kind == FML_LW ? (u32)PGXP_RecLW : (kind == FML_LH ? (u32)PGXP_RecLH : (u32)PGXP_RecLHU));
+	}
 	if (kind == FML_LB) {
 		EXTSB(PutHWReg32(_Rt_), 3);    /* sign-extend byte */
 	} else if (kind == FML_LH) {
@@ -1774,7 +1887,13 @@ static void emitFastLoad(u32 func, int kind)
 static void emitFastStore(u32 func, int size)
 {
 	u32 *slow1, *slow2, *slow3, *notHW, *done;
+	const int pgxp = g_pgxp_memory && size != 1;
 	preMemWrite(size);                  /* ARG1(r3)=ea, ARG2(r4)=val ; vuelca r0-r12 */
+	if (pgxp) {                         /* [PGXP] guardar ea y valor (r5 = scratch) */
+		LIW(5, (u32)&PGXP_rec_slot[0]);
+		STW(3, 0, 5);
+		STW(4, 4, 5);
+	}
 	SRWI(5, 3, 16);                     /* r5 = t = ea >> 16 */
 	RLWINM(6, 5, 0, 19, 31);            /* r6 = t & 0x1fff */
 	CMPLWI(6, 0x1f80);
@@ -1807,6 +1926,9 @@ static void emitFastStore(u32 func, int size)
 	B_DST(slow3);
 	CALLFunc(func);                     /* psxMemWriteN_2(ea,val) : write + recClear en C */
 	B_DST(done);
+	if (pgxp) {                         /* [PGXP] (filtro) gancho(instruccion) */
+		emitPgxpStoreHook(size == 4 ? (u32)PGXP_RecSW : (u32)PGXP_RecSH);
+	}
 }
 #endif /* PCSXR_SMC_FIX */
 #endif /* PCSXR_FASTMEM */
@@ -1877,14 +1999,14 @@ static void recLW() {
 			MapConst(_Rt_, psxRu32_2(addr));
 			return;
 		}
-		if ((t & 0x1fe0) == 0 && (t & 0x1fff) != 0) {
+		if ((t & 0x1fe0) == 0 && (t & 0x1fff) != 0 && !g_pgxp_memory) {
 			if (!_Rt_) return;
 
 			LIW(PutHWReg32(_Rt_), (u32)&psxM_2[addr & 0x1fffff]);
 			LWBRX(PutHWReg32(_Rt_), 0, GetHWReg32(_Rt_));
 			return;
 		}
-		if (t == 0x1f80 && addr < 0x1f801000) {
+		if (t == 0x1f80 && addr < 0x1f801000 && !g_pgxp_memory) {
 			if (!_Rt_) return;
 
 			LIW(PutHWReg32(_Rt_), (u32)&psxH_2[addr & 0xfff]);

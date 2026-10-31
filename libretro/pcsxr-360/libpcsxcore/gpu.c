@@ -19,12 +19,16 @@
 #include "psxhw.h"
 #include "gpu.h"
 #include "psxdma.h"
+#include "pgxp.h"
 /* PCSXR_PERF_ENABLED gates the gpu_wait_ticks sonda below.  See
  * plugins/xbox_soft/peops_prof.h for the rationale on locating the flag
  * at the bottom of the include graph. */
 #include "../plugins/xbox_soft/peops_prof.h"
 
 #include <libretro.h>
+
+/* libretro_core.cpp.  Se usaba sin prototipo (declaracion implicita). */
+extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
 
 extern unsigned int hSyncCount;
 
@@ -119,6 +123,119 @@ enum {
 };
 static volatile uint32_t s_thread_state = GPU_THREAD_STOPPED;
 static HANDLE            s_thread_handle = NULL;
+
+/* ===========================================================================
+ * [2026-10-31] HILO DE GPU CON EL RENDERIZADOR HARDWARE (SwanStation HW)
+ *
+ * Antes, con SwanStation HW el hilo no se creaba: todo el trabajo D3D9 iba en
+ * el hilo de retro_run, que es el dueno del device.  Medido en la intro de GT2
+ * en Xbox: ~4,4 ms por frame de renderizador (parseo GP0 + lotes + llamadas
+ * D3D) encima de ~12 ms de emulacion = 16,5 ms, justo en el borde de 60 fps.
+ * Unai va bien en la misma escena porque dibuja en este hilo.
+ *
+ * El device D3D9 lo puede usar UN hilo a la vez, y en la Xbox solo el que lo
+ * tiene (Acquire/ReleaseThreadOwnership).  La propiedad es un testigo que va
+ * y viene en los puntos de sincronizacion que ya existian:
+ *
+ *   - El hilo principal la tiene "en reposo": al crear el device, entre
+ *     frames (Salvia presenta) y despues de cada ring_drain().
+ *   - Al ENCOLAR (ring_push / gp1q_push) el principal la suelta antes de
+ *     publicar: desde ahi no toca el device hasta el siguiente drain.
+ *   - El consumidor la coge cuando tiene trabajo y la suelta cuando el ring
+ *     esta vacio Y el principal la pide (s_hw_release_req), o cuando se va a
+ *     dormir (Sleep): asi la peticion del drain no espera a que despierte.
+ *   - ring_drain() termina SIEMPRE con el device en el principal.  Todos los
+ *     accesos directos del principal al plugin (lace, GP1 no diferidos, DMA
+ *     de bloque, lecturas, savestates) pasan por un drain, y retro_run drena
+ *     antes de duck_hw_frame_end.
+ *
+ * Solo Xbox, que es donde hace falta; en PC sigue sin hilo con HW
+ * (DUCK_HW_GPU_THREAD 0), igual que antes.
+ * =========================================================================== */
+#if defined(_XBOX)
+#define DUCK_HW_GPU_THREAD 1
+#else
+#define DUCK_HW_GPU_THREAD 0
+#endif
+
+/* gpu_duck_hw_d3d9.cpp: 1 con el renderizador "SwanStation HW". */
+extern int  duck_hw_enabled;
+extern void duck_hw_thread_acquire(int call_d3d);
+extern void duck_hw_thread_release(void);
+
+#define HWOWN_NONE 0u
+#define HWOWN_MAIN 1u
+#define HWOWN_GPU  2u
+
+/* 1 = HW con hilo de GPU (lo decide gpuDmaThreadInit, antes de RUNNING). */
+static volatile uint32_t s_hw_threaded    = 0;
+/* Quien tiene el device: lo escribe SOLO el hilo que lo suelta o lo coge. */
+static volatile uint32_t s_hw_owner       = HWOWN_MAIN;
+/* El principal pide el device (dentro de hw_main_take). */
+static volatile uint32_t s_hw_release_req = 0;
+
+/* PRINCIPAL: soltar el device antes de publicar trabajo al consumidor. */
+static void hw_main_release(void)
+{
+    if (!s_hw_threaded || s_hw_owner != HWOWN_MAIN)
+        return;
+    duck_hw_thread_release();
+    __lwsync();                 /* release: soltar antes de publicar el flag */
+    s_hw_owner = HWOWN_NONE;
+}
+
+/* PRINCIPAL: recuperar el device.  Solo con el ring vacio (tras el bucle de
+ * ring_drain): el consumidor lo suelta en su camino idle al ver la peticion. */
+static void hw_main_take(void)
+{
+    DWORD t0;
+    if (!s_hw_threaded || s_hw_owner == HWOWN_MAIN)
+        return;
+    s_hw_release_req = 1;
+    __lwsync();
+    t0 = GetTickCount();
+    while (s_hw_owner != HWOWN_NONE) {
+        YieldProcessor();
+        if ((GetTickCount() - t0) > 2000u) {
+            /* No deberia pasar: el consumidor responde en su bucle idle.  Se
+             * loguea y se sigue esperando; coger el device sin que lo suelte
+             * seria peor. */
+            pcsxr_log(RETRO_LOG_ERROR,
+                "[PCSXR-LR] HW: el hilo de GPU no suelta el device (owner=%u)\n",
+                (unsigned)s_hw_owner);
+            t0 = GetTickCount();
+        }
+    }
+    __lwsync();                 /* acquire: ver lo que hizo el consumidor */
+    s_hw_release_req = 0;
+    duck_hw_thread_acquire(1);
+    s_hw_owner = HWOWN_MAIN;
+}
+
+/* CONSUMIDOR: coger el device antes de tocar el plugin. */
+static void hw_gpu_take(void)
+{
+    /* El principal lo solto antes de publicar el trabajo que estamos viendo,
+     * asi que esto no deberia esperar; el bucle es solo por seguridad. */
+    while (s_hw_owner != HWOWN_NONE)
+        YieldProcessor();
+    __lwsync();
+    duck_hw_thread_acquire(1);
+    s_hw_owner = HWOWN_GPU;
+}
+
+/* CONSUMIDOR: soltar el device (ring vacio). */
+static void hw_gpu_release(void)
+{
+    duck_hw_thread_release();
+    __lwsync();
+    s_hw_owner = HWOWN_NONE;
+}
+
+/* [PGXP] Con el hilo, el plugin parsea una COPIA de la lista (s_ring_data) y
+ * la busqueda de vertices precisos necesita la direccion en RAM de cada
+ * palabra.  ring_push la apunta en s_ring_ram (final del fichero). */
+static uint32_t *s_ring_ram_ptr(void);
 
 /* QueryPerformanceCounter ticks acumulados durante ring_drain (CPU
  * emulada bloqueada esperando al GPU thread).  retro_run lo resetea a 0
@@ -514,6 +631,7 @@ static int gp1q_push(u32 data)
         return 0;
     s_gp1q_pos[w & GP1Q_MASK]  = s_ring_wpos;
     s_gp1q_data[w & GP1Q_MASK] = (uint32_t)data;
+    hw_main_release();                    /* [HW] lo va a aplicar el consumidor */
     __lwsync();                           /* release: data antes del indice */
     s_gp1q_w = w + 1;
     return 1;
@@ -578,7 +696,7 @@ static void gp1q_reset(void)
  *   2. Copiar payload al ring.
  *   3. lwsync (release): payload visible antes de publicar wpos.
  *   4. Publicar s_ring_wpos. */
-static void ring_push(const uint32_t *data, uint32_t size)
+static void ring_push(const uint32_t *data, uint32_t size, uint32_t ram)
 {
     uint32_t wpos = s_ring_wpos;   /* producer es dueño exclusivo */
     uint32_t widx, first_chunk;
@@ -625,6 +743,18 @@ static void ring_push(const uint32_t *data, uint32_t size)
                (size - first_chunk) * sizeof(uint32_t));
     }
 
+    /* [PGXP] Direccion en RAM de cada palabra copiada (ver s_ring_ram). */
+    if (g_pgxp_enabled && ram != 0xFFFFFFFFu) {
+        uint32_t *rr = s_ring_ram_ptr();
+        uint32_t i;
+        for (i = 0; i < size; i++)
+            rr[(wpos + i) & RING_MASK] = ram + (i << 2);
+    }
+
+    /* [2026-10-31] HW: soltar el device antes de que el consumidor vea el
+     * trabajo (no-op sin renderizador hardware o si ya lo habia soltado). */
+    hw_main_release();
+
     /* Release barrier: payload completo antes de publicar wpos.  El
      * consumer hace lwsync acquire y ve datos consistentes. */
     __lwsync();
@@ -660,8 +790,12 @@ static void ring_drain(void)
 
     /* Fast path: ring vacio Y sin GP1 diferidos pendientes.  Coste cero comun.
      * Las dos condiciones son necesarias: ver el bucle de abajo. */
-    if (s_ring_wpos == s_ring_rpos && s_gp1q_r == s_gp1q_w)
+    if (s_ring_wpos == s_ring_rpos && s_gp1q_r == s_gp1q_w) {
+        /* [HW] Aunque no haya nada pendiente, quien llama va a tocar el
+         * plugin: el device tiene que estar en este hilo. */
+        hw_main_take();
         return;
+    }
 
     /* Umbral de liveness (lazy-init): ~5 s SIN progreso de rpos = el
      * consumidor esta colgado (bucle infinito en un comando GP0; los
@@ -725,6 +859,8 @@ static void ring_drain(void)
     }
     /* Acquire: ver psxVuw/state writes hechos por el thread antes de rpos. */
     __lwsync();
+    /* [HW] Y el device de vuelta a este hilo (ver hw_main_take). */
+    hw_main_take();
     QueryPerformanceCounter(&t1);
     gpu_wait_ticks += (uint64_t)(t1.QuadPart - t0.QuadPart);
 #if PCSXR_DIAG_INSTRUMENTATION
@@ -761,6 +897,18 @@ static void gpu_thread_proc(void)
         __lwsync();
         rpos = s_ring_rpos;
         used = wpos - rpos;
+
+        /* [2026-10-31] HW: con trabajo (palabras o GP1 diferidos, que tambien
+         * llegan al plugin) el device tiene que ser nuestro; sin trabajo se
+         * devuelve si el principal lo esta pidiendo. */
+        if (s_hw_threaded) {
+            if (used != 0 || s_gp1q_r != s_gp1q_w) {
+                if (s_hw_owner != HWOWN_GPU)
+                    hw_gpu_take();
+            } else if (s_hw_owner == HWOWN_GPU && s_hw_release_req) {
+                hw_gpu_release();
+            }
+        }
 
         /* GP1 diferidos: aplicar los que ya toca y no cruzar el siguiente.
          * Va antes de procesar el chunk porque un cambio de modo pendiente
@@ -881,6 +1029,10 @@ static void gpu_thread_proc(void)
             if (++idle_iters < 200000u) {
                 YieldProcessor();
             } else {
+                /* [HW] Antes de dormir, devolver el device: si no, el drain
+                 * siguiente esperaria a que despertasemos (hasta 1 ms). */
+                if (s_hw_threaded && s_hw_owner == HWOWN_GPU)
+                    hw_gpu_release();
                 Sleep(1);
             }
             continue;
@@ -1006,6 +1158,10 @@ static void gpu_thread_proc(void)
         s_ring_rpos = rpos + chunk;
     }
 
+    /* [HW] No salir con el device cogido. */
+    if (s_hw_owner == HWOWN_GPU)
+        hw_gpu_release();
+
     /* Marcamos que terminamos.  Shutdown lee STOPPED para confirmar. */
     s_thread_state = GPU_THREAD_STOPPED;
     ExitThread(0);
@@ -1018,7 +1174,7 @@ static void gpu_thread_proc(void)
  * En modo NO_THREADING o si el thread no esta corriendo, ejecuta inline.
  * =========================================================================== */
 
-static void chain_enqueue(uint32_t *pMem, int size)
+static void chain_enqueue(uint32_t *pMem, int size, uint32_t ram)
 {
     if (size <= 0) return;
 
@@ -1032,7 +1188,7 @@ static void chain_enqueue(uint32_t *pMem, int size)
 			 * GPU_BUSY_MAX_CYCLES.  Equivalente a lo que hace upstream en
 			 * gpu_state_change(PGS_PRIMITIVE_START). */
 			s_gpu_busy_until = psxRegs.cycle + GPU_BUSY_MAX_CYCLES;
-			ring_push((const uint32_t *)pMem, (uint32_t)size);
+			ring_push((const uint32_t *)pMem, (uint32_t)size, ram);
 		} else {
 			/* Pre-init, post-shutdown, o NO_THREADING runtime: directo. */
 			GPU_writeDataMem(pMem, size);
@@ -1071,7 +1227,7 @@ uint32_t gpuDmaChain(uint32_t addr)
         dmaMem = addr + 4;
 
         if (count > 0) {
-            chain_enqueue(&baseAddrL[dmaMem >> 2], count);
+            chain_enqueue(&baseAddrL[dmaMem >> 2], count, dmaMem);
         }
 
         /* Acumular size: count words del nodo + 1 word del next ptr
@@ -1520,6 +1676,8 @@ void gpuSync(void)
  * perder el hilo GPU es infinitamente preferible a dos consumidores. */
 static int s_thread_unavailable = 0;
 
+/* duck_hw_enabled: declarado arriba, en el bloque del hilo de GPU con HW. */
+
 /* ===========================================================================
  * MODELO DE CICLO DE VIDA: HILO PERSISTENTE
  *
@@ -1569,10 +1727,16 @@ void gpuDmaThreadShutdown(void)
 			YieldProcessor();
 		}
 		__lwsync();
+		/* [HW] El device vuelve al principal antes de aparcar: desde aqui
+		 * todo va en linea (y GPU_close libera los recursos D3D9). */
+		if (s_ring_wpos == s_ring_rpos)
+			hw_main_take();
 	}
 
 	/* Aparcar: los productores pasan a inline; el consumidor queda idle. */
 	s_thread_state = GPU_THREAD_STOPPED;
+	__lwsync();
+	s_hw_threaded = 0;
 }
 
 void gpuDmaThreadInit(void)
@@ -1584,11 +1748,27 @@ void gpuDmaThreadInit(void)
      * justo antes del reset y leer luego rpos = 0, calculando
      * used = 5000 -> procesaria basura del ring de la sesion anterior.
      * El cursor es propiedad exclusiva de su dueño (SPSC). */
-	if (!g_pcsxr_threading_enabled || s_thread_unavailable){
+	/* [2026-10-30] Con SwanStation HW el device D3D9 es del hilo de retro_run.
+	 * [2026-10-31] En Xbox ya se puede usar el hilo: la propiedad del device va
+	 * y viene (ver el bloque "HILO DE GPU CON EL RENDERIZADOR HARDWARE").  En
+	 * PC sigue sin hilo (DUCK_HW_GPU_THREAD 0). */
+	s_hw_threaded    = 0;
+	s_hw_owner       = HWOWN_MAIN;
+	s_hw_release_req = 0;
+	if (!g_pcsxr_threading_enabled || s_thread_unavailable ||
+	    (duck_hw_enabled && !DUCK_HW_GPU_THREAD)){
 		/* Modo single-thread: chain_enqueue / ring_drain van directos.
 		 * Si el hilo ya existe se queda aparcado e idle, sin molestar. */
 		s_thread_state = GPU_THREAD_STOPPED;
 		return;
+	}
+
+	/* [HW] El principal tiene el device (lo creo Salvia en este hilo): se
+	 * apunta sin llamar a D3D. */
+	if (duck_hw_enabled) {
+		duck_hw_thread_acquire(0);
+		s_hw_threaded = 1;
+		pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] SwanStation HW con hilo de GPU\n");
 	}
 
 	if (s_thread_created) {
@@ -1615,6 +1795,7 @@ void gpuDmaThreadInit(void)
 		pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: CreateThread for GPU helper failed, falling back to inline mode\n");
 		s_thread_state      = GPU_THREAD_STOPPED;
 		s_thread_unavailable = 1;
+		s_hw_threaded       = 0;
 		return;
 	}
 
@@ -1758,3 +1939,32 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 	DMA_INTERRUPT_2(2);
 }
 
+
+
+/* ===========================================================================
+ * [PGXP] Direccion en RAM de las palabras del ring (hilo de GPU + PGXP).
+ *
+ * El plugin pide la direccion de cada palabra de la lista con
+ * PGXP_RamAddrOf(puntero), y con el hilo ese puntero apunta a la COPIA del
+ * ring, no a psxM.  ring_push apunta en s_ring_ram la direccion original de
+ * cada palabra (solo con PGXP) y esto la traduce.  Lo lee el consumidor en el
+ * tramo [rpos, wpos), que el productor ya no toca.
+ *
+ * La sombra de PGXP la sigue escribiendo la CPU emulada mientras el
+ * consumidor lee: si el juego ya ha reescrito esa palabra, el valor no
+ * coincide y el vertice sale sin decimales (como sin PGXP), nada peor.
+ * =========================================================================== */
+static __declspec(align(128)) uint32_t s_ring_ram[RING_SIZE];
+
+static uint32_t *s_ring_ram_ptr(void)
+{
+    return s_ring_ram;
+}
+
+unsigned int gpuRingRamAddrOf(const void *p)
+{
+    const uint32_t *q = (const uint32_t *)p;
+    if (q >= s_ring_data && q < s_ring_data + RING_SIZE)
+        return s_ring_ram[(uint32_t)(q - s_ring_data)];
+    return 0xFFFFFFFFu;
+}

@@ -27,6 +27,7 @@ email                : BlackDove@addcom.de
 #include <xtl.h>
 #include "xb_video.h"
 #include "../../libpcsxcore/psxcommon.h"
+#include "../gpu_duck/gpu_duck_c_api.h"
 
 /* [Windows, 2026-10-30] Lectura de un halfword de la VRAM de la PSX, que
  * esta en orden little-endian.  En la Xbox (big-endian) es lhbrx, un load con
@@ -478,6 +479,26 @@ void DoBufferSwap(void)
 	 * content remains in pPsxScreen for the frontend to reuse. */
 	if (bSkipNextFrame)
 		return;
+
+	/* [2026-10-30] SwanStation HW: la imagen la compone la GPU en la textura
+	 * que ve Salvia, con la misma geometria que BlitScreen32 (margen
+	 * izquierdo Range.x0, ancho Range.x1, margen superior Range.y0/2). */
+	if (duck_hw_enabled)
+	{
+		const PSXDisplay_t *prv = &PreviousPSXDisplay;
+		int top = 0;
+		int ch  = prv->DisplayMode.y;
+		if (prv->Range.y0)
+		{
+			top = prv->Range.y0 >> 1;
+			ch -= prv->Range.y0;
+		}
+		duck_hw_present(PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y,
+		                prv->Range.x1, ch, prv->Range.x0, top,
+		                PSXDisplay.DisplayMode.x, PSXDisplay.DisplayMode.y, PSXDisplay.RGB24);
+		DisplayUpdate();
+		return;
+	}
 
 	if (g_useRGB565)
 		BlitScreen16((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y, &PSXDisplay, &PreviousPSXDisplay);

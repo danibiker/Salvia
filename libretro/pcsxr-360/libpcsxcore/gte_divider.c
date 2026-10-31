@@ -3,6 +3,7 @@
 // on Xbox 360 Xenon (32KB L1 D-cache per core)
 #include "gte.h"
 #include "psxcommon.h"
+#include "pgxp.h"
 
 /* Widescreen hack (16:9): cuando g_pcsxr_widescreen esta activo, la GTE
  * comprime la X proyectada 3/4 (= (4:3)/(16:9)) alrededor de OFX (el centro),
@@ -61,6 +62,27 @@ static __inline u32 limE(u32 result) {
 	return result;
 }
 
+/* [PGXP] La misma proyeccion sin redondear (gte.cpp de upstream, RTPS sin
+ * "preserve projection precision"): x = OFX + IR1 * H / SZ, con el limite
+ * del divisor de la PSX (cociente <= 2, o sea SZ >= H/2).  La w es la SZ.
+ * Con el widescreen la X se comprime igual que WSX_DISP. */
+static void pgxp_push_rtp(s32 ir1, s32 ir2, u32 sz, u32 sxy)
+{
+	float z = (float)sz;
+	const float h = (float)gteH;
+	float hz, x, y;
+	if (z < h * 0.5f) z = h * 0.5f;
+	if (z <= 0.0f) z = 1.0f;
+	hz = h / z;
+	x = (float)ir1 * hz;
+	if (g_pcsxr_widescreen) x = x * 0.75f;
+	x += (float)gteOFX / 65536.0f;
+	y = (float)gteOFY / 65536.0f + (float)ir2 * hz;
+	if (x < -1024.0f) x = -1024.0f; else if (x > 1023.0f) x = 1023.0f;
+	if (y < -1024.0f) y = -1024.0f; else if (y > 1023.0f) y = 1023.0f;
+	PGXP_GTE_PushSXYZ2f(x, y, z, sxy);
+}
+
 void gteRTPS() {
 	int quotient;
 	s64 tmp;
@@ -85,6 +107,7 @@ void gteRTPS() {
 	gteSXY1 = gteSXY2;
 	gteSX2 = limG1(F((s64)gteOFX + WSX_DISP((s64)gteIR1 * quotient)) >> 16);
 	gteSY2 = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
+	if (g_pgxp_enabled) pgxp_push_rtp(gteIR1, gteIR2, gteSZ3, gteSXY2);
 
 	/* Backport from pcsx_rearmed (commit 8cb04d22 — fix for missing green
 	 * plasma balls in Legacy of Kain: Soul Reaver, also fixes Burning Road
@@ -126,6 +149,8 @@ void gteRTPT() {
 		quotient = limE(DIVIDE(gteH, fSZ(v)));
 		fSX(v) = limG1(F((s64)gteOFX + WSX_DISP((s64)gteIR1 * quotient)) >> 16);
 		fSY(v) = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
+		/* SXY0..2 se escriben en orden: tres empujones dejan la sombra igual */
+		if (g_pgxp_enabled) pgxp_push_rtp(gteIR1, gteIR2, fSZ(v), psxRegs.CP2D.r[12 + v]);
 	}
 	/* Same fix as gteRTPS — see comment there. */
 	tmp = (s64)gteDQB + ((s64)gteDQA * quotient);

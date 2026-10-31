@@ -394,6 +394,10 @@ struct GPUBackendDrawCommand : public GPUBackendCommand
 struct GPUBackendDrawPolygonCommand : public GPUBackendDrawCommand
 {
   u16 num_vertices;
+  /* [PGXP] precise = px/py de los vertices validas (con decimales donde las
+   * hubo); precise_w = las pw tambien (perspectiva).  Solo las mira el
+   * renderizador HW; el software sigue con x/y. */
+  u8 precise, precise_w;
 
   struct Vertex
   {
@@ -446,12 +450,18 @@ struct GPUBackendDrawPolygonCommand : public GPUBackendDrawCommand
     };
 #endif
 
+    /* [PGXP] posicion con decimales y w (ver precise / precise_w) */
+    float px, py, pw;
+
     ALWAYS_INLINE void Set(s32 x_, s32 y_, u32 color_, u16 texcoord_)
     {
       x = x_;
       y = y_;
       color = color_;
       texcoord = texcoord_;
+      px = static_cast<float>(x_);
+      py = static_cast<float>(y_);
+      pw = 1.0f;
     }
   };
 

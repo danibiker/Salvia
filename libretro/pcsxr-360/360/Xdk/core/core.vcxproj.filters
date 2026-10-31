@@ -50,6 +50,9 @@
     <ClInclude Include="..\..\..\libpcsxcore\gte.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\libpcsxcore\pgxp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\libpcsxcore\mdec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -200,6 +203,9 @@
       <Filter>ppc</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\libpcsxcore\gte_divider.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\libpcsxcore\pgxp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\libpcsxcore\cdrom-async.c">

@@ -56,6 +56,9 @@
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp">
       <Filter>gpu_duck</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_hw_d3d9.cpp">
+      <Filter>gpu_duck</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.cpp">
       <Filter>gpu_unai</Filter>
     </ClCompile>

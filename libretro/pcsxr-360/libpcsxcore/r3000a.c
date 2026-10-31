@@ -25,6 +25,7 @@
 #include "mdec.h"
 #include "gpu.h"
 #include "gte.h"
+#include "pgxp.h"
 #include "sio.h"
 #include "psxdma.h"
 #include "spu.h"  /* spuDelayedIrq, spuUpdate (cycle-driven SPU events) */
@@ -634,6 +635,7 @@ void psxReset() {
 //}
 
 	memset(&psxRegs, 0, sizeof(psxRegs));
+	PGXP_Reset();   /* [PGXP] la sombra de la RAM y de los registros, a cero */
 
 	psxRegs.pc = 0xbfc00000; // Start in bootstrap
 	psxRegs.next_interupt = 0;

@@ -20,6 +20,9 @@
  */
 
 #include "gpu_duck_driver.h"
+#include "gpu_duck_hw_d3d9.h"
+#include "gpu_duck_c_api.h"
+#include "../../libpcsxcore/pgxp.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -117,6 +120,24 @@ GPU_Duck_Driver* duck_get_driver()
   return s_driver;
 }
 
+/* Para la API C del backend hardware (gpu_duck_hw_d3d9.cpp).  Solo es un
+ * GPU_HW_D3D9_Backend si duck_hw_enabled; quien llama lo comprueba. */
+GPUBackend* duck_get_backend_for_hw()
+{
+  return s_driver ? s_driver->GetBackend() : 0;
+}
+
+/* El estado de mascara vigente (GP0 E6) para las subidas del backend
+ * hardware.  Sin driver, todo a cero. */
+GPUBackendCommandParameters duck_get_current_params_for_hw()
+{
+  GPUBackendCommandParameters p;
+  if (s_driver)
+    return s_driver->CurrentParams();
+  p.bits = 0;
+  return p;
+}
+
 /* ------------------------------------------------------------------
  * Construction / lifecycle.
  * ---------------------------------------------------------------- */
@@ -148,12 +169,33 @@ bool GPU_Duck_Driver::Initialize(u16* psx_vram)
   if (m_backend)
     return true;
 
-  m_backend = new GPU_SW_Backend(psx_vram);
-  if (!m_backend->Initialize(false))
+  /* [2026-10-30] Con "SwanStation HW" el backend es el de Direct3D 9; si no
+   * arranca (sin device, sin shaders) se cae al software, que dibuja sobre
+   * psxVuw y el resto del core funciona igual. */
+#if DUCK_HW_D3D9
+  if (duck_hw_enabled)
   {
-    delete m_backend;
-    m_backend = 0;
-    return false;
+    GPU_HW_D3D9_Backend* hw = new GPU_HW_D3D9_Backend(psx_vram);
+    if (hw->Initialize(false))
+      m_backend = hw;
+    else
+    {
+      delete hw;
+      duck_hw_enabled = 0;
+    }
+  }
+#else
+  duck_hw_enabled = 0;
+#endif
+  if (!m_backend)
+  {
+    GPU_SW_Backend* sw = new GPU_SW_Backend(psx_vram);
+    if (!sw->Initialize(false))
+    {
+      delete sw;
+      return false;
+    }
+    m_backend = sw;
   }
 
   /* Seed the backend's drawing area with a full-VRAM default so any
@@ -384,6 +426,17 @@ void GPU_Duck_Driver::EmitPolygon(bool textured, bool shaded, bool quad,
   cmd->rc.bits = rc_bits;
 
   cmd->num_vertices = num_verts;
+  /* [PGXP] gpu_hw.cpp:696 de upstream: la w solo vale si la tienen TODOS los
+   * vertices (y con la correccion de texturas activa); si no, w = 1. */
+  const bool pgxp = (g_pgxp_enabled != 0);
+  bool valid_w = pgxp && (g_pgxp_texture_correction != 0);
+  if (valid_w)
+  {
+    for (u16 i = 0; i < num_verts; ++i)
+      valid_w = valid_w && (verts[i].pw_valid != 0);
+  }
+  cmd->precise = pgxp ? 1 : 0;
+  cmd->precise_w = valid_w ? 1 : 0;
   for (u16 i = 0; i < num_verts; ++i)
   {
     GPUBackendDrawPolygonCommand::Vertex* out = &cmd->vertices[i];
@@ -391,6 +444,9 @@ void GPU_Duck_Driver::EmitPolygon(bool textured, bool shaded, bool quad,
     out->y        = verts[i].y;
     out->color    = verts[i].color & 0x00FFFFFFu;
     out->texcoord = verts[i].texcoord;
+    out->px       = pgxp ? verts[i].px : static_cast<float>(verts[i].x);
+    out->py       = pgxp ? verts[i].py : static_cast<float>(verts[i].y);
+    out->pw       = valid_w ? verts[i].pw : 1.0f;
   }
 
   m_backend->DrawPolygon(cmd);
@@ -551,6 +607,17 @@ static void duck_primLoadImage(unsigned char* baseAddr)
  * anything extra since our backend's VRAM aliases psxVuw. */
 static void duck_primStoreImage(unsigned char* baseAddr)
 {
+  /* [2026-10-30] Con el renderizador hardware la VRAM buena esta en la GPU:
+   * bajar a psxVuw el rectangulo que xbox_soft va a leer.  Mismos campos que
+   * primStoreImage; 0 de ancho/alto = 1024/512 como en la PSX. */
+  if (duck_hw_enabled)
+  {
+    const u32 x = static_cast<u32>(gp0_short(baseAddr, 2)) & 0x3FFu;
+    const u32 y = static_cast<u32>(gp0_short(baseAddr, 3)) & 0x1FFu;
+    const u32 w = ((static_cast<u32>(static_cast<u16>(gp0_short(baseAddr, 4))) - 1u) & 0x3FFu) + 1u;
+    const u32 h = ((static_cast<u32>(static_cast<u16>(gp0_short(baseAddr, 5))) - 1u) & 0x1FFu) + 1u;
+    duck_hw_readback_rect(x, y, w, h);
+  }
   primStoreImage(baseAddr);
 }
 
@@ -575,6 +642,23 @@ static void duck_cmdDrawAreaBR   (unsigned char* baseAddr) { GPU_Duck_Driver* dr
 static void duck_cmdDrawOffset   (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetDrawingOffset (gp0_word(baseAddr, 0)); }
 static void duck_cmdSTP          (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetMaskBitSetting(gp0_word(baseAddr, 0)); }
 
+/* --- [PGXP] posicion con decimales de un vertice ------------------
+ * `word` = indice de la palabra de POSICION del vertice dentro del paquete;
+ * xbox_soft/gpu.c guarda de que direccion de RAM vino cada palabra
+ * (g_gpu_data_addr).  Llamar despues de cook_xy (x/y ya con desplazamiento). */
+extern "C" unsigned int g_gpu_data_addr[256];
+
+static void pgxp_vertex(GPU_Duck_Driver::DuckVertex& v, const unsigned char* baseAddr, u32 word)
+{
+  GPU_Duck_Driver* drv = duck_get_driver();
+  const s32 ox = drv ? drv->GetDrawOffsetX() : 0;
+  const s32 oy = drv ? drv->GetDrawOffsetY() : 0;
+  v.pw_valid = PGXP_GetPreciseVertex(g_gpu_data_addr[word & 255u], gp0_word(baseAddr, word), v.x, v.y, ox, oy,
+                                     &v.px, &v.py, &v.pw);
+}
+
+#define PGXP_V(i, word) do { if (g_pgxp_enabled) pgxp_vertex(v[(i)], baseAddr, (word)); } while (0)
+
 /* --- Polygon helpers: extract opcode attribute flags. ------------ */
 static ALWAYS_INLINE bool is_raw_texture (u32 w) { return (w & (1u << 24)) != 0; }
 static ALWAYS_INLINE bool is_transparent (u32 w) { return (w & (1u << 25)) != 0; }
@@ -595,6 +679,7 @@ static void duck_primPolyF3(unsigned char* baseAddr)
     v[i].color = col;
     v[i].texcoord = 0;
   }
+  PGXP_V(0, 1); PGXP_V(1, 2); PGXP_V(2, 3);
   drv->EmitPolygon(false, false, false, false, is_transparent(cmd), v, 0, 0);
 }
 
@@ -613,6 +698,7 @@ static void duck_primPolyF4(unsigned char* baseAddr)
     v[i].color = col;
     v[i].texcoord = 0;
   }
+  PGXP_V(0, 1); PGXP_V(1, 2); PGXP_V(2, 3); PGXP_V(3, 4);
   drv->EmitPolygon(false, false, true, false, is_transparent(cmd), v, 0, 0);
 }
 
@@ -646,6 +732,7 @@ static void duck_primPolyFT3(unsigned char* baseAddr)
   v[2].color = col;
   v[2].texcoord = read_le_u16(baseAddr + 6 * 4);
 
+  PGXP_V(0, 1); PGXP_V(1, 3); PGXP_V(2, 5);
   drv->EmitPolygon(true, false, false, raw, is_transparent(cmd), v, texpage, palette);
 }
 
@@ -673,6 +760,7 @@ static void duck_primPolyFT4(unsigned char* baseAddr)
   cook_xy(gp0_short(baseAddr, 14), gp0_short(baseAddr, 15), v[3].x, v[3].y);
   v[3].color = col; v[3].texcoord = read_le_u16(baseAddr + 8 * 4);
 
+  PGXP_V(0, 1); PGXP_V(1, 3); PGXP_V(2, 5); PGXP_V(3, 7);
   drv->EmitPolygon(true, false, true, raw, is_transparent(cmd), v, texpage, palette);
 }
 
@@ -697,6 +785,7 @@ static void duck_primPolyG3(unsigned char* baseAddr)
   cook_xy(gp0_short(baseAddr, 10), gp0_short(baseAddr, 11), v[2].x, v[2].y);
   v[2].texcoord = 0;
 
+  PGXP_V(0, 1); PGXP_V(1, 3); PGXP_V(2, 5);
   drv->EmitPolygon(false, true, false, false, is_transparent(cmd), v, 0, 0);
 }
 
@@ -724,6 +813,7 @@ static void duck_primPolyG4(unsigned char* baseAddr)
   cook_xy(gp0_short(baseAddr, 14), gp0_short(baseAddr, 15), v[3].x, v[3].y);
   v[3].texcoord = 0;
 
+  PGXP_V(0, 1); PGXP_V(1, 3); PGXP_V(2, 5); PGXP_V(3, 7);
   drv->EmitPolygon(false, true, true, false, is_transparent(cmd), v, 0, 0);
 }
 
@@ -754,6 +844,7 @@ static void duck_primPolyGT3(unsigned char* baseAddr)
   cook_xy(gp0_short(baseAddr, 14), gp0_short(baseAddr, 15), v[2].x, v[2].y);
   v[2].texcoord = read_le_u16(baseAddr + 8 * 4);
 
+  PGXP_V(0, 1); PGXP_V(1, 4); PGXP_V(2, 7);
   drv->EmitPolygon(true, true, false, raw, is_transparent(cmd), v, texpage, palette);
 }
 
@@ -785,6 +876,7 @@ static void duck_primPolyGT4(unsigned char* baseAddr)
   cook_xy(gp0_short(baseAddr, 20), gp0_short(baseAddr, 21), v[3].x, v[3].y);
   v[3].texcoord = read_le_u16(baseAddr + 11 * 4);
 
+  PGXP_V(0, 1); PGXP_V(1, 4); PGXP_V(2, 7); PGXP_V(3, 10);
   drv->EmitPolygon(true, true, true, raw, is_transparent(cmd), v, texpage, palette);
 }
 

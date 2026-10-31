@@ -69,6 +69,10 @@ public:
     s32 x, y;
     u32 color;    /* RGB24 as 0x00BBGGRR */
     u16 texcoord; /* (v<<8)|u, ignored if no texture */
+    /* [PGXP] posicion con decimales y w (solo si g_pgxp_enabled; los rellena
+     * pgxp_vertex en gpu_duck_driver.cpp) */
+    float px, py, pw;
+    int pw_valid;
   };
 
   void EmitPolygon(bool textured, bool shaded, bool quad,
@@ -89,7 +93,9 @@ public:
    * case we later separate the buffers for PPC big-endian fixup. */
   void FlushForDisplay();
 
-  GPU_SW_Backend* GetBackend() { return m_backend; }
+  /* [2026-10-30] GPUBackend, no GPU_SW_Backend: puede ser el hardware D3D9
+   * (gpu_duck_hw_d3d9.h).  Los que la usan solo llaman a GetVRAM(). */
+  GPUBackend* GetBackend() { return m_backend; }
 
   /* Accessors used by per-opcode handlers to cook raw vertex coords
    * (sign-extend 11-bit, add drawing offset). */
@@ -104,6 +110,12 @@ public:
     m_active_line_lsb = static_cast<u8>(active_line_lsb & 1);
   }
 
+  /* [2026-10-30] El estado de mascara/entrelazado VIGENTE (GP0 E6, GP1 08),
+   * para las subidas CPU->VRAM del backend hardware: upstream las hace con
+   * el GPUSTAT actual (gpu_commands.cpp:496), no con el de la ultima
+   * primitiva. */
+  GPUBackendCommandParameters CurrentParams() const { return BuildParams(); }
+
 private:
   /* Push the current m_draw_area_* values into the backend's drawing
    * rectangle. Clamps to VRAM bounds first. */
@@ -117,7 +129,7 @@ private:
    * driver state. */
   void FillDrawCommand(GPUBackendDrawCommand* cmd) const;
 
-  GPU_SW_Backend* m_backend;
+  GPUBackend* m_backend;
 
   /* Scratch space for variable-sized command structs (polygons have
    * trailing vertex arrays, lines can have many). Sized for the worst
