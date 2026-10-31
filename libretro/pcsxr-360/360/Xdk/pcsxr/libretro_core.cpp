@@ -223,13 +223,6 @@ extern struct gpu_unai_config_t gpu_unai_config_ext;
 
 }
 
-/* ===== CRT stub ===== */
-extern "C" int __cdecl _chvalidator(int c, int mask)
-{
-    extern const unsigned short *_pctype;
-    return (_pctype[(unsigned char)c] & mask);
-}
-
 /* ===== Libretro callbacks ===== */
 static retro_environment_t        environ_cb;
 static retro_video_refresh_t      video_cb;
@@ -601,6 +594,25 @@ void retro_set_environment(retro_environment_t cb) {
             NULL, NULL, "system",
             { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
             "disabled"
+        },
+		{
+            "pcsxr360_bios",
+            "PSX bios", "PSX bios",
+            NULL, NULL, "system",
+			{ { "scph1001.bin", "SCPH-1001 USA (v2.2)" }, 
+			  { "scph5501.bin", "SCPH-5501 USA (v3.0) (Default)" }, 
+			  { "scph7001.bin", "SCPH-7001 USA (v4.1)" }, 
+			  { "scph101.bin" , "SCPH-101 USA (v4.5)" },
+			  { "scph1000.bin", "SCPH-1000 JPN (v1.0)" }, 
+			  { "scph3000.bin", "SCPH-3000 JPN (v1.1)" }, 
+			  { "scph5500.bin", "SCPH-5500 JPN (v3.0) (Recommended)" }, 
+			  { "scph7000.bin", "SCPH-7000 JPN (v4.0)" }, 
+			  { "scph1002.bin", "SCPH-1002 EUR (v2.0)" }, 
+			  { "scph5502.bin", "SCPH-5502 EUR (v3.0)" }, 
+			  { "scph7502.bin", "SCPH-7502 EUR (v4.1) (Recommended)" }, 
+			  { "scph102.bin",  "SCPH-102 EUR (v4.5)" }, 
+			  { NULL, NULL }},			  
+            "scph5501.bin"
         },
         {
             "pcsxr360_region",
@@ -1348,7 +1360,7 @@ unsigned retro_api_version(void) {
 void retro_get_system_info(struct retro_system_info *info) {
     memset(info, 0, sizeof(*info));
     info->library_name     = "PCSXR-360";
-    info->library_version  = "2.1.1";
+    info->library_version  = "2.2";
     info->valid_extensions = "bin|cue|img|mdf|pbp|cbn|iso|chd|m3u";
     info->need_fullpath    = true;
     info->block_extract    = false;
@@ -2046,6 +2058,39 @@ static void game_db_apply(void) {
     }
 }
 
+#include <iostream>
+#include <string>
+#include <io.h>      // Biblioteca de C de Microsoft para búsqueda de archivos
+
+static std::string buscar_archivos_scph(const std::string& ruta_dir) {
+    // Construimos el patrón de búsqueda: "ruta\SCPH*"
+    std::string patron = ruta_dir + "\\SCPH*";
+	std::string biosFound = "";
+
+    struct _finddata_t datos_archivo;
+    // _findfirst inicia la búsqueda. Retorna un manejador (intptr_t)
+    intptr_t hFind = _findfirst(patron.c_str(), &datos_archivo);
+
+    if (hFind == -1) {
+        pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] No se encontraron archivos SCPH o la ruta no existe\n");
+        return biosFound;
+    }
+
+	//pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] Bios encontrados en %s\n", ruta_dir.c_str());
+    do {
+        // Filtramos para omitir subcarpetas (_A_SUBDIR) y mostrar solo archivos
+        if (!(datos_archivo.attrib & _A_SUBDIR)) {
+			//pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] Bios: %s\n", datos_archivo.name);
+			biosFound = datos_archivo.name;
+			break;
+        }
+    } while (_findnext(hFind, &datos_archivo) == 0);
+
+    // Es obligatorio cerrar el manejador para liberar memoria
+    _findclose(hFind);
+	return biosFound;
+}
+
 static int emu_setup(void) {
     int ret;
 
@@ -2167,8 +2212,47 @@ static int emu_setup(void) {
 		pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] system_dir: %s\n", system_dir);
 	}
 
-    strcpy(Config.Bios, "SCPH1001.BIN");
-    strcpy(Config.BiosDir, system_dir ? system_dir : "");
+	strcpy(Config.BiosDir, system_dir ? system_dir : "");
+
+	//Obteniendo la bios configurada
+	{
+		const int msgFrames = 300;
+        struct retro_variable var_icd;
+		var_icd.key = "pcsxr360_bios";
+		var_icd.value = NULL;
+		if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_icd)
+            && var_icd.value) {
+            strcpy(Config.Bios, var_icd.value);
+        } else {
+			char warn[256];
+			_snprintf(warn, sizeof(warn), "Bios not found selecting SCPH1001.BIN");
+			pcsxr_lr_notify_user(warn, msgFrames);
+			strcpy(Config.Bios, "SCPH1001.BIN");
+		}
+
+		char bios[1024];
+		sprintf(bios, "%s\\%s", Config.BiosDir, Config.Bios);
+		FILE *f = fopen(bios, "rb");
+		if (f == NULL) {
+			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] selected bios: not found. Listing bios directory\n");
+			std::string biosFile = buscar_archivos_scph(Config.BiosDir);
+			char warn[256];
+			if (biosFile.empty()){
+				_snprintf(warn, sizeof(warn), "No bios found in system directory. Copy the file scph1001.bin", Config.BiosDir);
+				pcsxr_lr_notify_user(warn, msgFrames);
+			} else {
+				strcpy(Config.Bios, biosFile.c_str());
+				_snprintf(warn, sizeof(warn), "Auto-selected bios: %s", Config.Bios);
+				pcsxr_lr_notify_user(warn, msgFrames);
+			}
+		} else {
+			fclose(f);
+		}
+		pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] bios: %s\n", Config.Bios);
+	}
+
+
+    
 
     /* Patches dir: <system>\patches\psx  (must end with separator because
      * the core concatenates <PatchesDir><file> without adding one). */
