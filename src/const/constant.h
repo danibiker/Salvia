@@ -89,6 +89,7 @@ typedef enum {
 	clYellow,
 	clRed,
 	clBlue,
+	clBkgMenuDarker,
 	clBkgMenu,
 	clBkgMenuLighter,
 	clBG,

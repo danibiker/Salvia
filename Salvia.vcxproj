@@ -7340,6 +7340,7 @@
     <ClInclude Include="src\dischelper.h" />
     <ClInclude Include="src\engine.h" />
     <ClInclude Include="src\http\gamefaqs.h" />
+    <ClInclude Include="src\io\statesram.h" />
     <ClInclude Include="src\menus\gamemenu.h" />
     <ClInclude Include="src\video\HLSLBackground.h" />
     <ClInclude Include="src\video\win_d3d9.h" />
@@ -7381,7 +7382,6 @@
     <ClInclude Include="src\salvia.h" />
     <ClInclude Include="src\so\launcher.h" />
     <ClInclude Include="src\so\soutils.h" />
-    <ClInclude Include="src\statesram.h" />
     <ClInclude Include="src\uiobjects\image.h" />
     <ClInclude Include="src\uiobjects\listmenu.h" />
     <ClInclude Include="src\uiobjects\object.h" />

@@ -25,7 +25,7 @@
 #include <io/cfgloader.h>
 #include <io/filepackage.h>
 #include "menuassetloader.h"
-
+#include <io/statesram.h>
 
 #ifdef _XBOX
 	#ifndef SALVIA_GPU_VIDEO
@@ -40,6 +40,8 @@
 	#include <io/hqx_2/hqx.h>
 	#endif
 #endif
+
+#define MSG_GAP_Y 4
 
 static const string SNAP = "snap";
 static const string BOX2D = "box2d";
@@ -122,6 +124,7 @@ class GameMenu : public Engine{
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;
+		StateSram statesSram;
 
 		#ifndef SALVIA_GPU_VIDEO
 		ScalerFunc current_scaler;
@@ -170,6 +173,7 @@ class GameMenu : public Engine{
 		std::string getSramPath();
 		void showSystemMessage(std::string, uint32_t);
 		void showLangSystemMessage(std::string, uint32_t);
+		void showProgressMessage(std::string, float, uint32_t);
 		void startScrapping();
 		void loadGameAchievements(unzippedFileInfo& unzipped);
 		void showAchievementMessage(const std::string &line1Str, const std::string &line2Str, const std::string &line3Str, SDL_Surface *badge);

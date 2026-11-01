@@ -32,8 +32,8 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 			switch(optionAction.action){
 				case ASK_CARGAR:
 					LOG_DEBUG("Peticion cargar Partida: %s", filepath);
-					g_currentSlot = iPosSlot;
-					loadState();
+					gameMenu->statesSram.saveContext.g_currentSlot = iPosSlot;
+					gameMenu->statesSram.loadState();
 					gameMenu->setEmuStatus(EMU_STARTED);
 					gameMenu->configMenus->resetStatus();
 					gameMenu->clearOverlay();
@@ -41,9 +41,9 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 					break;
 				case ASK_GUARDAR:
 					LOG_DEBUG("Peticion guardar Partida: %s", filepath);
-					g_currentSlot = iPosSlot;
-					action_postponed.cycles = 1;
-					action_postponed.action = SAVE_STATE;
+					gameMenu->statesSram.saveContext.g_currentSlot = iPosSlot;
+					gameMenu->statesSram.saveContext.action_postponed.cycles = 1;
+					gameMenu->statesSram.saveContext.action_postponed.action = SAVE_STATE;
 					gameMenu->setEmuStatus(EMU_STARTED);
 					gameMenu->configMenus->resetStatus();
 					gameMenu->clearOverlay();

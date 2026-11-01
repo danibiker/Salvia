@@ -12,6 +12,7 @@ svColor Constant::colors[clTotalColors] = {
 	{{241, 222, 19}, 255},		//clYellow
 	{{255, 0, 0}, 0},			//clRed
 	{{76, 194, 255}, 255},		//clBlue
+	{{183, 161, 56}, 0},		//clBkgMenuDarker
 	{{247, 221, 114}, 0},		//clBkgMenu
 	{{237, 221, 150}, 255},		//clBkgMenuLighter
 	{{40, 40, 40}, 0xFF},		//clBG

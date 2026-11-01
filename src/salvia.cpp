@@ -877,20 +877,20 @@ static bool retro_environment(unsigned cmd, void *data) {
 }
 
 static inline void take_screenshot(void* final_src, unsigned width, unsigned height, std::size_t pitch, int bpp = 16){
-    if (action_postponed.screenshot) {
-        delete[] action_postponed.screenshot;
-        action_postponed.screenshot = NULL;
+	if (gameMenu->statesSram.saveContext.action_postponed.screenshot) {
+        delete[] gameMenu->statesSram.saveContext.action_postponed.screenshot;
+        gameMenu->statesSram.saveContext.action_postponed.screenshot = NULL;
     }
 
 	const std::size_t bytes_per_pixel = (bpp == 32) ? 4 : 2;
 	const std::size_t total_bytes = (std::size_t)width * height * bytes_per_pixel;
-    action_postponed.screenshot = new uint8_t[total_bytes];
-    action_postponed.width = width;
-    action_postponed.height = height;
-	action_postponed.bpp = bpp;
+    gameMenu->statesSram.saveContext.action_postponed.screenshot = new uint8_t[total_bytes];
+    gameMenu->statesSram.saveContext.action_postponed.width = width;
+    gameMenu->statesSram.saveContext.action_postponed.height = height;
+	gameMenu->statesSram.saveContext.action_postponed.bpp = bpp;
 
     uint8_t* src_ptr = (uint8_t*)final_src;
-    uint8_t* dst_ptr = action_postponed.screenshot;
+    uint8_t* dst_ptr = gameMenu->statesSram.saveContext.action_postponed.screenshot;
     std::size_t row_size = width * bytes_per_pixel;
     for (unsigned y = 0; y < height; y++) {
         memcpy(dst_ptr, src_ptr, row_size);
@@ -898,7 +898,7 @@ static inline void take_screenshot(void* final_src, unsigned width, unsigned hei
         dst_ptr += row_size;
     }
 
-    action_postponed.cycles = 0;
+    gameMenu->statesSram.saveContext.action_postponed.cycles = 0;
 }
 
 // Rota un framebuffer RGB565 (16 bpp) hacia un buffer denso.
@@ -1083,30 +1083,30 @@ static inline void hw_refresh(const void *data, unsigned width,
          * lo tolera entera -- `saveState()` solo copia la imagen si el
          * puntero no es NULL, y el hilo de guardado comprueba lo mismo antes
          * de escribir el PNG. */
-        if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE) {
-            if (action_postponed.screenshot) {
-                delete[] action_postponed.screenshot;
-                action_postponed.screenshot = NULL;
+        if (gameMenu->statesSram.saveContext.action_postponed.cycles == 1 && gameMenu->statesSram.saveContext.action_postponed.action == SAVE_STATE) {
+            if (gameMenu->statesSram.saveContext.action_postponed.screenshot) {
+                delete[] gameMenu->statesSram.saveContext.action_postponed.screenshot;
+                gameMenu->statesSram.saveContext.action_postponed.screenshot = NULL;
             }
 
-            action_postponed.width  = 0;
-            action_postponed.height = 0;
-            action_postponed.bpp    = 32;   /* la textura del core es A8R8G8B8 */
+            gameMenu->statesSram.saveContext.action_postponed.width  = 0;
+            gameMenu->statesSram.saveContext.action_postponed.height = 0;
+            gameMenu->statesSram.saveContext.action_postponed.bpp    = 32;   /* la textura del core es A8R8G8B8 */
 
             if (width > 0 && height > 0) {
                 const std::size_t total = (std::size_t)width * height * 4;
                 uint8_t *shot = new uint8_t[total];
 
                 if (SDL_XBOX_CaptureGameTexture(shot, (int)width, (int)height)) {
-                    action_postponed.screenshot = shot;
-                    action_postponed.width      = width;
-                    action_postponed.height     = height;
+                    gameMenu->statesSram.saveContext.action_postponed.screenshot = shot;
+                    gameMenu->statesSram.saveContext.action_postponed.width = width;
+                    gameMenu->statesSram.saveContext.action_postponed.height = height;
                 } else {
                     delete[] shot;
                 }
             }
 
-            action_postponed.cycles = 0;
+            gameMenu->statesSram.saveContext.action_postponed.cycles = 0;
         }
         return;
     }
@@ -1172,7 +1172,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     }
 
     // ── Screenshot (usa la fuente ya convertida) ─────────────────────────────
-    if (action_postponed.cycles == 1 && action_postponed.action  == SAVE_STATE){
+    if (gameMenu->statesSram.saveContext.action_postponed.cycles == 1 && gameMenu->statesSram.saveContext.action_postponed.action  == SAVE_STATE){
         take_screenshot((void *)final_src, width, height, final_pitch, bpp);
     }
 
@@ -1875,7 +1875,7 @@ void closeGame(){
 		gameMenu->g_midi.panic();
 		g_midiFastForwardCut = false;
 #ifndef NO_SRAM
-		saveSram(romPaths.sram.c_str());
+		gameMenu->statesSram.saveSram(romPaths.sram.c_str());
 #endif
 
 		// Multi-disc: persistir indice del disco actual para la proxima carga
@@ -2027,7 +2027,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	// cards, que el core ya ha cargado via Config.Mcd1/2 en emu_setup.
 	if (!bios_only) {
 		gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
-		loadSram(romPaths.sram.c_str());
+		gameMenu->statesSram.loadSram(romPaths.sram.c_str());
 	}
 
 	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
@@ -2089,9 +2089,9 @@ inline void updateGame() {
     #ifndef NO_SRAM
 	const Uint32 currentTime = SDL_GetTicks();
     // Verificamos si ha pasado el intervalo desde el ultimo guardado
-    if (currentTime - lastSramSaved >= INTERVAL_SRAM_SAVE) {
-        saveSram(romPaths.sram.c_str());
-        lastSramSaved = currentTime;
+	if (currentTime - gameMenu->statesSram.saveContext.lastSramSaved >= INTERVAL_SRAM_SAVE) {
+        gameMenu->statesSram.saveSram(romPaths.sram.c_str());
+        gameMenu->statesSram.saveContext.lastSramSaved = currentTime;
     }
 	#endif
 	// retro_run hace todo: 
@@ -2227,85 +2227,7 @@ void processFrontendEvents(){
 	
 	//Procesamos las hotkeys
 	HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
-
-	if (action_postponed.cycles == 0){
-		saveState();
-		action_postponed.action = SAVE_NONE;
-		action_postponed.cycles = -1;
-	}
-
-	switch (hotkey) {
-		case HK_SAVESTATE:
-			#ifdef NO_SAVEGAMES
-				gameMenu->showLangSystemMessage("msg.filesave.forbidden", 3000);
-			#else
-				SDL_mutexP(g_saveQueue.saveMutex);
-				if (g_saveQueue.action == SAVE_STATE){
-					LOG_ERROR("Savestate pending. Aborting new savestate...");
-					SDL_mutexV(g_saveQueue.saveMutex);
-					break;
-				}
-				SDL_mutexV(g_saveQueue.saveMutex);
-
-				action_postponed.cycles = 1;
-				action_postponed.action = SAVE_STATE;
-			#endif
-			break;
-
-		case HK_LOADSTATE:
-			// loadState debe ejecutarse en el hilo principal		
-			#ifdef NO_SAVEGAMES
-				gameMenu->showLangSystemMessage("msg.filesave.forbidden", 3000);
-			#else
-				loadState();
-			#endif
-			break;
-
-		case HK_MAX:
-			// No hacemos nada para el valor limite
-			break;
-
-		case HK_SLOT_UP:
-			g_currentSlot = (g_currentSlot + 1) % MAX_SAVESTATES;
-			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(g_currentSlot), 2000);
-			break;
-
-		case HK_SLOT_DOWN:
-			g_currentSlot = (g_currentSlot - 1 < 0) ? MAX_SAVESTATES - 1 : g_currentSlot - 1;
-			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(g_currentSlot), 2000);
-			break;
-
-		// ─── Multi-disc (PSX M3U) ────────────────────────────────────────────
-		/*case HK_DISC_NEXT:
-			if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
-				unsigned n   = disk_control.get_num_images();
-				unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
-				swapDisc((cur + 1) % n);
-			}
-			break;
-
-		case HK_DISC_PREV:
-			if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
-				unsigned n   = disk_control.get_num_images();
-				unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
-				swapDisc(cur == 0 ? (n - 1) : (cur - 1));
-			}
-			break;
-
-		case HK_DISC_EJECT:
-			if (disk_control.set_eject_state && disk_control.get_eject_state) {
-				bool now = !disk_control.get_eject_state();
-				disk_control.set_eject_state(now);
-				gameMenu->showSystemMessage(now ? "Tray open" : "Tray closed", 1500);
-			}
-			break;
-		*/
-		default:
-			//LOG_DEBUG("Sending Hotkey %d\n", hotkey);
-			// Cualquier otro hotkey (ej. volumen, reset, menu) se delega al frontend
-			gameMenu->processFrontendEvents(hotkey);
-			break;
-	}
+	gameMenu->processFrontendEvents(hotkey);
 }
 
 void closeResources() {
@@ -2335,7 +2257,7 @@ void closeResources() {
         rotation_buffer_size = 0;
     }
 
-	deinitSaveSystem();
+	gameMenu->statesSram.deinitSaveSystem();
 	Launcher::unmountAll();
 	CurlClient curlClient;
 	curlClient.close();
@@ -2513,7 +2435,7 @@ int main(int argc, char *argv[]) {
 
 	ConfigEmu *emu = cfgLoader->getCfgEmu();
 	gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
-	initSaveSystem();
+	gameMenu->statesSram.initSaveSystem();
 	CurlClient curlClient;
 	curlClient.init();
 

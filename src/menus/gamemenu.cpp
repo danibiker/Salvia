@@ -1605,6 +1605,35 @@ bool GameMenu::updateFps(){
 }
 
 void GameMenu::processFrontendEvents(HOTKEYS_LIST hotkey){
+
+	//Actions to be processed or post-processed from a thread
+	//First, check if the save should be made effective
+	if (statesSram.saveContext.action_postponed.cycles == 0){
+		std::string msg = statesSram.saveState();
+		statesSram.saveContext.action_postponed.action = SAVE_NONE;
+		statesSram.saveContext.action_postponed.cycles = -1;
+
+		if (!msg.empty())
+			showSystemMessage(msg, 3000);
+	}
+
+	//Second, check if there is some save message from the thread
+	if (!statesSram.saveContext.g_saveQueue.toastMessage.empty()){
+		SDL_mutexP(statesSram.saveContext.g_saveQueue.saveMutex);
+		showSystemMessage(statesSram.saveContext.g_saveQueue.toastMessage, 3000);
+		statesSram.saveContext.g_saveQueue.toastMessage = "";
+		SDL_mutexV(statesSram.saveContext.g_saveQueue.saveMutex);
+	}
+
+	//Thirdly, check if there is an screenshot saved
+	if (statesSram.saveContext.g_saveQueue.screenshotSaved){
+		configMenus->poblarPartidasGuardadas(getCfgLoader(), romPaths.rompath);
+		statesSram.saveContext.g_saveQueue.screenshotSaved = false;
+	}
+	
+	//Finaly, show a savestate progress message
+	showProgressMessage(statesSram.saveContext.g_saveQueue.savingMessage, statesSram.saveContext.g_saveQueue.savingProgress, 3000);
+
 	// Procesamos hotkeys
 	processHotkeys(hotkey);
 }
@@ -1646,6 +1675,8 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	std::string msgShader;
 	ConfigEmu *emu = getCfgLoader()->getCfgEmu();
 	static int lastSync = *current_sync;
+
+	std::string msg;
 
 	switch (hotkey){
 		case HK_RATIO:
@@ -1816,6 +1847,48 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			} else {
 				showLangSystemMessage("msg.fastfoward.hardcore", 3000);
 			}
+			break;
+
+		case HK_SAVESTATE:
+			#ifdef NO_SAVEGAMES
+				showLangSystemMessage("msg.filesave.forbidden", 3000);
+			#else
+				SDL_mutexP(statesSram.saveContext.g_saveQueue.saveMutex);
+				if (statesSram.saveContext.g_saveQueue.action == SAVE_STATE){
+					LOG_ERROR("Savestate pending. Aborting new savestate...");
+					SDL_mutexV(statesSram.saveContext.g_saveQueue.saveMutex);
+					break;
+				}
+				SDL_mutexV(statesSram.saveContext.g_saveQueue.saveMutex);
+
+				statesSram.saveContext.action_postponed.cycles = 1;
+				statesSram.saveContext.action_postponed.action = SAVE_STATE;
+			#endif
+			break;
+
+		case HK_LOADSTATE:
+			// loadState debe ejecutarse en el hilo principal		
+			#ifdef NO_SAVEGAMES
+				showLangSystemMessage("msg.filesave.forbidden", 3000);
+			#else
+				msg = statesSram.loadState();
+				if (!msg.empty())
+					showSystemMessage(msg, 3000);
+			#endif
+			break;
+
+		case HK_MAX:
+			// No hacemos nada para el valor limite
+			break;
+
+		case HK_SLOT_UP:
+			statesSram.saveContext.g_currentSlot = (statesSram.saveContext.g_currentSlot + 1) % MAX_SAVESTATES;
+			showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(statesSram.saveContext.g_currentSlot), 2000);
+			break;
+
+		case HK_SLOT_DOWN:
+			statesSram.saveContext.g_currentSlot = (statesSram.saveContext.g_currentSlot - 1 < 0) ? MAX_SAVESTATES - 1 : statesSram.saveContext.g_currentSlot - 1;
+			showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(statesSram.saveContext.g_currentSlot), 2000);
 			break;
 	}
 }
@@ -2063,6 +2136,44 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     }
 }
 
+void GameMenu::showProgressMessage(std::string text, float progress, uint32_t duration){
+	static std::string lastText;
+	static SDL_Rect rectBadge = {0, 0, 0, 0};
+	static SDL_Surface *srfMsg = NULL;
+	static SDL_Surface *surfaceToScreen = NULL;
+
+	
+	if (text.empty() && !lastText.empty()){
+		clearOverlayRect(rectBadge); 
+		rectBadge.y = 0;
+		lastText = text;
+	} else if (!text.empty()){
+		if (text != lastText){
+			if (srfMsg != NULL) SDL_FreeSurface(srfMsg);
+			if (surfaceToScreen != NULL) SDL_FreeSurface(surfaceToScreen);
+
+			srfMsg = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTBIG), text.c_str(), Constant::colors[clWhite].sdlColor);
+			surfaceToScreen = SDL_CreateRGBSurface(SDL_SWSURFACE, srfMsg->w, srfMsg->h, 
+																overlay->format->BitsPerPixel,
+																overlay->format->Rmask, 
+																overlay->format->Gmask, 
+																overlay->format->Bmask, 
+																overlay->format->Amask);
+			SDL_SetAlpha(surfaceToScreen, SDL_RLEACCEL, 0xFF);
+			rectBadge.y = this->overlay->h - srfMsg->h - MSG_GAP_Y;
+		}
+
+		if (srfMsg != NULL && surfaceToScreen != NULL){
+			SDL_Rect rectProgress = {0, 0, (Uint16)(srfMsg->w * progress), srfMsg->h};
+			SDL_FillRect(surfaceToScreen, NULL, Constant::colors[clBlack].color);
+			SDL_FillRect(surfaceToScreen, &rectProgress, Constant::colors[clBkgMenuDarker].color);
+			SDL_BlitSurface(srfMsg, NULL, surfaceToScreen, NULL);
+			SDL_BlitSurface(surfaceToScreen, NULL, overlay, &rectBadge);
+		}
+		lastText = text;
+	}
+}
+
 void GameMenu::renderTrackers() {
     Achievements* ach = Achievements::instance();
     if (ach->trackers.empty()) return;
@@ -2296,7 +2407,7 @@ void GameMenu::processMessages() {
     if (messages.empty()) return;
 
     // 3. CALCULO DE POSICIONES Y DIBUJO
-    static int line_height = face_h_big + 4;
+    static int line_height = face_h_big + MSG_GAP_Y;
     int currentY = this->overlay->h - line_height;
 
     // Usamos referencia directa en el bucle para mayor seguridad que el puntero mData

@@ -364,9 +364,6 @@
     <ClInclude Include="src\dischelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\statesram.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\salvia.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -405,6 +402,9 @@
     </ClInclude>
     <ClInclude Include="libs\rcheevos\include\rc_consoles.h">
       <Filter>Source Files\retroachievements</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\statesram.h">
+      <Filter>Source Files\io</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

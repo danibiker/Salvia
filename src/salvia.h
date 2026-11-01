@@ -21,10 +21,6 @@
 #include <io/cfgloader.h>
 #include <io/dirutil.h>
 #include <io/progress_bar.h>
-#include <io/statesram.h>
-#include <io/inputsmenu.h>
-#include <io/inputscore.h>
-#include <io/dischelper.h>
 #include <so/launcher.h>
 #include <so/soutils.h>
 
@@ -37,6 +33,10 @@ ListMenu *listMenu;
 Logger *logger;
 dirutil dir;
 TileMap tileMap(9, 0, 16, 16);
+
+#include <io/inputsmenu.h>
+#include <io/inputscore.h>
+#include <io/dischelper.h>
 
 /* ---------- Memory map descriptors from the core ----------
  * Capturados cuando el core llama RETRO_ENVIRONMENT_SET_MEMORY_MAPS.
