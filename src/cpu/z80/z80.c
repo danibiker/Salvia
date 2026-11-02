@@ -3487,6 +3487,7 @@ if( _BC > 1 && _PCD < 0xfffc ) {									\
 		if( op3==0x20 && op4==0xfb )								\
 		{															\
 			int cnt =												\
+				cc[Z80_TABLE_op][0x0b] +							\
 				cc[Z80_TABLE_op][0x78] +							\
 				cc[Z80_TABLE_op][0xb1] +							\
 				cc[Z80_TABLE_op][0x20] +							\
@@ -3505,6 +3506,7 @@ if( _BC > 1 && _PCD < 0xfffc ) {									\
 			if( (ad1 + 256 * ad2) == (_PCD - 1) )					\
 			{														\
 				int cnt =											\
+					cc[Z80_TABLE_op][0x0b] +						\
 					cc[Z80_TABLE_op][0x78] +						\
 					cc[Z80_TABLE_op][0xb1] +						\
 					cc[Z80_TABLE_op][0xc2] +						\
@@ -3530,6 +3532,7 @@ if( _DE > 1 && _PCD < 0xfffc ) {									\
 		if( op3==0x20 && op4==0xfb )								\
 		{															\
 			int cnt =												\
+				cc[Z80_TABLE_op][0x1b] +							\
 				cc[Z80_TABLE_op][0x7a] +							\
 				cc[Z80_TABLE_op][0xb3] +							\
 				cc[Z80_TABLE_op][0x20] +							\
@@ -3548,6 +3551,7 @@ if( _DE > 1 && _PCD < 0xfffc ) {									\
 			if( (ad1 + 256 * ad2) == (_PCD - 1) )					\
 			{														\
 				int cnt =											\
+					cc[Z80_TABLE_op][0x1b] +						\
 					cc[Z80_TABLE_op][0x7a] +						\
 					cc[Z80_TABLE_op][0xb3] +						\
 					cc[Z80_TABLE_op][0xc2] +						\
@@ -3573,6 +3577,7 @@ if( _HL > 1 && _PCD < 0xfffc ) {									\
 		if( op3==0x20 && op4==0xfb )								\
 		{															\
 			int cnt =												\
+				cc[Z80_TABLE_op][0x2b] +							\
 				cc[Z80_TABLE_op][0x7c] +							\
 				cc[Z80_TABLE_op][0xb5] +							\
 				cc[Z80_TABLE_op][0x20] +							\
@@ -3591,6 +3596,7 @@ if( _HL > 1 && _PCD < 0xfffc ) {									\
 			if( (ad1 + 256 * ad2) == (_PCD - 1) )					\
 			{														\
 				int cnt =											\
+					cc[Z80_TABLE_op][0x2b] +						\
 					cc[Z80_TABLE_op][0x7c] +						\
 					cc[Z80_TABLE_op][0xb5] +						\
 					cc[Z80_TABLE_op][0xc2] +						\
@@ -4117,6 +4123,8 @@ void z80_init(void)
 	state_save_register_UINT8("z80", cpu, "int_state", Z80.int_state, 4);
 	state_save_register_UINT8("z80", cpu, "nmi_state", &Z80.nmi_state, 1);
 	state_save_register_UINT8("z80", cpu, "irq_state", &Z80.irq_state, 1);
+	/* the cycles of an interrupt taken outside of z80_execute, counted at the next one */
+	state_save_register_INT32("z80", cpu, "extra_cycles", (INT32 *)&Z80.extra_cycles, 1);
 	/* daisy chain needs to be saved by z80ctc.c somehow */
 }
 

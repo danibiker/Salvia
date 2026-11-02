@@ -21,21 +21,6 @@
 	- Sonic while globally flipped via the service menu, fails to flip
 	  the "SEGA" and "SEGASONIC" sprite based logos on the title screen.
 
-	- titlef NBG0 and NBG2 layers are currently hidden during gameplay.
-	  It sets $31ff02 with either $7be0 and $2960 (and $31ff8e is $c00).
-	  Game actually uses the "rowscroll/rowselect" tables for a line window
-	  effect to draw the boxing ring over NBG0.
-	  Same deal for ga2 when in stage 2 cave a wall torch is lit.
-
-	- Wrong priority cases (parenthesis for the level setup):
-	  dbzvrvs: draws text layer ($e) behind sprite-based gauges ($f).
-	  dbzvrvs: Sheng-Long speech balloon during Piccoro ending (fixme: check levels).
-	  f1lap: attract mode ranking sprite-based text ($a) vs. road ($d)
-	  f1lap: attract mode map display (after aforementioned), sprite-based turn names
-	  ($a) are hidden by map ($d) again;
-	  (Note: Theory about these being CPU core bug(s) is debunked by the fact that latter
-	   sets up via immediate opcodes)
-
 	- Tilemap opaque behaviour is incorrect
 
     Information extracted from below, and from Modeler:
@@ -87,6 +72,8 @@
                  -------- ------d-  Disable tilemap layer 1
                  -------- -------d  Disable tilemap layer 0
         F04      tttttttt --------  Rowscroll/select table page number
+                 -------- --l-----  Enable per-line clipping window 3 (overrides rowscroll/select table)
+                 -------- ---l----  Enable per-line clipping window 2 (overrides rowscroll/select table)
                  -------- ----s---  Enable rowselect for tilemap layer 3
                  -------- -----s--  Enable rowselect for tilemap layer 2
                  -------- ------c-  Enable rowscroll for tilemap layer 3
@@ -245,7 +232,7 @@ struct layer_info
 struct extents_list
 {
 	UINT8					scan_extent[256];
-	UINT16					extent[32][16];
+	UINT16					extent[256][16];
 };
 
 
@@ -297,7 +284,7 @@ static int32_t *prev_bgendx;
 static int32_t *bgcolor_line;
 
 /* sprite data */
-static UINT8 sprite_render_count;
+static UINT8 sprite_render_count = 0;
 static UINT8 sprite_control_latched[8];
 static UINT8 sprite_control[8];
 static UINT32 *spriteram_32bit;
@@ -595,7 +582,7 @@ WRITE16_HANDLER( system32_videoram_w )
 		int page = offset >> 9;
 		offset &= 0x1ff;
 
-		/* scan the cache for a matching pages */
+		/* scan the cache for a matching page */
 		for (entry = cache_head; entry != NULL; entry = entry->next)
 			if (entry->page == page)
 				tilemap_mark_tile_dirty(entry->tmap, offset);
@@ -871,12 +858,14 @@ static void get_tile_info(int tile_index)
 static bool compute_clipping_extents(bool enable, bool clipout, int clipmask, const struct rectangle *cliprect, struct extents_list *list)
 {
 	bool flip = BIT(system32_videoram[0x1ff00 / 2], 9);
+	bool perlineclip2 = BIT(system32_videoram[0x1ff04 / 2], 4);
+	bool perlineclip3 = BIT(system32_videoram[0x1ff04 / 2], 5);
 	struct rectangle tempclip;
 	struct rectangle clips[5];
 	int sorted[5];
 	int i, j, y;
 
-	/* expand our cliprect to exclude the bottom-right */
+	/* expand our cliprect to include the bottom-right */
 	tempclip = *cliprect;
 	tempclip.max_x++;
 	tempclip.max_y++;
@@ -892,7 +881,7 @@ static bool compute_clipping_extents(bool enable, bool clipout, int clipmask, co
 		return 1;
 	}
 
-	/* extract the from videoram into locals, and apply the cliprect */
+	/* extract the clips from videoram into locals, and apply the cliprect */
 	for (i = 0; i < 5; i++)
 	{
 		if (!flip)
@@ -913,10 +902,19 @@ static bool compute_clipping_extents(bool enable, bool clipout, int clipmask, co
 		sorted[i] = i;
 	}
 
-	/* bubble sort them by min_x */
-	for (i = 0; i < 5; i++)
-		for (j = i + 1; j < 5; j++)
-			if (clips[sorted[i]].min_x > clips[sorted[j]].min_x) { int temp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = temp; }
+	/* insertion sort them by min_x */
+	for (i = 1; i < 5; i++)
+	{
+		int j = i - 1;
+		int key = sorted[i];
+
+		while (j >= 0 && clips[sorted[j]].min_x > clips[key].min_x)
+		{
+			sorted[j + 1] = sorted[j];
+			j--;
+		}
+		sorted[j + 1] = key;
+	}
 
 	/* create all valid extent combinations */
 	for (i = 1; i < 32; i++)
@@ -964,7 +962,136 @@ static bool compute_clipping_extents(bool enable, bool clipout, int clipmask, co
 		for (i = 0; i < 5; i++)
 			if ((BIT(clipmask, i)) && y >= clips[i].min_y && y < clips[i].max_y)
 				sect |= 1 << i;
-		list->scan_extent[y] = sect;
+
+		/*
+		 * $1FF04 bits 4/5 enable per-line clip windows.
+		 *
+		 * clip 2:
+		 *   +000 = min X
+		 *   +200 = max X
+		 *
+		 * clip 3:
+		 *   +100 = min X
+		 *   +300 = max X
+		 */
+		if (perlineclip2 || perlineclip3)
+		{
+			struct rectangle lineclips[5];
+			int linesorted[5];
+			int line = flip ? (cliprect->max_y - y) : y;
+			UINT16 *table = &system32_videoram[(system32_videoram[0x1ff04/2] >> 10) * 0x400];
+
+			for (i = 0; i < 5; i++)
+			{
+				lineclips[i] = clips[i];
+				linesorted[i] = i;
+			}
+
+			/* clip window 2 */
+			if (perlineclip2 && BIT(clipmask, 2))
+			{
+				UINT16 minx = table[0x000 + line];
+				UINT16 maxx = table[0x200 + line];
+
+				if (minx == 0xffff || maxx == 0xffff)
+				{
+					sect &= ~(1 << 2);
+				}
+				else if (!flip)
+				{
+					lineclips[2].min_x = minx & 0x1ff;
+					lineclips[2].max_x = (maxx & 0x1ff) + 1;
+				}
+				else
+				{
+					lineclips[2].min_x = tempclip.max_x - ((maxx & 0x1ff) + 1);
+					lineclips[2].max_x = tempclip.max_x - (minx & 0x1ff);
+				}
+
+				sect_rect(&lineclips[2], &tempclip);
+
+				if (lineclips[2].min_x >= lineclips[2].max_x)
+					sect &= ~(1 << 2);
+			}
+
+			/* clip window 3 */
+			if (perlineclip3 && BIT(clipmask, 3))
+			{
+				UINT16 minx = table[0x100 + line];
+				UINT16 maxx = table[0x300 + line];
+
+				if (minx == 0xffff || maxx == 0xffff)
+				{
+					sect &= ~(1 << 3);
+				}
+				else if (!flip)
+				{
+					lineclips[3].min_x = minx & 0x1ff;
+					lineclips[3].max_x = (maxx & 0x1ff) + 1;
+				}
+				else
+				{
+					lineclips[3].min_x = tempclip.max_x - ((maxx & 0x1ff) + 1);
+					lineclips[3].max_x = tempclip.max_x - (minx & 0x1ff);
+				}
+
+				sect_rect(&lineclips[3], &tempclip);
+
+				if (lineclips[3].min_x >= lineclips[3].max_x)
+					sect &= ~(1 << 3);
+			}
+
+			/*
+			 * Build the extent for this individual scanline.
+			 * 0-31 remain the normal combinations.
+			 * 32+y is the per-line extent.
+			 */
+			{
+				UINT16 *extent = &list->extent[32 + y][0];
+
+				for (i = 1; i < 5; i++)
+				{
+					int j = i - 1;
+					int key = linesorted[i];
+
+					while (j >= 0 && lineclips[linesorted[j]].min_x > lineclips[key].min_x)
+					{
+						linesorted[j + 1] = linesorted[j];
+						j--;
+					}
+					linesorted[j + 1] = key;
+				}
+
+				*extent++ = tempclip.min_x;
+
+				for (j = 0; j < 5; j++)
+				{
+					if (BIT(sect, linesorted[j]))
+					{
+						const struct rectangle *cur = &lineclips[linesorted[j]];
+
+						if (extent != &list->extent[32 + y][1] && cur->min_x <= extent[-1])
+						{
+							if (cur->max_x > extent[-1])
+								extent[-1] = cur->max_x;
+						}
+						else
+						{
+							*extent++ = cur->min_x;
+							*extent++ = cur->max_x;
+						}
+					}
+				}
+
+				*extent++ = tempclip.max_x;
+			}
+
+			list->scan_extent[y] = 32 + y;
+		}
+		else
+		{
+			list->scan_extent[y] = sect;
+		}
 	}
 
 	return clipout;
@@ -1011,28 +1138,6 @@ static INLINE void get_tilemaps(int bgnum, struct tilemap **tilemaps)
 }
 
 
-static bool patch_enable(bool in, int bgnum)
-{
-	if (!titlef_kludge) return in;
-
-	switch (system32_videoram[0x1ff02/2])
-	{
-		case 0x7be0:
-		case 0x52a0:
-		case 0x2960:
-			return false;
-
-		case 0x5be0:
-			return (bgnum%2 == 0) ? in : false;
-
-		case 0x3be0:
-			return (bgnum%2 == 1) ? in : false;
-
-		default: return in;
-	}
-}
-
-
 static void update_tilemap_zoom(struct layer_info *layer, const struct rectangle *cliprect, int bgnum)
 {
 	bool clipenable, clipout, clipdraw_start;
@@ -1051,16 +1156,13 @@ static void update_tilemap_zoom(struct layer_info *layer, const struct rectangle
 	get_tilemaps(bgnum, tilemaps);
 
 	/* configure the layer */
-	opaque = (opaquey_hack) ? ((system32_videoram[0x1ff8e/2] >> (8 + bgnum)) & 1) : 0;
-//opaque = (system32_videoram[0x1ff8e/2] >> (8 + bgnum)) & 1;
-//if (code_pressed(KEYCODE_Z) && bgnum == 0) opaque = 1;
-//if (code_pressed(KEYCODE_X) && bgnum == 1) opaque = 1;
+	opaque = (opaquey_hack) ? BIT(system32_videoram[0x1ff8e/2], (8 + bgnum)) : 0;
 
 	/* determine flipping */
 	compute_tilemap_flips(bgnum, &flipx, &flipy);
 
 	/* determine the clipping */
-	clipenable = patch_enable(BIT(system32_videoram[0x1ff02/2], (11 + bgnum)), bgnum);
+	clipenable = BIT(system32_videoram[0x1ff02/2], (11 + bgnum));
 	clipout = BIT(system32_videoram[0x1ff02/2], (6 + bgnum));
 	clips = (system32_videoram[0x1ff06/2] >> (4 * bgnum)) & 0x0f;
 	clipdraw_start = compute_clipping_extents(clipenable, clipout, clips, cliprect, &clip_extents);
@@ -1148,6 +1250,8 @@ static void update_tilemap_zoom(struct layer_info *layer, const struct rectangle
 						srcx += srcxstep;
 						if ((pix & 0x0f) == 0 && !opaque)
 							pix = 0, transparent++;
+						else if ((pix & 0x0f) == 0 && titlef_kludge)
+							pix |= 0x2000;
 						dst[x] = pix;
 					}
 				}
@@ -1216,16 +1320,13 @@ static void update_tilemap_rowscroll(struct layer_info *layer, const struct rect
 	get_tilemaps(bgnum, tilemaps);
 
 	/* configure the layer */
-	opaque = (opaquey_hack) ? ((system32_videoram[0x1ff8e/2] >> (8 + bgnum)) & 1) : 0;
-//opaque = (system32_videoram[0x1ff8e/2] >> (8 + bgnum)) & 1;
-//if (code_pressed(KEYCODE_C) && bgnum == 2) opaque = 1;
-//if (code_pressed(KEYCODE_V) && bgnum == 3) opaque = 1;
+	opaque = (opaquey_hack) ? BIT(system32_videoram[0x1ff8e/2], (8 + bgnum)) : 0;
 
 	/* determine flipping */
 	compute_tilemap_flips(bgnum, &flipx, &flipy);
 
 	/* determine the clipping */
-	clipenable = patch_enable(BIT(system32_videoram[0x1ff02/2], (11 + bgnum)), bgnum);
+	clipenable = BIT(system32_videoram[0x1ff02/2], (11 + bgnum));
 	clipout = BIT(system32_videoram[0x1ff02/2], (6 + bgnum));
 	clips = (system32_videoram[0x1ff06/2] >> (4 * bgnum)) & 0x0f;
 	clipdraw_start = compute_clipping_extents(clipenable, clipout, clips, cliprect, &clip_extents);
@@ -1307,6 +1408,8 @@ static void update_tilemap_rowscroll(struct layer_info *layer, const struct rect
 						UINT16 pix = src[(srcx >> 9) & 1][srcx & 0x1ff];
 						if ((pix & 0x0f) == 0 && !opaque)
 							pix = 0, transparent++;
+						else if ((pix & 0x0f) == 0 && titlef_kludge)
+							pix |= 0x2000;
 						dst[x] = pix;
 					}
 				}
@@ -1619,11 +1722,14 @@ static void update_bitmap(struct layer_info *layer, const struct rectangle *clip
 static void update_background(struct layer_info *layer, const struct rectangle *cliprect)
 {
 	struct mame_bitmap *bitmap = layer->bitmap;
-	int x, y;
+	int y;
+
+	/* determine if we're flipped */
+	bool flip = BIT(system32_videoram[0x1ff00 / 2], 9);
 
 	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 	{
-		UINT16 *dst = (UINT16 *)bitmap->line[y];
+		UINT16 *dst = (UINT16 *)bitmap->line[flip ? (cliprect->max_y - y) : y];
 		int color;
 
 		/* determine the color */
@@ -1660,16 +1766,6 @@ static UINT8 update_tilemaps(const struct rectangle *cliprect)
 	int enablet = !BIT(system32_videoram[0x1ff02/2], 4) && !BIT(system32_videoram[0x1ff8e/2], 0);
 	int enableb = !BIT(system32_videoram[0x1ff02/2], 5) && !BIT(system32_videoram[0x1ff8e/2], 5);
 
-	if (titlef_kludge) /* patch ending credits */
-	{
-		UINT16 *src1 = (UINT16 *)layer_data[MIXER_LAYER_NBG0].bitmap->line[0];
-		UINT16 *src2 = (UINT16 *)layer_data[MIXER_LAYER_NBG1].bitmap->line[0];
-		if (src1[0]==0x1902 && src1[8]==0x1901 && src1[16]==0x1902 && src1[24]==0x1901)
-			enable2 = 0;
-		if (src2[0]==0x1902 && src2[8]==0x1901 && src2[16]==0x1902 && src2[24]==0x1901)
-			enable3 = 0;
-	}
-
 	/* update any tilemaps */
 	if (enable0)
 		update_tilemap_zoom(&layer_data[MIXER_LAYER_NBG0], cliprect, 0);
@@ -1683,8 +1779,7 @@ static UINT8 update_tilemaps(const struct rectangle *cliprect)
 		update_tilemap_text(&layer_data[MIXER_LAYER_TEXT], cliprect);
 	if (enableb)
 		update_bitmap(&layer_data[MIXER_LAYER_BITMAP], cliprect);
-	if (!titlef_kludge)
-		update_background(&layer_data[MIXER_LAYER_BACKGROUND], cliprect);
+	update_background(&layer_data[MIXER_LAYER_BACKGROUND], cliprect);
 
 	return (enablet << 0) | (enable0 << 1) | (enable1 << 2) | (enable2 << 3) | (enable3 << 4) | (enableb << 5);
 }
@@ -1862,7 +1957,7 @@ static int draw_one_sprite(UINT16 *data, int xoffs, int yoffs, const struct rect
 	int ypos      = SEXT(data[4], 12);
 	int xpos      = SEXT(data[5], 12);
 	UINT32 addr   = data[6] | ((data[2] & 0xf000) << 4);
-	int color     = 0x8000 | (data[7] & (bpp8 ? 0x7f00 : 0x7ff0));
+	int color     = data[7] & (bpp8 ? 0x7f00 : 0x7ff0);
 	int hzoom, vzoom;
 	int xdelta = 1, ydelta = 1;
 	int x, y, xtarget, ytarget, yacc = 0, pix, transmask;
@@ -1873,6 +1968,12 @@ static int draw_one_sprite(UINT16 *data, int xoffs, int yoffs, const struct rect
 	/* if hidden, or top greater than/equal to bottom, or invalid bank, punt */
 	if (srcw == 0 || srch == 0 || dstw == 0 || dsth == 0)
 		goto bail;
+
+	/* sprite group modes 0-3 take the top group bit from palette bit 15, the other modes use pixel bit 15 for shadows */
+	if ((mixer_control[(is_multi32 && BIT(data[3], 11)) ? 1 : 0][0x4c/2] & 0x0c) == 0)
+		color |= data[7] & 0x8000;
+	else
+		color |= 0x8000;
 
 	/* determine the transparency mask for pixels */
 	transmask = transparency_masks[sprite_control_latched[0x08/2] & 3][sprite_control_latched[0x0a/2] & 3];
@@ -1977,7 +2078,7 @@ static int draw_one_sprite(UINT16 *data, int xoffs, int yoffs, const struct rect
 					UINT32 pixels = spritedata[++curaddr & addrmask];
 
 					/* draw four pixels */
-					pix = (pixels >> 28) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp)  x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+					pix = (pixels >> 28) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
 					pix = (pixels >> 24) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
 					pix = (pixels >> 20) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
 					pix = (pixels >> 16) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
@@ -2174,7 +2275,7 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 		UINT8		coloroffs;			/* color offset index */
 	} layerorder[16][8], layersort[8];
 	struct layer_info temp_sprite_save = { 0 };
-	UINT8 sprgroup_shift, sprgroup_mask, sprgroup_or;
+	UINT8 sprgroup_shift, sprgroup_mask;
 	int numlayers, laynum, groupnum;
 	int rgboffs[3][3];
 	int sprpixmask, sprshadowmask;
@@ -2205,25 +2306,25 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 	switch (mixer_control[which][0x4c/2] & 0x0f)
 	{
 		default:
-		case 0x0:	sprgroup_shift = 14;	sprgroup_mask = 0x00;	sprgroup_or = 0x01;	break;
-		case 0x1:	sprgroup_shift = 14;	sprgroup_mask = 0x01;	sprgroup_or = 0x02;	break;
-		case 0x2:	sprgroup_shift = 13;	sprgroup_mask = 0x03;	sprgroup_or = 0x04;	break;
-		case 0x3:	sprgroup_shift = 12;	sprgroup_mask = 0x07;	sprgroup_or = 0x08;	break;
+		case 0x0:	sprgroup_shift = 15;	sprgroup_mask = 0x01;	break;
+		case 0x1:	sprgroup_shift = 14;	sprgroup_mask = 0x03;	break;
+		case 0x2:	sprgroup_shift = 13;	sprgroup_mask = 0x07;	break;
+		case 0x3:	sprgroup_shift = 12;	sprgroup_mask = 0x0f;	break;
 
-		case 0x4:	sprgroup_shift = 14;	sprgroup_mask = 0x01;	sprgroup_or = 0x00;	break;
-		case 0x5:	sprgroup_shift = 13;	sprgroup_mask = 0x03;	sprgroup_or = 0x00;	break;
-		case 0x6:	sprgroup_shift = 12;	sprgroup_mask = 0x07;	sprgroup_or = 0x00;	break;
-		case 0x7:	sprgroup_shift = 11;	sprgroup_mask = 0x0f;	sprgroup_or = 0x00;	break;
+		case 0x4:	sprgroup_shift = 14;	sprgroup_mask = 0x01;	break;
+		case 0x5:	sprgroup_shift = 13;	sprgroup_mask = 0x03;	break;
+		case 0x6:	sprgroup_shift = 12;	sprgroup_mask = 0x07;	break;
+		case 0x7:	sprgroup_shift = 11;	sprgroup_mask = 0x0f;	break;
 
-		case 0x8:	sprgroup_shift = 14;	sprgroup_mask = 0x01;	sprgroup_or = 0x00;	break;
-		case 0x9:	sprgroup_shift = 13;	sprgroup_mask = 0x03;	sprgroup_or = 0x00;	break;
-		case 0xa:	sprgroup_shift = 12;	sprgroup_mask = 0x07;	sprgroup_or = 0x00;	break;
-		case 0xb:	sprgroup_shift = 11;	sprgroup_mask = 0x0f;	sprgroup_or = 0x00;	break;
+		case 0x8:	sprgroup_shift = 14;	sprgroup_mask = 0x01;	break;
+		case 0x9:	sprgroup_shift = 13;	sprgroup_mask = 0x03;	break;
+		case 0xa:	sprgroup_shift = 12;	sprgroup_mask = 0x07;	break;
+		case 0xb:	sprgroup_shift = 11;	sprgroup_mask = 0x0f;	break;
 
-		case 0xc:	sprgroup_shift = 13;	sprgroup_mask = 0x01;	sprgroup_or = 0x00;	break;
-		case 0xd:	sprgroup_shift = 12;	sprgroup_mask = 0x03;	sprgroup_or = 0x00;	break;
-		case 0xe:	sprgroup_shift = 11;	sprgroup_mask = 0x07;	sprgroup_or = 0x00;	break;
-		case 0xf:	sprgroup_shift = 10;	sprgroup_mask = 0x0f;	sprgroup_or = 0x00;	break;
+		case 0xc:	sprgroup_shift = 13;	sprgroup_mask = 0x01;	break;
+		case 0xd:	sprgroup_shift = 12;	sprgroup_mask = 0x03;	break;
+		case 0xe:	sprgroup_shift = 11;	sprgroup_mask = 0x07;	break;
+		case 0xf:	sprgroup_shift = 10;	sprgroup_mask = 0x0f;	break;
 	}
 	sprshadowmask = (mixer_control[which][0x4c/2] & 0x04) ? 0x8000 : 0x0000;
 	sprpixmask = ((1 << sprgroup_shift) - 1) & 0x3fff;
@@ -2270,8 +2371,7 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 	/* for each possible sprite group, insert the sprites into the list at the appropriate point */
 	for (groupnum = 0; groupnum <= sprgroup_mask; groupnum++)
 	{
-		int effgroup = sprgroup_or | groupnum;
-		int priority = mixer_control[which][0x00/2 + effgroup] & 0x0f;
+		int priority = mixer_control[which][0x00/2 + groupnum] & 0x0f;
 		int effpri = (priority << 3) | 7;
 		int sprindex = numlayers;
 		int dstnum = 0;
@@ -2288,10 +2388,10 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 		layerorder[groupnum][sprindex].index = MIXER_LAYER_SPRITES;
 		layerorder[groupnum][sprindex].effpri = effpri;
 		if ((mixer_control[which][0x4c/2] & 3) != 3)
-			layerorder[groupnum][sprindex].palbase = (mixer_control[which][0x00/2 + effgroup] & 0x00f0) << 6;
+			layerorder[groupnum][sprindex].palbase = (mixer_control[which][0x00/2 + groupnum] & 0x00f0) << 6;
 		else
 			layerorder[groupnum][sprindex].palbase = (mixer_control[which][0x4c/2] & 0x00f0) << 6;
-		layerorder[groupnum][sprindex].mixshift = (mixer_control[which][0x00/2 + effgroup] >> 8) & 3;
+		layerorder[groupnum][sprindex].mixshift = (mixer_control[which][0x00/2 + groupnum] >> 8) & 3;
 		layerorder[groupnum][sprindex].blendmask = 0;
 		layerorder[groupnum][sprindex].sprblendmask = 0;
 		layerorder[groupnum][sprindex].coloroffs = compute_color_offsets(which, BIT(mixer_control[which][0x3e/2], 6), BIT(mixer_control[which][0x4c/2], 15));
@@ -2373,6 +2473,8 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 					firstpix = layerbase[laynum][x] & 0x1fff;
 					if (firstpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
 						break;
+					else if ((layerbase[laynum][x] & 0x2000) && titlef_kludge)
+						break;
 				}
 
 				/* sprite layers are special */
@@ -2415,6 +2517,8 @@ static void mix_all_layers(int which, int xoffs, struct mame_bitmap *bitmap, con
 					{
 						secondpix = layerbase[laynum][x] & 0x1fff;
 						if (secondpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
+							break;
+						else if ((layerbase[laynum][x] & 0x2000) && titlef_kludge)
 							break;
 					}
 

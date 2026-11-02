@@ -33,6 +33,7 @@
 
 #include <math.h>
 #include "driver.h"
+#include "state.h"
 
 /*
 Two Q sound drivers:
@@ -109,6 +110,7 @@ static int qsound_stream;				/* Audio stream */
 static struct QSOUND_CHANNEL qsound_channel[QSOUND_CHANNELS];
 static int qsound_data;				  /* register latch data */
 QSOUND_SRC_SAMPLE *qsound_sample_rom;	/* Q sound sample ROM */
+static int qsound_bank_mask;			/* bank register bits that address the ROM */
 
 #if QSOUND_DRIVER1
 static int qsound_pan_table[33];		 /* Pan volume table */
@@ -141,6 +143,9 @@ int qsound_sh_start(const struct MachineSound *msound)
 
 	qsound_sample_rom = (QSOUND_SRC_SAMPLE *)memory_region(intf->region);
 
+	/* 7 bank bits address 8MB; the 16MB sample ROM of CPS2Turbo (sfz3mix) needs the 8th */
+	qsound_bank_mask = (memory_region_length(intf->region) > 0x800000) ? 0xff : 0x7f;
+
 	memset(qsound_channel, 0, sizeof(qsound_channel));
 
 #if QSOUND_DRIVER1
@@ -156,6 +161,28 @@ int qsound_sh_start(const struct MachineSound *msound)
 #else
 	i=0;
 #endif
+
+	/* Save the channels, so a loaded save state keeps its sound */
+	for (i = 0; i < QSOUND_CHANNELS; i++)
+	{
+		state_save_register_int("QSound", i, "bank", &qsound_channel[i].bank);
+		state_save_register_int("QSound", i, "address", &qsound_channel[i].address);
+		state_save_register_int("QSound", i, "pitch", &qsound_channel[i].pitch);
+		state_save_register_int("QSound", i, "reg3", &qsound_channel[i].reg3);
+		state_save_register_int("QSound", i, "loop", &qsound_channel[i].loop);
+		state_save_register_int("QSound", i, "end", &qsound_channel[i].end);
+		state_save_register_int("QSound", i, "vol", &qsound_channel[i].vol);
+		state_save_register_int("QSound", i, "pan", &qsound_channel[i].pan);
+		state_save_register_int("QSound", i, "reg9", &qsound_channel[i].reg9);
+		state_save_register_int("QSound", i, "key", &qsound_channel[i].key);
+#if QSOUND_DRIVER1
+		state_save_register_int("QSound", i, "lvol", &qsound_channel[i].lvol);
+		state_save_register_int("QSound", i, "rvol", &qsound_channel[i].rvol);
+		state_save_register_int("QSound", i, "lastdt", &qsound_channel[i].lastdt);
+		state_save_register_int("QSound", i, "offset", &qsound_channel[i].offset);
+#endif
+	}
+	state_save_register_int("QSound", 0, "data", &qsound_data);
 
 #if LOG_QSOUND
 	log_cb(RETRO_LOG_DEBUG, LOGPRE "Pan table\n");
@@ -266,7 +293,7 @@ void qsound_set_command(int data, int value)
 	{
 		case 0: /* Bank */
 			ch=(ch+1)&0x0f;	/* strange ... */
-			qsound_channel[ch].bank=(value&0x7f)<<16;
+			qsound_channel[ch].bank=(value&qsound_bank_mask)<<16;
 			qsound_channel[ch].bank /= LENGTH_DIV;
 #ifdef MAME_DEBUG
 			if (!value & 0x8000)

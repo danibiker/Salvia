@@ -8,14 +8,26 @@
 
 #include "mame.h"
 #include "driver.h"
+#if (HAS_PSXCPU)
+#include "cpu/mips/psx.h"
+#endif
 #include <libretro.h>
 #include <string/stdstring.h>
+
+int vector_resize_pending;
 
 static struct retro_core_option_v2_definition  default_options[OPT_end + 1];    /* need the plus one for the NULL entries at the end */
 static struct retro_core_option_v2_definition  effective_defaults[OPT_end + 1];
 
 /* prevent saving corrupt cfgs when the save type does not match the type initialized */
 bool save_protection;
+
+/* one CPU clock scale core option per CPU. The labels and sublabels name each CPU of  */
+/* the loaded game (set_cpu_clock_scale_labels). The keys name the romset             */
+/* (APPNAME"_kinst_cpu_clock_scale_2"), so one game's saved values never reach another. */
+static char cpu_clock_scale_keys[CPU_CLOCK_SCALE_SLOTS][64];
+static char cpu_clock_scale_labels[CPU_CLOCK_SCALE_SLOTS][80];
+static char cpu_clock_scale_info[CPU_CLOCK_SCALE_SLOTS][128];
 
 /******************************************************************************
 
@@ -25,6 +37,9 @@ bool save_protection;
 
 static void   set_variables(void);
 static void   determine_core_options_version(struct retro_core_options_v2 *core_options_us);
+static void   format_cpu_clock(char *buf, int hz);
+static void   describe_cpu(char *buf, int cpu);
+static void   set_cpu_clock_scale_labels(void);
 
 
 /******************************************************************************
@@ -239,7 +254,7 @@ static struct retro_core_option_v2_definition option_def_art_resolution = {
    APPNAME"_art_resolution",
    "Artwork Resolution Multiplier",
    "Resolution Multiplier",
-   "Restart core required. Increases the artwork resolution by the selected multiplier value.",
+   "Restart core required. Multiplies the rendered resolution by the selected overscale value.",
    NULL,
    "cat_key_artwork",
    {
@@ -326,6 +341,25 @@ static struct retro_core_option_v2_definition option_def_neogeo_bios = {
    },
    "default"
 };
+
+/* ST-V games that check the BIOS region and only run with one (as MAME's
+   default BIOS for them) */
+static const char *stv_required_bios(const char *name)
+{
+  static const char *const games[][2] = {
+    { "diehard",  "us" },
+    { "smleague", "us" },
+    { "znpwfvt",  "taiwan" },
+    { "znpwfve",  "taiwan" },
+    { "critcrsh", "europe" },
+    { "tatacot",  "japan" },
+  };
+  size_t i;
+  for (i = 0; i < sizeof(games) / sizeof(games[0]); i++)
+    if (strcmp(name, games[i][0]) == 0)
+      return games[i][1];
+  return NULL;
+}
 
 static struct retro_core_option_v2_definition option_def_stv_bios = {
    APPNAME"_stv_bios",
@@ -426,7 +460,7 @@ static struct retro_core_option_v2_definition option_def_vector_resolution = {
    APPNAME"_vector_resolution",
    "Vector Resolution",
    "Resolution",
-   "Restart core required.",
+   "Renders at the selected resolution for greater precision.",
    NULL,
    "cat_key_vector",
    {
@@ -718,11 +752,10 @@ static struct retro_core_option_v2_definition option_def_cpu_clock_scale = {
    APPNAME"_cpu_clock_scale",
    "CPU Clock Scale",
    NULL,
-   "Used to under or over clock the emulated CPU by a specified percentage.",
+   "Used to underclock or overclock the emulated CPU by a specified percentage.",
    NULL,
    NULL,
    {
-      { "default", NULL },
       { "25",     "25%" },
       { "30",     "30%" },
       { "35",     "35%" },
@@ -738,6 +771,7 @@ static struct retro_core_option_v2_definition option_def_cpu_clock_scale = {
       { "85",     "85%" },
       { "90",     "90%" },
       { "95",     "95%" },
+      { "100",   "100%" },
       { "105",   "105%" },
       { "110",   "110%" },
       { "115",   "115%" },
@@ -748,7 +782,99 @@ static struct retro_core_option_v2_definition option_def_cpu_clock_scale = {
       { "300",   "300%" },
       { NULL, NULL },
    },
-   "default"
+   "100"
+};
+
+static struct retro_core_option_v2_definition option_def_mips_dynarec = {
+   APPNAME"_mips_dynarec",
+   "MIPS Dynarec",
+   NULL,
+   "Restart core required. Use the MIPS recompiler where supported; disable to use the interpreter.",
+   NULL,
+   NULL,
+   {
+      { "enabled",  NULL },
+      { "disabled", NULL },
+      { NULL, NULL },
+   },
+   "enabled"
+};
+
+static struct retro_core_option_v2_definition option_def_sh2_dynarec = {
+   APPNAME"_sh2_dynarec",
+   "SH-2 Dynarec",
+   NULL,
+   "Restart core required. Recompile the SH-2 code (offered only for the games that support it, on x86 and ARM hosts, 32 and 64-bit, that allow it); turn it off to use the interpreter.",
+   NULL,
+   NULL,
+   {
+      { "enabled",  NULL },
+      { "disabled", NULL },
+      { NULL, NULL },
+   },
+   "disabled"
+};
+
+static struct retro_core_option_v2_definition option_def_stv_video_threads = {
+   APPNAME"_stv_video_threads",
+   "ST-V Threaded Video",
+   NULL,
+   "Draw the ST-V screen in horizontal bands on several threads (same picture, faster on multi-core hosts).",
+   NULL,
+   NULL,
+   {
+      { "disabled", NULL },
+      { "2",        NULL },
+      { "3",        NULL },
+      { "4",        NULL },
+      { NULL, NULL },
+   },
+   "disabled"
+};
+
+static struct retro_core_option_v2_definition option_def_adsp_dynarec = {
+   APPNAME"_adsp_dynarec",
+   "ADSP Dynarec",
+   NULL,
+   "Restart core required. Recompile the sound DSP (ADSP-2100 family) code (offered only for the games that support it, on x86 and ARM hosts, 32 and 64-bit, that allow it); turn it off to use the interpreter.",
+   NULL,
+   NULL,
+   {
+      { "enabled",  NULL },
+      { "disabled", NULL },
+      { NULL, NULL },
+   },
+   "enabled"
+};
+
+static struct retro_core_option_v2_definition option_def_sh3_dynarec = {
+   APPNAME"_sh3_dynarec",
+   "SH-3 Dynarec",
+   NULL,
+   "Restart core required. Recompile the SH-3 code of the Cave CV1000 games (on x86 and ARM hosts, 32 and 64-bit, that allow it), with the same results as the interpreter; turn it off to use the interpreter.",
+   NULL,
+   NULL,
+   {
+      { "enabled",  NULL },
+      { "disabled", NULL },
+      { NULL, NULL },
+   },
+   "enabled"
+};
+
+static struct retro_core_option_v2_definition option_def_tx1_screens = {
+   APPNAME"_tx1_screens",
+   "TX-1 / Buggy Boy Screens",
+   NULL,
+   "Restart core required. The cockpit cabinets of TX-1 and Buggy Boy have three screens: show them side by side, or only the middle one.",
+   NULL,
+   "cat_key_video",
+   {
+      { "3 screens",     NULL },
+      { "middle screen", NULL },
+      { NULL, NULL },
+   },
+   "3 screens"
 };
 
 static struct retro_core_option_v2_definition option_def_cyclone_mode = {
@@ -849,6 +975,8 @@ struct retro_core_options_v2 options_us = {
 
 void init_core_options(void)
 {
+  int cpu;
+
   default_options[OPT_4WAY]                      = option_def_four_way_emulation;
   default_options[OPT_XY_DEVICE]                 = option_def_xy_device;
   default_options[OPT_CROSSHAIR_ENABLED]         = option_def_crosshair_enabled;
@@ -884,7 +1012,19 @@ void init_core_options(void)
   default_options[OPT_AUTOSAVE_HISCORE]          = option_def_autosave_hiscore;
   default_options[OPT_CHEAT_INPUT_PORTS]         = option_def_cheat_input_ports;
   default_options[OPT_DIGITAL_JOY_CENTERING]     = option_def_digital_joy_centering;
-  default_options[OPT_CPU_CLOCK_SCALE]           = option_def_cpu_clock_scale;
+  for(cpu = 0; cpu < CPU_CLOCK_SCALE_SLOTS; cpu++)
+  {
+    default_options[OPT_CPU_CLOCK_SCALE + cpu]      = option_def_cpu_clock_scale;
+    default_options[OPT_CPU_CLOCK_SCALE + cpu].key  = cpu_clock_scale_keys[cpu];
+    default_options[OPT_CPU_CLOCK_SCALE + cpu].desc = cpu_clock_scale_labels[cpu];
+    default_options[OPT_CPU_CLOCK_SCALE + cpu].info = cpu_clock_scale_info[cpu];
+  }
+  default_options[OPT_MIPS_DYNAREC]              = option_def_mips_dynarec;
+  default_options[OPT_ADSP_DYNAREC]              = option_def_adsp_dynarec;
+  default_options[OPT_SH3_DYNAREC]               = option_def_sh3_dynarec;
+  default_options[OPT_TX1_SCREENS]               = option_def_tx1_screens;
+  default_options[OPT_SH2_DYNAREC]               = option_def_sh2_dynarec;
+  default_options[OPT_STV_VIDEO_THREADS]         = option_def_stv_video_threads;
   default_options[OPT_OVERRIDE_AD_STICK]         = option_def_override_ad_stick;
   default_options[OPT_INPUT_TOGGLE]              = option_def_input_toggle;
 #if (HAS_CYCLONE || HAS_DRZ80)
@@ -916,6 +1056,40 @@ static void set_variables(void)
       case OPT_STV_BIOS:
          if(!options.content_flags[CONTENT_STV])
            continue; /* only offer BIOS selection when it is relevant */
+         break;
+      case OPT_CPU_CLOCK_SCALE_2:
+      case OPT_CPU_CLOCK_SCALE_3:
+      case OPT_CPU_CLOCK_SCALE_4:
+      case OPT_CPU_CLOCK_SCALE_5:
+      case OPT_CPU_CLOCK_SCALE_6:
+      case OPT_CPU_CLOCK_SCALE_7:
+      case OPT_CPU_CLOCK_SCALE_8:
+         if(option_index - OPT_CPU_CLOCK_SCALE >= options.content_flags[CONTENT_CPU_COUNT])
+           continue; /* one clock scale option for each CPU the game has */
+         break;
+      case OPT_MIPS_DYNAREC:
+         if(!options.content_flags[CONTENT_MIPS_DYNAREC])
+           continue; /* only offered for the games that use the recompiler */
+         break;
+      case OPT_ADSP_DYNAREC:
+         if(!options.content_flags[CONTENT_ADSP_DYNAREC])
+           continue; /* only offered for the games that use the recompiler */
+         break;
+      case OPT_TX1_SCREENS:
+         if(!options.content_flags[CONTENT_TX1_SCREENS])
+           continue;
+         break;
+      case OPT_SH3_DYNAREC:
+         if(!options.content_flags[CONTENT_SH3_DYNAREC])
+           continue; /* only offered for the games that use the recompiler */
+         break;
+      case OPT_SH2_DYNAREC:
+         if(!options.content_flags[CONTENT_SH2_DYNAREC])
+           continue; /* only offered for the games that use the recompiler */
+         break;
+      case OPT_STV_VIDEO_THREADS:
+         if(!options.content_flags[CONTENT_STV_VIDEO_THREADS])
+           continue; /* ST-V only, where threads are compiled in */
          break;
       case OPT_NEOGEO_BIOS:
           if(!options.content_flags[CONTENT_NEOGEO])
@@ -1090,8 +1264,8 @@ void update_variables(bool first_time)
         case OPT_STV_BIOS:
           if(!options.content_flags[CONTENT_STV])
             break;
-          if(options.content_flags[CONTENT_DIEHARD]) /* catch required bios for this one game. */
-            options.bios = "us";
+          if(stv_required_bios(game_driver->name)) /* a game that only runs with one region's BIOS */
+            options.bios = stv_required_bios(game_driver->name);
           else
             options.bios = (strcmp(var.value, "default") == 0) ? NULL : var.value;
           break;
@@ -1146,12 +1320,22 @@ void update_variables(bool first_time)
 
         case OPT_VECTOR_RESOLUTION:
           {
-            int width = 0;
-            int height = 0;
-            sscanf(var.value, "%dx%d", &width, &height);
-            /* if they are still 0, mame will set from driver resolution set */
-            options.vector_width = width;
-            options.vector_height = height;
+            /* applied when the game starts, and again when it changes: the
+               display is resized while the game runs (retro_run) */
+            static char applied[32];
+            if (first_time || strcmp(applied, var.value) != 0)
+            {
+              int width = 0;
+              int height = 0;
+              sscanf(var.value, "%dx%d", &width, &height);
+              /* if they are still 0, mame will set from driver resolution set */
+              options.vector_width = width;
+              options.vector_height = height;
+              if (!first_time)
+                vector_resize_pending = 1;
+              strncpy(applied, var.value, sizeof(applied) - 1);
+              applied[sizeof(applied) - 1] = 0;
+            }
           }
           break;
 
@@ -1215,11 +1399,54 @@ void update_variables(bool first_time)
           retro_set_audio_buff_status_cb();
           break;
 
-        case OPT_CPU_CLOCK_SCALE:
-          if(strcmp(var.value, "default") == 0)
-            options.cpu_clock_scale = 1;
+        case OPT_MIPS_DYNAREC:
+          if(strcmp(var.value, "enabled") == 0)
+            options.mips_dynarec = true;
           else
-            options.cpu_clock_scale = (double) atoi(var.value) / 100;
+            options.mips_dynarec = false;
+          break;
+
+        case OPT_SH2_DYNAREC:
+          if(strcmp(var.value, "enabled") == 0)
+            options.sh2_dynarec = true;
+          else
+            options.sh2_dynarec = false;
+          break;
+
+        case OPT_STV_VIDEO_THREADS:
+          options.stv_video_threads = atoi(var.value);	/* 0 for "disabled" */
+          break;
+
+        case OPT_ADSP_DYNAREC:
+          if(strcmp(var.value, "enabled") == 0)
+            options.adsp_dynarec = true;
+          else
+            options.adsp_dynarec = false;
+          break;
+
+        case OPT_SH3_DYNAREC:
+          if(strcmp(var.value, "enabled") == 0)
+            options.sh3_dynarec = true;
+          else
+            options.sh3_dynarec = false;
+          break;
+
+        case OPT_TX1_SCREENS:
+          if(strcmp(var.value, "middle screen") == 0)
+            options.tx1_screens = 1;
+          else
+            options.tx1_screens = 3;
+          break;
+
+        case OPT_CPU_CLOCK_SCALE:
+        case OPT_CPU_CLOCK_SCALE_2:
+        case OPT_CPU_CLOCK_SCALE_3:
+        case OPT_CPU_CLOCK_SCALE_4:
+        case OPT_CPU_CLOCK_SCALE_5:
+        case OPT_CPU_CLOCK_SCALE_6:
+        case OPT_CPU_CLOCK_SCALE_7:
+        case OPT_CPU_CLOCK_SCALE_8:
+          options.cpu_clock_scale[index - OPT_CPU_CLOCK_SCALE] = (double) atoi(var.value) / 100;
           break;
 
         case OPT_CORE_SYS_SUBFOLDER:
@@ -1303,6 +1530,59 @@ void update_variables(bool first_time)
 }
 
 
+/* a clock in Hz as "8 MHz", "3.072 MHz" or "756 kHz" */
+static void format_cpu_clock(char *buf, int hz)
+{
+  char *end;
+
+  sprintf(buf, "%.3f", hz >= 1000000 ? hz / 1000000.0 : hz / 1000.0);
+  end = buf + strlen(buf) - 1;
+  while(*end == '0')
+    *end-- = '\0';
+  if(*end == '.')
+    *end = '\0';
+  strcat(buf, hz >= 1000000 ? " MHz" : " kHz");
+}
+
+/* "8 MHz 68010", or "8 MHz 68000, Sound" for a CPU flagged as a sound CPU */
+static void describe_cpu(char *buf, int cpu)
+{
+  const struct MachineCPU *machine_cpu = &Machine->drv->cpu[cpu];
+
+  format_cpu_clock(buf, machine_cpu->cpu_clock);
+  strcat(buf, " ");
+  strcat(buf, cputype_name(machine_cpu->cpu_type));
+  if(machine_cpu->cpu_flags & CPU_AUDIO_CPU)
+    strcat(buf, ", Sound");
+}
+
+static void set_cpu_clock_scale_labels(void)
+{
+  char description[64];
+  int cpu;
+
+  for(cpu = 0; cpu < CPU_CLOCK_SCALE_SLOTS; cpu++)
+  {
+    if(cpu == 0)
+      sprintf(cpu_clock_scale_keys[cpu], APPNAME"_%.16s_cpu_clock_scale", game_driver->name);
+    else
+      sprintf(cpu_clock_scale_keys[cpu], APPNAME"_%.16s_cpu_clock_scale_%d", game_driver->name, cpu + 1);
+  }
+
+  /* the sublabels name no speed: some drivers and CPU cores run a CPU at a multiple of */
+  /* its machine driver clock (the V25 divides it, backfire and deco_mlc multiply it)    */
+  for(cpu = 0; cpu < options.content_flags[CONTENT_CPU_COUNT]; cpu++)
+  {
+    describe_cpu(description, cpu);
+    if(options.content_flags[CONTENT_CPU_COUNT] == 1)
+      sprintf(cpu_clock_scale_labels[cpu], "CPU Clock Scale (%s)", description);
+    else
+      sprintf(cpu_clock_scale_labels[cpu], "CPU %d Clock Scale (%s)", cpu + 1, description);
+    sprintf(cpu_clock_scale_info[cpu], "Under or overclock CPU %d. 100%% is its normal speed.", cpu + 1);
+  }
+}
+
+
 void set_content_flags(void)
 {
   int i = 0;
@@ -1318,6 +1598,62 @@ void set_content_flags(void)
         options.content_flags[CONTENT_ALT_SOUND] = true;
       }
   }
+
+  /************ KILLER INSTINCT, CARNEVIL, SF RUSH: MIPS III RECOMPILER ************/
+  /* only the Killer Instinct driver, CarnEvil and the SF Rush games (Seattle) enable it, */
+  /* and the option means nothing where it is compiled out */
+#if (HAS_R4600 || HAS_R5000)
+  {
+    extern int mips3_jit_available(void);
+    if (game_driver->source_file && mips3_jit_available()
+     && (strstr(game_driver->source_file, "kinst.c") || strcmp(game_driver->name, "carnevil") == 0
+      || strcmp(game_driver->name, "sfrush") == 0 || strcmp(game_driver->name, "sfrushrk") == 0))
+      options.content_flags[CONTENT_MIPS_DYNAREC] = true;
+  }
+#endif
+
+  /************ KILLER INSTINCT: ADSP-2105 (DCS SOUND) RECOMPILER ************/
+  /* the other DCS games and Hard Drivin' keep the interpreter */
+#if (HAS_ADSP2105)
+  {
+    extern int adsp2100_jit_available(void);
+    if (game_driver->source_file && strstr(game_driver->source_file, "kinst.c") && adsp2100_jit_available())
+      options.content_flags[CONTENT_ADSP_DYNAREC] = true;
+  }
+#endif
+
+  /************ CAVE CV1000: SH-3 RECOMPILER ************/
+  /* the option means nothing where it is compiled out */
+#if (HAS_SH3)
+  {
+    extern int sh3_jit_available(void);
+    if (game_driver->source_file && strstr(game_driver->source_file, "cv1k.c") && sh3_jit_available())
+      options.content_flags[CONTENT_SH3_DYNAREC] = true;
+  }
+#endif
+
+  /************ TX-1 / BUGGY BOY: THE THREE SCREENS ************/
+  /* Buggy Boy Junior is the upright cabinet, with one screen */
+  if (game_driver->source_file && strstr(game_driver->source_file, "tx1.c")
+   && strcmp(game_driver->name, "buggyboyjr") != 0)
+    options.content_flags[CONTENT_TX1_SCREENS] = true;
+
+  /************ SEGA ST-V: SH-2 RECOMPILER ************/
+  /* the option means nothing where the recompiler is compiled out */
+#if (HAS_SH2)
+  {
+    extern int sh2_jit_available(void);
+    if (game_driver->source_file && strstr(game_driver->source_file, "stv.c") && sh2_jit_available())
+      options.content_flags[CONTENT_SH2_DYNAREC] = true;
+  }
+#endif
+#if (HAS_SH2)
+  {
+    extern int stv_video_threads_available(void);
+    if (game_driver->source_file && strstr(game_driver->source_file, "stv.c") && stv_video_threads_available())
+      options.content_flags[CONTENT_STV_VIDEO_THREADS] = true;
+  }
+#endif
 
   /************ DRIVERS WITH MULTIPLE BIOS OPTIONS ************/
 #ifndef SPLIT_CORE
@@ -1338,9 +1674,14 @@ void set_content_flags(void)
 }
 #endif
 
-  /************ DIE HARD: ARCADE ************/
-  if(strcasecmp(game_driver->name, "diehard") == 0)
-    options.content_flags[CONTENT_DIEHARD] = true;
+  /************ NAMCO SYSTEM 11/12, SONY ZN: PSX CPU RECOMPILER ************/
+  /* the option means nothing where the recompiler is compiled out */
+#if (HAS_PSXCPU)
+  if (game_driver->source_file && psxcpu_jit_available()
+   && (strstr(game_driver->source_file, "namcos11.c") || strstr(game_driver->source_file, "namcos12.c")
+    || strstr(game_driver->source_file, "zn.c")))
+    options.content_flags[CONTENT_MIPS_DYNAREC] = true;
+#endif
 
   /************ DRIVERS WITH VECTOR VIDEO DISPLAYS ************/
   if(Machine->drv->video_attributes & VIDEO_TYPE_VECTOR)
@@ -1496,6 +1837,13 @@ void set_content_flags(void)
   if(game_driver->bootstrap != NULL)
     options.content_flags[CONTENT_NVRAM_BOOTSTRAP] = true;
 
+  /************ NUMBER OF CPUS, EACH WITH ITS OWN CLOCK SCALE CORE OPTION ************/
+  for( i = 0; i < CPU_CLOCK_SCALE_SLOTS && Machine->drv->cpu[i].cpu_type != CPU_DUMMY; i++ )
+    ;
+  options.content_flags[CONTENT_CPU_COUNT] = i;
+  memset(options.cpu_clock_scale, 0, sizeof(options.cpu_clock_scale)); /* the frontend sets them in update_variables() */
+  set_cpu_clock_scale_labels();
+
 
   /************ LOG THE STATE OF THE CONTENT FLAGS ************/
 
@@ -1503,9 +1851,20 @@ void set_content_flags(void)
 
   if(options.content_flags[CONTENT_NEOGEO])     log_cb(RETRO_LOG_INFO, LOGPRE "* Neo Geo BIOS required.\n");
   if(options.content_flags[CONTENT_STV])        log_cb(RETRO_LOG_INFO, LOGPRE "* STV BIOS required.\n");
-  if(options.content_flags[CONTENT_DIEHARD])    log_cb(RETRO_LOG_INFO, LOGPRE "* Die Hard: Arcade BIOS required.\n");
+  if(options.content_flags[CONTENT_STV] && stv_required_bios(game_driver->name))
+    log_cb(RETRO_LOG_INFO, LOGPRE "* ST-V BIOS forced: %s.\n", stv_required_bios(game_driver->name));
   if(options.content_flags[CONTENT_ALT_SOUND])  log_cb(RETRO_LOG_INFO, LOGPRE "* Alternative soundtrack available.\n");
   if(options.content_flags[CONTENT_VECTOR])     log_cb(RETRO_LOG_INFO, LOGPRE "* Vector display.\n");
+
+  /* the same text as the CPU clock scale core option labels, to match them up in the frontend */
+  if(options.content_flags[CONTENT_CPU_COUNT] == 1)
+    log_cb(RETRO_LOG_INFO, LOGPRE "* Uses 1 CPU: %s\n", cpu_clock_scale_labels[0]);
+  else
+  {
+    log_cb(RETRO_LOG_INFO, LOGPRE "* Uses %i CPUs:\n", options.content_flags[CONTENT_CPU_COUNT]);
+    for(i = 0; i < options.content_flags[CONTENT_CPU_COUNT]; i++)
+      log_cb(RETRO_LOG_INFO, LOGPRE "*   %s\n", cpu_clock_scale_labels[i]);
+  }
 
   log_cb(RETRO_LOG_INFO, LOGPRE "* Supports %i players with %i distinct controls.\n", options.content_flags[CONTENT_PLAYER_COUNT], options.content_flags[CONTENT_CTRL_COUNT]);
   log_cb(RETRO_LOG_INFO, LOGPRE "* Supports %i distinct button controls.\n", options.content_flags[CONTENT_BUTTON_COUNT]);

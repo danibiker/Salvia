@@ -178,6 +178,7 @@ The games seem to use them to mark platforms, kill zones and no-go areas.
 
 #include "driver.h"
 #include "vidhrdw/generic.h"
+#include "state.h"
 #include "cps1.h"
 
 #define VERBOSE 0
@@ -271,6 +272,12 @@ static struct CPS1config cps1_config_table[]=
 	{"ghouls",  CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
 	{"ghoulsu", CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
 	{"daimakai",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"ghoulsmaiden",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"ghoulsknight",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"ghoulsumaiden",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"ghoulsuknight",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"daimakaimaiden",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
+	{"daimakaiknight",CPS_B_01, 0,0,0, 0x0000,0xffff,0x0000,0xffff, 1 },
 	{"strider", CPS_B_01, 1,0,1, 0x0000,0xffff,0x0000,0xffff },
 	{"stridrua",CPS_B_01, 1,0,1, 0x0000,0xffff,0x0000,0xffff },
 	{"striderj",CPS_B_01, 1,0,1, 0x0000,0xffff,0x0000,0xffff },
@@ -441,6 +448,7 @@ static int cps_version;
 int scanline1;
 int scanline2;
 int scancalls;
+int scancount;	/* CPS2 interrupt line counter, see cps2_interrupt() */
 
 void cps_setversion(int v)
 {
@@ -632,6 +640,7 @@ static data16_t *cps1_buffered_obj;
 static data16_t *cps1_palette;
 static data16_t *cps1_other;
 static data16_t *cps1_old_palette;
+static int cps1_palette_rebuild;	/* set after a state load: cps1_old_palette is stale */
 
 /* Working variables */
 static int cps1_last_sprite_offset;     /* Offset of the last sprite */
@@ -685,6 +694,7 @@ static data16_t *cps2_buffered_obj;
 static int pri_ctrl;				/* Sprite layer priorities */
 static int cps2_objram_bank;
 static int cps2_last_sprite_offset;     /* Offset of the last sprite */
+static int cps2_turbo;					/* CPS2Turbo hack hardware (sfz3mix) */
 
 #define CPS2_OBJ_BASE	0x00	/* Unknown (not base address of objects). Could be bass address of bank used when object swap bit set? */
 #define CPS2_OBJ_UK1	0x02	/* Unknown (nearly always 0x807d, or 0x808e when screen flipped) */
@@ -779,6 +789,8 @@ DRIVER_INIT( cps2 )
 	data16_t *rom = (data16_t *)memory_region(REGION_CPU1);
 	data16_t *xor = (data16_t *)memory_region(REGION_USER1);
 	int i;
+
+	cps_qsound_state_register();
 
 
 	for (i = 0;i < memory_region_length(REGION_CPU1)/2;i++)
@@ -1144,6 +1156,14 @@ static void update_transmasks(void)
 	}
 }
 
+/* after a state load: the video RAM pointers come from the loaded output
+   ports, and the palette cache doesn't match the loaded palette */
+static void cps1_postload(void)
+{
+	cps1_get_video_base();
+	cps1_palette_rebuild = 1;
+}
+
 VIDEO_START( cps )
 {
 	int i;
@@ -1210,6 +1230,21 @@ VIDEO_START( cps )
 	cps1_get_video_base();   /* Calculate base pointers */
 	cps1_get_video_base();   /* Calculate old base pointers */
 
+	/* save states: the raster interrupt and object RAM state, and the
+	   sprite list latched at the end of the previous frame */
+	state_save_register_int("cps", 0, "scanline1", &scanline1);
+	state_save_register_int("cps", 0, "scanline2", &scanline2);
+	state_save_register_int("cps", 0, "scancalls", &scancalls);
+	state_save_register_int("cps", 0, "scancount", &scancount);
+	state_save_register_UINT16("cps", 0, "buffered obj", cps1_buffered_obj, cps1_obj_size/2);
+	if (cps_version == 2)
+	{
+		state_save_register_int("cps", 0, "objram bank", &cps2_objram_bank);
+		state_save_register_int("cps", 0, "sprite priorities", &pri_ctrl);
+		state_save_register_UINT16("cps", 0, "cps2 buffered obj", cps2_buffered_obj, cps2_obj_size/2);
+	}
+	state_save_register_func_postload(cps1_postload);
+
 	/* set palette banks */
 	palette_basecolor[0] = 0*32;	/* obj */
 	palette_basecolor[1] = 1*32;	/* scroll1 */
@@ -1233,6 +1268,16 @@ VIDEO_START( cps2 )
     {
         cps_version=2;
     }
+    cps2_turbo = 0;
+    return video_start_cps();
+}
+
+/* CPS2Turbo, the extended CPS2 of Street Fighter Zero 3 Mix (Zero800):
+   bigger sprite ROM, see cps2_render_sprites() */
+VIDEO_START( cps2turbo )
+{
+    cps_version = 2;
+    cps2_turbo = 1;
     return video_start_cps();
 }
 
@@ -1252,7 +1297,7 @@ void cps1_build_palette(void)
 	{
 		int palette = cps1_palette[offset];
 
-		if (palette != cps1_old_palette[offset])
+		if (palette != cps1_old_palette[offset] || cps1_palette_rebuild)
 		{
 		   int red, green, blue, bright;
 
@@ -1278,6 +1323,7 @@ void cps1_build_palette(void)
 			cps1_old_palette[offset] = palette;
 		}
 	}
+	cps1_palette_rebuild = 0;
 }
 
 
@@ -1619,6 +1665,11 @@ void cps2_render_sprites(struct mame_bitmap *bitmap,const struct rectangle *clip
 		int code  = base[i+2]+((y & 0x6000) <<3);
 		int colour= base[i+3];
 		int col=colour&0x1f;
+
+		/* CPS2Turbo: the unused bit 12 of Y selects the upper half of
+		   the 64MB sprite ROM (bit 15 can't be used, it is the end marker) */
+		if (cps2_turbo)
+			code += (y & 0x1000) << 6;
 
 		if(colour & 0x80)
 		{

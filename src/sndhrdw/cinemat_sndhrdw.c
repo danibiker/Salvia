@@ -696,7 +696,7 @@ void solarq_sound_w(UINT8 sound_val, UINT8 bits_changed)
             if (current_volume < target_volume)
                 current_volume += 20;
             if (current_volume > 0)
-                sample_set_volume(2, current_volume);
+                sample_set_volume(2, current_volume * 100 / 255);
             else
                 sample_stop(2);
             last_frame = cpu_getcurrentframe();
@@ -760,7 +760,7 @@ void spacewar_sound_w(UINT8 sound_val, UINT8 bits_changed)
 	{
 		if (sound_val & 0x01)
 		{
-            if (rand() & 1)
+            if (mame_rand_int() & 1)
                 sample_start(0, 0, 0);
             else
                 sample_start(0, 6, 0);
@@ -770,7 +770,7 @@ void spacewar_sound_w(UINT8 sound_val, UINT8 bits_changed)
 
 	if ((sound_val & 0x02) && (bits_changed & 0x02))
 	{
-       if (rand() & 1)
+       if (mame_rand_int() & 1)
            sample_start(1, 1, 0);
        else
            sample_start(1, 7, 0);

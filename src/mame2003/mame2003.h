@@ -104,6 +104,8 @@ enum /* the "display numbers" for each player, as opposed to their array index *
 
 #define MAX_PLAYER_COUNT  DISP_PLAYER8   /* We currently support a maximum of eight simultaneous players */
 
+#define CPU_CLOCK_SCALE_SLOTS  8   /* one CPU clock scale core option per CPU, up to MAX_CPU in driver.h */
+
 /******************************************************************************
 
     The following is a set of OS joystick codes (also including buttons and controls
@@ -180,6 +182,9 @@ extern retro_log_printf_t log_cb;
 ******************************************************************************/
 extern void frontend_message_cb(const char *message_string, unsigned frames_to_display);
 
+/* set when the vector resolution option changes while the game runs */
+extern int vector_resize_pending;
+
 
 /******************************************************************************
 
@@ -229,7 +234,21 @@ enum CORE_OPTIONS  /* controls the order in which core options appear. common, i
   OPT_VECTOR_INTENSITY,
   OPT_NEOGEO_BIOS,
   OPT_STV_BIOS,
-  OPT_CPU_CLOCK_SCALE,
+  OPT_CPU_CLOCK_SCALE,   /* CPU 1 */
+  OPT_CPU_CLOCK_SCALE_2,
+  OPT_CPU_CLOCK_SCALE_3,
+  OPT_CPU_CLOCK_SCALE_4,
+  OPT_CPU_CLOCK_SCALE_5,
+  OPT_CPU_CLOCK_SCALE_6,
+  /* As of October 2026, the maximum number of CPUs of any supported driver is 6 */
+  OPT_CPU_CLOCK_SCALE_7,
+  OPT_CPU_CLOCK_SCALE_8,
+  OPT_MIPS_DYNAREC,
+  OPT_ADSP_DYNAREC,
+  OPT_SH3_DYNAREC,
+  OPT_TX1_SCREENS,
+  OPT_SH2_DYNAREC,
+  OPT_STV_VIDEO_THREADS,
 #if (HAS_CYCLONE || HAS_DRZ80)
   OPT_CYCLONE_MODE,
 #endif

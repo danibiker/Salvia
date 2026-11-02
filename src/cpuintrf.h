@@ -103,6 +103,9 @@ enum
 #if (HAS_V30)
 	CPU_V30,
 #endif
+#if (HAS_V25)
+	CPU_V25,
+#endif
 #if (HAS_V33)
 	CPU_V33,
 #endif
@@ -126,6 +129,9 @@ enum
 #endif
 #if (HAS_I8X41)
 	CPU_I8X41,
+#endif
+#if (HAS_I8051)
+	CPU_I8051,
 #endif
 #if (HAS_M6800)
 	CPU_M6800,
@@ -250,8 +256,23 @@ enum
 #if (HAS_ADSP2115)
 	CPU_ADSP2115,
 #endif
+#if (HAS_ADSP2181)
+	CPU_ADSP2181,
+#endif
 #if (HAS_PSXCPU)
 	CPU_PSXCPU,
+#endif
+#if (HAS_H83002)
+	CPU_H83002,
+#endif
+#if (HAS_I386)
+	CPU_I386,
+#endif
+#if (HAS_MN10200)
+	CPU_MN10200,
+#endif
+#if (HAS_M37702)
+	CPU_M37702,
 #endif
 #if (HAS_ASAP)
 	CPU_ASAP,
@@ -281,8 +302,14 @@ enum
 #if (HAS_ARM)
 	CPU_ARM,
 #endif
+#if (HAS_ARM7)
+	CPU_ARM7,
+#endif
 #if (HAS_SH2)
 	CPU_SH2,
+#endif
+#if (HAS_SH3)
+	CPU_SH3,
 #endif
 #if (HAS_DSP32C)
 	CPU_DSP32C,
@@ -310,6 +337,18 @@ enum
 #endif
 #if (HAS_E132XS)
 	CPU_E132XS,
+#endif
+#if (HAS_I960)
+	CPU_I960,
+#endif
+#if (HAS_MB86233)
+	CPU_MB86233,
+#endif
+#if (HAS_MB86235)
+	CPU_MB86235,
+#endif
+#if (HAS_ADSP21062)
+	CPU_ADSP21062,
 #endif
 
     CPU_COUNT
@@ -589,6 +628,10 @@ data8_t cpunum_read_byte(int cpunum, offs_t address);
 
 /* write a byte from another CPU's memory space */
 void cpunum_write_byte(int cpunum, offs_t address, data8_t data);
+
+/* read/write 'count' consecutive bytes of another CPU's memory space (one context switch) */
+void cpunum_read_bytes(int cpunum, offs_t address, UINT8 *data, UINT32 count);
+void cpunum_write_bytes(int cpunum, offs_t address, const UINT8 *data, UINT32 count);
 
 /* return a pointer to the saved context of a given CPU, or NULL if the
    context is active (and contained within the CPU core */

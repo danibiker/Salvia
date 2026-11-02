@@ -175,20 +175,6 @@ static int game_loaded;
 
 ***************************************************************************/
 
-static struct chd_interface_file *mame_chd_open(const char *filename, const char *mode);
-static void mame_chd_close(struct chd_interface_file *file);
-static UINT32 mame_chd_read(struct chd_interface_file *file, UINT64 offset, UINT32 count, void *buffer);
-static UINT32 mame_chd_write(struct chd_interface_file *file, UINT64 offset, UINT32 count, const void *buffer);
-static UINT64 mame_chd_length(struct chd_interface_file *file);
-
-static struct chd_interface mame_chd_interface =
-{
-	mame_chd_open,
-	mame_chd_close,
-	mame_chd_read,
-	mame_chd_write,
-	mame_chd_length
-};
 
 
 
@@ -349,9 +335,6 @@ static int init_machine(void)
 		}
 	}
 
-	/* init the hard drive interface now, before attempting to load */
-	chd_set_interface(&mame_chd_interface);
-
 	/* load the ROMs if we have some */
 	if (gamedrv->rom && rom_load(gamedrv->rom) != 0)
 	{
@@ -366,6 +349,9 @@ static int init_machine(void)
 
 	/* now set up all the CPUs */
 	cpu_init();
+
+	/* the random number generator of the emulation, in the save states */
+	mame_rand_init();
 
 	/* load input ports settings (keys, dip switches, and so on) */
 	settingsloaded = load_input_port_settings();
@@ -438,9 +424,11 @@ static int run_machine(void)
 					{
 						int i;
 
-						/* invalidate contents to avoid subtle bugs */
+						/* invalidate contents to avoid subtle bugs; not with the
+						   emulation's random numbers, which would then depend on
+						   the size of the regions freed */
 						for (i = 0; i < memory_region_length(region); i++)
-							memory_region(region)[i] = rand();
+							memory_region(region)[i] = mame_rand_video();
 						free(Machine->memory_region[region].base);
 						Machine->memory_region[region].base = 0;
 					}
@@ -549,7 +537,7 @@ static void shutdown_machine(void)
 		free_memory_region(i);
 
 	/* close all hard drives */
-	chd_close_all();
+	hard_disk_close_all();
 
 	/* reset the CPU system */
 	cpu_exit();
@@ -927,6 +915,71 @@ static void scale_vectorgames(int gfx_width, int gfx_height, int *width, int *he
 
 
 /*-------------------------------------------------
+	vector_resize_display - the vector resolution
+	option changed while the game runs: size the
+	display (and its artwork) and the screen
+	bitmap again, as vh_open() does at start.
+	Returns 0 on success.
+-------------------------------------------------*/
+
+int vector_resize_display(void)
+{
+	struct osd_create_params params;
+	struct mame_bitmap *bitmap;
+	int bmwidth = Machine->drv->screen_width;
+	int bmheight = Machine->drv->screen_height;
+
+	if (!(Machine->drv->video_attributes & VIDEO_TYPE_VECTOR) || !Machine->scrbitmap)
+		return 1;
+
+	/* "original" asks for the driver's size */
+	if (options.vector_width  == 0) options.vector_width  = Machine->drv->screen_width;
+	if (options.vector_height == 0) options.vector_height = Machine->drv->screen_height;
+
+	scale_vectorgames(options.vector_width, options.vector_height, &bmwidth, &bmheight);
+
+	/* the same display parameters as vh_open() */
+	params.width = bmwidth;
+	params.height = bmheight;
+	compute_aspect_ratio(Machine->drv, &params.aspect_x, &params.aspect_y);
+	params.depth = Machine->color_depth;
+	params.colors = palette_get_total_colors_with_ui();
+	params.fps = Machine->drv->frames_per_second;
+	params.video_attributes = Machine->drv->video_attributes;
+	params.orientation = Machine->orientation;
+
+	if (artwork_resize_display(&params, direct_rgb_components))
+		return 1;
+
+	/* the artwork may have changed the vector width/height, so recompute */
+	bmwidth = Machine->drv->screen_width;
+	bmheight = Machine->drv->screen_height;
+	scale_vectorgames(options.vector_width, options.vector_height, &bmwidth, &bmheight);
+
+	/* a new screen bitmap; the vector renderer forgets the old pixels */
+	bitmap = auto_bitmap_alloc_depth(bmwidth, bmheight, Machine->color_depth);
+	if (!bitmap)
+		return 1;
+	auto_bitmap_free(Machine->scrbitmap);
+	Machine->scrbitmap = bitmap;
+	vector_bitmap_resized();
+
+	/* recompute the visible area on the new bitmap, and redraw everything */
+	set_visible_area(0,1,0,1);
+	set_visible_area(
+			Machine->drv->default_visible_area.min_x,
+			Machine->drv->default_visible_area.max_x,
+			Machine->drv->default_visible_area.min_y,
+			Machine->drv->default_visible_area.max_y);
+	schedule_full_refresh();
+
+	log_cb(RETRO_LOG_INFO, LOGPRE "vector resolution now %dx%d\n", bmwidth, bmheight);
+	return 0;
+}
+
+
+
+/*-------------------------------------------------
 	init_buffered_spriteram - initialize the
 	double-buffered spriteram
 -------------------------------------------------*/
@@ -1013,6 +1066,38 @@ void set_visible_area(int min_x, int max_x, int min_y, int max_y)
 
 	/* recompute scanline timing */
 	cpu_compute_scanline_timing();
+}
+
+
+/*-------------------------------------------------
+	set_display_aspect_ratio - changes the aspect
+	ratio of the display while the game runs, for
+	the drivers whose display shape is chosen at
+	run time (DIP switches, monitor setups, wide
+	video modes)
+
+	The new aspect ratio reaches the frontend with
+	the next display update, together with the
+	geometry, like a change of the visible area.
+	Calling it again with the same ratio does
+	nothing, so drivers can call it every frame.
+-------------------------------------------------*/
+
+void set_display_aspect_ratio(int aspect_x, int aspect_y)
+{
+	extern struct osd_create_params video_config;
+
+	if (aspect_x <= 0 || aspect_y <= 0)
+		return;
+
+	if (video_config.aspect_x == aspect_x && video_config.aspect_y == aspect_y)
+		return;
+
+	video_config.aspect_x = aspect_x;
+	video_config.aspect_y = aspect_y;
+
+	/* the frontend gets the new geometry with the next display update */
+	visible_area_changed = 1;
 }
 
 
@@ -1392,85 +1477,6 @@ void machine_remove_sound(struct InternalMachineDriver *machine, const char *tag
 		}
 
 	log_cb(RETRO_LOG_ERROR, LOGPRE "Can't find sound '%s'!\n", tag);
-}
-
-
-
-/*-------------------------------------------------
-	mame_chd_open - interface for opening
-	a hard disk image
--------------------------------------------------*/
-
-struct chd_interface_file *mame_chd_open(const char *filename, const char *mode)
-{
-	/* look for read-only drives first in the ROM path */
-	if (mode[0] == 'r' && !strchr(mode, '+'))
-	{
-		const struct GameDriver *drv;
-
-		/* attempt reading up the chain through the parents */
-		for (drv = Machine->gamedrv; drv != NULL; drv = drv->clone_of)
-		{
-			void* file = mame_fopen(drv->name, filename, FILETYPE_IMAGE, 0);
-
-			if (file != NULL)
-				return file;
-		}
-
-		return NULL;
-	}
-
-	/* look for read/write drives in the diff area */
-	return (struct chd_interface_file *)mame_fopen(NULL, filename, FILETYPE_IMAGE_DIFF, 1);
-}
-
-
-
-/*-------------------------------------------------
-	mame_chd_close - interface for closing
-	a hard disk image
--------------------------------------------------*/
-
-void mame_chd_close(struct chd_interface_file *file)
-{
-	mame_fclose((mame_file *)file);
-}
-
-
-
-/*-------------------------------------------------
-	mame_chd_read - interface for reading
-	from a hard disk image
--------------------------------------------------*/
-
-UINT32 mame_chd_read(struct chd_interface_file *file, UINT64 offset, UINT32 count, void *buffer)
-{
-	mame_fseek((mame_file *)file, offset, SEEK_SET);
-	return mame_fread((mame_file *)file, buffer, count);
-}
-
-
-
-/*-------------------------------------------------
-	mame_chd_write - interface for writing
-	to a hard disk image
--------------------------------------------------*/
-
-UINT32 mame_chd_write(struct chd_interface_file *file, UINT64 offset, UINT32 count, const void *buffer)
-{
-	mame_fseek((mame_file *)file, offset, SEEK_SET);
-	return mame_fwrite((mame_file *)file, buffer, count);
-}
-
-
-/*-------------------------------------------------
-	mame_chd_length - interface for getting
-	the length a hard disk image
--------------------------------------------------*/
-
-UINT64 mame_chd_length(struct chd_interface_file *file)
-{
-	return mame_fsize((mame_file *)file);
 }
 
 

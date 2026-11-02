@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "state.h"
 
 
 /***************************************************************************
@@ -313,6 +314,9 @@ int YM3526_num(const struct MachineSound *msound) { return ((struct YM3526interf
 #if (HAS_Y8950)
 int Y8950_clock(const struct MachineSound *msound) { return ((struct Y8950interface*)msound->sound_interface)->baseclock; }
 int Y8950_num(const struct MachineSound *msound) { return ((struct Y8950interface*)msound->sound_interface)->num; }
+#endif
+#if (HAS_C352)
+int C352_clock(const struct MachineSound *msound) { return ((struct C352interface*)msound->sound_interface)->clock; }
 #endif
 #if (HAS_YMZ280B)
 int YMZ280B_clock(const struct MachineSound *msound) { return ((struct YMZ280Binterface*)msound->sound_interface)->baseclock[0]; }
@@ -980,6 +984,18 @@ struct snd_interface sndintf[] =
 		0
 	},
 #endif
+#if (HAS_C352)
+	{
+		SOUND_C352,
+		"C352",
+		0,
+		C352_clock,
+		C352_sh_start,
+		C352_sh_stop,
+		0,
+		0
+	},
+#endif
 #if (HAS_QSOUND)
 	{
 		SOUND_QSOUND,
@@ -1193,7 +1209,7 @@ struct snd_interface sndintf[] =
 		YMF271_sh_start,
 		YMF271_sh_stop,
 		0,
-		0
+		YMF271_sh_reset
 	},
 #endif
 #if (HAS_ICS2115)
@@ -1234,6 +1250,13 @@ log_cb(RETRO_LOG_ERROR, LOGPRE "Sound #%d wrong ID %d: check enum SOUND_... in s
 	/* samples will be read later if needed */
 	Machine->samples = 0;
 
+	/* Save the sound latches: a command the main CPU wrote and the sound
+	   CPU has not read yet must still be there after loading */
+	state_save_register_int("soundlatch", 0, "latch",  &latch);
+	state_save_register_int("soundlatch", 0, "latch2", &latch2);
+	state_save_register_int("soundlatch", 0, "latch3", &latch3);
+	state_save_register_int("soundlatch", 0, "latch4", &latch4);
+
 	refresh_period = TIME_IN_HZ(Machine->drv->frames_per_second);
 	refresh_period_inv = 1.0 / refresh_period;
 	sound_update_timer = timer_alloc(NULL);
@@ -1252,6 +1275,8 @@ log_cb(RETRO_LOG_ERROR, LOGPRE "Sound #%d wrong ID %d: check enum SOUND_... in s
 		totalsound++;
 	}
 
+	mixer_register_state();
+	streams_register_state();
 	return 0;
 
 

@@ -67,6 +67,9 @@
 #if (HAS_V20 || HAS_V30 || HAS_V33)
 #include "cpu/nec/necintrf.h"
 #endif
+#if (HAS_V25)
+#include "cpu/nec/v25.h"
+#endif
 #if (HAS_V60 || HAS_V70)
 #include "cpu/v60/v60.h"
 #endif
@@ -75,6 +78,9 @@
 #endif
 #if (HAS_I8X41)
 #include "cpu/i8x41/i8x41.h"
+#endif
+#if (HAS_I8051)
+#include "cpu/i8051/i8051.h"
 #endif
 #if (HAS_M6800 || HAS_M6801 || HAS_M6802 || HAS_M6803 || HAS_M6808 || HAS_HD63701)
 #include "cpu/m6800/m6800.h"
@@ -118,17 +124,41 @@
 #if (HAS_TMS32025)
 #include "cpu/tms32025/tms32025.h"
 #endif
+#if (HAS_I960)
+#include "cpu/i960/i960.h"
+#endif
+#if (HAS_MB86233)
+#include "cpu/mb86233/mb86233.h"
+#endif
+#if (HAS_MB86235)
+#include "cpu/mb86235/mb86235.h"
+#endif
+#if (HAS_ADSP21062)
+#include "cpu/sharc/sharc.h"
+#endif
 #if (HAS_TMS32031)
 #include "cpu/tms32031/tms32031.h"
 #endif
 #if (HAS_CCPU)
 #include "cpu/ccpu/ccpu.h"
 #endif
-#if (HAS_ADSP2100 || HAS_ADSP2101 || HAS_ADSP2104 || HAS_ADSP2105 || HAS_ADSP2115)
+#if (HAS_ADSP2100 || HAS_ADSP2101 || HAS_ADSP2104 || HAS_ADSP2105 || HAS_ADSP2115 || HAS_ADSP2181)
 #include "cpu/adsp2100/adsp2100.h"
 #endif
 #if (HAS_PSXCPU)
 #include "cpu/mips/psx.h"
+#endif
+#if (HAS_MN10200)
+#include "cpu/mn10200/mn10200.h"
+#endif
+#if (HAS_H83002)
+#include "cpu/h83002/h83002.h"
+#endif
+#if (HAS_I386)
+#include "cpu/i386/i386.h"
+#endif
+#if (HAS_M37702)
+#include "cpu/m37710/m37710.h"
 #endif
 #if (HAS_ASAP)
 #include "cpu/asap/asap.h"
@@ -148,8 +178,14 @@
 #if (HAS_ARM)
 #include "cpu/arm/arm.h"
 #endif
+#if (HAS_ARM7)
+#include "cpu/arm7/arm7.h"
+#endif
 #if (HAS_SH2)
 #include "cpu/sh2/sh2.h"
+#endif
+#if (HAS_SH3)
+#include "cpu/sh3/sh3.h"
 #endif
 #if (HAS_DSP32C)
 #include "cpu/dsp32/dsp32.h"
@@ -405,6 +441,9 @@ const struct cpu_interface cpuintrf[] =
 #if (HAS_V30)
 	CPU0(V30,	   v30, 	 1,255,1.00, 8, 20,	  0,20,LE,1, 5	),
 #endif
+#if (HAS_V25)
+	CPU0(V25,	   v25, 	 1,255,1.00, 8, 20,	  0,20,LE,1, 5	),
+#endif
 #if (HAS_V33)
 	CPU0(V33,	   v33, 	 1,255,1.00, 8, 20,	  0,20,LE,1, 5	),
 #endif
@@ -428,6 +467,9 @@ const struct cpu_interface cpuintrf[] =
 #endif
 #if (HAS_I8X41)
 	CPU0(I8X41,    i8x41,	 1,  0,1.00, 8, 16,	  0,16,LE,1, 2	),
+#endif
+#if (HAS_I8051)
+	CPU0(I8051,    i8051,	 5,  0,1.00, 8, 16,	  0,16,LE,1, 3	),
 #endif
 #if (HAS_M6800)
 	CPU0(M6800,    m6800,	 1,  0,1.00, 8, 16,	  0,16,BE,1, 4	),
@@ -553,8 +595,25 @@ const struct cpu_interface cpuintrf[] =
 #if (HAS_ADSP2115)
 	CPU3(ADSP2115, adsp2115, 4,  0,1.00,16,17lew, -1,15,LE,2, 4 ),
 #endif
+#if (HAS_ADSP2181)
+	CPU3(ADSP2181, adsp2181, 10, 0,1.00,16,17lew, -1,15,LE,2, 4 ),
+#endif
 #if (HAS_PSXCPU)
 	CPU0(PSXCPU,   mips,	 1,  0,1.00,32,32ledw, 0,32,LE,4, 4 ),
+#endif
+#if (HAS_H83002)
+	CPU0(H83002,   h8_3002,	 8,  0,1.00,16,24bew,  0,24,BE,2,10 ),
+#endif
+#if (HAS_I386)
+	CPU0(I386,     i386,	 1,  0,1.00,32,32ledw, 0,32,LE,1,15 ),
+#endif
+#if (HAS_MN10200)
+	CPU0(MN10200,  mn10200,	 4,  0,1.00,16,24lew,  0,24,LE,1, 6 ),
+#endif
+#if (HAS_M37702)
+	/* 16 cpuint lines: the maskable ones (M37710_LINE_ADC..IRQ0); the
+	   non-maskable and timer tick lines are raised by the core itself */
+	CPU0(M37702,   m37702,	16,  0,1.00,16,24lew,  0,24,LE,1, 6 ),
 #endif
 #if (HAS_ASAP)
 	#define asap_ICount asap_icount
@@ -595,8 +654,14 @@ const struct cpu_interface cpuintrf[] =
 #if (HAS_ARM)
 	CPU0(ARM,	   arm, 	 2,  0,1.00,32,26ledw, 0,26,LE,4, 4	),
 #endif
+#if (HAS_ARM7)
+	CPU0(ARM7,	   arm7, 	 5,  0,1.00,32,32ledw, 0,32,LE,2, 4	),
+#endif
 #if (HAS_SH2)
 	CPU4(SH2,	   sh2, 	16,  0,1.00,32,32bedw,   0,32,BE,2, 2  ),
+#endif
+#if (HAS_SH3)
+	CPU0(SH3,	   sh3, 	 4,  0,1.00,32,32bedw,   0,32,BE,2, 2  ),
 #endif
 #if (HAS_DSP32C)
 	#define dsp32c_ICount dsp32_icount
@@ -625,6 +690,22 @@ const struct cpu_interface cpuintrf[] =
 #endif
 #if (HAS_E132XS)
 	CPU0(E132XS,   e132xs, 	 1,0,1.00, 32, 32bedw,	  0,32,BE,2, 6	),
+#endif
+#if (HAS_I960)
+	#define i960_ICount i960_icount
+	CPU0(I960,     i960,	 4,  0,1.00,32,32ledw,	  0,32,LE,4,12	),
+#endif
+#if (HAS_MB86233)
+	#define mb86233_ICount mb86233_icount
+	CPU0(MB86233,  mb86233,	 0,  0,1.00,32,32ledw,	  0,32,LE,4, 4	),
+#endif
+#if (HAS_MB86235)
+	#define mb86235_ICount mb86235_icount
+	CPU0(MB86235,  mb86235,	 0,  0,1.00,32,32ledw,	  0,32,LE,8, 8	),
+#endif
+#if (HAS_ADSP21062)
+	#define sharc_ICount sharc_icount
+	CPU0(ADSP21062, sharc,	 3,  0,1.00,32,32ledw,	  0,32,LE,4, 8	),
 #endif
 
 };
@@ -1165,6 +1246,32 @@ void cpunum_write_byte(int cpunum, offs_t address, data8_t data)
 	VERIFY_CPUNUM_VOID(cpunum_write_byte);
 	cpuintrf_push_context(cpunum);
 	(*cpu[cpunum].intf.memory_write)(address, data);
+	cpuintrf_pop_context();
+}
+
+
+/*--------------------------
+ 	Read/write a run of bytes
+ 	(as cpunum_read_byte/
+ 	cpunum_write_byte on each,
+ 	one context switch)
+--------------------------*/
+
+void cpunum_read_bytes(int cpunum, offs_t address, UINT8 *data, UINT32 count)
+{
+	VERIFY_CPUNUM_VOID(cpunum_read_bytes);
+	cpuintrf_push_context(cpunum);
+	while (count--)
+		*data++ = (*cpu[cpunum].intf.memory_read)(address++);
+	cpuintrf_pop_context();
+}
+
+void cpunum_write_bytes(int cpunum, offs_t address, const UINT8 *data, UINT32 count)
+{
+	VERIFY_CPUNUM_VOID(cpunum_write_bytes);
+	cpuintrf_push_context(cpunum);
+	while (count--)
+		(*cpu[cpunum].intf.memory_write)(address++, *data++);
 	cpuintrf_pop_context();
 }
 

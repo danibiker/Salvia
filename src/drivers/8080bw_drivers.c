@@ -1873,7 +1873,7 @@ static READ_HANDLER( indianbt_r )
                 case 0x5ffc:    return 0;
         }
         logerror("unknown port 0 read @ %x\n",activecpu_get_pc());
-        return rand();
+        return mame_rand_int();
 }
 
 static PORT_READ_START( indianbt_readport )
@@ -2241,6 +2241,15 @@ INPUT_PORTS_START( polaris )
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Cocktail ) )
+
+	PORT_START		/* 4, read by POLARIS_ADJ_VR1 */
+	PORT_ADJUSTER( 80, "Sub Volume VR1" )
+
+	PORT_START		/* 5, read by POLARIS_ADJ_VR2 */
+	PORT_ADJUSTER( 70, "Sub Volume VR2" )
+
+	PORT_START		/* 6, read by POLARIS_ADJ_VR3 */
+	PORT_ADJUSTER( 90, "Sub Volume VR3" )
 INPUT_PORTS_END
 
 static MACHINE_DRIVER_START( polaris )

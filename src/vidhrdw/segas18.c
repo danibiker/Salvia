@@ -2,6 +2,8 @@
 #include "vidhrdw/generic.h"
 #include "system16.h"
 #include "vidhrdw/segaic16.h"
+#include "state.h"
+#include "vidhrdw/segavdp.h"
 
 static struct mame_bitmap *tempbitmap;
 
@@ -28,13 +30,56 @@ static void draw_vdp(struct mame_bitmap *bitmap, const struct rectangle *cliprec
 		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 		{
 			UINT16 pix = src[x];
-			if (pix != 0xffff)
+
+			/* as in MAME: the VDP shadow/highlight flags (0x800/0x1000) are not
+			   used, only the 64 VDP colors at 0x1800; they would also index
+			   past the end of the palette */
+			if (pix != 0xffff && (pix & 0xf))
 			{
-				dst[x] = pix;
+				dst[x] = 0x1800 + (pix & 0x3f);
 				pri[x] |= priority;
 			}
 		}
 	}
+}
+
+/*************************************
+ *
+ *	The VDP of System 18: its 64 colors
+ *	are set directly after the System 16
+ *	palette, the screen is not resized
+ *
+ *************************************/
+
+int system18_vdp_start(void)
+{
+	struct segavdp_interface intf;
+
+	intf.cram_mode        = SEGAVDP_CRAM_DIRECT;
+	intf.cram_base        = 0x1800;
+	intf.bg_palbase       = 0x1800;
+	intf.sp_palbase       = 0x1800;
+	intf.scanbase         = 0;
+	intf.line_scale       = 1;
+	intf.display_enable   = 1;
+	intf.set_visible_area = 0;
+	intf.irq_update       = NULL;
+	return segavdp_start(&intf);
+}
+
+/* render the VDP layer, transparent where the VDP draws nothing */
+void system18_vdp_update(struct mame_bitmap *bitmap, const struct rectangle *cliprect)
+{
+	int y;
+
+	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+		segavdp_draw_line((UINT16 *)bitmap->line[y], y, 0xffff);
+}
+
+/* the VBLANK flag of the VDP */
+VIDEO_EOF( system18 )
+{
+	segavdp_eof();
 }
 
 void system18_set_grayscale(int enable)
@@ -87,11 +132,19 @@ VIDEO_START( system18_new )
 		return 1;
 
 	/* create the VDP */
-	start_system18_vdp();
+	if (system18_vdp_start())
+		return 1;
 	/* create a temp bitmap to draw the VDP data into */
 	tempbitmap = auto_bitmap_alloc_depth(Machine->drv->screen_width, Machine->drv->screen_height, 16);
 	if (!tempbitmap)
 		return 1;
+	fillbitmap(tempbitmap, 0xffff, NULL);
+
+	grayscale_enable = vdp_enable = vdp_mixing = 0;
+	state_save_register_UINT8("system18", 0, "grayscale", &grayscale_enable, 1);
+	state_save_register_UINT8("system18", 0, "vdp_enable", &vdp_enable, 1);
+	state_save_register_UINT8("system18", 0, "vdp_mixing", &vdp_mixing, 1);
+	state_save_register_UINT16("system18", 0, "vdp_bitmap", (UINT16 *)tempbitmap->base, tempbitmap->rowpixels * (tempbitmap->height - 1) + tempbitmap->width);
 	return 0;
 }
 
@@ -105,12 +158,11 @@ VIDEO_UPDATE( system18_new )
 	if (!segaic16_display_enable)
 	{
 		fillbitmap(bitmap, get_black_pen(), cliprect);
+		if (vdp_enable)
+			system18_vdp_update(tempbitmap, cliprect);
 		return;
 	}
 
-	/* if the VDP is enabled, update our tempbitmap */
-	if (vdp_enable)
-		update_system18_vdp(tempbitmap, cliprect);
 
 	/* reset priorities */
 	fillbitmap(priority_bitmap, 0, cliprect);
@@ -136,4 +188,10 @@ VIDEO_UPDATE( system18_new )
 	if (vdp_enable && vdplayer == 3) draw_vdp(bitmap, cliprect, vdppri);
 	/* draw the sprites */
 	segaic16_sprites_draw(0, bitmap, cliprect);
+
+	/* the VDP layer shows one frame later than the other layers, as in MAME
+	   (it renders its lines ahead of the screen): render it for the next
+	   frame. It is part of the save states. */
+	if (vdp_enable)
+		system18_vdp_update(tempbitmap, cliprect);
 }
