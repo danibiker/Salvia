@@ -2154,12 +2154,6 @@
     <ClCompile Include="src\machine\scudsp.c">
       <Filter>src\machine</Filter>
     </ClCompile>
-    <ClCompile Include="src\vidhrdw\stvvdp1_vidhrdw.c">
-      <Filter>src\vidhrdw</Filter>
-    </ClCompile>
-    <ClCompile Include="src\vidhrdw\stvvdp2_vidhrdw.c">
-      <Filter>src\vidhrdw</Filter>
-    </ClCompile>
     <ClCompile Include="src\vidhrdw\deniam_vidhrdw.c">
       <Filter>src\vidhrdw</Filter>
     </ClCompile>
@@ -5676,9 +5670,6 @@
     <ClCompile Include="src\sound\ics2115.c">
       <Filter>src\sound</Filter>
     </ClCompile>
-    <ClCompile Include="src\lib\mame-chd\chd.c">
-      <Filter>src\lib\mame-chd</Filter>
-    </ClCompile>
     <ClCompile Include="src\lib\mame-chd\mame_sha1.c">
       <Filter>src\lib\mame-chd</Filter>
     </ClCompile>
@@ -5814,6 +5805,68 @@
     <ClCompile Include="src\lib\zlib\zutil.c">
       <Filter>src\lib\zlib</Filter>
     </ClCompile>
+    <ClCompile Include="src\machine\ataflash.c" />
+    <ClCompile Include="src\machine\ds2404.c" />
+    <ClCompile Include="src\machine\fd1094.c" />
+    <ClCompile Include="src\machine\intelfsh.c" />
+    <ClCompile Include="src\machine\megadriv.c" />
+    <ClCompile Include="src\machine\model2_machine.c" />
+    <ClCompile Include="src\machine\sega315_5838.c" />
+    <ClCompile Include="src\machine\sega315_5881.c" />
+    <ClCompile Include="src\machine\seibuspi_machine.c" />
+    <ClCompile Include="src\machine\smc91c9x.c" />
+    <ClCompile Include="src\machine\tx1_machine.c" />
+    <ClCompile Include="src\sndhrdw\cps3_sndhrdw.c" />
+    <ClCompile Include="src\sndhrdw\segadsb.c" />
+    <ClCompile Include="src\sndhrdw\taitozoom.c" />
+    <ClCompile Include="src\sndhrdw\tx1_sndhrdw.c" />
+    <ClCompile Include="src\vidhrdw\cv1k_vidhrdw.c" />
+    <ClCompile Include="src\vidhrdw\model2_vidhrdw.c" />
+    <ClCompile Include="src\vidhrdw\segavdp.c" />
+    <ClCompile Include="src\vidhrdw\seibuspi_vidhrdw.c" />
+    <ClCompile Include="src\vidhrdw\stvvid.c" />
+    <ClCompile Include="src\vidhrdw\tx1_vidhrdw.c" />
+    <ClCompile Include="src\drivers\cps3.c" />
+    <ClCompile Include="src\drivers\cv1k.c" />
+    <ClCompile Include="src\drivers\hvyunit.c" />
+    <ClCompile Include="src\drivers\megadriv_acbl.c" />
+    <ClCompile Include="src\drivers\megadriv_sunmix.c" />
+    <ClCompile Include="src\drivers\megadriv_ybox.c" />
+    <ClCompile Include="src\drivers\megaplay.c" />
+    <ClCompile Include="src\drivers\megatech.c" />
+    <ClCompile Include="src\drivers\model2.c" />
+    <ClCompile Include="src\drivers\seibuspi.c" />
+    <ClCompile Include="src\drivers\tx1.c" />
+    <ClCompile Include="src\cpu\arm7\arm7.c" />
+    <ClCompile Include="src\cpu\h83002\h83002.c" />
+    <ClCompile Include="src\cpu\i386\i386.c" />
+    <ClCompile Include="src\cpu\i8051\i8051.c" />
+    <ClCompile Include="src\cpu\i960\i960.c" />
+    <ClCompile Include="src\cpu\m37710\m37710.c" />
+    <ClCompile Include="src\cpu\m37710\m37710o0.c" />
+    <ClCompile Include="src\cpu\m37710\m37710o1.c" />
+    <ClCompile Include="src\cpu\m37710\m37710o2.c" />
+    <ClCompile Include="src\cpu\m37710\m37710o3.c" />
+    <ClCompile Include="src\cpu\mb86233\mb86233.c" />
+    <ClCompile Include="src\cpu\mb86235\mb86235.c" />
+    <ClCompile Include="src\cpu\mn10200\mn10200.c" />
+    <ClCompile Include="src\cpu\nec\v25.c" />
+    <ClCompile Include="src\cpu\sh3\sh3.c" />
+    <ClCompile Include="src\cpu\sharc\sharc.c" />
+    <ClCompile Include="src\cpu\tms57002\tms57002.c" />
+    <ClCompile Include="src\sound\c352.c" />
+    <ClCompile Include="src\sound\mpeg_audio.c" />
+    <ClCompile Include="src\sound\ymz770.c" />
+    <ClCompile Include="src\sound\zsg2.c" />
+    <ClCompile Include="src\lib\libchdr\deps\lzma\LzFind.c" />
+    <ClCompile Include="src\lib\libchdr\deps\lzma\LzmaDec.c" />
+    <ClCompile Include="src\lib\libchdr\deps\lzma\LzmaEnc.c" />
+    <ClCompile Include="src\lib\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="src\lib\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="src\lib\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="src\lib\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="src\lib\libchdr\src\libchdr_huffman.c" />
+    <ClCompile Include="src\lib\sljit\sljit_mame.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\artwork.h">

@@ -28,6 +28,8 @@
 #define BIT( x, n )			( ( ( x ) >> ( n ) ) & 1 )
 #endif
 
+double _HUGE = 1e308; /* infinito */
+
 typedef struct
 {
 	UINT32 t1, t2;
@@ -2392,7 +2394,8 @@ static void execute_op(UINT32 opcode)
 			break;
 
 		default:
-			i960_fatal("I960: %x: Unhandled %02x\n", m_PIP, opcode >> 24);
+			logerror("I960: %x: Unhandled %02x\n", m_PIP, opcode >> 24);
+			break;
 	}
 
 }
