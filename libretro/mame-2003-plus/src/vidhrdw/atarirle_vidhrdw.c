@@ -883,13 +883,13 @@ if (hilite)
 
 			for (ty = sy; ty <= ey; ty++)
 			{
-				plot_pixel(bitmap1, sx, ty, rand() & 0xff);
-				plot_pixel(bitmap1, ex, ty, rand() & 0xff);
+				plot_pixel(bitmap1, sx, ty, mame_rand_video() & 0xff);
+				plot_pixel(bitmap1, ex, ty, mame_rand_video() & 0xff);
 			}
 			for (tx = sx; tx <= ex; tx++)
 			{
-				plot_pixel(bitmap1, tx, sy, rand() & 0xff);
-				plot_pixel(bitmap1, tx, ey, rand() & 0xff);
+				plot_pixel(bitmap1, tx, sy, mame_rand_video() & 0xff);
+				plot_pixel(bitmap1, tx, ey, mame_rand_video() & 0xff);
 			}
 		} while (0);
 fprintf(stderr, "   Sprite: c=%04X l=%04X h=%d X=%4d (o=%4d w=%3d) Y=%4d (o=%4d h=%d) s=%04X\n",
@@ -912,6 +912,9 @@ void draw_rle(struct atarirle_data *mo, struct mame_bitmap *bitmap, int code, in
 	int x, int y, int xscale, int yscale, const struct rectangle *clip)
 {
 	UINT32 palettebase = mo->palettebase + color;
+  // draw it with appropriate flipping; the pen base is aligned to the
+	// object's depth (color and pixel bits cannot overlap)
+	//UINT32 palettebase = (mo->palettebase + color) & ~UINT32((1 << rledata->bpp) - 1);
 	const struct atarirle_info *info = &mo->info[code];
 	int scaled_xoffs = (xscale * info->xoffs) >> 12;
 	int scaled_yoffs = (yscale * info->yoffs) >> 12;

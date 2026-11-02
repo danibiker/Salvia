@@ -118,8 +118,6 @@ extern struct GfxDecodeInfo sys16_gfxdecodeinfo[];
 /* encryption decoding */
 void endurob2_decode_data(data16_t *dest,data16_t *source,int size);
 void endurob2_decode_data2(data16_t *dest,data16_t *source,int size);
-void enduror_decode_data(data16_t *dest,data16_t *source,int size);
-void enduror_decode_data2(data16_t *dest,data16_t *source,int size);
 
 void aurail_decode_data(data16_t *dest,data16_t *source,int size);
 void aurail_decode_opcode1(data16_t *dest,data16_t *source,int size);
@@ -270,11 +268,10 @@ void system18_set_grayscale(int enable);
 void system18_set_vdp_enable(int enable);
 void system18_set_vdp_mixing(int mixing);
 
-/* vidhrdw/segac2.c */
-void update_system18_vdp( struct mame_bitmap *bitmap, const struct rectangle *cliprect );
-void start_system18_vdp(void);
-READ16_HANDLER( segac2_vdp_r );
-WRITE16_HANDLER( segac2_vdp_w );
+/* the System 18 VDP (vidhrdw/segas18.c, on vidhrdw/segavdp.c) */
+int  system18_vdp_start(void);
+void system18_vdp_update( struct mame_bitmap *bitmap, const struct rectangle *cliprect );
+VIDEO_EOF( system18 );
 
 
 /* video driver constants (vary with game) */

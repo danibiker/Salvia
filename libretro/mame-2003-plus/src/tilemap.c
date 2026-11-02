@@ -2806,7 +2806,7 @@ static UINT8 TRANSP(HandleTransparencyPen)(struct tilemap *tilemap, UINT32 x0, U
 				x = x0+(yx%MAX_TILESIZE);
 				y = y0+(yx/MAX_TILESIZE);
 				*(x+(UINT16 *)pixmap->line[y]) = PAL_GET(pen);
-				((UINT8 *)transparency_bitmap->line[y])[x] = (pen==transparent_pen)?code_transparent:code_opaque;
+        ((UINT8 *)transparency_bitmap->line[y])[x] = (pen==transparent_pen)?code_transparent:code_opaque;
 			}
 			pPenData += pitch/2;
 		}

@@ -1641,11 +1641,13 @@ void register_banks(void)
 	int cpunum, i;
 	int banksize[MAX_BANKS];
 	int bankcpu[MAX_BANKS];
+	int bankwrite[MAX_BANKS]; /* bank appears in a write map */
 
 	for (i=0; i<MAX_BANKS; i++)
 	{
 		banksize[i] = 0;
 		bankcpu[i] = -1;
+		bankwrite[i] = 0;
 	}
 
 	/* loop over CPUs */
@@ -1661,7 +1663,8 @@ void register_banks(void)
 			UINT32 size = memory_region_length(REGION_CPU1 + cpunum);
 			if (size > (1<<bits))
 				size = 1 << bits;
-			rg_add_entry(0, size-1, RG_SAVE_READ|RG_SAVE_WRITE);
+			if (size > 0)	/* a CPU with no region (e.g. a program uploaded in its RAM) */
+				rg_add_entry(0, size-1, RG_SAVE_READ|RG_SAVE_WRITE);
 		}
 
 
@@ -1725,6 +1728,7 @@ void register_banks(void)
 						if (banksize[HANDLER_TO_BANK(h)] < size)
 							banksize[HANDLER_TO_BANK(h)] = size;
 						bankcpu[HANDLER_TO_BANK(h)] = cpunum;
+						bankwrite[HANDLER_TO_BANK(h)] = 1;
 						mode = RG_DROP_WRITE;;
 					}
 					else
@@ -1769,6 +1773,14 @@ void register_banks(void)
 
 	for (i=0; i<MAX_BANKS; i++)
 		if (banksize[i])
+		{
+			/* a large bank that no write map touches is ROM (ST-V cart 48MB, CAGE sound ROM 18MB).
+			   Its bytes never change, so keep them out of the save state (netplay keeps dozens of states). */
+			if (!bankwrite[i] && banksize[i] >= 0x100000)
+			{
+				log_cb(RETRO_LOG_INFO, LOGPRE "read-only bank %d (%d bytes) left out of the save state\n", i, banksize[i]);
+				continue;
+			}
 			switch (cpunum_databus_width(bankcpu[i]))
 			{
 			case 8:
@@ -1781,6 +1793,7 @@ void register_banks(void)
 				state_save_register_UINT32("bank", i, "ram", (UINT32 *)cpu_bankbase[i], banksize[i]/4);
 				break;
 			}
+		}
 
 }
 

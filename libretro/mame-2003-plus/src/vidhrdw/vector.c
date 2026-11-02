@@ -163,6 +163,21 @@ static void update_options(void)
 }
 
 /*
+ * The screen bitmap was reallocated at another size (vector resolution
+ * changed while the game runs): the pixels drawn last frame are in the old
+ * bitmap, so they must not be erased in the new one
+ */
+static int vector_resized;
+
+void vector_bitmap_resized(void)
+{
+	vector_resized = 1;
+	p_index = 0;
+	if (vector_dirty_list)
+		vector_dirty_list[0] = VECTOR_PIXEL_END;
+}
+
+/*
  * Initializes vector game video emulation
  */
 
@@ -476,7 +491,7 @@ void vector_add_point (int x, int y, rgb_t color, int intensity)
 
 	if (options.vector_flicker && (intensity > 0))
 	{
-		intensity += (intensity * (0x80-(rand()&0xff)) * options.vector_flicker)>>16;
+		intensity += (intensity * (0x80-(mame_rand_video()&0xff)) * options.vector_flicker)>>16;
 		if (intensity < 0)
 			intensity = 0;
 		if (intensity > 0xff)
@@ -508,7 +523,7 @@ void vector_add_point_callback (int x, int y, rgb_t (*color_callback)(void), int
 
 	if (options.vector_flicker && (intensity > 0))
 	{
-		intensity += (intensity * (0x80-(rand()&0xff)) * options.vector_flicker)>>16;
+		intensity += (intensity * (0x80-(mame_rand_video()&0xff)) * options.vector_flicker)>>16;
 		if (intensity < 0)
 			intensity = 0;
 		if (intensity > 0xff)
@@ -733,6 +748,13 @@ VIDEO_UPDATE( vector )
 	/* the old pixels which get removed are marked dirty immediately,  */
 	/* new pixels are recognized by setting new->dirty */
 	dirty_index = 0;
+	/* after a resize the previous vectors were drawn on the old bitmap: */
+	/* don't compare with them, everything is redrawn */
+	if (vector_resized)
+	{
+		old_index = 0;
+		vector_resized = 0;
+	}
 	clever_mark_dirty();
 
 	/* clear ALL pixels in the hidden map */

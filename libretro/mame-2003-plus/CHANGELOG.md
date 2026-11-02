@@ -2,7 +2,8 @@
 
 * Current repository maintainers: arcadez, mahoneyt944, markwkidd, twinaphex
 * Past repository maintiners: arnoldsecret, grant2258
-* Significant code contributors to this project: AMadvanceMAME, BritneysPAIRS, dink, FBN Dev, grant2258, iq_132, MAME Dev, Mistydreams, ShmupMAME
+* Significant code contributors to this project: AMadvanceMAME, BritneysPAIRS, dink,
+* FBN Dev, grant2258, iq_132, MAME Dev, Mistydreams, ShmupMAME, Zanac, AI agent claude
 
 The list of direct contributors to the MAME 2003-Plus github repository can be found at https://github.com/libretro/mame2003-plus-libretro/graphs/contributors. Additional contributor credits can be found in LICENSE.md, CHANGELOG.old, and in the individual driver source files.
 
@@ -26,10 +27,14 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Backfire!
 * Back Fire (Tecmo)
 * Bang Bang Busters
+* Bare Knuckle (scrambled bootleg of Mega Drive version) - Romset `barekch` - 6 button pads
+* Bare Knuckle II (bootleg of Mega Drive version) - Romset `barek2mb` - its PIC16C57 emulated
 * Bare Knuckle II (chinese bootleg of Megadrive version)
 * Bare Knuckle III (bootleg of Megadrive version)
 * Baryon: Future Assault
+* Beastie Feastie (Epos Tristar 9000) - Romset `beastf`; the Pac-Man conversion is now `beastfp`, as in current MAME
 * Big Fight - Big Trouble In The Atlantic Ocean
+* Bio-Hazard Battle (scrambled bootleg of Mega Drive version) - Romset `biohzdmb`
 * Bomb Kick
 * Boogie Wings
 * Born To Fight
@@ -38,6 +43,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Bubble Bobble 2 - The Return Of Super Drunk (prototype)
 * Bubble Buster
 * Buccaneers
+* Buggy Boy/Speed Buggy (cockpit, rev. D and B), Buggy Boy Junior/Speed Buggy (upright)
 * Bullet (unprotected of FD1094 317-0041 set)" )
 * Cabal (World, Joystick version)
 * Calorie Kun vs Moguranian
@@ -48,6 +54,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Choky! Choky!
 * Choutetsu Brikin'ger - iron clad
 * Clockwork Aquario
+* Columns II: The Voyage Through Time (World) - Romset `columns2`; the old `columns2` (Japan) is now its clone `column2j`, as in current MAME
 * Combat Hawk
 * Come Back Toto
 * Cookie & Bibi
@@ -62,6 +69,8 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Cycle Warriors
 * Daikaiju no Gyakushu
 * Danger Express (prototype)
+* Deathsmiles - Romset `deathsml`
+* Deathsmiles MegaBlack Label - Romset `dsmbl`
 * Deluxe 5
 * Denjin Makai 
 * Deer Hunting
@@ -69,6 +78,8 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Dice - The Dice Game
 * Diet Go Go
 * Digger (CVS)
+* DoDonPachi Dai-Fukkatsu (Ver 1.5 and 1.0) - Romsets `ddpdfk`, `ddpdfk10`
+* DoDonPachi Dai-Fukkatsu Black Label - Romset `dfkbl`
 * Dolmen
 * Dodge Man
 * DoDonPachi Dai-Ou-Jou
@@ -80,6 +91,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Dyna Gear
 * Eeekk!
 * ESPGaluda
+* Espgaluda II (all sets) - Romsets `espgal2`, `espgal2a`, `espgal2b`
 * F1 Super Lap (World)
 * Fantasy Zone II - The Tears of Opa-Opa (System 16C version)
 * Fever SOS
@@ -109,15 +121,19 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Hard Times
 * Head On Channel (Japan, Prototype)
 * Heavy Smash
+* Heavy Unit
 * Hoops '96
 * Hypernoid
 * Hyper Crash
 * Hyper Street Fighter II (All Sets)
+* Ibara (all sets) - Romsets `ibara`, `ibarao`
+* Ibara Kuro Black Label (all sets) - Romsets `ibarablk`, `ibarablka`
 * In Your Face
 * Inca * Mature *
 * Indian Battle
 * Invasion
 * Jammin (Atari Prototype)
+* Jingling Jiazu Genie 2000 - Romset `jingling`
 * Joe & Mac Returns
 * Jolly Jogger
 * Jurassic Park (Bootleg Of Megadrive Version)
@@ -150,11 +166,17 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Monsters World (Bootleg Of Super Pang)
 * Monster Maulers
 * More More
+* Mortal Kombat 3 (scrambled bootleg of Mega Drive version) - Romset `mk3mdb` - 6 button pads
 * Mortal Race
 * Mouse Shooter GoGo
 * Ms. Pacman Twin
 * Mrs. Dynamite
+* Muchi Muchi Pork! - Romset `mmpork`
 * Multi Champ Deluxe * Mature *
+* Mushihime-Sama (all sets) - Romsets `mushisam`, `mushisama`, `mushisamb`
+* Mushihime-Sama Futari Black Label (all sets) - Romsets `futaribl`, `futariblj`
+* Mushihime-Sama Futari Ver 1.5 and 1.0 (all sets) - Romsets `futari15`, `futari15a`, `futari10`
+* New Zero Team
 * Ninja Kazan
 * Oo Parts (Japan, Prototype)
 * Opa Opa (Rev A Unprotected)
@@ -168,6 +190,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Passing Shot (Japan 2 players) 
 * Penky
 * Photo Y2K 2
+* Pink Sweets: Ibara Sorekara (all sets) - Romsets `pinkswts`, `pinkswtsa`, `pinkswtsb`, `pinkswtsx`
 * Pirate Treasure
 * Planet Probe
 * Pochi & Nyaa
@@ -177,16 +200,23 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Power Instinct Matrimelee
 * Power Up Baseball
 * Progear
+* Puckman Pockimon Genie 2000 - Romset `puckpkmn` - the set of current MAME; the old `puckpkmn` set is now its clone `puckpkmnb`, as in current MAME
+* Puyo Puyo (World) - Romset `puyo`; the old `puyopuyo`, `puyopuya` and `puyopuyb` are now its clones `puyoj`, `puyoja` and `puyobl`, as in current MAME
 * Puzz Loop 2 (All Sets)
 * Puzzle Break
 * Puzzle Star
+* Puzzle! Mushihime-Tama (all sets) - Romsets `mushitam`, `mushitama`
 * Puzzli 2
 * Puzzli 2 Super
 * Quick Shots (Clone Of Target Hits)
 * Racing Beat
 * Racing Hero
 * Rage Of The Dragons
+* Raiden II
+* Raiden DX
+* Raiden II / Raiden DX New
 * Recalhorn (prototype)
+* Revenger '84 (newer) - Romset `revngr84`; the older set `revenger` is a bad dump and stays not working
 * Riot
 * Rolling Crush
 * Round Up 5 - Super Delta Force
@@ -202,10 +232,13 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Sega Megaplay : Streets Of Rage II
 * Sega Megaplay : Tecmo World Cup
 * Sega Sonic Bros (Japan, Prototype)
+* SegaSonic Cosmo Fighter (World and Japan) - Romsets `sonicfgt`, `sonicfgtj`
+* SegaSonic Popcorn Shop (Rev B) - Romset `sonicpop` - the popcorn machine itself isn't emulated, as in current MAME
 * Sengoku 3
 * Shuihu Feng Yun Zhuan
 * Skater (Deco Cassette)
 * Skull Fang
+* Sky Robo / Tatakae! Big Fighter
 * Slap Shooter
 * Snow Brothers 3 - Magical Adventure
 * Snk Vs Capcom : Svc Chaos (MVS)
@@ -213,19 +246,26 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Sonic Boom
 * Sonic The Hedgehog 2 (Bootleg Of Megadrive Version)
 * Sonic The Hedgehog 3 (Bootleg Of Megadrive Version)
+* Soreike! Anpanman Popcorn Koujou (Rev B and Rev A) - Romsets `anpanman`, `anpanmana` - the popcorn machine itself isn't emulated, as in current MAME
 * Space Fever High Splitter
 * Space Launcher
 * Space Raider
 * Spectrum 2000 (Euro)
 * Squash
+* Stack Columns (World) - Romset `stkclmns`; the old `stkclmns` (Japan) is now its clone `stkclmnsj`, as in current MAME
+* Stadium Cross (World, linkable) and (US) - Romsets `scrossa`, `scrossu`; `scross` now uses the ROM names of current MAME
 * Star Fire 2
 * Steel Worker
+* Street Fighter III 3rd Strike: Fight for the Future (Widescreen 20220908, Bank Bank hack) - Romset `sfiii3ws`
+* Street Fighter Zero 3 Mix v0.32 (Zero800 hack, CPS2Turbo) - Romset `sfz3mix`, optional music samples `sfz3mix.zip`
 * Success Joe
 * Super Bishi Bashi Championship (ver JAA, 2 Players)
 * Super Bubble Bobble (Sun Mixing, Megadrive clone hardware)
 * Super Doubles Tennis (Deco Cassette)
+* Sunset Riders (scrambled bootleg of Mega Drive version) - Romset `srmdb`
 * Super Monaco GP
 * Super Rider
+* Super Street Fighter II - The New Challengers (scrambled bootleg of Mega Drive version) - Romset `ssf2mdb` - 6 button pads
 * Super Trio
 * SWAT Police
 * Tang Tang
@@ -241,6 +281,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * ThunderForce AC (Japan, prototype, bootleg)
 * Top Driving
 * Top Roller
+* Top Shooter - Romset `topshoot`
 * Toppy & Rappy
 * Torus * Mature *
 * Touch & Go (Korea, unprotected)
@@ -252,14 +293,21 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Turkey Hunting
 * Twin Cobra 2
 * Twin Action
+* Twin Squash - Romset `twinsqua`
 * Twinkle
 * Twinkle Tale (Bootleg Of Megadrive Version)
+* TX-1 (World, Japan rev. B and C)
 * Tylz
 * Ufo Senshi Yohko Chan
 * Varia Metal
 * Vasara 2
 * Virtua Bowling
 * Virtua Fighter
+* Waku Waku Anpanman (Rev A and original) - Romsets `wwanpanm`, `wwanpanmo`
+* Waku Waku Jumbo (Rev A) - Romset `wwjumbo`
+* Waku Waku Marine - Romset `wwmarine`
+* Waku Waku Pajero - Romset `wwpajero`
+* Waku Waku Sonic Patrol Car - Romset `soniccar`
 * Wheels Runner
 * Wing Force
 * Wing Shooting Championship
@@ -268,20 +316,39 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Woodpecker
 * World Cup Volley 95
 * Xeno Crisis
+* Zero Team 2000
 * Zintrick
 * Zupapa
 
 ## New Clones
 
+* 800 Fathoms (older), Knock Out!! (bootleg, set 2 and set 3), Triple Punch (set 2) - Romsets `800fatha`, `knockoutb`, `knockoutc`, `triplepa`
+* Alien Storm (bootlegs of the 3 players and Japan sets) - Romsets `astorm3d`, `astormud`, `astormjd`
+* Asura Buster - Eternal Warriors (USA), (Japan, set 2) and (Japan) (ARCADIA review build) - Romsets `asurabus`, `asurabusja`, `asurabusjr`; the Japan set 1 is now `asurabusj`, as in current MAME
+* Bare Knuckle III (bootleg of Mega Drive version, alt set, the PIC simulated) - Romset `barek3mba` - not working, as in current MAME
+* Bare Knuckle III / Sunset Riders (scrambled bootleg of Mega Drive versions) - Romset `bk3ssrmb` - not working, as in current MAME (only Bare Knuckle III boots)
+* Bloxeed (US, C System, Rev A) - Romset `bloxeedu`
+* Borench (set 2) and (Japan) - Romsets `borencha`, `borenchj`
+* Columns (US, cocktail, Rev A) - Romset `columnsu`
+* Print Club (World) and (Japan Vol.3) - Romsets `pclub`, `pclubjv3` - not working (camera and printer), as in current MAME
+* Puzzle & Action: Ichidant-R (World) (bootleg) - Romset `ichirbl`
+* Puzzle & Action: Tant-R (Japan) (bootleg set 3 and set 4) - Romsets `tantrbl3`, `tantrbl4`
+* Ribbit! (Japan) - Romset `ribbitj`
+* Sunset Riders / Super Street Fighter II - The New Challengers (scrambled bootleg of Mega Drive versions) - Romset `srssf2mb` - not working, as in current MAME (the order of the ROMs is not known)
 * Battle Shark (Japan, Joystick)
+* Bloxeed (bootleg) - Romset `bloxeedd`
 * Botanic (French version)
 * Bubble Bobble (prototype on tokio hardware)
 * Calorie Kun vs Moguranian (bootleg)
 * Cannon Dancer
+* Clutch Hitter (bootlegs) - Romsets `cltchitrd`, `cltchitrjd`
 * Competition Golf Final Round (old version) - `compglfo`
+* Cotton (bootlegs of the US and Japan sets) - Romsets `cottonud`, `cottonjd`, `cottonjad`
 * Crouching Tiger Hidden Dragon 2003
 * Crouching Tiger Hidden Dragon 2003 Super Plus
 * Crystal Castles (Joystick Version)
+* D. D. Crew (bootlegs of the six FD1094 sets) - Romsets `ddcrewd`, `ddcrewud`, `ddcrew1d`, `ddcrew2d`, `ddcrewjd`, `ddcrewj2d`
+* Desert Breaker (bootlegs) - Romsets `desertbrd`, `desertbrjd`
 * DJ Boy (Japan)
 * DoDonPachi Dai-Ou-Jou (Black Label)
 * Double Dragon 3 - The Rosetta Stone (Japan)
@@ -295,6 +362,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Gals Panic DX * Mature *
 * Ghox (Joystick)
 * Ganbare! Gonta!! 2 / Party Time: Gonta the Diver II * Mature *
+* Golden Axe II (Mega Play, original revision) - Romset `mp_gaxe2a`
 * GunNail (Location Test)
 * Guwange Special Version
 * Hacha Mecha Fighter (bootleg)
@@ -307,6 +375,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * King of Gladiator
 * Knuckle Bash 2
 * Kyukyoku Tiger (Japan, 2 Players) 
+* Laser Ghost (bootlegs) - Romsets `lghostd`, `lghostud`
 * Mad Ball V2.0 * Mature * - Romset `madball`
 * Magical Drop
 * Magical Drop Plus 1
@@ -315,6 +384,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Renegade (US, Bootleg)
 * Safari Rally (World) - safarir
 * Sexy Parodius (Ver AAA) * Mature *
+* Shadow Dancer (World, Japan and US) - Romsets `shdancer`, `shdancerj`, `shdancer1` (were `shdancer`, `shdancrj`, `shdancrb`), now on the System 18 memory mapper and video as in current MAME
 * Snk Vs Capcom : Svc Chaos (bootleg)
 * Super Bishi Bashi Championship (ver KAA, 3 Players)
 * Target Ball * Mature * (Romset `tgtballa`)
@@ -364,6 +434,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Metal Slug 2 - Turbo (Trap15, Hack)
 * Midnight Resistance (joystick hack bootleg)
 * Mortal Kombat 2 Plus Beta 2
+* Pink Sweets: Suicide Club (2017 hack of Pink Sweets) - Romset `pinkswtssc`
 * TANK III (joystick hack bootleg)
 * The Eye Of The Typhoon (Beta 7)
 * Tron freeplay custom rom
@@ -374,6 +445,8 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 
 * Agent Super Bond - Romset `superbon` - colors fixed
 * Alcon - Romset: `alcon`
+* Alien Storm (World and Japan 2 players, World and US 3 players) - Romsets `astorm`, `astormj`, `astorm3`, `astormu` - FD1094 encrypted 68000, Sega System 18
+* Bloxeed (Japan, two sets) - Romsets `bloxeed`, `bloxeeda` - FD1094 encrypted 68000, Sega System 18
 * Arch Rivals - Romset: `archrivl`
 * Avengers In Galactic Storm US - Romset: `avengrgs`
 * Avengers In Galactic Storm Japan - Romset: `avengrgsj`
@@ -391,10 +464,14 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Cheeky Mouse - Romset `cheekyms` - colors fixed
 * Chouji Meikyuu Legion (ver 1.05) - Romset `legiono`
 * Competition Golf Final Round (revision 3) - `compgolf`
+* Cotton (World, US, Japan Rev A and Rev B) - Romsets `cotton`, `cottonu`, `cottonj`, `cottonja` - FD1094 encrypted 68000
+* Clutch Hitter (US and Japan) - Romsets `cltchitr`, `cltchitrj` - FD1094 encrypted 68000, Sega System 18
 * Crater Raider - Romset `crater`
 * Crazy Climber 2 - Romset `cclimbr2`
 * Dark Edge - Romset `darkedge`
 * DD Crew - Romset `ddcrew`
+* D. D. Crew (all FD1094 sets: World 2, 3 and 4 players, US, Japan 2 and 4 players) - Romsets `ddcrew`, `ddcrew1`, `ddcrew2`, `ddcrewu`, `ddcrewj`, `ddcrewj2` - Sega System 18, as in current MAME
+* Desert Breaker (World and Japan) - Romsets `desertbr`, `desertbrj` - FD1094 encrypted 68000, Sega System 18
 * Demolition Derby - Romset `demoderb`
 * Die Hard Arcade - Romset `diehard` - Requires a fast system; video and sound issues remain
 * Discs Of Tron - Romsets `dotron` and `dotrone`
@@ -436,6 +513,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Kick - Romset `kick`
 * Kick'N Run- Romset `kicknrun`
 * Kozmik Kroozr - Romset `kroozr`
+* Laser Ghost (World, US and Japan) - Romsets `lghost`, `lghostu`, `lghostj` - FD1094 encrypted 68000, Sega System 18, light guns
 * Legion (ver 2.03) - Romset `legion`
 * Macho Mouse - Romset `machomou` - colors fixed
 * Mario's Open Golf (Playchoice 10) - Romset `pc_moglf`
@@ -452,11 +530,13 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Phantasm - Romset `phantasm`
 * Photo Y2k - Romset `photoy2k`
 * Pigskin 621AD - Romset `pigskin`
+* Princess Clara Daisakusen - Romset `prikura`
 * Power Drive - Romset `powerdrv`
 * Prebillian - `pbillian`
 * Pro Baseball Skill Tryout - `tryout`
 * Puzzle King (PacMan 2 with Tetris & HyperMan 2 & Snow Bros - `4in1boot`
 * Rabbit - Romset `rabbit` - no sound
+* Raiden II - Romset `raiden2`
 * Rampage - Romsets `rampage` and `rampage2`
 * Risky Challenge - Romset `riskchal`
 * Rohga Armor Force - Romsets `rohga`, `rohgah`, `rohgau`
@@ -467,6 +547,15 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Satan's Hollow - Romset `shollow`
 * Sega Megaplay : Golden Axe II - Romset `mp_gaxe2`
 * Sega Megaplay : Sonic The Hedgehog - Romset `mp_sonic`
+* Sega Mega-Tech : After Burner - Romset `mt_aftrb` - SMS based
+* Sega Mega-Tech : Astro Warrior - Romset `mt_astro` - SMS based
+* Sega Mega-Tech : Bonanza Bros. - Romset `mt_bbros` - the good dump of current MAME
+* Sega Mega-Tech : Ghouls'n Ghosts - Romset `mt_gng` - the good dump of current MAME
+* Sega Mega-Tech : Golden Axe II - Romset `mt_gaxe2`
+* Sega Mega-Tech : Great Golf - Romset `mt_ggolf` - SMS based, the good dump of current MAME
+* Sega Mega-Tech : Parlour Games - Romset `mt_parlg` - SMS based
+* Sega Mega-Tech : Shinobi - Romset `mt_shnbi` - SMS based
+* Sega Mega-Tech : Tetris - Romset `mt_tetri` - the good dump of current MAME
 * Shisensho II * Mature * - Romset `shisen2`
 * Shogun Warriors - Romset `shogwarr`
 * Shrike Avenger - Romset `shrike`
@@ -475,6 +564,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Slipstream - Romset `slipstrm`
 * Snowboard Championship - Romset `snowboar`
 * Solar Fox - Romset `solarfox`
+* Songjiangyanyi Final - Romset `songjang` - the Mega Drive board of current MAME, the HBLANK status it waits for
 * Space Position - Romset `spcpostn`
 * Space Seeker - Romset `spaceskr`
 * Speed Spin - Romset `speedspn` - gfx glitches
@@ -487,6 +577,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Tapper - Romset `tapper`
 * Target Ball (Nude) - Romset `tgtball`
 * Task Force Harrier - Romsets `tharrier` and `tharierj`
+* The Dealer - Romset `dealer` - Epos Tristar 9000 board from current MAME
 * Thunder Blade - Romsets `thndrbld` and `thndrbld1`
 * Thunder Dragon - Romset `tdragon` - Minor sound issues remaining
 * Thunder Strike - Romset `tstrike`
@@ -502,6 +593,7 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 * Under Fire - Romset `undrfire`
 * U.S. Classic - Romset `usclssic` - colors fixed
 * VS. Hot Smash - `hotsmash`
+* Wally wo Sagase! (rev A and B, 2 and 3 players) - Romsets `wwallyj`, `wwallyja`, `wwallyja3p` - FD1094 encrypted 68000, Sega System 18, trackballs
 * Wonder Boy in Monster Land (Japan New Ver.) - Romset `wbml`
 * Wonder Boy in Monster Land (Japan Old Ver.) - Romset `wbmljo`
 * Xenophobe - Romset `xenophob`
@@ -571,10 +663,12 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 
 ## Games now with improved sound
 
+* 800 Fathoms, Knock Out!!, Mariner, Triple Punch: AY-8910 clock of current MAME (1.536 MHz, verified on hardware), the sound was 16% too high and too fast
 * 1945kIII
 * Air Buster
 * Ashita no Joe
 * Asterix
+* Asura Blade, Asura Buster (no more repeated voices and sound effects)
 * Athena
 * Bandito
 * Big Event Golf
@@ -692,6 +786,8 @@ The list of direct contributors to the MAME 2003-Plus github repository can be f
 
 ## New and/or Recommended Input Options and Settings
 
+* Ikari (joystick hack bootleg): dual stick aiming. Set the 'Aim with Right Stick' DIP switch to On (Tab menu, Dip Switches): the player walks with the left stick and aims and fires with the right stick; with the right stick released he fires where he walks, as before. Off by default.
+
 * Added 'X-Way Joystick' Option to Analog Controls Menu only for IPT_DIAL and IPT_DIAL_V devices.  This option is for use with x-way rotary joysticks (where the joystick can rotate X discrete steps, 8 or 12 appears to be most common).  The joystick can still move up, down, left, right and diagonally. The most famous game to use this control scheme is Ikari Warriors.
 Notes on this option:
   - When on, prevents the character from rotating two discrete steps sometimes when the rotary joystick is just rotated one step.
@@ -765,6 +861,24 @@ Notes on this option:
 
 
 ## Misc Changes
+* Save states (RunAhead, netplay) of the Galaxian/Scramble/Frogger hardware: Galaxian video (stars, flip, banks, background), the 7474 flip-flops, the Scramble sound RAM and timer, the RC filters of the sound streams, the global sound enable
+* Sega System 18: all the games on the 315-5195 memory mapper, the segaic16 video and the VDP layer as in current MAME (171-5874, 171-5987 and Shadow Dancer ROM boards, FD1094 sets, Laser Ghost light guns, Wally wo Sagase! trackballs); the old `astorm` and `astorm2p` are now `astormj` and `astorm`
+* Sega Mega Drive VDP (315-5313): now a module of its own (`vidhrdw/segavdp.c`), started with its own configuration by System C/C2, Mega-Tech, Mega Play, the Mega Drive bootlegs and System 18, so a change for one board no longer reaches the others; a game loaded after a Mega Play game in the same session no longer inherits its interrupt mode (e.g. Columns attract out of sync), and the VDP window position and VBLANK flag are in the save states
+* Sega Mega Play: its own driver (`drivers/megaplay.c`, as in current MAME), the Mega Drive part shared with the other Mega Drive based boards; Tecmo World Cup is now `mp_twcup` and the BIOS version 2 ROM `epr-a15294.ic2`, as in current MAME
+* Sega Mega-Tech: its own driver (`drivers/megatech.c`, as in current MAME), sets, ROMs and names as in current MAME (good dumps of `mt_bbros`, `mt_ggolf`, `mt_gng`, `mt_tetri`, the instruction ROMs in the cart at 0x300000); the Master System carts now run, on the Mega Drive in Mark III mode as in current MAME (the VDP in mode 4, the Z80 with the Sega mapper); the BIOS cart slots as in current MAME (the menu lists the one cart in slot 1, the slot RAM, the window into the cart), the BIOS display in its 224 line mode (the MENU title was cut) and drawn line by line; the Mega Drive VDP line timing and partial updates now count its own lines below the BIOS screen (they used the scanlines of the double screen); the 68000 writes to 0xa02000 of the boards without the Mega Play BIOS no longer go through a NULL pointer (Great Golf and Great Soccer crashed)
+* Sega Mega Play: the BIOS overlay is transparent on colour 0 of both its palettes and covers its borders, as in current MAME (the boot logo screen was hidden behind a green background)
+* Sega Mega Drive based bootlegs: their own driver (`drivers/megadriv_acbl.c`, as in current MAME), with the board variants of current MAME (the 6 button pads, the DIP switches at 0x770070 of the scrambled boards, the 3rd I/O port coins, the PIC16C57 of `barek2mb`); the new sets take their V-INT / H-INT through the VDP interrupt enables as on the real hardware (Mortal Kombat 3 crashed at boot), the descrambling of the bootlegs and the PIC of `barek2mb` now also work on big-endian hosts
+* Genie / Y-BOX and Sun Mixing boards: their own drivers (`drivers/megadriv_ybox.c`, `drivers/megadriv_sunmix.c`, as in current MAME); the Y-BOX games run on the Mega Drive machine as in MAME (Z80, I/O, the VDP interrupts and HBLANK as on the real hardware), with the protection read back latches and the ROM address remapping of Shuihu Feng Yun Zhuan of current MAME
+* Sega System C/C2: `drivers/segac2.c` now has only System C/C2, the Mega Drive part shared by the other boards is in `machine/megadriv.c` (as `megadriv.cpp` in current MAME); the sets, ROMs, titles, inputs and DIP switches as in current MAME; the protection chip as the EPM5032 logic of each game of current MAME (no more Ribbit! and Puyo Puyo 2 workarounds and fake tables, Print Club Vol.2, 4 and 5 now get past the protection); the alternate palette mode of Ribbit! and Twin Squash (instead of the palette address watching of Ribbit!); the 68000 at 8.95 MHz and the 59.92 Hz refresh as in current MAME (it ran at 7.67 MHz and 60 Hz: the games now follow the timing of MAME frame for frame), the V-INT and H-INT held until the 68000 takes them as on the board, the address mirrors, the battery-backed work RAM (high scores kept, as in current MAME) and the coin meters on the I/O chip
+* YM2612 / YM3438: the busy flag after a data write (192 clocks, as in current MAME), and a timer started long after its last overflow runs a whole period instead of firing at once (Thunder Force AC, Bloxeed and the other System C2 games follow MAME again)
+* Sega Mega Play: the V-INT of the BIOS VDP comes about 12 lines after the Mega Drive VBLANK, as in current MAME (it came ~80 lines early, and the BIOS/game handshake on port C could miss: Tecmo World Cup stayed on a black screen)
+* Sega Mega Play / System E: the tiles of the SMS-type VDP are read byte by byte, so they are drawn right on big-endian hosts (the Mega Play BIOS screen had the wrong colours)
+* Sega Mega Drive VDP: in H32 mode the sprite table base uses bit 0 of register 5, as on the real VDP (the fighters of Super Street Fighter II were missing, the sprites of Bonanza Bros. on Mega-Tech were garbled)
+* PIC16C5x CPU core: the program counter wraps at the end of the program memory (the 2K parts start at 0x7ff and ran past the ROM), and the save states no longer register the ports and STATUS through a NULL pointer (the save of a game with a PIC crashed); these are in the data RAM, saved with the CPU memory
+* Save states (netplay, RunAhead with a second instance) of the Mega Drive based boards: the Z80 RAM and bus state and the Mega-Tech / Mega Play BIOS registers and RAM are saved (Gunstar Heroes and Mazin Wars Mega Play went out of sync after loading a state in a new instance); the SN76496 PSG is saved, and the YM2612 DAC enable is restored from its own register (0x2b, it was read from 0x2d)
+* Sega System 18 (also Moonwalker): the VDP palette writes no longer overflow the System 16 palette RAM (they corrupted the memory after it, e.g. garbled graphics in Shadow Dancer), and the sprite shadows over the VDP layer no longer index past the palette
+* Save states (RunAhead, netplay) of the Sega System 18 hardware: the RF5C68 PCM, the YM2612/YM3438 envelope, LFO, frequency and timer state, the VDP layer, the sound ROM bank
+* Save states (RunAhead, netplay) of the Sega System 16B hardware: the uPD7759 ADPCM chip, the sound CPU ROM bank, the segaic16 tilemap and sprite banks, flip, scroll latches and display enable
 * Added HD647180 MCU sound support for Fire Shark and Vimana [arcadez]
 * Added sound sample support for Cosmic Alien [BritneysPAIRS, arcadez]
 * Updated sample support for Donkey Kong and Donkey kong JR to MAME87 [BritneysPAIRS, arcadez]
@@ -1159,6 +1273,18 @@ could crash on the score calc between levels is sorted [amadvance, arcadez]
 * Ported across from FBL dink's fix for the broken text gfx layer in the Japanese version Of Cameltry [dink, arcadez]
 * Added support for Jammin a rare Atari prototype music game to the Donkey Kong driver [arcadez]
 * Added Saurian Front a super rare Williams prototype of Midway's Strike Force to the midyunit driver [arcadez]
-* Added Adventure Canoe to the taitosj driver [arcadez,  jackphilippi, dink]
+* Added Adventure Canoe to the taitosj driver [arcadez, jackphilippi, dink]
 * Added support for Ketsui: Kizuna Jigoku Tachi - IKD 2007 Special Version to pgm.c [arcadez]
-
+* Fixed a protection related problem with powerups in Burning Force [MAMEDev, arcadez]
+* Extended IREM Drum sample support to Lode Runner 3 and 4 [dink, arcadez]
+* Improved the dip switch options for Data East's Break Thru [arcadez]
+* Fixed BG GFX colours for Crater Raider [MAMEDev, arcadez]
+* Fixed multiple sound sample issues in TAD CORP's Toki [MAMEDev, arcadez]
+* Fixed sound sample playing for SEGA's Zaxxon [MAMEDev, arcadez]
+* Fixed Palette banking problems for Pleiads [MAMEDev, arcadez]
+* Added fixes from later MAME so that Princess Clara Daisakusen now works [MAMEDev, arcadez]
+* Ported a new raiden2.c driver Raiden II Raiden DX and Zero Team etc etc now playable [Salvia, MAMEDev, FBN, vanni and claude, arcadez]
+* Ported the Cave CV1000 driver from current MAME: SH-3 CPU (interpreter and a recompiler with the same results), the blitter, the YMZ770 sound chip, the NAND flash and the RTC9701 [MAMEDev, vanni and claude]
+* Added support for the hvyunit.c driver ported across from my xbox project [arcadez, mistydreams, vanni and claude]
+* Added Sky Robo / Tatakae! Big Fighter to armedf.c and hooked it up to the new mcs51 cpu
+[arcadez, grant2258, AdvanceMAME, Zanac]

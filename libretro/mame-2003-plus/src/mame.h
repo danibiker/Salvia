@@ -154,7 +154,6 @@ enum /* used to index content-specific flags */
 {
   CONTENT_NEOGEO = 0,
   CONTENT_STV,
-  CONTENT_DIEHARD,
   CONTENT_ALT_SOUND,
   CONTENT_VECTOR,
   CONTENT_DIAL,
@@ -177,6 +176,13 @@ enum /* used to index content-specific flags */
   CONTENT_JOYSTICK_DIRECTIONS,
   CONTENT_NVRAM_BOOTSTRAP,
   CONTENT_CHEAT_INPUT_PORT,
+  CONTENT_MIPS_DYNAREC,
+  CONTENT_ADSP_DYNAREC,
+  CONTENT_SH3_DYNAREC,
+  CONTENT_TX1_SCREENS,
+  CONTENT_CPU_COUNT,
+  CONTENT_SH2_DYNAREC,
+  CONTENT_STV_VIDEO_THREADS,
   CONTENT_end,
 };
 
@@ -218,6 +224,12 @@ struct GameOptions
 
   int      samplerate;		       /* sound sample playback rate, in KHz */
   bool     use_samples;	         /* 1 to enable external .wav samples */
+  bool     mips_dynarec;	       /* 1 to let drivers enable the MIPS recompiler */
+  bool     adsp_dynarec;	       /* 1 to let drivers enable the ADSP-2100 recompiler */
+  bool     sh3_dynarec;	       /* 1 to let drivers enable the SH-3 recompiler */
+  int      tx1_screens;	       /* TX-1 / Buggy Boy: 3 screens side by side, or 1 (the middle one) */
+  bool     sh2_dynarec;	       /* 1 to let drivers enable the SH-2 recompiler */
+  int      stv_video_threads;    /* ST-V: threads drawing the VDP2 screen in bands (0 or 1 = the main thread only) */
   bool     use_alt_sound;	       /* 1 to enable alternate ost samples */
 
   float	   brightness;		       /* brightness of the display */
@@ -257,7 +269,7 @@ struct GameOptions
   int      override_ad_stick;
   bool     input_toggle;
   bool     digital_joy_centering; /* center digital joysticks enable/disable */
-  double   cpu_clock_scale;
+  double   cpu_clock_scale[CPU_CLOCK_SCALE_SLOTS];
   int      autosave_hiscore;      /* default saves on exit / recursively saves every number of frames defined in hiscore.c / disabled bypasses hiscore implementation entirely */
 #if (HAS_CYCLONE || HAS_DRZ80)
   int      cyclone_mode;
@@ -359,8 +371,15 @@ void expand_machine_driver(void (*constructor)(struct InternalMachineDriver *), 
 /* set the current visible area of the screen bitmap */
 void set_visible_area(int min_x, int max_x, int min_y, int max_y);
 
+/* change the display aspect ratio while the game runs (the geometry is sent
+   again to the frontend with the next display update) */
+void set_display_aspect_ratio(int aspect_x, int aspect_y);
+
 /* force an erase and a complete redraw of the video next frame */
 void schedule_full_refresh(void);
+
+/* the vector resolution changed while the game runs: resize the display */
+int vector_resize_display(void);
 
 /* called by cpuexec.c to reset updates at the end of VBLANK */
 void reset_partial_updates(void);

@@ -142,7 +142,8 @@ struct cpuinfo
 
 	UINT64 	totalcycles;			/* total CPU cycles executed */
 	double	localtime;				/* local time, relative to the timer system's global time */
-	double	clockscale;				/* current active clock scale factor */
+	double	clockscale;				/* current active clock scale factor, set by drivers and CPU cores */
+	double	overclock;				/* user overclock factor (core options), applied on top of clockscale */
 
 	int 	vblankint_countdown;	/* number of vblank callbacks left until we interrupt */
 	int 	vblankint_multiplier;	/* number of vblank callbacks per interrupt */
@@ -163,11 +164,99 @@ struct cpuinfo
 
 static struct cpuinfo cpu[MAX_CPU];
 
+/* The lasting suspend reasons of each CPU (held in reset, halted or
+   disabled), kept for save states. Without them a loaded save state keeps
+   the suspend state of the board that loads it: a sound CPU that was held
+   in reset at that moment is reset again when the game releases its reset
+   line, and it restarts its program while the main CPU does not. The
+   short-lived reasons (spin, trigger) are not kept: the loaded CPU simply
+   runs until it waits again. */
+#define SUSPEND_LASTING_REASONS	(SUSPEND_REASON_HALT | SUSPEND_REASON_RESET | SUSPEND_REASON_DISABLE)
+static INT32 saved_suspend[MAX_CPU];
+
+/* Each CPU's local time (how far it ran past the timer system's time) and
+   cycle count, kept with a save: without them a loaded CPU keeps the offset
+   it had when the save was loaded, a few cycles off, and a game that polls
+   another CPU drifts from the run it was saved from. */
+static double saved_localtime[MAX_CPU];
+static UINT32 saved_cycles[MAX_CPU * 2];
+
+/* With the timer system in the save state (timer_state_loaded()), the
+   rest of the scheduling is loaded exactly too: all the suspend reasons
+   and the triggers they wait for, the interrupts left in the frame, the
+   VBLANK countdowns and the frame number. The timers they depend on (spin,
+   trigger time, VBLANK) are then the ones of the save. */
+#define EXACT_PER_CPU	7
+static INT32 saved_exact[MAX_CPU * EXACT_PER_CPU];
+static INT32 saved_exact_globals[3];
+static int vblank;
+static int current_frame;
+static int vblank_countdown;
+
+static void cpu_suspend_presave(void)
+{
+	int cpunum;
+
+	for (cpunum = 0; cpunum < cpu_gettotalcpu(); cpunum++)
+	{
+		INT32 *e = &saved_exact[cpunum * EXACT_PER_CPU];
+		e[0] = cpu[cpunum].suspend;
+		e[1] = cpu[cpunum].nextsuspend;
+		e[2] = cpu[cpunum].eatcycles;
+		e[3] = cpu[cpunum].nexteatcycles;
+		e[4] = cpu[cpunum].trigger;
+		e[5] = cpu[cpunum].iloops;
+		e[6] = cpu[cpunum].vblankint_countdown;
+	}
+	saved_exact_globals[0] = vblank;
+	saved_exact_globals[1] = current_frame;
+	saved_exact_globals[2] = vblank_countdown;
+
+	for (cpunum = 0; cpunum < cpu_gettotalcpu(); cpunum++)
+	{
+		saved_suspend[cpunum] = cpu[cpunum].nextsuspend & SUSPEND_LASTING_REASONS;
+		saved_localtime[cpunum] = cpu[cpunum].localtime;
+		saved_cycles[cpunum * 2] = (UINT32)cpu[cpunum].totalcycles;
+		saved_cycles[cpunum * 2 + 1] = (UINT32)(cpu[cpunum].totalcycles >> 32);
+	}
+}
+
+static void cpu_suspend_postload(void)
+{
+	int cpunum;
+
+	for (cpunum = 0; cpunum < cpu_gettotalcpu(); cpunum++)
+	{
+		cpu[cpunum].suspend = cpu[cpunum].nextsuspend = saved_suspend[cpunum] & SUSPEND_LASTING_REASONS;
+		if (saved_suspend[cpunum])
+			cpu[cpunum].eatcycles = cpu[cpunum].nexteatcycles = 1;
+		cpu[cpunum].localtime = saved_localtime[cpunum];
+		cpu[cpunum].totalcycles = ((UINT64)saved_cycles[cpunum * 2 + 1] << 32) | saved_cycles[cpunum * 2];
+
+		if (timer_state_loaded())
+		{
+			INT32 *e = &saved_exact[cpunum * EXACT_PER_CPU];
+			cpu[cpunum].suspend = e[0];
+			cpu[cpunum].nextsuspend = e[1];
+			cpu[cpunum].eatcycles = e[2];
+			cpu[cpunum].nexteatcycles = e[3];
+			cpu[cpunum].trigger = e[4];
+			cpu[cpunum].iloops = e[5];
+			cpu[cpunum].vblankint_countdown = e[6];
+		}
+	}
+
+	if (timer_state_loaded())
+	{
+		vblank = saved_exact_globals[0];
+		current_frame = saved_exact_globals[1];
+		vblank_countdown = saved_exact_globals[2];
+	}
+}
+
 static int time_to_reset;
 static int time_to_quit;
 
-static int vblank;
-static int current_frame;
 static INT32 watchdog_counter;
 
 static int cycles_running;
@@ -182,7 +271,6 @@ static int cycles_stolen;
  *************************************/
 
 static void *vblank_timer;
-static int vblank_countdown;
 static int vblank_multiplier;
 static double vblank_period;
 
@@ -253,9 +341,10 @@ int cpu_init(void)
 		memset(&cpu[cpunum], 0, sizeof(cpu[cpunum]));
 		cpu[cpunum].suspend = SUSPEND_REASON_RESET;
 		cpu[cpunum].clockscale = cputype_get_interface(cputype)->overclock;
+		cpu[cpunum].overclock = 1.0;
 
 		/* compute the cycle times */
-		sec_to_cycles[cpunum] = cpu[cpunum].clockscale * Machine->drv->cpu[cpunum].cpu_clock;
+		sec_to_cycles[cpunum] = cpu[cpunum].clockscale * cpu[cpunum].overclock * Machine->drv->cpu[cpunum].cpu_clock;
 		cycles_to_sec[cpunum] = 1.0 / sec_to_cycles[cpunum];
 
 		/* initialize this CPU */
@@ -269,10 +358,21 @@ int cpu_init(void)
 	/* save some stuff in tag 0 */
 	state_save_set_current_tag(0);
 	state_save_register_INT32("cpu", 0, "watchdog count", &watchdog_counter, 1);
+	state_save_register_INT32("cpu", 0, "suspend", saved_suspend, cpu_gettotalcpu());
+	state_save_register_double("cpu", 0, "localtime", saved_localtime, cpu_gettotalcpu());
+	state_save_register_UINT32("cpu", 0, "totalcycles", saved_cycles, cpu_gettotalcpu() * 2);
+	state_save_register_INT32("cpu", 0, "exact", saved_exact, cpu_gettotalcpu() * EXACT_PER_CPU);
+	state_save_register_INT32("cpu", 0, "exact globals", saved_exact_globals, 3);
+	state_save_register_func_presave(cpu_suspend_presave);
+	state_save_register_func_postload(cpu_suspend_postload);
 
 	/* reset the IRQ lines and save those */
 	if (cpuint_init())
 		return 1;
+
+	/* the timer system, in the save states: registered after the CPU and
+	   interrupt state, so its postload runs before theirs */
+	timer_save_init();
 
 	return 0;
 }
@@ -799,6 +899,30 @@ int cpunum_is_suspended(int cpunum, int reason)
 
 /*************************************
  *
+ *	Trigger suspension helpers for
+ *	save states
+ *
+ *************************************/
+
+int cpunum_get_suspend_trigger(int cpunum)
+{
+	VERIFY_CPUNUM(0, cpunum_get_suspend_trigger);
+	if (!(cpu[cpunum].nextsuspend & SUSPEND_REASON_TRIGGER))
+		return 0;
+	return cpu[cpunum].trigger;
+}
+
+void cpunum_suspend_until_trigger(int cpunum, int trigger, int eatcycles)
+{
+	VERIFY_CPUNUM_VOID(cpunum_suspend_until_trigger);
+	cpunum_suspend(cpunum, SUSPEND_REASON_TRIGGER, eatcycles);
+	cpu[cpunum].trigger = trigger;
+}
+
+
+
+/*************************************
+ *
  *	Returns the current scaling factor
  *	for a CPU's clock speed
  *
@@ -808,6 +932,24 @@ double cpunum_get_clockscale(int cpunum)
 {
 	VERIFY_CPUNUM(1.0, cpunum_get_clockscale);
 	return cpu[cpunum].clockscale;
+}
+
+
+
+/*************************************
+ *
+ *	Recomputes a CPU's cycle times from
+ *	its clock, clock scale and overclock
+ *
+ *************************************/
+
+static void update_cycle_rate(int cpunum)
+{
+	sec_to_cycles[cpunum] = cpu[cpunum].clockscale * cpu[cpunum].overclock * Machine->drv->cpu[cpunum].cpu_clock;
+	cycles_to_sec[cpunum] = 1.0 / sec_to_cycles[cpunum];
+
+	/* re-compute the perfect interleave factor */
+	compute_perfect_interleave();
 }
 
 
@@ -824,11 +966,42 @@ void cpunum_set_clockscale(int cpunum, double clockscale)
 	VERIFY_CPUNUM_VOID(cpunum_set_clockscale);
 
 	cpu[cpunum].clockscale = clockscale;
-	sec_to_cycles[cpunum] = cpu[cpunum].clockscale * Machine->drv->cpu[cpunum].cpu_clock;
-	cycles_to_sec[cpunum] = 1.0 / sec_to_cycles[cpunum];
+	update_cycle_rate(cpunum);
+}
 
-	/* re-compute the perfect interleave factor */
-	compute_perfect_interleave();
+
+
+/*************************************
+ *
+ *	Returns the user overclock factor
+ *	for a CPU's clock speed
+ *
+ *************************************/
+
+double cpunum_get_overclock(int cpunum)
+{
+	VERIFY_CPUNUM(1.0, cpunum_get_overclock);
+	return cpu[cpunum].overclock;
+}
+
+
+
+/*************************************
+ *
+ *	Sets the user overclock factor for
+ *	a CPU's clock speed. It multiplies
+ *	the clock scale, so a clock scale
+ *	that a driver or CPU core sets is
+ *	kept
+ *
+ *************************************/
+
+void cpunum_set_overclock(int cpunum, double overclock)
+{
+	VERIFY_CPUNUM_VOID(cpunum_set_overclock);
+
+	cpu[cpunum].overclock = overclock;
+	update_cycle_rate(cpunum);
 }
 
 

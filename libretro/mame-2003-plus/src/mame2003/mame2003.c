@@ -31,6 +31,9 @@
 const struct GameDriver  *game_driver;
 
 int            retro_running = 0;
+/* a frame has run since the game was loaded: a reset sets the frame number
+   to 0 again, so the frame number can't tell */
+static int     frame_run_since_load = 0;
 int            gotFrame;
 static float   delta_samples;
 int            samples_per_frame = 0;
@@ -38,6 +41,7 @@ int            orig_samples_per_frame = 0;
 short*         samples_buffer;
 short*         conversion_buffer;
 int            usestereo = 1;
+static double  applied_cpu_clock_scale[CPU_CLOCK_SCALE_SLOTS]; /* last CPU clock scale core option values applied, per CPU */
 
 
 /* MAME data structures to store and translate keyboard state */
@@ -242,6 +246,8 @@ bool retro_load_game(const struct retro_game_info *game)
   int   port_index;
   char  *driver_lookup = NULL;
 
+  frame_run_since_load = 0;
+
   if(string_is_empty(game->path))
   {
     log_cb(RETRO_LOG_ERROR, LOGPRE "Content path is not set. Exiting!\n");
@@ -386,6 +392,7 @@ extern UINT8 frameskip_counter;
 void retro_run (void)
 {
   bool updated = false;
+  int cpunum;
   poll_cb(); /* execute input callback */
 
   if (retro_running == 0) /* first time through the loop */
@@ -397,15 +404,36 @@ void retro_run (void)
   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
     update_variables(false);
 
-  if (options.cpu_clock_scale)
+  /* the vector resolution changed: resize the display before this frame and
+     give the frontend the new size (it can grow past the old maximum) */
+  if (vector_resize_pending)
   {
-    if (cpunum_get_clockscale(0) != options.cpu_clock_scale)
+    vector_resize_pending = 0;
+    if (vector_resize_display() == 0)
     {
-      log_cb(RETRO_LOG_DEBUG, LOGPRE "changing cpu clock scale from %lf to %lf\n",cpunum_get_clockscale(0),options.cpu_clock_scale);
-      cpunum_set_clockscale(0, options.cpu_clock_scale);
+      extern unsigned vis_width, vis_height;
+      struct retro_system_av_info av_info;
+      vis_width = vis_height = 0;	/* the whole new bitmap until the frame sets it */
+      retro_get_system_av_info(&av_info);
+      environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av_info);
+    }
+  }
+
+  /* a CPU's clock scale core option sets its overclock, which multiplies the clock scale */
+  /* that drivers and CPU cores set.                                                       */
+  for (cpunum = 0; cpunum < cpu_gettotalcpu() && cpunum < CPU_CLOCK_SCALE_SLOTS; cpunum++)
+  {
+    double scale = options.cpu_clock_scale[cpunum];
+
+    if (scale && scale != applied_cpu_clock_scale[cpunum])
+    {
+      log_cb(RETRO_LOG_DEBUG, LOGPRE "changing CPU %d overclock from %lf to %lf\n", cpunum + 1, cpunum_get_overclock(cpunum), scale);
+      cpunum_set_overclock(cpunum, scale);
+      applied_cpu_clock_scale[cpunum] = scale;
     }
   }
   mame_frame();
+  frame_run_since_load = 1;
   if(frameskip_counter <= 11)
     frameskip_counter++;
 
@@ -421,6 +449,7 @@ void retro_run (void)
 void retro_unload_game(void)
 {
     mame_done();
+    memset(applied_cpu_clock_scale, 0, sizeof(applied_cpu_clock_scale));
     /* do we need to be freeing things here? */
 
     free(options.romset_filename_noext);
@@ -485,7 +514,7 @@ bool retro_unserialize(const void * data, size_t size)
 	int cpunum;
 
 	/* disable automatic savestate loading */
-	if (cpu_getcurrentframe() == 0) 
+	if (!frame_run_since_load)
 	{
         log_cb(RETRO_LOG_WARN, LOGPRE "Core is incompatible with automatic savestate loading.\n");
         return false;
@@ -550,6 +579,13 @@ bool retro_unserialize(const void * data, size_t size)
 
 ******************************************************************************/
 
+/* a state saved with another sample rate */
+static void osd_audio_postload(void)
+{
+  if (samples_per_frame < orig_samples_per_frame || samples_per_frame > orig_samples_per_frame + 16)
+    samples_per_frame = orig_samples_per_frame;
+}
+
 int osd_start_audio_stream(int stereo)
 {
 
@@ -563,6 +599,12 @@ int osd_start_audio_stream(int stereo)
   orig_samples_per_frame = samples_per_frame;
 
   if (Machine->sample_rate == 0) return 0;
+
+  /* the frames alternate their number of samples when the frame rate
+     doesn't divide the sample rate: where they are in that is state */
+  state_save_register_float("osd_audio", 0, "delta_samples", &delta_samples, 1);
+  state_save_register_int("osd_audio", 0, "samples_per_frame", &samples_per_frame);
+  state_save_register_func_postload(osd_audio_postload);
 
   samples_buffer = (short *) calloc(samples_per_frame+16, 2 + usestereo * 2);
   if (!usestereo) conversion_buffer = (short *) calloc(samples_per_frame+16, 4);
@@ -754,6 +796,15 @@ void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 void retro_set_controller_port_device(unsigned in_port, unsigned device)
 {
   static bool run_update = false;
+
+  /* the frontend can set more ports than the core has: netplay sets all of
+   * its 16 ports on the clients, and RetroArch the ports of all its users.
+   * active_control_type[] has MAX_PLAYER_COUNT entries, and the fields that
+   * follow it in the options (4-way restrictor, TATE mode, sample rate,
+   * brightness...) must not be written. */
+  if (in_port >= MAX_PLAYER_COUNT)
+    return;
+
   if (in_port == (options.content_flags[CONTENT_CTRL_COUNT] - 1) ) run_update = true;
 
   options.active_control_type[in_port] = device;
@@ -1167,10 +1218,21 @@ struct JoystickInfo alternate_joystick_maps[MAX_PLAYER_COUNT][IDX_NUMBER_OF_INPU
 
 struct JoystickInfo mame_joy_map[(MAX_PLAYER_COUNT * OSD_INPUT_CODES_PER_PLAYER) + 1] = { { 0 } }; /* + 1 for final zeroed struct */
 
+/* the list only changes with the controller layouts: the input code asks for
+   it at every key check (about 100 times a frame), so it is built again only
+   when a layout changed */
+static unsigned joy_map_types[MAX_PLAYER_COUNT];
+static int joy_map_built;
+
 const struct JoystickInfo *osd_get_joy_list(void)
 {
   unsigned needle      = 0;
   unsigned port_number = 0;
+
+  if(joy_map_built && memcmp(joy_map_types, options.active_control_type, sizeof(joy_map_types)) == 0)
+    return mame_joy_map;
+  memcpy(joy_map_types, options.active_control_type, sizeof(joy_map_types));
+  joy_map_built = 1;
 
   for(port_number = 0; port_number < MAX_PLAYER_COUNT; port_number++)
   {
