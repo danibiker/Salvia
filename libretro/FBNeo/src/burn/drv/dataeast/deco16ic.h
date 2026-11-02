@@ -33,7 +33,7 @@ void deco16_set_graphics(INT32 num, UINT8 *gfx, INT32 len, INT32 size /*tile siz
 
 void deco16_create_transtable(INT32 select, INT32 trans); // speedup!
 
-void deco16Init(INT32 no_pf34, INT32 split, INT32 full_width);
+void deco16Init(INT32 no_pf34, INT32 split, INT32 tmap_size);
 void deco16Reset();
 void deco16Exit();
 
@@ -71,15 +71,15 @@ void deco16_palette_recalculate(UINT32 *palette, UINT8 *pal);
 #define deco16_write_control_byte(num, addr, a, d)		\
 	if ((addr & 0xfffffff0) == a) {				\
 		if ((addr) & 1)				\
-			deco16_pf_control[num][(addr & 0x0f)/2] = (deco16_pf_control[num][(addr & 0x0f)/2] & 0xff00) | d;	\
+			deco16_pf_control[num][(addr & 0x0f)/2] = BURN_ENDIAN_SWAP_INT16((BURN_ENDIAN_SWAP_INT16(deco16_pf_control[num][(addr & 0x0f)/2]) & 0xff00) | d);	\
 		else														\
-			deco16_pf_control[num][(addr & 0x0f)/2] = (deco16_pf_control[num][(addr & 0x0f)/2] & 0x00ff) | (d << 8);\
+			deco16_pf_control[num][(addr & 0x0f)/2] = BURN_ENDIAN_SWAP_INT16((BURN_ENDIAN_SWAP_INT16(deco16_pf_control[num][(addr & 0x0f)/2]) & 0x00ff) | (d << 8));\
 		return;						\
 	}
 
 #define deco16_read_control_word(num, addr, a)			\
 	if ((addr & 0xfffffff0) == a) {				\
-		return deco16_pf_control[num][(addr & 0x0f)/2];	\
+		return BURN_ENDIAN_SWAP_INT16(deco16_pf_control[num][(addr & 0x0f)/2]);	\
 	}
 
 

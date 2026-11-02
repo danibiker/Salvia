@@ -591,7 +591,8 @@ reload:
 		*(UINT16*) (paprium_s.ram + 0x140C + dmaPtr*16) = BURN_ENDIAN_SWAP_INT16(0x4000 + (vram & 0x3FFF));
 		*(UINT16*) (paprium_s.ram + 0x140E + dmaPtr*16) = BURN_ENDIAN_SWAP_INT16(0x0080 + (vram >> 14));
 
-		*(UINT16*) (paprium_s.ram + 0x1F16) = BURN_ENDIAN_SWAP_INT16(++dmaPtr);
+		dmaPtr++;
+		*(UINT16*) (paprium_s.ram + 0x1F16) = BURN_ENDIAN_SWAP_INT16(dmaPtr);
 		*(UINT16*) (paprium_s.ram + 0x1F18) = BURN_ENDIAN_SWAP_INT16(spriteCount);
 
 
@@ -795,8 +796,7 @@ static void paprium_audio_setting(UINT8 flags)
 
 static void paprium_cmd_ack()
 {
-	// Read-modify-write: leer con swap, AND, escribir con swap.
-	*(UINT16*)(paprium_s.ram + 0x1FEA) = BURN_ENDIAN_SWAP_INT16(BURN_ENDIAN_SWAP_INT16(*(UINT16*)(paprium_s.ram + 0x1FEA)) & 0x7FFF);
+	*(UINT16*)(paprium_s.ram + 0x1FEA) &= BURN_ENDIAN_SWAP_INT16(0x7FFF);
 }
 
 static void paprium_sfx_volume(UINT8 level)
@@ -978,13 +978,6 @@ static UINT16 __fastcall paprium_r16(UINT32 address)
 			break;
 
 		default:
-			// Callback del 68k: musashi pasa/espera el VALOR LOGICO del 68k.
-			// En BE host la RAM esta en formato LE-style (consistente con el
-			// resto del flujo MD), asi que hay que aplicar swap al leer para
-			// devolver el valor logico a musashi.
-			// PRUEBA: si esto no se envuelve, paprium_cmd(data) recibe data
-			// con bytes invertidos, los cmds del 68k no se reconocen y el
-			// juego no progresa.
 			data = BURN_ENDIAN_SWAP_INT16(*(UINT16 *)(paprium_s.ram + address));
 			break;
 	}
@@ -999,11 +992,6 @@ static void __fastcall paprium_w8(UINT32 address, UINT8 data)
 
 static void __fastcall paprium_w16(UINT32 address, UINT16 data)
 {
-	// Callback del 68k: musashi pasa 'data' con el VALOR LOGICO. paprium_cmd
-	// lo consume directo (espera cmd 0xC6 en MSB de data, lo cual solo funciona
-	// si data es el valor logico).
-	// Para guardar en memoria en formato LE-style (que es lo que el resto del
-	// flujo asume), hay que aplicar swap antes del store.
 	*(UINT16 *)(paprium_s.ram + address) = BURN_ENDIAN_SWAP_INT16(data);
 
 	if ( address == 0x1FEA ) {
@@ -1093,20 +1081,16 @@ static void paprium_reset()
 	paprium_tmss = 1;
 
 #if 1  /* fast loadstate */
-	// Los reads sin BURN_ENDIAN_SWAP_INT16 daban valores byte-swapped en hosts
-	// big-endian (Xbox 360, PS3) porque la ROM se almacena byte-swapped en
-	// memoria via BurnByteswap. En LE host la macro es no-op; en BE host
-	// devuelve el valor 68k natural.
 	int ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0xaf77c)) << 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0xaf77e));
 
-	paprium_sfx_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x778)) << 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x77a));
-	paprium_sprite_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0x10014)) << 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0x10016));
-	paprium_tile_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x780)) << 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x782));
+	paprium_sfx_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x778))<< 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x77a));
+	paprium_sprite_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0x10014))<< 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + 0x10016));
+	paprium_tile_ptr = (BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x780))<< 16) + BURN_ENDIAN_SWAP_INT16(*(UINT16*)(cart_rom + ptr + 0x782));
 
 	paprium_decoder_type(paprium_sprite_ptr, paprium_obj_ram);
 	paprium_s.decoder_size = 0;
 
-//	*(UINT16*)(paprium_s.ram + 0x192) = 0x3634;  /* 6-button, multitap */
+//	*(UINT16*)(paprium_s.ram + 0x192) = BURN_ENDIAN_SWAP_INT16(0x3634);  /* 6-button, multitap */
 #endif
 
 
@@ -1122,9 +1106,6 @@ static void paprium_reset()
 
 
 #if DEBUG_CHEAT  /* cheat - big hurt */
-	// Stores envueltos en BURN_ENDIAN_SWAP_INT16 para que el valor escrito
-	// en memoria respete el orden byte-swapped que la ROM tiene tras
-	// BurnByteswap (transparente en LE hosts, byteswap real en BE).
 	*(UINT16*) (cart_rom + 0x9FE38 + 6) = BURN_ENDIAN_SWAP_INT16(0x007F);	/* Tug */
 	*(UINT16*) (cart_rom + 0x9FE58 + 6) = BURN_ENDIAN_SWAP_INT16(0x007F);
 	*(UINT16*) (cart_rom + 0x9FF18 + 6) = BURN_ENDIAN_SWAP_INT16(0x007F);
@@ -1147,10 +1128,6 @@ static void paprium_reset()
 
 
 #if 1  /* WM text - pre-irq delay */
-	// Stores envueltos en BURN_ENDIAN_SWAP_INT16 — sin esto, en hosts BE
-	// (Xbox 360, PS3) el valor se almacenaba con bytes invertidos y los
-	// reads posteriores del codigo Paprium (paprium_decoder_type) recibian
-	// punteros basura, provocando access violation en la primera ejecucion.
 	*(UINT16*)(cart_rom + 0xb9094) = BURN_ENDIAN_SWAP_INT16(0x2079);
 	*(UINT16*)(cart_rom + 0xb9096) = BURN_ENDIAN_SWAP_INT16(0x000a);
 	*(UINT16*)(cart_rom + 0xb9098) = BURN_ENDIAN_SWAP_INT16(0xf85c);

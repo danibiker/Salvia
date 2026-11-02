@@ -1,6 +1,5 @@
 // Burner Game Input
 #include "burner.h"
-#include "inp_keys.h"
 
 // Player Default Controls
 INT32 nPlayerDefaultControls[8] = {0, 1, 2, 3, 8, 8, 8, 8};
@@ -542,7 +541,7 @@ static void GameInpInitMacros()
 				if (_stricmp(" Right", bii.szName + 2) == 0) pArrow[3] = bii.pVal;
 
 				if ((SETS_VS) && pArrow[0] && pArrow[1] && pArrow[2] && pArrow[3]) {
-					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "¨I");
+					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "ï¿½I");
 					pgi->nInput = GIT_MACRO_AUTO;
 					pgi->nType = BIT_DIGITAL;
 					pgi->Macro.nMode = 0;
@@ -553,7 +552,7 @@ static void GameInpInitMacros()
 					nMacroCount++;
 					pgi++;
 
-					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "¨J");
+					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "ï¿½J");
 					pgi->nInput = GIT_MACRO_AUTO;
 					pgi->nType = BIT_DIGITAL;
 					pgi->Macro.nMode = 0;
@@ -564,7 +563,7 @@ static void GameInpInitMacros()
 					nMacroCount++;
 					pgi++;
 
-					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "¨L");
+					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "ï¿½L");
 					pgi->nInput = GIT_MACRO_AUTO;
 					pgi->nType = BIT_DIGITAL;
 					pgi->Macro.nMode = 0;
@@ -575,7 +574,7 @@ static void GameInpInitMacros()
 					nMacroCount++;
 					pgi++;
 
-					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "¨K");
+					sprintf(pgi->Macro.szName, "P%d %s", nPlayer + 1, "ï¿½K");
 					pgi->nInput = GIT_MACRO_AUTO;
 					pgi->nType = BIT_DIGITAL;
 					pgi->Macro.nMode = 0;
@@ -2175,9 +2174,11 @@ tIniStruct gamehw_cfg[] = {
 	{_T("FDS hardware"),				_T("config/presets/fds.ini"),		true,	{ HARDWARE_FDS, 0 },				"\t\t\t<item list=\"famicom_flop\" name=\""	},
 	{_T("SNES hardware"),				_T("config/presets/snes.ini"),		true,	{ HARDWARE_SNES, 0 },				"\t\t\t<item list=\"snes\" name=\""			},
 	{_T("SNES w/Scope hardware"),		_T("config/presets/snes_scope.ini"),true,	{ HARDWARE_SNES_ZAPPER, 0 },				"\t\t\t<item list=\"snes\" name=\""			},
-	{_T("PGM hardware"),				_T("config/presets/pgm.ini"),		false,	{ HARDWARE_IGS_PGM, 0 },			"\t\t\t<system name=\""        				},
+	{_T("GBA hardware"),				_T("config/presets/gba.ini"),		true,	{ HARDWARE_GBA, 0 },				"\t\t\t<item list=\"gba\" name=\""	},
+	{_T("PGM hardware"),				_T("config/presets/pgm.ini"),		false,	{ HARDWARE_IGS_PGM, HARDWARE_IGS_PGM2, 0 },			"\t\t\t<system name=\""        				},
 	{_T("MegaDrive hardware"),			_T("config/presets/megadrive.ini"),	true,	{ HARDWARE_SEGA_MEGADRIVE, 0 },		"\t\t\t<item list=\"megadriv\" name=\""		},
 	{_T("PCE/SGX hardware"),			_T("config/presets/pce.ini"),		true,	{ HARDWARE_PCENGINE_PCENGINE, HARDWARE_PCENGINE_SGX, 0 },	"\t\t\t<item list=\"pce\" name=\""			},
+	{_T("PCE CD hardware"),				_T("config/presets/pcecd.ini"),		true,	{ HARDWARE_PCENGINE_PCE_CD, 0 },	"\t\t\t<item list=\"pce_cd\" name=\""		},
 	{_T("TG16 hardware"),				_T("config/presets/pce.ini"),		true,	{ HARDWARE_PCENGINE_TG16, 0 },		"\t\t\t<item list=\"tg16\" name=\""			},
 	{_T("MSX1 hardware"),				_T("config/presets/msx.ini"),		false,	{ HARDWARE_MSX, 0 },				"\t\t\t<item list=\"msx1_cart\" name=\""	},
 	{_T("Coleco hardware"),				_T("config/presets/coleco.ini"),	true,	{ HARDWARE_COLECO, 0 },				"\t\t\t<item list=\"coleco\" name=\""		},
@@ -2186,6 +2187,7 @@ tIniStruct gamehw_cfg[] = {
 	{_T("Sega Game Gear hardware"),		_T("config/presets/gg.ini"),		true,	{ HARDWARE_SEGA_GAME_GEAR, 0 },		"\t\t\t<item list=\"gamegear\" name=\""		},
 	{_T("Sinclair Spectrum hardware"),	_T("config/presets/spectrum.ini"),	false,	{ HARDWARE_SPECTRUM, 0 },			"\t\t\t<item list=\"spectrum_cass\" name=\""},
 	{_T("Fairchild Channel F hardware"),_T("config/presets/channelf.ini"),	true,	{ HARDWARE_CHANNELF, 0 },			"\t\t\t<item list=\"channelf\" name=\""		},
+	{_T("Bally Astrocade hardware"),	_T("config/presets/astrocade.ini"),	true,	{ HARDWARE_ASTROHOME, 0 },			"\t\t\t<item list=\"astrocade\" name=\""	},
 	{_T("\0"), _T("\0"), false, { 0 }, "" } // END of list
 };
 

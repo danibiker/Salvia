@@ -129,6 +129,14 @@ UINT32 System16BackupRamSize = 0;
 UINT32 System16BackupRam2Size = 0;
 
 bool System16HasGears = false;
+
+// Render scale for the high resolution mode (1 = original 320x224).
+// Set by the driver before System16Init() and fixed until the game exits.
+INT32 System16ResScale = 1;
+// Lightgun coordinates per native pixel: the driver sets it to System16ResScale
+// when its guns work in the larger screen's coordinates (BurnGunInit() after
+// the screen size is set), so relative moves are scaled to match.
+INT32 System16GunScale = 1;
 INT32 s16a_update_after_vblank = 0;
 
 UINT8 System16VideoControl;
@@ -166,6 +174,10 @@ static UINT8 N7751Command;
 static UINT32 N7751RomAddress;
 static UINT32 UPD7759BankAddress;
 static UINT32 RF5C68PCMBankAddress;
+
+static UINT8  DfjailNmiEnable = 0;
+static UINT8  DfjailDacData   = 0;
+static double DfjailNmiAcc    = 0;
 
 static BIQSTEREO biq_shelf;
 
@@ -244,11 +256,23 @@ inline static void PdriftMakeInputs()
 	Pdrift_analog_target = ProcessAnalog(System16AnalogPort0, 0, INPUT_DEADZONE, 0x20, 0xe0);
 }
 
+extern bool bBurnGunPositionalMode;
+
+static INT16 System16GunMove(INT16 v)
+{
+	if (System16GunScale <= 1 || bBurnGunPositionalMode) return v;
+
+	INT32 m = v * System16GunScale;
+	if (m > 0x7fff) m = 0x7fff;
+	if (m < -0x8000) m = -0x8000;
+	return (INT16)m;
+}
+
 static void System16GunMakeInputs()
 {
-	if (nBurnGunNumPlayers) BurnGunMakeInputs(0, (INT16)System16AnalogPort0, (INT16)System16AnalogPort1);
-	if (nBurnGunNumPlayers >= 2) BurnGunMakeInputs(1, (INT16)System16AnalogPort2, (INT16)System16AnalogPort3);
-	if (nBurnGunNumPlayers >= 3) BurnGunMakeInputs(2, (INT16)System16AnalogPort4, (INT16)System16AnalogPort5);
+	if (nBurnGunNumPlayers) BurnGunMakeInputs(0, System16GunMove(System16AnalogPort0), System16GunMove(System16AnalogPort1));
+	if (nBurnGunNumPlayers >= 2) BurnGunMakeInputs(1, System16GunMove(System16AnalogPort2), System16GunMove(System16AnalogPort3));
+	if (nBurnGunNumPlayers >= 3) BurnGunMakeInputs(2, System16GunMove(System16AnalogPort4), System16GunMove(System16AnalogPort5));
 }
 
 /*====================================================
@@ -732,6 +756,70 @@ void __fastcall System16Z80Write2(UINT16 a, UINT8 d)
 #endif
 }
 
+static INT32 DfjailSyncDAC()
+{
+	return (INT32)(float)(nBurnSoundLen * (ZetTotalCycles() / ((System16Z80ClockSpeed) / (nBurnFPS / 100.0000))));
+}
+
+static void DfjailSoundControlWrite(UINT8 d)
+{
+	DfjailNmiEnable = ((d & 0xc0) == 0);
+
+	INT32 bankoffs = ((d & 0x08) >> 3) * 0x20000;
+	bankoffs += (d & 0x07) * 0x4000;
+	bankoffs %= 0x40000;
+
+	ZetMapArea(0x8000, 0xdfff, 0, System16Z80Rom + 0x10000 + bankoffs);
+	ZetMapArea(0x8000, 0xdfff, 2, System16Z80Rom + 0x10000 + bankoffs);
+}
+
+UINT8 __fastcall DfjailZ80PortRead(UINT16 a)
+{
+	a &= 0xff;
+
+	if ((a & 0xc1) == 0x00 || (a & 0xc1) == 0x01) {
+		return BurnYM2151Read();
+	}
+
+	if ((a & 0xc0) == 0xc0) {
+		ZetSetIRQLine(0, CPU_IRQSTATUS_NONE);
+		return System16SoundLatch;
+	}
+
+	return 0;
+}
+
+void __fastcall DfjailZ80PortWrite(UINT16 a, UINT8 d)
+{
+	a &= 0xff;
+
+	if ((a & 0xc0) == 0x00) {
+		if (a & 1) BurnYM2151WriteRegister(d);
+		else       BurnYM2151SelectRegister(d);
+		return;
+	}
+
+	if ((a & 0xc0) == 0x40) {
+		DfjailSoundControlWrite(d);
+		return;
+	}
+
+	switch (a) {
+		case 0x80: {
+			DfjailDacData = (d >> 2) & 0x0f;
+			return;
+		}
+		case 0x81: {
+			DfjailDacData |= (d << 4);
+			DACWrite(0, DfjailDacData);
+			return;
+		}
+		case 0x82:
+		case 0x83:
+			return;
+	}
+}
+
 UINT8 __fastcall System18Z80PortRead(UINT16 a)
 {
 	a &= 0xff;
@@ -1001,7 +1089,7 @@ static INT32 System16MemIndex()
 		System16PaletteEntries = 0x1000;
 		System16RamSize = 0x10000;
 	}
-	
+
 	System16Rom          = Next; Next += (System16RomSize > 0x100000) ? System16RomSize : 0x100000;
 	System16Code         = Next; Next += (System16RomSize > 0x100000) ? System16RomSize : 0x100000;
 	System16Rom2         = Next; (System16Rom2Size) ? Next += 0x080000 : Next += 0;
@@ -1065,9 +1153,9 @@ static INT32 System16MemIndex()
 	
 	System16Palette      = (UINT32*)Next; Next += System16PaletteEntries * 3 * sizeof(UINT32) + (0x42 * sizeof(UINT32));//(((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SEGA_SYSTEM18) ? (0x40 * sizeof(UINT32)) : 0);
 	
-	if (UseTempDraw) { pTempDraw = (UINT16*)Next; Next += (512 * 512 * sizeof(UINT16)); }
+	if (UseTempDraw) { pTempDraw = (UINT16*)Next; Next += (512 * 512 * sizeof(UINT16)) * System16ResScale * System16ResScale; }
 	
-	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SEGA_SYSTEMY) { System16PriorityMap = Next; Next += 320 * 224; }
+	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SEGA_SYSTEMY) { System16PriorityMap = Next; Next += 320 * 224 * System16ResScale * System16ResScale; }
 	
 	MemEnd = Next;
 
@@ -2110,7 +2198,12 @@ INT32 System16Init()
 			MSM6295Init(0, 1000000 / 132, 1);
 			MSM6295SetRoute(0, 0.20, BURN_SND_ROUTE_BOTH);
 		}
-		
+
+		if (BurnDrvGetHardwareCode() & HARDWARE_SEGA_DFJAIL) {
+			DACInit(0, 0, 1, DfjailSyncDAC);
+			DACSetRoute(0, 0.25, BURN_SND_ROUTE_BOTH);
+		}
+
 		System16TileBankSize = 0x1000;
 		System16CreateOpaqueTileMaps = 1;
 		System16BTileMapsInit(1);
@@ -2623,7 +2716,11 @@ INT32 System16Exit()
 		N7751Exit();
 		DACExit();
 	}
-	
+
+	if (BurnDrvGetHardwareCode() & HARDWARE_SEGA_DFJAIL) {
+		DACExit();
+	}
+
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SEGA_SYSTEM18) {
 		BurnYM3438Exit();
 		RF5C68PCMExit();
@@ -2703,6 +2800,9 @@ INT32 System16Exit()
 
 	if (System16HasGears) BurnShiftExit();
 	System16HasGears = false;
+	System16GfxThreadsExit();
+	System16ResScale = 1;
+	System16GunScale = 1;
 
  	System16RoadControl = 0;
  	System16RoadColorOffset1 = 0;
@@ -2976,6 +3076,15 @@ INT32 System16BFrame()
 		if (has_z80) {
 			ZetOpen(0);
 			CPU_RUN_TIMER(1);
+
+			if (BurnDrvGetHardwareCode() & HARDWARE_SEGA_DFJAIL) {
+				DfjailNmiAcc += 8000.0 / 60.0; // match refresh rate
+				if (DfjailNmiAcc >= nInterleave) {
+					DfjailNmiAcc -= nInterleave;
+					if (DfjailNmiEnable) ZetNmi();
+				}
+			}
+
 			ZetClose();
 		} else {
 			CPU_IDLE_NULL(1);
@@ -3012,6 +3121,10 @@ INT32 System16BFrame()
 
 		if (System16UPD7759DataSize) {
 			UPD7759Render(0, pBurnSoundOut, nBurnSoundLen);
+		}
+
+		if (BurnDrvGetHardwareCode() & HARDWARE_SEGA_DFJAIL) {
+			DACUpdate(pBurnSoundOut, nBurnSoundLen);
 		}
 	}
 

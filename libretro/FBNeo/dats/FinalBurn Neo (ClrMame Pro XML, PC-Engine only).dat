@@ -194,6 +194,15 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="batmanhb" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Batman (HB)</description>
+		<year>2026</year>
+		<manufacturer>Magic Games</manufacturer>
+		<rom name="Batman (2026)(Magic Games).pce" size="1048576" crc="0577fe88"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="batman" sourcefile="pce/d_pce.cpp">
 		<description>Batman (Japan)</description>
 		<year>1990</year>
@@ -387,6 +396,18 @@
 		<year>1990</year>
 		<manufacturer>Taito Corp.</manufacturer>
 		<rom name="Cadash (Japan)(1990)(Taito).pce" size="393216" crc="8dc0d85f"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="scdsys" sourcefile="pce/d_pce.cpp">
+		<comment>System - media selected seperately</comment>
+		<description>CD System Card</description>
+		<year>1991</year>
+		<manufacturer>NEC - Hudson Soft</manufacturer>
+		<rom name="Super CD-Rom System Card (Japan, v3.0)(1991).pce" size="262144" crc="6d9a73ef"/>
+		<rom name="Super CD-Rom System Card (Japan, v3.0, font hack)(2026).pce" size="262144" crc="16a9fda2"/>
+		<rom name="TurboGrafx CD System Card (USA, v3.0)(1992).pce" size="262144" crc="2b5b75fe"/>
+		<rom name="Games Express CD Card (Japan)(1993).pce" size="32768" crc="51a12d90"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2461,11 +2482,20 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="sonson2te" cloneof="sonson2" romof="sonson2" sourcefile="pce/d_pce.cpp">
+		<comment>Hack</comment>
+		<description>Son Son II (Hack, English)</description>
+		<year>2026</year>
+		<manufacturer>Jackic</manufacturer>
+		<rom name="Son Son II T-Eng (2026)(Jackic).pce" size="524288" crc="ef783f57"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="sonson2" sourcefile="pce/d_pce.cpp">
 		<description>Son Son II (Japan)</description>
 		<year>1989</year>
 		<manufacturer>NEC</manufacturer>
-		<rom name="son son ii (japan).pce" size="262144" crc="d7921df2"/>
+		<rom name="Son Son II (Japan)(1989)(NEC).pce" size="262144" crc="d7921df2"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2686,6 +2716,15 @@
 		<year>1992</year>
 		<manufacturer>Nihon Bussan</manufacturer>
 		<rom name="Terra Cresta II - Mandoraa no Gyakushuu (Japan)(1992)(Nihon Bussan).pce" size="524288" crc="1b2d0077"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="tetrisarc" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Tetris - Atari Games Arcade Port (HB, v1.02)</description>
+		<year>2026</year>
+		<manufacturer>ShinobiZ</manufacturer>
+		<rom name="Tetris - Atari Games Arcade Port v1.02 (2026)(ShinobiZ).pce" size="524288" crc="6e1de759"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

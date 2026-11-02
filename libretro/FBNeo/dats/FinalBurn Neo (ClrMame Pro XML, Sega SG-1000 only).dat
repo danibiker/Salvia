@@ -225,6 +225,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="bubblefight" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Bubble Fight (HB, v1.2.0)</description>
+		<year>2026</year>
+		<manufacturer>SiRioHD</manufacturer>
+		<rom name="Bubble Fight v1.2.0 (2026)(SiRioHD).sg" size="32768" crc="4e6f8134"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="cso" sourcefile="sg1000/d_sg1000.cpp">
 		<description>C_So! (Japan)</description>
 		<year>1985</year>
@@ -1227,6 +1236,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="mikemech" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Mike Mech (HB)</description>
+		<year>2026</year>
+		<manufacturer>SiRioKD</manufacturer>
+		<rom name="Mike Mech (2026)(SiRioKD).sg" size="49152" crc="1977d78b"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="motianda" cloneof="rocknbol" romof="rocknbol" sourcefile="sg1000/d_sg1000.cpp">
 		<description>Mo Tian Da Lou (Taiwan)</description>
 		<year>198?</year>
@@ -1929,6 +1947,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="structris" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Structris (HB)</description>
+		<year>2026</year>
+		<manufacturer>unhuman</manufacturer>
+		<rom name="Structris (2026)(unhuman).sg" size="32768" crc="58a27c68"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="supertnk" sourcefile="sg1000/d_sg1000.cpp">
 		<description>Super Tank (Japan)</description>
 		<year>1986</year>
@@ -1969,6 +1996,15 @@
 		<year>2026</year>
 		<manufacturer>Inufuto</manufacturer>
 		<rom name="SwordWork (2026)(Inufuto).sg" size="16384" crc="1bfc657f"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="uchotos" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Uchotos (HB)</description>
+		<year>2026</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Uchotos (2026)(Inufuto).sg" size="8192" crc="a39f47b7"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

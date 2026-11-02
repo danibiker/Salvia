@@ -22,6 +22,7 @@ static struct BurnInputInfo OutrunInputList[] = {
 	{"Reset"             , BIT_DIGITAL   , &System16Reset         , "reset"     },
 	{"Dip 1"             , BIT_DIPSWITCH , System16Dip + 0        , "dip"       },
 	{"Dip 2"             , BIT_DIPSWITCH , System16Dip + 1        , "dip"       },
+	{"Dip 3"             , BIT_DIPSWITCH , System16Dip + 2        , "dip"       },
 };
 
 STDINPUTINFO(Outrun)
@@ -41,6 +42,7 @@ static struct BurnInputInfo ShangonInputList[] = {
 	{"Reset"             , BIT_DIGITAL   , &System16Reset         , "reset"     },
 	{"Dip 1"             , BIT_DIPSWITCH , System16Dip + 0        , "dip"       },
 	{"Dip 2"             , BIT_DIPSWITCH , System16Dip + 1        , "dip"       },
+	{"Dip 3"             , BIT_DIPSWITCH , System16Dip + 2        , "dip"       },
 };
 
 STDINPUTINFO(Shangon)
@@ -61,6 +63,7 @@ static struct BurnInputInfo ToutrunInputList[] = {
 	{"Reset"             , BIT_DIGITAL   , &System16Reset         , "reset"     },
 	{"Dip 1"             , BIT_DIPSWITCH , System16Dip + 0        , "dip"       },
 	{"Dip 2"             , BIT_DIPSWITCH , System16Dip + 1        , "dip"       },
+	{"Dip 3"             , BIT_DIPSWITCH , System16Dip + 2        , "dip"       },
 };
 
 STDINPUTINFO(Toutrun)
@@ -108,11 +111,20 @@ Dip Defs
 	{dipval, 0x01, 0xf0, 0xa0, "1 Coin  6 Credits"                  },			\
 	{dipval, 0x01, 0xf0, 0x00, "Free Play (if coin A too) or 1C/1C" },
 	
+// Higher internal resolution (hi-res renderer in sys16_gfx.cpp), read by
+// OutrunSetResolution() when the game starts: bits 1-2 of DIP 3
+#define OUTRUN_RESOLUTION(dipval)								\
+	{0   , 0xfe, 0   , 3   , "Game Resolution"                    },			\
+	{dipval, 0x01, 0x06, 0x00, "Original (320x224)"                 },			\
+	{dipval, 0x01, 0x06, 0x02, "2x (640x448)"                       },			\
+	{dipval, 0x01, 0x06, 0x04, "4x (1280x896)"                      },
+
 static struct BurnDIPInfo OutrunDIPList[]=
 {
 	// Default Values
 	{0x0a, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0b, 0xff, 0xff, 0xf9, NULL                                 },
+	{0x0c, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0a)
@@ -138,6 +150,9 @@ static struct BurnDIPInfo OutrunDIPList[]=
 	{0x0b, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0b, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0b, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0c)
 };
 
 STDDIPINFO(Outrun)
@@ -147,6 +162,7 @@ static struct BurnDIPInfo OutrunehDIPList[]=
 	// Default Values
 	{0x0a, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0b, 0xff, 0xff, 0xf9, NULL                                 },
+	{0x0c, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0a)
@@ -176,6 +192,9 @@ static struct BurnDIPInfo OutrunehDIPList[]=
 	{0x0b, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0b, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0b, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0c)
 };
 
 STDDIPINFO(Outruneh)
@@ -185,6 +204,7 @@ static struct BurnDIPInfo OutrundxDIPList[]=
 	// Default Values
 	{0x0a, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0b, 0xff, 0xff, 0xfc, NULL                                 },
+	{0x0c, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0a)
@@ -209,6 +229,9 @@ static struct BurnDIPInfo OutrundxDIPList[]=
 	{0x0b, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0b, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0b, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0c)
 };
 
 STDDIPINFO(Outrundx)
@@ -218,6 +241,7 @@ static struct BurnDIPInfo OutrundxehDIPList[]=
 	// Default Values
 	{0x0a, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0b, 0xff, 0xff, 0xfc, NULL                                 },
+	{0x0c, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0a)
@@ -246,6 +270,9 @@ static struct BurnDIPInfo OutrundxehDIPList[]=
 	{0x0b, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0b, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0b, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0c)
 };
 
 STDDIPINFO(Outrundxeh)
@@ -255,6 +282,7 @@ static struct BurnDIPInfo ShangonDIPList[]=
 	// Default Values
 	{0x0a, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0b, 0xff, 0xff, 0x1e, NULL                                 },
+	{0x0c, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0a)
@@ -275,6 +303,9 @@ static struct BurnDIPInfo ShangonDIPList[]=
 	{0x0b, 0x01, 0x18, 0x18, "Normal"                             },
 	{0x0b, 0x01, 0x18, 0x08, "Hard"                               },
 	{0x0b, 0x01, 0x18, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0c)
 };
 
 STDDIPINFO(Shangon)
@@ -284,6 +315,7 @@ static struct BurnDIPInfo ToutrunDIPList[]=
 	// Default Values
 	{0x0b, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0c, 0xff, 0xff, 0xd9, NULL                                 },
+	{0x0d, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0b)
@@ -314,6 +346,9 @@ static struct BurnDIPInfo ToutrunDIPList[]=
 	{0x0c, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0c, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0c, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0d)
 };
 
 STDDIPINFO(Toutrun)
@@ -323,6 +358,7 @@ static struct BurnDIPInfo ToutruncDIPList[]=
 	// Default Values
 	{0x0b, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0c, 0xff, 0xff, 0xd8, NULL                                 },
+	{0x0d, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0b)
@@ -349,6 +385,9 @@ static struct BurnDIPInfo ToutruncDIPList[]=
 	{0x0c, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0c, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0c, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0d)
 };
 
 STDDIPINFO(Toutrunc)
@@ -358,6 +397,7 @@ static struct BurnDIPInfo ToutrunmDIPList[]=
 	// Default Values
 	{0x0b, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0c, 0xff, 0xff, 0xdb, NULL                                 },
+	{0x0d, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0b)
@@ -385,6 +425,9 @@ static struct BurnDIPInfo ToutrunmDIPList[]=
 	{0x0c, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0c, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0c, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0d)
 };
 
 STDDIPINFO(Toutrunm)
@@ -394,6 +437,7 @@ static struct BurnDIPInfo ToutrunctDIPList[]=
 	// Default Values
 	{0x0b, 0xff, 0xff, 0xff, NULL                                 },
 	{0x0c, 0xff, 0xff, 0xd8, NULL                                 },
+	{0x0d, 0xff, 0xff, 0x00, NULL                                 },
 
 	// Dip 1
 	OUTRUN_COINAGE(0x0b)
@@ -420,6 +464,9 @@ static struct BurnDIPInfo ToutrunctDIPList[]=
 	{0x0c, 0x01, 0xc0, 0xc0, "Normal"                             },
 	{0x0c, 0x01, 0xc0, 0x40, "Hard"                               },
 	{0x0c, 0x01, 0xc0, 0x00, "Hardest"                            },
+
+	// Dip 3
+	OUTRUN_RESOLUTION(0x0d)
 };
 
 STDDIPINFO(Toutrunct)
@@ -1066,6 +1113,52 @@ static struct BurnRomInfo OutrunmRomDesc[] = {
 
 STD_ROM_PICK(Outrunm)
 STD_ROM_FN(Outrunm)
+
+
+// Out Run Gumball Edition
+// https://www.romhacking.net/hacks/10079/
+static struct BurnRomInfo OutrungbRomDesc[] = {
+	{ "gb-epr-10380b.133", 0x10000, 0xdc34c0e7, SYS16_ROM_PROG | BRF_ESS | BRF_PRG },
+	{ "gb-epr-10382b.118", 0x10000, 0xd8023805, SYS16_ROM_PROG | BRF_ESS | BRF_PRG },
+	{ "gb-epr-10381b.132", 0x10000, 0xd452b797, SYS16_ROM_PROG | BRF_ESS | BRF_PRG },
+	{ "gb-epr-10383b.117", 0x10000, 0xdecbe6af, SYS16_ROM_PROG | BRF_ESS | BRF_PRG },
+	
+	{ "gb-epr-10327a.76",  0x10000, 0xed700498, SYS16_ROM_PROG2 | BRF_ESS | BRF_PRG },
+	{ "gb-epr-10329a.58",  0x10000, 0xbeaec603, SYS16_ROM_PROG2 | BRF_ESS | BRF_PRG },
+	{ "epr-10328a.75",     0x10000, 0xd5ec5e5d, SYS16_ROM_PROG2 | BRF_ESS | BRF_PRG },
+	{ "epr-10330a.57",     0x10000, 0xba9ec82a, SYS16_ROM_PROG2 | BRF_ESS | BRF_PRG },
+
+	{ "gb-opr-10268.99",   0x08000, 0x85fd8460, SYS16_ROM_TILES | BRF_GRA },
+	{ "opr-10232.102",     0x08000, 0x776ba1eb, SYS16_ROM_TILES | BRF_GRA },
+	{ "gb-opr-10267.100",  0x08000, 0xfe365eb7, SYS16_ROM_TILES | BRF_GRA },
+	{ "opr-10231.103",     0x08000, 0x8908bcbf, SYS16_ROM_TILES | BRF_GRA },
+	{ "gb-opr-10266.101",  0x08000, 0x84ab6c2f, SYS16_ROM_TILES | BRF_GRA },
+	{ "opr-10230.104",     0x08000, 0x686f5e50, SYS16_ROM_TILES | BRF_GRA },
+	
+	{ "mpr-10371.9",       0x20000, 0x7cc86208, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10373.10",      0x20000, 0xb0d26ac9, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10375.11",      0x20000, 0x59b60bd7, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10377.12",      0x20000, 0x17a1b04a, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10372.13",      0x20000, 0xb557078c, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10374.14",      0x20000, 0x8051e517, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10376.15",      0x20000, 0xf3b8f318, SYS16_ROM_SPRITES | BRF_GRA },
+	{ "mpr-10378.16",      0x20000, 0xa1062984, SYS16_ROM_SPRITES | BRF_GRA },
+	
+	{ "opr-10186.47",      0x08000, 0x22794426, SYS16_ROM_ROAD | BRF_GRA },
+	{ "opr-10185.11",      0x08000, 0x22794426, SYS16_ROM_ROAD | BRF_GRA },
+
+	{ "gb-epr-10187.88",   0x08000, 0xe8639f00, SYS16_ROM_Z80PROG | BRF_ESS | BRF_PRG },
+	
+	{ "opr-10193.66",      0x08000, 0xbcd10dde, SYS16_ROM_PCMDATA | BRF_SND },
+	{ "opr-10192.67",      0x08000, 0x770f1270, SYS16_ROM_PCMDATA | BRF_SND },
+	{ "opr-10191.68",      0x08000, 0x20a284ab, SYS16_ROM_PCMDATA | BRF_SND },
+	{ "opr-10190.69",      0x08000, 0x7cab70e2, SYS16_ROM_PCMDATA | BRF_SND },
+	{ "opr-10189.70",      0x08000, 0x01366b54, SYS16_ROM_PCMDATA | BRF_SND },
+	{ "opr-10188.71",      0x08000, 0xbad30ad9, SYS16_ROM_PCMDATA | BRF_SND },
+};
+
+STD_ROM_PICK(Outrungb)
+STD_ROM_FN(Outrungb)
 
 
 static struct BurnRomInfo ShangonRomDesc[] = {
@@ -2237,8 +2330,26 @@ UINT8 ShangonProcessAnalogControls(UINT16 value)
 	return 0;
 }
 
+// Sets the hi-res scale and screen size from the "Game Resolution" DIP.
+// Called by every Out Run board game's Init before System16Init().
+static void OutrunSetResolution()
+{
+	switch ((System16Dip[2] & 0x06) >> 1) {
+		case 1:  System16ResScale = 2; break;
+		case 2:  System16ResScale = 4; break;
+		default: System16ResScale = 1; break;
+	}
+
+	if (System16ResScale > 1) {
+		// restored to 320x224 automatically by BurnDrvExit()
+		BurnDrvSetVisibleSize(320 * System16ResScale, 224 * System16ResScale);
+	}
+}
+
 static INT32 OutrunInit()
 {
+	OutrunSetResolution();
+
 	System16ProcessAnalogControlsDo = OutrunProcessAnalogControls;
 	sega_315_5195_custom_io_do = OutrunReadIO;
 	sega_315_5195_custom_io_write_do = OutrunWriteIO;
@@ -2273,11 +2384,13 @@ static INT32 OutrunInit()
 
 static INT32 OutrunbInit()
 {
+	OutrunSetResolution();
+
 	System16ProcessAnalogControlsDo = OutrunProcessAnalogControls;
 	sega_315_5195_custom_io_do = OutrunReadIO;
 	sega_315_5195_custom_io_write_do = OutrunWriteIO;
 	
-	UINT8 memory_control[0x10] = { 0x02, 0x00, 0x0d, 0x10, 0x00, 0x12, 0x0c, 0x13, 0x08, 0x14, 0x0f ,0x20, 0x00, 0x00, 0x00, 0x00 };
+	static UINT8 memory_control[0x10] = { 0x02, 0x00, 0x0d, 0x10, 0x00, 0x12, 0x0c, 0x13, 0x08, 0x14, 0x0f ,0x20, 0x00, 0x00, 0x00, 0x00 };
 	System16I8751InitialConfig = memory_control;
 	
 	System16HasGears = true;
@@ -2295,7 +2408,7 @@ static INT32 OutrunbInit()
 		word = (UINT16 *)System16Rom;
 		length = System16RomSize / 2;
 		for (i = 0; i < length; i++)
-			word[i] = BITSWAP16(word[i], 15,14,11,12,13,10,9,8,6,7,5,4,3,2,1,0);
+			word[i] = BURN_ENDIAN_SWAP_INT16(BITSWAP16(BURN_ENDIAN_SWAP_INT16(word[i]), 15,14,11,12,13,10,9,8,6,7,5,4,3,2,1,0));
 		
 		memcpy(System16Code, System16Rom, System16RomSize);
 		
@@ -2303,7 +2416,7 @@ static INT32 OutrunbInit()
 		word = (UINT16 *)System16Rom2;
 		length = System16Rom2Size / 2;
 		for (i = 0; i < length; i++)
-			word[i] = BITSWAP16(word[i], 14,15,13,12,11,10,9,8,7,6,5,4,2,3,1,0);
+			word[i] = BURN_ENDIAN_SWAP_INT16(BITSWAP16(BURN_ENDIAN_SWAP_INT16(word[i]), 14,15,13,12,11,10,9,8,7,6,5,4,2,3,1,0));
 			
 		/* road gfx */
 		/* rom a-2.bin: swap bits 6,7 */
@@ -2340,6 +2453,8 @@ static INT32 OutrunbInit()
 
 static INT32 ShangonInit()
 {
+	OutrunSetResolution();
+
 	System16ProcessAnalogControlsDo = ShangonProcessAnalogControls;
 	sega_315_5195_custom_io_do = ShangonReadIO;
 	sega_315_5195_custom_io_write_do = ShangonWriteIO;
@@ -2374,6 +2489,8 @@ static INT32 ShangonInit()
 
 static INT32 ToutrunInit()
 {
+	OutrunSetResolution();
+
 	System16ProcessAnalogControlsDo = OutrunProcessAnalogControls;
 	sega_315_5195_custom_io_do = OutrunReadIO;
 	sega_315_5195_custom_io_write_do = OutrunWriteIO;
@@ -2564,6 +2681,16 @@ struct BurnDriver BurnDrvOutrunm = {
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK | BDF_HISCORE_SUPPORTED, 2, HARDWARE_SEGA_OUTRUN | HARDWARE_SEGA_SPRITE_LOAD32, GBF_RACING, 0,
 	NULL, OutrunmRomInfo, OutrunmRomName, NULL, NULL, NULL, NULL, OutrunInputInfo, OutrunDIPInfo,
+	OutrunmInit, System16Exit, OutrunFrame, OutrunRender, OutrunmScan,
+	NULL, 0x3000, 320, 224, 4, 3
+};
+
+struct BurnDriver BurnDrvOutrungb = {
+	"outrungb", "outrun", NULL, NULL, "2026",
+	"Out Run Gumball Edition (Hack)\0", NULL, "niknak", "Out Run",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK | BDF_HISCORE_SUPPORTED, 2, HARDWARE_SEGA_OUTRUN | HARDWARE_SEGA_SPRITE_LOAD32, GBF_RACING, 0,
+	NULL, OutrungbRomInfo, OutrungbRomName, NULL, NULL, NULL, NULL, OutrunInputInfo, OutrunDIPInfo,
 	OutrunmInit, System16Exit, OutrunFrame, OutrunRender, OutrunmScan,
 	NULL, 0x3000, 320, 224, 4, 3
 };

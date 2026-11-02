@@ -11,13 +11,17 @@ int main(int /*argc*/, char** /*argv*/)
 	printf("#define BUILD_CHAR ANSI\n");
 #endif
 
-#if !defined BUILD_X64_EXE
-	printf("#define BUILD_CPU  X86\n");
-#else
+#if defined BUILD_ARM64_EXE
+	printf("#define BUILD_CPU  ARM64\n");
+#elif defined BUILD_X64_EXE
 	printf("#define BUILD_CPU  X64\n");
+#else
+	printf("#define BUILD_CPU  X86\n");
 #endif
 
-#if defined __GNUC__
+#if defined __clang__
+	printf("#define BUILD_COMP Clang %i.%i.%i\n", __clang_major__, __clang_minor__, __clang_patchlevel__);
+#elif defined __GNUC__
 	printf("#define BUILD_COMP GCC %i.%i.%i\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
 #elif defined _MSC_VER
  #if _MSC_VER >= 1300 && _MSC_VER < 1310

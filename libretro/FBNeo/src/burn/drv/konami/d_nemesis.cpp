@@ -1503,7 +1503,7 @@ static UINT8 __fastcall nemesis_main_read_byte(UINT32 address)
 static UINT16 __fastcall nemesis_main_read_word(UINT32 address)
 {
 	if ((address & 0xfffff8) == 0x040000) {
-		return mcu_control[(address / 2) & 3];
+		return BURN_ENDIAN_SWAP_INT16(mcu_control[(address / 2) & 3]);
 	}
 
 	switch (address)
@@ -1710,14 +1710,14 @@ static void bubsys_mcu_write(INT32 offset)
 
 	if (offset == 1)
 	{
-		if (mcu_control[1] == 1)
+		if (BURN_ENDIAN_SWAP_INT16(mcu_control[1]) == 1)
 		{
-			INT32 page = (mcu_control[0] & 0x7ff) * 0x90;
+			INT32 page = (BURN_ENDIAN_SWAP_INT16(mcu_control[0]) & 0x7ff) * 0x90;
 
 			memcpy (Drv68KRAM0 + 0xf00, Drv68KROM + page, 0x80);
 			BurnByteswap(Drv68KRAM0 + 0xf00, 0x80);
 
-			mcu_control[0] = Drv68KROM[page + 0x81] | (Drv68KROM[page + 0x80] << 8);
+			mcu_control[0] = BURN_ENDIAN_SWAP_INT16(Drv68KROM[page + 0x81] | (Drv68KROM[page + 0x80] << 8));
 
 			SekSetIRQLine(5, CPU_IRQSTATUS_AUTO);
 		}
@@ -1728,7 +1728,7 @@ static void __fastcall gx400_main_write_word(UINT32 address, UINT16 data)
 {
 	if ((address & 0xfffff8) == 0x040000) {
 		INT32 offset = (address / 2) & 3;
-		mcu_control[offset] = data;
+		mcu_control[offset] = BURN_ENDIAN_SWAP_INT16(data);
 		bubsys_mcu_write(offset);
 		return;
 	}
@@ -2191,7 +2191,7 @@ static inline void update_char_tiles(UINT32 offset)
 {
 	offset &= 0xfffe;
 
-	INT32 data = *((UINT16*)(DrvCharRAM + offset));
+	INT32 data = BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvCharRAM + offset)));
 
 	offset *= 2;
 
@@ -2203,7 +2203,7 @@ static inline void update_char_tiles(UINT32 offset)
 
 static void __fastcall nemesis_charram_write_word(UINT32 address, UINT16 data)
 {
-	*((UINT16*)(DrvCharRAM + (address & 0xfffe))) = data;
+	*((UINT16*)(DrvCharRAM + (address & 0xfffe))) = BURN_ENDIAN_SWAP_INT16(data);
 
 	update_char_tiles(address);
 }
@@ -2263,7 +2263,7 @@ static void salamand_palette_update(INT32 i)
 
 static void __fastcall nemesis_palette_write_word(UINT32 address, UINT16 data)
 {
-	*((UINT16*)(DrvPalRAM + (address & 0x1ffe))) = data;
+	*((UINT16*)(DrvPalRAM + (address & 0x1ffe))) = BURN_ENDIAN_SWAP_INT16(data);
 
 	palette_write(address);
 }
@@ -2334,7 +2334,7 @@ static INT32 DrvDoReset()
 		BurnLoadRom(Drv68KRAM0, 0, 1); // load bubsys bios
 		BurnByteswap(Drv68KRAM0, 0x1e0);
 
-		mcu_control[3] = 0x240;
+		mcu_control[3] = BURN_ENDIAN_SWAP_INT16(0x240);
 	}
 
 	SekReset(0);
@@ -3230,13 +3230,13 @@ static void draw_layer(UINT8 *vidram, UINT8 *colram, UINT16 *scrollx, UINT16 *sc
 
 	for (INT32 y = 0; y < 256; y++)
 	{
-		INT32 xscroll = (scrollx[y] & 0xff) | ((scrollx[y+0x100] & 1) * 256);
+		INT32 xscroll = (BURN_ENDIAN_SWAP_INT16(scrollx[y]) & 0xff) | ((BURN_ENDIAN_SWAP_INT16(scrollx[y+0x100]) & 1) * 256);
 
 		INT32 sx_off = xscroll & 0x07;
 
 		for (INT32 x = 0; x < nScreenWidth + (sx_off); x+=8)
 		{
-			INT32 scry = scrolly[x/8] & 0xff;
+			INT32 scry = BURN_ENDIAN_SWAP_INT16(scrolly[x/8]) & 0xff;
 
 			INT32 offs = ((((scry/8)+(y/8)) & 0x1f) * 64) + (((x/8)+(xscroll/8)) & 0x3f);
 
@@ -3248,8 +3248,8 @@ static void draw_layer(UINT8 *vidram, UINT8 *colram, UINT16 *scrollx, UINT16 *sc
 
 			if (*tilemap_flip_y) dy = (nScreenHeight - 1) - dy;
 
-			INT32 code  = vram[offs];
-			INT32 color = cram[offs];
+			INT32 code  = BURN_ENDIAN_SWAP_INT16(vram[offs]);
+			INT32 color = BURN_ENDIAN_SWAP_INT16(cram[offs]);
 			INT32 flipx = (color & 0x0080) ? 0x07 : 0;
 			INT32 flipy = (code  & 0x0800) ? 0x38 : 0;
 			INT32 mask  = (code  & 0x1000) >> 12;
@@ -3300,33 +3300,33 @@ static void draw_sprites()
 	{
 		for (INT32 address = (0x1000/2) - 8; address >= 0; address -= 8)
 		{
-			if((spriteram[address] & 0xff) != priority)
+			if((BURN_ENDIAN_SWAP_INT16(spriteram[address]) & 0xff) != priority)
 				continue;
 
-			INT32 zoom = spriteram[address + 2] & 0xff;
+			INT32 zoom = BURN_ENDIAN_SWAP_INT16(spriteram[address + 2]) & 0xff;
 
 			INT32 code;
-			if (!(spriteram[address + 2] & 0xff00) && ((spriteram[address + 3] & 0xff00) != 0xff00))
-				code = spriteram[address + 3] + ((spriteram[address + 4] & 0xc0) << 2);
+			if (!(BURN_ENDIAN_SWAP_INT16(spriteram[address + 2]) & 0xff00) && ((BURN_ENDIAN_SWAP_INT16(spriteram[address + 3]) & 0xff00) != 0xff00))
+				code = BURN_ENDIAN_SWAP_INT16(spriteram[address + 3]) + ((BURN_ENDIAN_SWAP_INT16(spriteram[address + 4]) & 0xc0) << 2);
 			else
-				code = (spriteram[address + 3] & 0xff) + ((spriteram[address + 4] & 0xc0) << 2);
+				code = (BURN_ENDIAN_SWAP_INT16(spriteram[address + 3]) & 0xff) + ((BURN_ENDIAN_SWAP_INT16(spriteram[address + 4]) & 0xc0) << 2);
 
 			if (zoom != 0xff || code != 0)
 			{
 
-				INT32 size = spriteram[address + 1];
+				INT32 size = BURN_ENDIAN_SWAP_INT16(spriteram[address + 1]);
 				zoom += (size & 0xc0) << 2;
 
 				if (zoom == 0) continue;
 
-				INT32 sx = spriteram[address + 5] & 0xff;
-				INT32 sy = spriteram[address + 6] & 0xff;
-				if (spriteram[address + 4] & 0x01)
+				INT32 sx = BURN_ENDIAN_SWAP_INT16(spriteram[address + 5]) & 0xff;
+				INT32 sy = BURN_ENDIAN_SWAP_INT16(spriteram[address + 6]) & 0xff;
+				if (BURN_ENDIAN_SWAP_INT16(spriteram[address + 4]) & 0x01)
 					sx-=0x100;
 
-				INT32 color = (spriteram[address + 4] & 0x1e) >> 1;
-				INT32 flipx = spriteram[address + 1] & 0x01;
-				INT32 flipy = spriteram[address + 4] & 0x20;
+				INT32 color = (BURN_ENDIAN_SWAP_INT16(spriteram[address + 4]) & 0x1e) >> 1;
+				INT32 flipx = BURN_ENDIAN_SWAP_INT16(spriteram[address + 1]) & 0x01;
+				INT32 flipy = BURN_ENDIAN_SWAP_INT16(spriteram[address + 4]) & 0x20;
 
 				INT32 w = table[(size >> 3) & 7][0];
 				INT32 h = table[(size >> 3) & 7][1];
@@ -4289,7 +4289,7 @@ struct BurnDriver BurnDrvGwarrior = {
 };
 
 
-// Konami RF2 - Red Fighter
+// Konami RF2: Red Fighter
 
 static struct BurnRomInfo rf2RomDesc[] = {
 	{ "400-a06.15l",	0x08000, 0xb99d8cff, 1 | BRF_PRG | BRF_ESS }, //  0 m68000 Code
@@ -4308,7 +4308,7 @@ STD_ROM_FN(rf2)
 
 struct BurnDriver BurnDrvRf2 = {
 	"rf2", "konamigt", NULL, NULL, "1985",
-	"Konami RF2 - Red Fighter\0", NULL, "Konami", "GX561",
+	"Konami RF2: Red Fighter\0", NULL, "Konami", "GX561",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
 	NULL, rf2RomInfo, rf2RomName, NULL, NULL, NULL, NULL, KonamigtInputInfo, KonamigtDIPInfo,
@@ -4547,7 +4547,7 @@ struct BurnDriver BurnDrvBubsys = {
 
 // Gradius (Bubble System)
 
-static struct BurnRomInfo gradiusbRomDesc[] = {
+static struct BurnRomInfo bs_gradiusRomDesc[] = {
 	{ "boot.bin",				0x001e0, 0xf0774fc2, 1 | BRF_PRG | BRF_ESS },              //  0 m68000 Vectors
 
 	{ "gradius.bin",			0x48360, 0xf83b9607, 2 | BRF_PRG | BRF_ESS },              //  1 Bubble Memory Data
@@ -4558,15 +4558,15 @@ static struct BurnRomInfo gradiusbRomDesc[] = {
 	{ "400a2.1b",				0x00100, 0x2f44f970, 4 | BRF_SND },                        //  4
 };
 
-STDROMPICKEXT(gradiusb, gradiusb, bubsys)
-STD_ROM_FN(gradiusb)
+STDROMPICKEXT(bs_gradius, bs_gradius, bubsys)
+STD_ROM_FN(bs_gradius)
 
-struct BurnDriver BurnDrvGradiusb = {
-	"gradiusb", NULL, "bubsys", NULL, "1985",
+struct BurnDriver BurnDrvbs_gradius = {
+	"bs_gradius", NULL, "bubsys", NULL, "1985",
 	"Gradius (Bubble System)\0", NULL, "Konami", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, gradiusbRomInfo, gradiusbRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
+	NULL, bs_gradiusRomInfo, bs_gradiusRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
 	BubsysInit, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -4574,7 +4574,7 @@ struct BurnDriver BurnDrvGradiusb = {
 
 // TwinBee (Bubble System)
 
-static struct BurnRomInfo twinbeebRomDesc[] = {
+static struct BurnRomInfo bs_twinbeeRomDesc[] = {
 	{ "boot.bin",				0x0001e0, 0xee6e93d7, 1 | BRF_PRG | BRF_ESS }, //  0 m68000 Vectors
 
 	{ "twinbee.bin",			0x040300, 0x4d396a0a, 2 | BRF_PRG | BRF_ESS }, //  1 Bubble Memory Data
@@ -4585,15 +4585,15 @@ static struct BurnRomInfo twinbeebRomDesc[] = {
 	{ "400-a02.fse",			0x000100, 0x2f44f970, 4 | BRF_SND },           //  5
 };
 
-STDROMPICKEXT(twinbeeb, twinbeeb, bubsys)
-STD_ROM_FN(twinbeeb)
+STDROMPICKEXT(bs_twinbee, bs_twinbee, bubsys)
+STD_ROM_FN(bs_twinbee)
 
-struct BurnDriver BurnDrvTwinbeeb = {
-	"twinbeeb", NULL, "bubsys", NULL, "1985",
+struct BurnDriver BurnDrvbs_twinbee = {
+	"bs_twinbee", NULL, "bubsys", NULL, "1985",
 	"TwinBee (Bubble System)\0", NULL, "Konami", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_KONAMI_68K_Z80, GBF_VERSHOOT, 0,
-	NULL, twinbeebRomInfo, twinbeebRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
+	NULL, bs_twinbeeRomInfo, bs_twinbeeRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
 	TwinbeebInit, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -4601,7 +4601,7 @@ struct BurnDriver BurnDrvTwinbeeb = {
 
 // Galactic Warriors (Bubble System)
 
-static struct BurnRomInfo gwarriorbRomDesc[] = {
+static struct BurnRomInfo bs_gwarriorRomDesc[] = {
 	{ "boot.bin",				0x0001e0, 0x728263bd, 1 | BRF_PRG | BRF_ESS }, //  0 m68000 Vectors
 
 	{ "gwarriorb.bin",			0x048360, 0xa10e1b62, 2 | BRF_PRG | BRF_ESS }, //  1 Bubble Memory Data
@@ -4612,23 +4612,23 @@ static struct BurnRomInfo gwarriorbRomDesc[] = {
 	{ "400a2.1b",				0x000100, 0x2f44f970, 4 | BRF_SND  },		   //  4 
 };
 
-STDROMPICKEXT(gwarriorb, gwarriorb, bubsys)
-STD_ROM_FN(gwarriorb)
+STDROMPICKEXT(bs_gwarrior, bs_gwarrior, bubsys)
+STD_ROM_FN(bs_gwarrior)
 
-struct BurnDriver BurnDrvGwarriorb = {
-	"gwarriorb", NULL, "bubsys", NULL, "1985",
+struct BurnDriver BurnDrvbs_gwarrior = {
+	"bs_gwarrior", NULL, "bubsys", NULL, "1985",
 	"Galactic Warriors (Bubble System)\0", NULL, "Konami", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_KONAMI_68K_Z80, GBF_VSFIGHT, 0,
-	NULL, gwarriorbRomInfo, gwarriorbRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
+	NULL, bs_gwarriorRomInfo, bs_gwarriorRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
 	BubsysInit, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
 
 
-// Konami RF2 - Red Fighter (Bubble System)
+// Konami RF2: Red Fighter (Bubble System)
 
-static struct BurnRomInfo rf2bRomDesc[] = {
+static struct BurnRomInfo bs_rf2RomDesc[] = {
 	{ "boot.bin",				0x0001e0, 0xee6e93d7, 1 | BRF_PRG | BRF_ESS },	//  0 m68000 Vectors
 
 	{ "rf2b.bin",				0x048360, 0x7ee7acc5, 2 | BRF_PRG | BRF_ESS },	//  1 Bubble Memory Data
@@ -4639,15 +4639,15 @@ static struct BurnRomInfo rf2bRomDesc[] = {
 	{ "400a2.1b",				0x000100, 0x2f44f970, 4 | BRF_SND },			//  4 
 };
 
-STDROMPICKEXT(rf2b, rf2b, bubsys)
-STD_ROM_FN(rf2b)
+STDROMPICKEXT(bs_rf2, bs_rf2, bubsys)
+STD_ROM_FN(bs_rf2)
 
-struct BurnDriver BurnDrvRf2b = {
-	"rf2b", NULL, "bubsys", NULL, "1985",
-	"Konami RF2 - Red Fighter (Bubble System)\0", NULL, "Konami", "Miscellaneous",
+struct BurnDriver BurnDrvbs_rf2 = {
+	"bs_rf2", NULL, "bubsys", NULL, "1985",
+	"Konami RF2: Red Fighter (Bubble System)\0", NULL, "Konami", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_NOT_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
-	NULL, rf2bRomInfo, rf2bRomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
+	NULL, bs_rf2RomInfo, bs_rf2RomName, NULL, NULL, NULL, NULL, BubsysInputInfo, BubsysDIPInfo,
 	BubsysInit, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };

@@ -1,45 +1,13 @@
 // =============================================================================
 //  FBNeo SNES  -  SuperFX (GSU) coprocessor core
 // =============================================================================
-//  Emulation logic derived (clean-room, open-source) from ares:
-//        ares/component/processor/gsu/{gsu.cpp,registers.hpp,instruction.cpp,
-//                                      instructions.cpp,serialization.cpp}
-//        ares/sfc/coprocessor/superfx/{superfx.cpp,bus.cpp,core.cpp,memory.cpp,
-//                                      io.cpp,timing.cpp,serialization.cpp}
-//  ares is (c) its authors under the ISC licence (see license.txt).
-//
-//  This file is a deliberate structural re-expression, NOT a transliteration
-//  (see the porting notes in gsu.h):
-//    * ares' GSU (Processor) + SuperFX (Thread) C++ classes, virtual dispatch,
-//      nall BitField/Register operator overloads and libco scheduler are all
-//      removed.  The whole chip is one flat C state struct, SnesGsuState, with
-//      plain file-scope functions - no members, templates or namespaces.
-//    * ares' n8/n16/u32 give way to FBNeo's UINT8/UINT16/UINT32/INT-typedefs.
-//    * ares' opcode dispatch (a preprocessor-expanded switch over member
-//      functions) is rebuilt as a switch over static functions taking an
-//      explicit register-index argument (mercury-style op4/op6/... groups),
-//      preserving ares' exact ALT-mode decoding.
-//    * ares' cooperative Thread::step / synchronize(cpu) becomes a cycle-budget
-//      catch-up loop (snes_gsu_run) driven by cart_run() under Cart::heavySync,
-//      exactly as sa1.cpp does.
-//    * ares' bus/serializer/cpu.irq bind to FBNeo's linear ROM/RAM buffers,
-//      StateHandler and cpu_setIrq().
-//
-//  FBNeo mount / bridge glue (c) 2026 (see license.txt).
-// =============================================================================
 
 #include "snes.h"
 #include "cpu.h"
 #include "cart.h"
 #include "gsu.h"
 
-// -----------------------------------------------------------------------------
-//  Flag / bit helpers.  ares stored the SFR (status flag register) as a packed
-//  BitField<16,..> word; here each flag is a plain field of SnesGsuState and the
-//  packed 16-bit view is (de)composed on the S-CPU-visible MMIO boundary only.
-// -----------------------------------------------------------------------------
-
-// SFR bit positions (ares registers.hpp: SFR BitField indices)
+// SFR bit positions
 #define SNES_GSU_SFR_Z    0x0002	// zero flag
 #define SNES_GSU_SFR_CY   0x0004	// carry flag
 #define SNES_GSU_SFR_S    0x0008	// sign flag
@@ -53,13 +21,6 @@
 #define SNES_GSU_SFR_B    0x1000	// with flag
 #define SNES_GSU_SFR_IRQ  0x8000	// interrupt flag
 
-// -----------------------------------------------------------------------------
-//  GSU state.  This single struct replaces ares' Registers, Cache, PixelCache,
-//  SuperFX chip state and the FBNeo mount bookkeeping.  ares kept many of these
-//  as C++ locals or sub-objects; per the porting brief they are hoisted into one
-//  global state structure.
-// -----------------------------------------------------------------------------
-
 typedef struct SnesGsuPixelCache {
 	UINT16 offset;
 	UINT8  bitpend;
@@ -67,11 +28,11 @@ typedef struct SnesGsuPixelCache {
 } SnesGsuPixelCache;
 
 typedef struct SnesGsuState {
-	// --- general purpose registers (ares: Register r[16]) ---
+	// --- general purpose registers ---
 	UINT16 r[16];			// r0..r15
-	UINT8  r_modified[16];	// ares Register::modified (only r14/r15 consulted)
+	UINT8  r_modified[16];
 
-	// --- status flag register, expanded (ares: SFR) ---
+	// --- status flag register ---
 	UINT8  sfr_z, sfr_cy, sfr_s, sfr_ov;
 	UINT8  sfr_g, sfr_r;
 	UINT8  sfr_alt1, sfr_alt2;
@@ -79,7 +40,7 @@ typedef struct SnesGsuState {
 	UINT8  sfr_b;
 	UINT8  sfr_irq;
 
-	// --- misc registers (ares: Registers struct fields) ---
+	// --- misc registers ---
 	UINT8  pipeline;		// prefetched opcode
 	UINT16 ramaddr;			// last RAM access address (store/load bookkeeping)
 
@@ -89,7 +50,7 @@ typedef struct SnesGsuState {
 	UINT16 cbr;				// cache base register
 	UINT8  scbr;			// screen base register
 
-	// screen mode register (ares: SCMR decomposed)
+	// screen mode register
 	UINT32 scmr_ht;
 	UINT8  scmr_ron;
 	UINT8  scmr_ran;
@@ -97,7 +58,7 @@ typedef struct SnesGsuState {
 
 	UINT8  colr;			// color register
 
-	// plot option register (ares: POR decomposed)
+	// plot option register
 	UINT8  por_obj;
 	UINT8  por_freezehigh;
 	UINT8  por_highnibble;
@@ -107,13 +68,13 @@ typedef struct SnesGsuState {
 	UINT8  bramr;			// back-up RAM enable (1 bit)
 	UINT8  vcr;				// version code register
 
-	// config register (ares: CFGR decomposed)
+	// config register
 	UINT8  cfgr_irq;
 	UINT8  cfgr_ms0;
 
 	UINT8  clsr;			// clock select register (1 bit)
 
-	// ROM/RAM access buffers (ares: romcl/romdr, ramcl/ramar/ramdr)
+	// ROM/RAM access buffers
 	UINT32 romcl;			// clock ticks until romdr valid
 	UINT8  romdr;			// ROM buffer data register
 	UINT32 ramcl;			// clock ticks until ramdr valid
@@ -123,17 +84,16 @@ typedef struct SnesGsuState {
 	UINT32 sreg;			// source register index (from)
 	UINT32 dreg;			// destination register index (to)
 
-	// --- opcode cache (ares: Cache) ---
+	// --- opcode cache ---
 	UINT8  cache_buffer[512];
 	UINT8  cache_valid[32];
 
-	// --- pixel plot caches (ares: PixelCache pixelcache[2]) ---
+	// --- pixel plot caches ---
 	SnesGsuPixelCache pixelcache[2];
 
-	// --- FBNeo mount / run-loop bookkeeping ---
 	UINT64 clock;			// GSU master-clock accumulator (snes->cycles domain)
 	UINT64 sync_to;			// current run() budget target
-	UINT8  r15_modified;	// ares Register r[15].modified, kept explicit
+	UINT8  r15_modified;
 
 	UINT8  cpu_irq_line;	// GSU-driven S-CPU IRQ line (raw)
 	UINT8  in_irq;			// did WE assert cpu_setIrq(true)? (latched)
@@ -148,7 +108,7 @@ typedef struct SnesGsuState {
 static SnesGsuState gsu;
 
 // -----------------------------------------------------------------------------
-//  Mount context (ares kept ROM/RAM as MappedRAM members of SuperFX).
+//  Mount context
 // -----------------------------------------------------------------------------
 
 static Snes*  gsu_snes;
@@ -161,7 +121,7 @@ static UINT8* gsu_ram;
 static UINT32 gsu_ram_size;
 static UINT32 gsu_ram_mask;
 
-static INT32  gsu_hirom;	// 0 = GSU-1 window set, 1 = GSU-2 window set
+static UINT8  gsu_type;
 
 // -----------------------------------------------------------------------------
 //  Forward declarations
@@ -187,17 +147,10 @@ static UINT8 snes_gsu_color(UINT8 source);
 static void  snes_gsu_plot(UINT8 x, UINT8 y);
 static UINT8 snes_gsu_rpix(UINT8 x, UINT8 y);
 static void  snes_gsu_pixelcache_flush(SnesGsuPixelCache* pc);
+static void  snes_gsu_fx3_command();
 
 static void  snes_gsu_execute(UINT8 opcode);
 static void  snes_gsu_update_irq_forward();
-
-// -----------------------------------------------------------------------------
-//  Register-file helpers.  ares used a Register class whose assignment operators
-//  set the "modified" flag and, for r14/r15, triggered ROM buffering / branch
-//  detection through SuperFX::main().  Here reads are plain and writes route
-//  through snes_gsu_reg_write(), which keeps the modified flags and fires the
-//  r14 ROM-buffer side effect exactly as ares' SuperFX::main() did.
-// -----------------------------------------------------------------------------
 
 static inline void snes_gsu_reg_write(UINT32 n, UINT16 value)
 {
@@ -206,11 +159,10 @@ static inline void snes_gsu_reg_write(UINT32 n, UINT16 value)
 	if (n == 15) gsu.r15_modified = 1;
 }
 
-// convenience: source / destination register accessors (ares: regs.sr()/dr())
+// convenience: source / destination register accessors
 #define SNES_GSU_SR() (gsu.r[gsu.sreg])
 #define SNES_GSU_DR_WRITE(v) snes_gsu_reg_write(gsu.dreg, (v))
 
-// ares regs.reset(): clear WITH/ALT flags and reset src/dst selection
 static inline void snes_gsu_regs_reset()
 {
 	gsu.sfr_b    = 0;
@@ -220,20 +172,16 @@ static inline void snes_gsu_regs_reset()
 	gsu.dreg     = 0;
 }
 
-// =============================================================================
-//  GSU-internal bus  (ares sfc/coprocessor/superfx/memory.cpp + bus.cpp)
-//  The GSU's own view of ROM/RAM: linear, masked.  ares spun on RON/RAN with
-//  synchronize(cpu); here (as in sa1.cpp) the buses are granted while g=1, which
-//  is always true for real GSU games, so the bus is read directly.
-// =============================================================================
 
 static UINT8 snes_gsu_bus_read(UINT32 address)
 {
+	UINT8 bank = address >> 16;
+
 	if ((address & 0xc00000) == 0x000000) {		// $00-3f:0000-7fff, :8000-ffff
 		return gsu_rom[(((address & 0x3f0000) >> 1) | (address & 0x7fff)) & gsu_rom_mask];
 	}
 
-	if ((address & 0xe00000) == 0x400000) {		// $40-5f:0000-ffff
+	if (bank >= 0x40 && bank <= ((gsu_type == SNES_GSU_3) ? 0x6f : 0x5f)) {
 		return gsu_rom[address & gsu_rom_mask];
 	}
 
@@ -251,7 +199,6 @@ static void snes_gsu_bus_write(UINT32 address, UINT8 data)
 	}
 }
 
-// ares SuperFX::readOpcode(): fetch through the 512-byte instruction cache
 static UINT8 snes_gsu_op_read(UINT16 address) {
 	UINT16 offset = address - gsu.cbr;
 	if (offset < 512) {
@@ -269,8 +216,8 @@ static UINT8 snes_gsu_op_read(UINT16 address) {
 		return gsu.cache_buffer[offset];
 	}
 
-	if (gsu.pbr <= 0x5f) {
-		// $00-5f:0000-ffff ROM
+	if (gsu.pbr <= ((gsu_type == SNES_GSU_3) ? 0x6f : 0x5f)) {
+		// $00-6f:0000-ffff ROM
 		snes_gsu_rombuffer_sync();
 		snes_gsu_step(gsu.clsr ? 5 : 6);
 		return snes_gsu_bus_read((gsu.pbr << 16) | address);
@@ -282,7 +229,6 @@ static UINT8 snes_gsu_op_read(UINT16 address) {
 	}
 }
 
-// ares SuperFX::peekpipe(): read pipeline without advancing r15 fetch position
 static UINT8 snes_gsu_peekpipe()
 {
 	UINT8 result = gsu.pipeline;
@@ -292,7 +238,6 @@ static UINT8 snes_gsu_peekpipe()
 	return result;
 }
 
-// ares SuperFX::pipe(): read pipeline and prefetch next (++r15)
 static UINT8 snes_gsu_pipe()
 {
 	UINT8 result = gsu.pipeline;
@@ -320,13 +265,6 @@ static void snes_gsu_cache_mmio_write(UINT16 address, UINT8 data)
 	gsu.cache_buffer[address] = data;
 	if ((address & 15) == 15) gsu.cache_valid[address >> 4] = 1;
 }
-
-// =============================================================================
-//  Timing  (ares sfc/coprocessor/superfx/timing.cpp)
-//  ares step(): resolve ROM/RAM buffer countdowns, advance the Thread clock and
-//  synchronize(cpu).  Here the Thread advance becomes accumulation into
-//  gsu.clock; synchronisation is implicit (run() yields when the budget spent).
-// =============================================================================
 
 static void snes_gsu_step(UINT32 clocks)
 {
@@ -384,13 +322,8 @@ static void snes_gsu_rambuffer_write(UINT16 address, UINT8 data)
 	gsu.ramdr = data;
 }
 
-// =============================================================================
-//  Core: raster / plot pipeline  (ares sfc/coprocessor/superfx/core.cpp)
-// =============================================================================
-
 static void snes_gsu_stop()
 {
-	// ares: cpu.irq(1)  -> raise the S-CPU IRQ line via FBNeo's latched forward
 	gsu.cpu_irq_line = 1;
 	snes_gsu_update_irq_forward();
 }
@@ -499,23 +432,47 @@ static void snes_gsu_pixelcache_flush(SnesGsuPixelCache* pc)
 	pc->bitpend = 0x00;
 }
 
-// =============================================================================
-//  Instruction set  (ares component/processor/gsu/instructions.cpp)
-//  ares member functions become file-scope statics; ares' member calls become
-//  direct calls; ares' regs.sr()/dr() become the SNES_GSU_SR / DR_WRITE macros.
-// =============================================================================
-#include "gsu_ops.h"
+static void snes_gsu_fx3_clear(UINT8 start, UINT8 end)
+{
+	static const UINT8 pattern[64] = {
+		0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00,
+		0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff,
+		0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff
+	};
 
-// =============================================================================
-//  Opcode dispatch  (ares component/processor/gsu/instruction.cpp)
-//  ares expanded a set of op/op4/op6/op12/op15/op16 macros over member function
-//  templates.  The same grouping is reproduced verbatim below, dispatching to
-//  the static instruction functions with an explicit 4-bit register index.
-// =============================================================================
+	snes_gsu_rambuffer_sync();
+	snes_gsu_pixelcache_flush(&gsu.pixelcache[1]);
+	snes_gsu_pixelcache_flush(&gsu.pixelcache[0]);
+
+	for (UINT32 row = 0; row < 18; row++) {
+		for (UINT32 column = start; column <= end; column++) {
+			UINT32 address = 0x10000 + row * 64 + column * 20 * 64;
+			if (gsu_ram != NULL && address <= gsu_ram_size && gsu_ram_size - address >= 64) {
+				for (UINT32 i = 0; i < 64; i++) gsu_ram[address + i] = pattern[i];
+			}
+		}
+	}
+}
+
+static void snes_gsu_fx3_command()
+{
+	switch (gsu.r[0]) {
+		case 3: snes_gsu_fx3_clear( 0,  8); break;
+		case 4: snes_gsu_fx3_clear( 9, 17); break;
+		case 5: snes_gsu_fx3_clear(18, 26); break;
+	}
+}
+
+#include "gsu_ops.h"
 #include "gsu_table.h"
 
 // =============================================================================
-//  GSU power / reset  (ares component/processor/gsu/gsu.cpp GSU::power)
+//  GSU power / reset
 // =============================================================================
 
 static void snes_gsu_power()
@@ -546,7 +503,7 @@ static void snes_gsu_power()
 	gsu.por_dither = gsu.por_transparent = 0;								// por = 0x00
 
 	gsu.bramr = 0;
-	gsu.vcr   = 0x04;
+	gsu.vcr   = (gsu_type == SNES_GSU_3) ? 0x52 : 0x04;
 
 	gsu.cfgr_irq = 0; gsu.cfgr_ms0 = 0;										// cfgr = 0x00
 
@@ -559,7 +516,6 @@ static void snes_gsu_power()
 
 // =============================================================================
 //  MMIO: GSU control registers as seen by the S-CPU  ($3000-$34ff)
-//  (ares sfc/coprocessor/superfx/io.cpp readIO/writeIO)
 // =============================================================================
 
 static UINT16 snes_gsu_sfr_pack() {
@@ -576,7 +532,7 @@ static UINT16 snes_gsu_sfr_pack() {
 	if (gsu.sfr_ih)   v |= SNES_GSU_SFR_IH;
 	if (gsu.sfr_b)    v |= SNES_GSU_SFR_B;
 	if (gsu.sfr_irq)  v |= SNES_GSU_SFR_IRQ;
-	return v & 0x9f7e;	// ares SFR::operator u32: mask $9f7e
+	return v & 0x9f7e;
 }
 
 static UINT8 snes_gsu_mmio_read(UINT32 address)
@@ -625,14 +581,12 @@ static void snes_gsu_mmio_write(UINT32 address, UINT8 data)
 
 	if (address >= 0x3000 && address <= 0x301f) {
 		UINT32 n = (address >> 1) & 15;
-		// ares writeIO: regs.r[n] = ... routes through Register::operator=, which
-		// sets the modified flag (consulted by the GSU main loop for r14/r15).
 		if ((address & 1) == 0) {
 			snes_gsu_reg_write(n, (gsu.r[n] & 0xff00) | data);
 		} else {
 			snes_gsu_reg_write(n, (data << 8) | (gsu.r[n] & 0x00ff));
 		}
-		if (n == 14) snes_gsu_rombuffer_update();	// ares io.cpp: if(n==14) updateROMBuffer()
+		if (n == 14) snes_gsu_rombuffer_update();
 
 		if (address == 0x301f) gsu.sfr_g = 1;
 		return;
@@ -641,7 +595,6 @@ static void snes_gsu_mmio_write(UINT32 address, UINT8 data)
 	switch (address) {
 		case 0x3030: {
 			UINT8 g = gsu.sfr_g;
-			// low byte of SFR (ares: regs.sfr = (sfr & 0xff00) | data)
 			gsu.sfr_z  = (data & SNES_GSU_SFR_Z)  != 0;
 			gsu.sfr_cy = (data & SNES_GSU_SFR_CY) != 0;
 			gsu.sfr_s  = (data & SNES_GSU_SFR_S)  != 0;
@@ -658,10 +611,10 @@ static void snes_gsu_mmio_write(UINT32 address, UINT8 data)
 			// high byte of SFR
 			gsu.sfr_alt1 = (data & (SNES_GSU_SFR_ALT1 >> 8)) != 0;
 			gsu.sfr_alt2 = (data & (SNES_GSU_SFR_ALT2 >> 8)) != 0;
-			gsu.sfr_il   = (data & (SNES_GSU_SFR_IL >> 8))   != 0;
-			gsu.sfr_ih   = (data & (SNES_GSU_SFR_IH >> 8))   != 0;
-			gsu.sfr_b    = (data & (SNES_GSU_SFR_B >> 8))    != 0;
-			gsu.sfr_irq  = (data & (SNES_GSU_SFR_IRQ >> 8))  != 0;
+			gsu.sfr_il   = (data & (SNES_GSU_SFR_IL   >> 8)) != 0;
+			gsu.sfr_ih   = (data & (SNES_GSU_SFR_IH   >> 8)) != 0;
+			gsu.sfr_b    = (data & (SNES_GSU_SFR_B    >> 8)) != 0;
+			gsu.sfr_irq  = (data & (SNES_GSU_SFR_IRQ  >> 8)) != 0;
 			break;
 
 		case 0x3033:
@@ -687,7 +640,6 @@ static void snes_gsu_mmio_write(UINT32 address, UINT8 data)
 			break;
 
 		case 0x303a:
-			// scmr (ares SCMR::operator=)
 			gsu.scmr_ht  = (UINT32)((data & 0x20) != 0) << 1;
 			gsu.scmr_ht |= (UINT32)((data & 0x04) != 0) << 0;
 			gsu.scmr_ron = (data & 0x10) != 0;
@@ -699,9 +651,6 @@ static void snes_gsu_mmio_write(UINT32 address, UINT8 data)
 
 // =============================================================================
 //  GSU -> S-CPU IRQ forwarding
-//  ares raised cpu.irq(1) on STOP (unless CFGR.irq masks it) and cpu.irq(0) when
-//  the S-CPU acknowledged $3031.  FBNeo latches this (like sa1.cpp scpu_in_irq)
-//  so a genuine SNES h/v line-IRQ is never cleared out from under the CPU.
 // =============================================================================
 
 static void snes_gsu_update_irq_forward()
@@ -719,14 +668,6 @@ static void snes_gsu_update_irq_forward()
 
 // =============================================================================
 //  S-CPU -> GSU cartridge bus bridge
-//  Address windows follow the ares SuperFX board definitions (SHVC-1C0N /
-//  SHVC-1CA0N...).  While g=1 the GSU owns ROM (RON) / RAM (RAN) and the S-CPU
-//  reads see the ares CPUROM/CPURAM "busy" values instead of live data.
-//    MMIO : 00-3f,80-bf : 3000-34ff
-//    ROM  : 00-3f,80-bf : 8000-ffff (32K banks)   [GSU-1: 00-1f,80-9f]
-//           40-5f,c0-df : 0000-ffff               [GSU-2 extended window]
-//    RAM  : GSU-1  60-7d,e0-fd : 0000-ffff
-//           GSU-2  70-71,f0-f1 : 0000-ffff  + 00-3f,80-bf : 6000-7fff (8K)
 // =============================================================================
 
 static inline UINT32 snes_gsu_scpu_rom_offset(UINT8 bank, UINT16 adr)
@@ -738,10 +679,9 @@ static inline UINT32 snes_gsu_scpu_rom_offset(UINT8 bank, UINT16 adr)
 	return (((bank & 0x7f) << 15) | (adr & 0x7fff)) & gsu_rom_mask;
 }
 
-// ares SuperFX::CPUROM::read: idle vector while GSU holds RON
 static UINT8 snes_gsu_cpurom_read(UINT8 bank, UINT16 adr)
 {
-	if (gsu.sfr_g && gsu.scmr_ron) {
+	if (gsu_type != SNES_GSU_3 && gsu.sfr_g && gsu.scmr_ron) {
 		static const UINT8 vector[16] = {
 		  0x00, 0x01, 0x00, 0x01, 0x04, 0x01, 0x00, 0x01,
 		  0x00, 0x01, 0x08, 0x01, 0x00, 0x01, 0x0c, 0x01,
@@ -751,10 +691,9 @@ static UINT8 snes_gsu_cpurom_read(UINT8 bank, UINT16 adr)
 	return gsu_rom[snes_gsu_scpu_rom_offset(bank, adr)];
 }
 
-// ares SuperFX::CPURAM::read: open bus while GSU holds RAN
 static UINT8 snes_gsu_cpuram_read(UINT32 ram_offset)
 {
-	if (gsu.sfr_g && gsu.scmr_ran) return gsu_snes->openBus;
+	if (gsu_type != SNES_GSU_3 && gsu.sfr_g && gsu.scmr_ran) return gsu_snes->openBus;
 	return gsu_ram[ram_offset & gsu_ram_mask];
 }
 
@@ -768,30 +707,40 @@ UINT8 snes_gsu_cart_read(UINT32 address)
 	UINT8  bank = (address >> 16) & 0xff;
 	UINT16 adr  = address & 0xffff;
 
-	// MMIO: $3000-34ff in banks 00-3f / 80-bf
+	if (gsu_type == SNES_GSU_3) {
+		if ((bank & 0x40) == 0 && adr >= 0x7000 && adr <= 0x7fff) {
+			if ((adr & 0x0300) == 0x0300) return gsu_snes->openBus;
+			return snes_gsu_mmio_read(adr);
+		}
+		if (gsu_ram_size > 0 && bank >= 0x70 && bank <= 0x71) {
+			return snes_gsu_cpuram_read(((bank & 1) << 16) | adr);
+		}
+		if (((bank & 0x40) == 0 && adr >= 0x8000) ||
+			(bank >= 0x40 && bank <= 0x6f) || bank >= 0xc0) {
+			return snes_gsu_cpurom_read(bank, adr);
+		}
+		return gsu_snes->openBus;
+	}
+
 	if (adr >= 0x3000 && adr <= 0x34ff && (bank & 0x40) == 0x00) {
 		return snes_gsu_mmio_read(adr);
 	}
 
-	// Save-RAM window
 	if (gsu_ram_size > 0) {
-		if (gsu_hirom) {
-			// GSU-2
+		if (gsu_type == SNES_GSU_2) {
 			if ((bank & 0x40) == 0x00 && adr >= 0x6000 && adr < 0x8000) {
-				return snes_gsu_cpuram_read(adr & 0x1fff);					// 00-3f,80-bf:6000-7fff 8K page
+				return snes_gsu_cpuram_read(adr & 0x1fff);
 			}
 			if (((bank & 0x7f) == 0x70) || ((bank & 0x7f) == 0x71)) {
-				return snes_gsu_cpuram_read(((bank & 1) << 16) | adr);		// 70-71,f0-f1 64K banks
+				return snes_gsu_cpuram_read(((bank & 1) << 16) | adr);
 			}
 		} else {
-			// GSU-1
 			if ((bank & 0x7f) >= 0x60 && (bank & 0x7f) <= 0x7d) {
-				return snes_gsu_cpuram_read(((bank & 0x1f) << 16) | adr);	// 60-7d,e0-fd 64K banks
+				return snes_gsu_cpuram_read(((bank & 0x1f) << 16) | adr);
 			}
 		}
 	}
 
-	// ROM window
 	if (adr >= 0x8000 || (bank & 0x40)) {
 		return snes_gsu_cpurom_read(bank, adr);
 	}
@@ -804,14 +753,24 @@ void snes_gsu_cart_write(UINT32 address, UINT8 data)
 	UINT8  bank = (address >> 16) & 0xff;
 	UINT16 adr = address & 0xffff;
 
+	if (gsu_type == SNES_GSU_3) {
+		if ((bank & 0x40) == 0 && adr >= 0x7000 && adr <= 0x7fff) {
+			if ((adr & 0x0300) != 0x0300) snes_gsu_mmio_write(adr, data);
+			return;
+		}
+		if (gsu_ram_size > 0 && bank >= 0x70 && bank <= 0x71) {
+			snes_gsu_cpuram_write(((bank & 1) << 16) | adr, data);
+		}
+		return;
+	}
+
 	if ((bank & 0x40) == 0x00 && adr >= 0x3000 && adr <= 0x34ff) {
 		snes_gsu_mmio_write(adr, data);
 		return;
 	}
 
 	if (gsu_ram_size > 0) {
-		if (gsu_hirom) {
-			// GSU-2
+		if (gsu_type == SNES_GSU_2) {
 			if ((bank & 0x40) == 0x00 && adr >= 0x6000 && adr < 0x8000) {
 				snes_gsu_cpuram_write(adr & 0x1fff, data);
 				return;
@@ -821,7 +780,6 @@ void snes_gsu_cart_write(UINT32 address, UINT8 data)
 				return;
 			}
 		} else {
-			// GSU-1
 			if ((bank & 0x7f) >= 0x60 && (bank & 0x7f) <= 0x7d) {
 				snes_gsu_cpuram_write(((bank & 0x1f) << 16) | adr, data);
 				return;
@@ -831,14 +789,9 @@ void snes_gsu_cart_write(UINT32 address, UINT8 data)
 }
 
 // =============================================================================
-//  Run loop  (ares sfc/coprocessor/superfx/superfx.cpp SuperFX::main)
-//  ares ran main() from a libco thread scheduled against the S-CPU.  Here it is
-//  a cycle-budget catch-up: execute GSU opcodes until gsu.clock reaches
-//  snes->cycles.  cart_run() calls this every 2 master cycles (Cart::heavySync),
-//  giving the same near-lockstep interleave ares got from its scheduler.
+//  Run loop
 // =============================================================================
 
-// ares SuperFX::main() body for a single opcode step.
 static void snes_gsu_main_step()
 {
 	if (gsu.sfr_g == 0) { snes_gsu_step(6); return; }
@@ -881,9 +834,7 @@ void snes_gsu_run()
 }
 
 // =============================================================================
-//  round rom size up to the next power of two (ares superfx.cpp romSizeRound):
-//  the SuperFX voxel demo ships a non-power-of-two ROM which would corrupt the
-//  ROM mask otherwise.
+//  round rom size up to the next power of two
 // =============================================================================
 
 static UINT32 snes_gsu_rom_size_round(UINT32 size)
@@ -895,10 +846,10 @@ static UINT32 snes_gsu_rom_size_round(UINT32 size)
 }
 
 // =============================================================================
-//  Lifecycle  (mount surface for cart.cpp - mirrors sa1 / sdd1)
+//  Lifecycle
 // =============================================================================
 
-void snes_gsu_init(void* mem, UINT8* rom, INT32 romSize, UINT8* ram, INT32 ramSize, INT32 hirom, UINT32 oscillator)
+void snes_gsu_init(void* mem, UINT8* rom, INT32 romSize, UINT8* ram, INT32 ramSize, UINT8 gsuType, UINT32 oscillator)
 {
 	gsu_snes     = (Snes*)mem;
 
@@ -906,7 +857,7 @@ void snes_gsu_init(void* mem, UINT8* rom, INT32 romSize, UINT8* ram, INT32 ramSi
 	gsu_rom_size = romSize;
 	gsu_ram      = ram;
 	gsu_ram_size = ramSize;
-	gsu_hirom    = hirom;
+	gsu_type     = gsuType;
 
 	gsu_rom_mask = snes_gsu_rom_size_round(gsu_rom_size) - 1;
 	gsu_ram_mask = (gsu_ram_size > 0) ? (gsu_ram_size - 1) : 0;
@@ -922,8 +873,8 @@ void snes_gsu_init(void* mem, UINT8* rom, INT32 romSize, UINT8* ram, INT32 ramSi
 	gsu.gsu_clock_fp   = 0;
 	gsu.gsu_clock_base = 0;
 
-	bprintf(0, _T("gsu (superfx): init  rom %x  ram %x  (%S)  osc %u Hz  cpu %u Hz\n"),
-		gsu_rom_size, gsu_ram_size, hirom ? "GSU-2" : "GSU-1", gsu.gsu_freq, gsu.cpu_freq);
+	bprintf(0, _T("gsu (superfx): init  rom %x  ram %x  (GSU-%d)  osc %u Hz  cpu %u Hz\n"),
+		gsu_rom_size, gsu_ram_size, gsu_type, gsu.gsu_freq, gsu.cpu_freq);
 }
 
 void snes_gsu_reset()
@@ -939,7 +890,6 @@ void snes_gsu_reset()
 	gsu.gsu_clock_fp   = 0;
 	gsu.gsu_clock_base = 0;
 
-	// ares SuperFX::power(): clear cache + pixel caches + buffers
 	for (UINT32 n = 0; n < 512; n++) gsu.cache_buffer[n] = 0x00;
 	for (UINT32 n = 0; n <  32; n++) gsu.cache_valid[n]  = 0;
 	for (UINT32 n = 0; n <   2; n++) {
@@ -963,10 +913,7 @@ void snes_gsu_exit()
 }
 
 // =============================================================================
-//  Save state  (ares component/processor/gsu/serialization.cpp
-//               + sfc/coprocessor/superfx/serialization.cpp -> StateHandler)
-//  Save-RAM contents are serialized by cart_handleState (cart->ram), exactly as
-//  for the other coprocessors - not duplicated here.
+//  Save state
 // =============================================================================
 
 void snes_gsu_handleState(StateHandler* sh)

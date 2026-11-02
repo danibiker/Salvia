@@ -466,6 +466,10 @@ static struct BurnDIPInfo LuckywldDIPList[]=
 	{0x00, 0x01, 0x01, 0x01, "Normal"			},
 	{0x00, 0x01, 0x01, 0x00, "Frozen"			},
 
+	{0   , 0xfe, 0   ,    2, "Show Winners Don't Use Drugs"	},
+	{0x00, 0x01, 0x40, 0x00, "Off"				},
+	{0x00, 0x01, 0x40, 0x40, "On"		   	 	},
+
 	{0   , 0xfe, 0   ,    2, "Service Mode"		},
 	{0x01, 0x01, 0x40, 0x40, "Off"				},
 	{0x01, 0x01, 0x40, 0x00, "On"				},
@@ -638,12 +642,12 @@ static UINT16 __fastcall namcos2_68k_read_word(UINT32 address)
 	}
 
 	if ((address & 0xffffc0) == 0x420000) {
-		return *((UINT16*)(DrvC123Ctrl + (address & 0x3e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvC123Ctrl + (address & 0x3e))));
 	}
 
 	if ((address & 0xff0000) == 0x440000) {
 		if ((address & 0x301e) > 0x3016) return 0xff;
-		return *((UINT16*)(DrvPalRAM + (address & 0x301e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvPalRAM + (address & 0x301e))));
 	}
 
 	if ((address & 0xff0000) == 0x460000) {
@@ -651,7 +655,7 @@ static UINT16 __fastcall namcos2_68k_read_word(UINT32 address)
 	}
 
 	if ((address & 0xfffff0) == 0xcc0000) {
-		return *((UINT16*)(DrvRozCtrl + (address & 0x0e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvRozCtrl + (address & 0x0e))));
 	}
 
 	if ((address & 0xfffff0) == 0xd00000) {
@@ -686,7 +690,7 @@ static UINT8 __fastcall namcos2_68k_read_byte(UINT32 address)
 
 	if ((address & 0xff0000) == 0x440000) {
 		if ((address & 0x301e) > 0x3016) return 0xff;
-		return *((UINT16*)(DrvPalRAM + (address & 0x301e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvPalRAM + (address & 0x301e))));
 	}
 
 	if ((address & 0xff0000) == 0x460000) {
@@ -879,7 +883,7 @@ static void __fastcall luckywld_68k_write_byte(UINT32 address, UINT8 data)
 static UINT16 __fastcall luckywld_68k_read_word(UINT32 address)
 {
 	if ((address & 0xffffe0) == 0xd00000) {
-		return *((UINT16*)(DrvRozCtrl + (address & 0x1e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvRozCtrl + (address & 0x1e))));
 	}
 
 	if ((address & 0xfffff8) == 0xf00000) {
@@ -935,7 +939,7 @@ static void __fastcall metlhawk_68k_write_byte(UINT32 address, UINT8 data)
 static UINT16 __fastcall metlhawk_68k_read_word(UINT32 address)
 {
 	if ((address & 0xffffe0) == 0xd00000) {
-		return *((UINT16*)(DrvRozCtrl + (address & 0x0e)));
+		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(DrvRozCtrl + (address & 0x0e))));
 	}
 
 	switch (address)
@@ -4839,6 +4843,69 @@ struct BurnDriver BurnDrvValkyrie = {
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
 	NULL, valkyrieRomInfo, valkyrieRomName, NULL, NULL, NULL, NULL, DefaultInputInfo, DefaultDIPInfo,
+	ValkyrieInit, Namcos2Exit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4000,
+	224, 288, 3, 4
+};
+
+
+// Valkyrie no Densetsu (Hack, English Translation from Namco Museum Vol. 5)
+// https://github.com/SpiralBrad/valkyrie-no-densetsu-english
+
+static struct BurnRomInfo valkyrienmv5RomDesc[] = {
+	{ "wd1mpr0.bin",	0x20000, 0xf6e93a8c, 0x01 | BRF_PRG | BRF_ESS }, //  0 Main 68K Code
+	{ "wd1mpr1.bin",	0x20000, 0x0f496013, 0x01 | BRF_PRG | BRF_ESS }, //  1
+
+	{ "wd1spr0.bin",	0x10000, 0xb2398321, 0x02 | BRF_PRG | BRF_ESS }, //  2 Sub 68K Code
+	{ "wd1spr1.bin",	0x10000, 0x38dba897, 0x02 | BRF_PRG | BRF_ESS }, //  3
+
+	{ "wd1snd0.bin",	0x20000, 0xd0fbf58b, 0x03 | BRF_PRG | BRF_ESS }, //  4 M6809 Code
+
+#if !defined ROM_VERIFY
+	{ "sys2mcpu.bin",	0x02000, 0xa342a97e, 0x04 | BRF_PRG | BRF_ESS }, //  5 HD68705 Code
+#endif
+	{ "sys2c65c.bin",	0x08000, 0xa5b2a4ff, 0x04 | BRF_PRG | BRF_ESS }, //  6
+
+	{ "wdobj0.bin",		0x40000, 0xe8089451, 0x05 | BRF_GRA },           //  7 Sprites
+	{ "wdobj1.bin",		0x40000, 0x7ca65666, 0x05 | BRF_GRA },           //  8
+	{ "wdobj2.bin",		0x40000, 0x7c159407, 0x05 | BRF_GRA },           //  9
+	{ "wdobj3.bin",		0x40000, 0x649f8760, 0x05 | BRF_GRA },           // 10
+	{ "wdobj4.bin",		0x40000, 0x7ca39ae7, 0x05 | BRF_GRA },           // 11
+	{ "wdobj5.bin",		0x40000, 0x9ead2444, 0x05 | BRF_GRA },           // 12
+	{ "wdobj6.bin",		0x40000, 0x9fa2ea21, 0x05 | BRF_GRA },           // 13
+	{ "wdobj7.bin",		0x40000, 0x66e07a36, 0x05 | BRF_GRA },           // 14
+
+	{ "wdchr0.bin",		0x20000, 0xdebb0116, 0x06 | BRF_GRA },           // 15 Layer Tiles
+	{ "wdchr1.bin",		0x20000, 0x8a1431e8, 0x06 | BRF_GRA },           // 16
+	{ "wdchr2.bin",		0x20000, 0x62f75f69, 0x06 | BRF_GRA },           // 17
+	{ "wdchr3.bin",		0x20000, 0xcc43bbe7, 0x06 | BRF_GRA },           // 18
+	{ "wdchr4.bin",		0x20000, 0x2f73d05e, 0x06 | BRF_GRA },           // 19
+	{ "wdchr5.bin",		0x20000, 0xb632b2ec, 0x06 | BRF_GRA },           // 20
+
+	{ "wdroz0.bin",		0x20000, 0xf776bf66, 0x07 | BRF_GRA },           // 21 Roz Layer Tiles
+	{ "wdroz1.bin",		0x20000, 0xc1a345c3, 0x07 | BRF_GRA },           // 22
+	{ "wdroz2.bin",		0x20000, 0x28ffb44a, 0x07 | BRF_GRA },           // 23
+	{ "wdroz3.bin",		0x20000, 0x7e77b46d, 0x07 | BRF_GRA },           // 24
+
+	{ "wdshape.bin",	0x20000, 0x3b5e0249, 0x08 | BRF_GRA },           // 25 Layer Tiles Mask Data
+
+	{ "wd1dat0.13s",	0x20000, 0xea209f48, 0x09 | BRF_PRG | BRF_ESS }, // 26 Shared 68K Data
+	{ "wd1dat1.13p",	0x20000, 0x04b48ada, 0x09 | BRF_PRG | BRF_ESS }, // 27
+
+	{ "wd1voi1.bin",	0x40000, 0xf1ace193, 0x0a | BRF_SND },           // 28 C140 Samples Samples
+	{ "wd1voi2.bin",	0x20000, 0xe95c5cf3, 0x0a | BRF_SND },           // 29
+
+	{ "valkyrie.nv",	0x02000, 0xd5ce4069, 0x0b | BRF_PRG | BRF_ESS},  // 30 nvram
+};
+
+STD_ROM_PICK(valkyrienmv5)
+STD_ROM_FN(valkyrienmv5)
+
+struct BurnDriver BurnDrvValkyrienmv5 = {
+	"valkyrienmv5", "valkyrie", NULL, NULL, "2026",
+	"Valkyrie no Densetsu (Hack, English Translation from Namco Museum Vol. 5)\0", NULL, "hack (SpiralBrad)", "System 2",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
+	NULL, valkyrienmv5RomInfo, valkyrienmv5RomName, NULL, NULL, NULL, NULL, DefaultInputInfo, DefaultDIPInfo,
 	ValkyrieInit, Namcos2Exit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4000,
 	224, 288, 3, 4
 };

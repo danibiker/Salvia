@@ -46,7 +46,6 @@
 
 static INT32 dcs_type;
 static INT32 dcs_mhz;
-static INT32 dcs_icycles;
 static double dcs_volume;
 
 static INT32 latch_addr_lo;
@@ -70,14 +69,23 @@ static UINT16 nTxIR;
 static UINT16 nTxIRBase;
 static UINT32 nTxSize;
 static UINT32 nTxIncrement;
-static UINT64 nNextIRQCycle;
-static UINT64 nTotalCycles;
 static UINT8 bGenerateIRQ;
 
-static INT32 samples_from; // samples per frame
+// the autobuffer IRQ is generated every half buffer of ADSP time (as MAME's dcs_irq timer)
+static INT32 nIRQPeriod;		// ADSP cycles between two half buffers
+static INT32 nIRQCountdown;		// ADSP cycles until the next half buffer
+
+static void (*pOutputFullCallback)(INT32 state) = NULL;
+static INT32 nOutputFull;	// state last given to pOutputFullCallback
+
 static INT32 sample_rate;  // sample rate of dcs
 static INT16 *mixer_buffer;
 static INT32 mixer_pos;
+static INT32 nRenderAcc;		// remainder of sample_rate * 100 / nBurnFPS
+static INT32 bRenderPrimed;
+static INT16 nLastSample;
+
+#define MIXER_BUFFER_LEN	10000
 
 void Dcs2kBoot();
 static void SetupMemory();
@@ -85,8 +93,6 @@ static INT32 RxCallback(INT32 port);
 static void TxCallback(INT32 port, INT32 data);
 static void TimerCallback(INT32 enable);
 static INT32 IRQCallback(INT32 line);
-
-void DcsIRQ();
 
 static UINT16 ReadRAM(UINT32 address);
 static void WriteRAM(UINT32 address, UINT16 value);
@@ -109,6 +115,8 @@ void Dcs2kInit(INT32 dtype, INT32 dmhz)
 
 	dcs_type = dtype;
 	dcs_mhz = dmhz;
+	pOutputFullCallback = NULL;
+	nOutputFull = 0;
 	dcs_volume = 1.00;
 
     Adsp2100Init();
@@ -153,7 +161,7 @@ void Dcs2kInit(INT32 dtype, INT32 dmhz)
 		break;
 	}
 
-	mixer_buffer = (INT16*)BurnMalloc(44800 * 2);
+	mixer_buffer = (INT16*)BurnMalloc(MIXER_BUFFER_LEN * sizeof(INT16));
 	mixer_pos = 0;
 
     nCurrentBank = 0;
@@ -172,47 +180,67 @@ void Dcs2kExit()
 	BurnFree(mixer_buffer);
 }
 
+void Dcs2kSetOutputFullCallback(void (*cb)(INT32 state))
+{
+	pOutputFullCallback = cb;
+}
+
+static void SetOutputFull(INT32 state)
+{
+	if (nOutputFull != state) {
+		nOutputFull = state;
+		if (pOutputFullCallback) pOutputFullCallback(state);
+	}
+}
+
 void Dcs2kSetVolume(double vol)
 {
 	dcs_volume = vol;
 }
 
+// the ADSP produced about one frame of samples, stretch them to the output length
 void Dcs2kRender(INT16 *pSoundBuf, INT32 nSegmentLength)
 {
-	// dcs provides 240 samples every call to DcsIRQ__INT()
-	// theory: check 3x a frame w/DcsCheckIRQ(), if mixer_pos gets below
-	// samples_from - run IRQ to get more samples. -dink oct.29, 2020
+	// exact number of DCS samples in this frame, the remainder carries over
+	nRenderAcc += sample_rate * 100;
+	INT32 want = nRenderAcc / nBurnFPS;
+	nRenderAcc -= want * nBurnFPS;
 
-	if (mixer_pos == 0) { // nothing to output
-		memset(pSoundBuf, 0, nSegmentLength * 2 * sizeof(INT16));
+	// keep a half buffer of jitter in reserve before starting, so the output does not starve
+	if (!bRenderPrimed && mixer_pos >= want + (INT32)(nTxSize / 2) + 16) bRenderPrimed = 1;
+
+	INT32 take = bRenderPrimed ? want : 0;
+	if (take > mixer_pos) take = mixer_pos;
+
+	if (take <= 0) {
+		INT32 v = BURN_SND_CLIP(nLastSample * dcs_volume);
+		for (INT32 j = 0; j < nSegmentLength; j++) {
+			pSoundBuf[0] = pSoundBuf[1] = v;
+			pSoundBuf += 2;
+		}
 		return;
 	}
 
-	for (INT32 j = 0; j < nSegmentLength; j++)
-	{
-		INT32 k = (samples_from * j) / nBurnSoundLen;
-
-		INT32 l = mixer_buffer[k];
-		INT32 r = mixer_buffer[k]; // dcs 2, 8k is mono :) (saved incase later we add stereo dcs)
-		pSoundBuf[0] = BURN_SND_CLIP(l * dcs_volume);
-		pSoundBuf[1] = BURN_SND_CLIP(r * dcs_volume);
+	// linear interpolation of take input samples over nSegmentLength output samples (dcs 2k/8k is mono)
+	for (INT32 j = 0; j < nSegmentLength; j++) {
+		INT32 pos = (INT32)(((INT64)j * take << 8) / nSegmentLength);
+		INT32 i = pos >> 8, frac = pos & 0xff;
+		INT32 a = (i == 0) ? nLastSample : mixer_buffer[i - 1];
+		INT32 b = mixer_buffer[i];
+		INT32 v = BURN_SND_CLIP(((a * (256 - frac) + b * frac) >> 8) * dcs_volume);
+		pSoundBuf[0] = pSoundBuf[1] = v;
 		pSoundBuf += 2;
 	}
 
-	if (mixer_pos >= samples_from) {
-		memmove(&mixer_buffer[0], &mixer_buffer[samples_from], (mixer_pos - samples_from) * sizeof(INT16));
+	nLastSample = mixer_buffer[take - 1];
+	memmove(&mixer_buffer[0], &mixer_buffer[take], (mixer_pos - take) * sizeof(INT16));
+	mixer_pos -= take;
 
-		mixer_pos = mixer_pos - samples_from;
-
-		//bprintf(0, _T("dcs2k: samples_from %d  extra samples: %d\n"), samples_from, mixer_pos);
-
-		if (mixer_pos > 10000) {
-			bprintf(0, _T("dcs2k: overrun!\n"));
-			mixer_pos = 0;
-		}
-	} else {
-		//bprintf(0, _T("dcs2k: underrun.  mixer_pos %d  samples %d\n"), mixer_pos, samples_from);
-		mixer_pos = 0;
+	// latency got too high (e.g. sound output was off for a while): drop the excess
+	if (mixer_pos > want * 4) {
+		INT32 drop = mixer_pos - want * 2;
+		memmove(&mixer_buffer[0], &mixer_buffer[drop], (mixer_pos - drop) * sizeof(INT16));
+		mixer_pos -= drop;
 	}
 }
 
@@ -226,31 +254,61 @@ UINT32 Dcs2kTotalCycles()
 	return Adsp2100TotalCycles();
 }
 
+static void DcsIRQ__INT();
+
+// The DCS program waits for the autobuffer to move on with a 3 instruction loop:
+//   AR = Ix (autobuffer index) / AF = AR - y / IF cond JUMP back
+// Ix only changes at the next half buffer IRQ, so the rest of the slice can be skipped.
+static INT32 DcsSpinLoop(adsp2100_state *adsp)
+{
+	UINT32 pc = adsp->pc & 0x3fff;
+	UINT32 mv = 0x0d00a0 | ((1 + (nTxIR >> 2)) << 8) | (nTxIR & 3);	// AR = Ix
+
+	for (UINT32 k = 0; k < 3; k++) {
+		if (pc < k || pc - k + 2 > 0x3fff) continue;
+		UINT32 a = pc - k;
+		if ((adsp21xx_read_dword_32le(a << 2) & 0xffffff) != mv) continue;
+		UINT32 op1 = adsp21xx_read_dword_32le((a + 1) << 2) & 0xffffff;
+		UINT32 op2 = adsp21xx_read_dword_32le((a + 2) << 2) & 0xffffff;
+		if (((op1 >> 16) & 0xfe) != 0x26 || (op1 & 0x0f) != 0x0f) continue;	// AF = AR op y, unconditional
+		if (((op1 >> 11) & 3) == 2) continue;									// y = AF would accumulate
+		if ((op2 >> 16) != 0x18 || ((op2 >> 4) & 0x3fff) != a) continue;		// IF cond JUMP a
+		if (adsp->loop >= a && adsp->loop <= a + 2) continue;
+		return 1;
+	}
+
+	return 0;
+}
+
 void Dcs2kRun(INT32 cycles)
 {
-	Adsp2100Run(cycles);
+	while (cycles > 0) {
+		if (!bGenerateIRQ) {
+			Adsp2100Run(cycles);
+			break;
+		}
 
-#if 0
-	// we use line-based irq timing now! ignore this (saving just-incase)
-	const INT64 nEndCycle = Adsp2100TotalCycles() + cycles;
-    INT64 nNextCycles = cycles;
+		INT32 seg = (cycles < nIRQCountdown) ? cycles : nIRQCountdown;
+		INT32 ran = 0;
 
-	while (Adsp2100TotalCycles() < nEndCycle) {
-        // check for next IRQ
-        if (Adsp2100TotalCycles() >= nNextIRQCycle) {
-            if (bGenerateIRQ) {
-                bGenerateIRQ = 1;
-                DcsIRQ();
-            }
-        }
-        INT64 next = nNextCycles;
-        if ((Adsp2100TotalCycles() + next) >= nNextIRQCycle)
-            next = (Adsp2100TotalCycles() + next) - nNextIRQCycle;
+		if (seg > 0) {
+			adsp2100_state *adsp = Adsp2100GetState();
+			if (seg > 16 && DcsSpinLoop(adsp)) {
+				// run a few iterations first: takes pending interrupts, checks it really spins
+				UINT32 idx = adsp->i[nTxIR];
+				ran = Adsp2100Run(8);
+				if (ran <= 0) ran = 8;
+				if (adsp->i[nTxIR] == idx && DcsSpinLoop(adsp)) ran += Adsp2100Idle(seg - ran);
+			} else {
+				ran = Adsp2100Run(seg);
+				if (ran <= 0) ran = seg;		// end of slice requested, don't spin
+			}
+		}
 
-		INT64 elapsed = Adsp2100Run(next);
-        nNextCycles -= elapsed;
+		cycles -= ran;
+		nIRQCountdown -= ran;
+		if (nIRQCountdown <= 0) DcsIRQ__INT();
 	}
-#endif
 }
 
 
@@ -297,20 +355,14 @@ static void SetupMemory()
 
 	Adsp2100SetReadLongHandler  (2, ReadProgramEXT);
     Adsp2100SetWriteLongHandler (2, WriteProgramEXT);
-    Adsp2100MapHandler(1, 0x0000, 0x03FF, MAP_RAM);
+    Adsp2100MapHandler(1, 0x0000, 0x03FF, MAP_WRITE);
+    Adsp2100MapHandler(2, 0x0800, 0x1FFF, MAP_WRITE);
 
-	switch (dcs_type) {
-		case DCS_2K:
-		case DCS_2KU:
-			Adsp2100MapHandler(2, 0x0800, 0x0FFF, MAP_RAM);
-			Adsp2100MapHandler(2, 0x1000, 0x17FF, MAP_RAM);
-			Adsp2100MapHandler(2, 0x1800, 0x1FFF, MAP_RAM);
-		break;
-
-		case DCS_8K:
-			Adsp2100MapHandler(2, 0x0800, 0x1FFF, MAP_RAM);
-		break;
-	}
+    // reads (and opcode fetches) go straight to memory, writes keep the 24-bit masking
+    Adsp2100MapMemory(pIntRAM, 0x0000, 0x03FF, MAP_READ);
+    Adsp2100MapMemory(pExtRAM, 0x0800, 0x0FFF, MAP_READ);
+    Adsp2100MapMemory(pExtRAM, 0x1000, 0x17FF, MAP_READ);
+    Adsp2100MapMemory(pExtRAM, 0x1800, 0x1FFF, MAP_READ);
 
     // data address space
     Adsp2100SetReadDataWordHandler  (1, ReadData);
@@ -343,7 +395,7 @@ static void SetupMemory()
 
 		case DCS_8K:
 			Adsp2100MapDataHandler(1, 0x0800, 0x1FFF, MAP_RAM);
-			Adsp2100MapDataHandler(7, 0x0000, 0x07FF, MAP_RAM);
+			Adsp2100MapData(pDataRAM0, 0x0000, 0x07FF, MAP_READ | MAP_WRITE);
 		break;
 	}
 
@@ -353,7 +405,7 @@ static void SetupMemory()
 
     Adsp2100MapDataHandler(4, 0x3400, 0x34FF, MAP_READ | MAP_WRITE);
 
-    Adsp2100MapDataHandler(5, 0x3800, 0x39FF, MAP_READ | MAP_WRITE);
+    Adsp2100MapData(pDataRAM, 0x3800, 0x39FF, MAP_READ | MAP_WRITE);
 
     Adsp2100MapDataHandler(6, 0x3FE0, 0x3FFF, MAP_READ | MAP_WRITE);
 }
@@ -394,9 +446,8 @@ void Dcs2kReset()
     nTxSize = 0;
     nTxIncrement = 0;
     bGenerateIRQ = 0;
-
-    nTotalCycles = 0ULL;
-    nNextIRQCycle = ~0ULL;
+    nIRQPeriod = 0;
+    nIRQCountdown = 0;
 
 	nCurrentBank = 0;
     nOutputData = 0;
@@ -408,14 +459,15 @@ void Dcs2kReset()
 
     SET_INPUT_EMPTY();
     SET_OUTPUT_EMPTY();
+    SetOutputFull(0);
 
     Dcs2kBoot();
 
-	dcs_icycles = ((dcs_mhz * 100) / nBurnFPS) / 2;
-
 	mixer_pos = 0;
+	nRenderAcc = 0;
+	bRenderPrimed = 0;
+	nLastSample = 0;
 	sample_rate = 31250; // default
-	samples_from = (INT32)((double)((sample_rate * 100) / nBurnFPS) + 0.5);
 }
 
 static UINT16 ReadRAMBank(UINT32 address)
@@ -513,6 +565,7 @@ static void OutputLatch(UINT32 address, UINT16 value)
 		dcs_log(_T("output_latch %x, %x\n"), address, value);
 		SET_OUTPUT_FULL();
 		nOutputData = value;
+		SetOutputFull(1);
 	}
 }
 
@@ -537,7 +590,6 @@ static void AdspWrite(UINT32 address, UINT16 value)
 		case S1_AUTOBUF_REG:
 			if (~value & 0x0002) {
 				bGenerateIRQ = 0;
-				nNextIRQCycle = ~0ULL;
 			}
 			break;
 		case SYSCONTROL_REG:
@@ -549,7 +601,6 @@ static void AdspWrite(UINT32 address, UINT16 value)
 			}
 			if ((value & 0x0800) == 0) {
 				bGenerateIRQ = 0;
-				nNextIRQCycle = ~0ULL;
 			}
 
 			break;
@@ -581,6 +632,7 @@ INT32 Dcs2kControlRead()
 INT32 Dcs2kDataRead()
 {
 	SET_OUTPUT_EMPTY();
+	SetOutputFull(0);
     return nOutputData;
 }
 
@@ -593,15 +645,15 @@ static INT32 RxCallback(INT32 port)
 
 static void ComputeNextIRQCycle()
 {
-    if (nTxIncrement) {
-        //adsp2100_state *adsp = Adsp2100GetState();
-        //nNextIRQCycle = (nTotalCycles + adsp->icount) + dcs_icycles; // half of frame.
-		nNextIRQCycle = Adsp2100TotalCycles() + dcs_icycles; // half of frame.
+    if (nTxIncrement && sample_rate > 0) {
+        // one half buffer: nTxSize / (2 * nTxIncrement) samples
+        INT32 count = nTxSize / (2 * nTxIncrement);
+        nIRQPeriod = (INT32)(((INT64)dcs_mhz * count) / sample_rate);
+        if (nIRQPeriod < 1) nIRQPeriod = 1;
+        nIRQCountdown = nIRQPeriod;
         bGenerateIRQ = 1;
-        // stop CPU to recalculate next irq
-		//Adsp2100RunEnd();
+        Adsp2100RunEnd();	// stop the current slice, so Dcs2kRun picks up the new period
     }
-
 }
 
 static void TxCallback(INT32 port, INT32 data)
@@ -630,13 +682,14 @@ static void TxCallback(INT32 port, INT32 data)
             nTxIRBase = src;
 
 			INT32 sample_rate_old = sample_rate;
-			sample_rate = (dcs_mhz / (2 * (nCtrlReg[S1_SCLKDIV_REG] + 1))) / 16;
+			if (nCtrlReg[S1_CONTROL_REG] & 0x4000) {
+				sample_rate = (dcs_mhz / (2 * (nCtrlReg[S1_SCLKDIV_REG] + 1))) / 16;
+			} else {
+				sample_rate = 31250; // external 31.25kHz sample clock
+			}
 
 			if (sample_rate != sample_rate_old) {
 				bprintf(0, _T("dcs2k: new sample rate %d\n"), sample_rate);
-
-				// re-calculate the #samples per frame
-				samples_from = (INT32)((double)((sample_rate * 100) / nBurnFPS) + 0.5);
 			}
 
             dcs_log(_T("tx_info base = %x, inc = %x, size = %x\n"), src, nTxIncrement, nTxSize);
@@ -646,7 +699,6 @@ static void TxCallback(INT32 port, INT32 data)
     }
     dcs_log(_T("disable_irq\n"));
     bGenerateIRQ = 0;
-    nNextIRQCycle = ~0ULL;
 }
 
 static void DcsIRQ__INT()
@@ -655,13 +707,20 @@ static void DcsIRQ__INT()
     adsp2100_state *adsp = Adsp2100GetState();
     INT32 r = adsp->i[nTxIR];
 
-    INT32 count = nTxSize / 2;
+    INT32 count = nTxSize / (2 * (nTxIncrement ? nTxIncrement : 1));
+
+    nIRQCountdown += nIRQPeriod;
+
+    // sound output not being consumed (no pBurnSoundOut)
+    if (mixer_pos + count > MIXER_BUFFER_LEN) {
+        mixer_pos = 0;
+        bRenderPrimed = 0;
+    }
 
     for (INT32 i = 0; i < count; i++) {
         mixer_buffer[mixer_pos++] = adsp21xx_data_read_word_16le(r<<1);
         r += nTxIncrement;
 	}
-	// bprintf(0, _T("mixer_pos %d [%04x %04x %04x %04x %04x %04x %04x %04x]\n"), mixer_pos, mixer_buffer[0], mixer_buffer[0], mixer_buffer[1], mixer_buffer[2], mixer_buffer[3], mixer_buffer[4+0], mixer_buffer[4+0], mixer_buffer[4+1], mixer_buffer[4+2], mixer_buffer[4+3]);
 
 	bool wrapped = false;
 
@@ -671,22 +730,9 @@ static void DcsIRQ__INT()
     }
     adsp->i[nTxIR] = r;
 
-    nNextIRQCycle = Adsp2100TotalCycles() + dcs_icycles;
-    bGenerateIRQ = 1;
-
     if (wrapped) {
 		Adsp2100SetIRQLine(ADSP2105_IRQ1, CPU_IRQSTATUS_AUTO);
     }
-}
-
-void DcsCheckIRQ()
-{
-	if (pBurnSoundOut == NULL)
-		mixer_pos = 0;
-
-	if (mixer_pos < samples_from) {
-		DcsIRQ__INT();
-	}
 }
 
 static void TimerCallback(INT32 enable)
@@ -715,19 +761,22 @@ INT32 Dcs2kScan(INT32 nAction, INT32 *pnMin)
 		SCAN_VAR(nOutputData);
 		SCAN_VAR(nInputData);
 		SCAN_VAR(nLatchControl);
+		SCAN_VAR(nOutputFull);
 		SCAN_VAR(nCtrlReg);
 		SCAN_VAR(nTxIR);
 		SCAN_VAR(nTxIRBase);
 		SCAN_VAR(nTxSize);
 		SCAN_VAR(nTxIncrement);
-		SCAN_VAR(nNextIRQCycle);
-		SCAN_VAR(nTotalCycles);
 		SCAN_VAR(bGenerateIRQ);
+		SCAN_VAR(nIRQPeriod);
+		SCAN_VAR(nIRQCountdown);
 
-		SCAN_VAR(samples_from); // samples per frame
 		SCAN_VAR(sample_rate);  // sample rate of dcs
-		ScanVar(mixer_buffer, 10000 * sizeof(INT16), "DcsMixerBuffer");
+		ScanVar(mixer_buffer, MIXER_BUFFER_LEN * sizeof(INT16), "DcsMixerBuffer");
 		SCAN_VAR(mixer_pos);
+		SCAN_VAR(nRenderAcc);
+		SCAN_VAR(bRenderPrimed);
+		SCAN_VAR(nLastSample);
 	}
 
 	return 0;

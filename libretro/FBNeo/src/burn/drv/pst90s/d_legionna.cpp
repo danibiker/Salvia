@@ -221,7 +221,7 @@ static struct BurnInputInfo GrainbowInputList[] = {
 	{"P2 Button 2",		BIT_DIGITAL,	DrvJoy1 + 13,	"p2 fire 2"	},
 	{"P2 Button 3",		BIT_DIGITAL,	DrvJoy1 + 14,	"p2 fire 3"	},
 
-	{"P3 Start",		BIT_DIGITAL,	DrvJoy1 + 8,	"p3 start"	},
+	{"P3 Start",		BIT_DIGITAL,	DrvJoy3 + 8,	"p3 start"	},
 	{"P3 Up",			BIT_DIGITAL,	DrvJoy2 + 0,	"p3 up"		},
 	{"P3 Down",			BIT_DIGITAL,	DrvJoy2 + 1,	"p3 down"	},
 	{"P3 Left",			BIT_DIGITAL,	DrvJoy2 + 2,	"p3 left"	},
@@ -230,7 +230,7 @@ static struct BurnInputInfo GrainbowInputList[] = {
 	{"P3 Button 2",		BIT_DIGITAL,	DrvJoy2 + 5,	"p3 fire 2"	},
 	{"P3 Button 3",		BIT_DIGITAL,	DrvJoy2 + 6,	"p3 fire 3"	},
 
-	{"P4 Start",		BIT_DIGITAL,	DrvJoy1 + 9,	"p4 start"	},
+	{"P4 Start",		BIT_DIGITAL,	DrvJoy3 + 9,	"p4 start"	},
 	{"P4 Up",			BIT_DIGITAL,	DrvJoy2 + 8,	"p4 up"		},
 	{"P4 Down",			BIT_DIGITAL,	DrvJoy2 + 9,	"p4 down"	},
 	{"P4 Left",			BIT_DIGITAL,	DrvJoy2 + 10,	"p4 left"	},
@@ -757,7 +757,7 @@ static UINT16 __fastcall heatbrl_main_read_word(UINT32 address)
 
 static void __fastcall denjinmk_palette_write_word(UINT32 address, UINT16 data)
 {
-	*((UINT16*)(DrvAllRAM + 0x3800 + ((address & 0xffe) ^ 2))) = data;
+	*((UINT16*)(DrvAllRAM + 0x3800 + ((address & 0xffe) ^ 2))) = BURN_ENDIAN_SWAP_INT16(data);
 }
 
 static void __fastcall denjinmk_palette_write_byte(UINT32 address, UINT8 data)
@@ -1237,11 +1237,11 @@ static INT32 GodzillaInit()
 	GenericTilemapSetOffsets(TMAP_GLOBAL, 0, 0);
 	GenericTilemapSetOffsets(3, 4, 4); // text layer offset
 
-	*((UINT16*)(Drv68KROM + 0xbe0e + 0x0a)) = 0xb000; // fix collisions (hack)
-	*((UINT16*)(Drv68KROM + 0xbe0e + 0x1a)) = 0xb800;
-	*((UINT16*)(Drv68KROM + 0xbb0a + 0x0a)) = 0xb000;
-	*((UINT16*)(Drv68KROM + 0xbb0a + 0x1a)) = 0xb800;
-	*((UINT16*)(Drv68KROM + 0x3fffe)) = 0x61ba; // checksum
+	*((UINT16*)(Drv68KROM + 0xbe0e + 0x0a)) = BURN_ENDIAN_SWAP_INT16(0xb000); // fix collisions (hack)
+	*((UINT16*)(Drv68KROM + 0xbe0e + 0x1a)) = BURN_ENDIAN_SWAP_INT16(0xb800);
+	*((UINT16*)(Drv68KROM + 0xbb0a + 0x0a)) = BURN_ENDIAN_SWAP_INT16(0xb000);
+	*((UINT16*)(Drv68KROM + 0xbb0a + 0x1a)) = BURN_ENDIAN_SWAP_INT16(0xb800);
+	*((UINT16*)(Drv68KROM + 0x3fffe)) = BURN_ENDIAN_SWAP_INT16(0x61ba); // checksum
 
 	DrvDoReset();
 
@@ -2316,7 +2316,7 @@ static struct BurnRomInfo grainbowkRomDesc[] = {
 	{ "rb-ad.922",					0x020000, 0xa364cb42, 7 | BRF_SND },           // 11 Samples
 
 	{ "copx-d2.313",				0x040000, 0xa6732ff9, 8 | BRF_GRA },           // 12 COP ROM
-	};
+};
 
 STD_ROM_PICK(grainbowk)
 STD_ROM_FN(grainbowk)

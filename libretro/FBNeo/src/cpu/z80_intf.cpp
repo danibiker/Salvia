@@ -187,6 +187,12 @@ void ZetSetEDFECallback(void (*pCallback)(Z80_Regs*))
 	z80edfe_callback = pCallback;
 }
 
+void ZetSetCallback(int (*cb)(int))
+{
+	// Can be set before init. it's cleared at exit.
+	Z80SetInsnCB(cb);
+}
+
 void ZetNewFrame()
 {
 #if defined FBNEO_DEBUG
@@ -653,6 +659,19 @@ INT32 ZetGetPrevPC(INT32 n)
 		return ActiveZ80GetPrevPC();
 	} else {
 		return ZetCPUContext[n]->reg.prvpc.d;
+	}
+}
+
+INT32 ZetIsHalted(INT32 nCPU)
+{
+#if defined FBNEO_DEBUG
+	if (!DebugCPU_ZetInitted) bprintf(PRINT_ERROR, _T("ZetIsHalted called without init\n"));
+#endif
+
+	if (nCPU == nOpenedCPU) {
+		return ActiveZ80GetHALT();
+	} else {
+		return ZetCPUContext[nCPU]->reg.halt;
 	}
 }
 

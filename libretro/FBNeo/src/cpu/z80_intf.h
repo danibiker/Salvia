@@ -39,10 +39,13 @@ INT32 ZetMemCallback(INT32 nStart,INT32 nEnd,INT32 nMode);
 INT32 ZetMapArea(INT32 nStart, INT32 nEnd, INT32 nMode, UINT8 *Mem);
 INT32 ZetMapArea(INT32 nStart, INT32 nEnd, INT32 nMode, UINT8 *Mem01, UINT8 *Mem02);
 
+void ZetSetCallback(int (*cb)(int)); // insn callback, supports only single z80 (for now)
+
 void ZetReset();
 void ZetReset(INT32 nCPU);
 UINT32 ZetGetPC(INT32 n);
 INT32 ZetGetPrevPC(INT32 n);
+INT32 ZetIsHalted(INT32 nCPU); // this is the actual HALT status of the z80
 INT32 ZetBc(INT32 n);
 INT32 ZetDe(INT32 n);
 INT32 ZetHL(INT32 n);
@@ -94,6 +97,7 @@ void ZetSetInHandler(UINT8 (__fastcall *pHandler)(UINT16));
 void ZetSetOutHandler(void (__fastcall *pHandler)(UINT16, UINT8));
 void ZetSetEDFECallback(void (*pCallback)(Z80_Regs*));
 
+// this is the interface version of halting the cpu.  is NOT related to the z80 HALT state.  confusing, eh?
 void ZetSetHALT(INT32 nStatus);
 void ZetSetHALT(INT32 nCPU, INT32 nStatus);
 INT32 ZetGetHALT();

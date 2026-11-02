@@ -14,6 +14,7 @@ static SDL_Joystick* JoyList[MAX_JOYSTICKS];
 static SDL_GameController *GCList[MAX_JOYSTICKS];
 static int* JoyPrevAxes = NULL;
 /* static */ int nJoystickCount = 0;						// Number of joysticks connected to this machine
+#define JOYSTICK_DETECT_MS 600								// how long to wait for async pad enumeration (see SDLinpInit)
 int buttons [4][8]= { {-1,-1,-1,-1,-1,-1,-1,-1}, {-1,-1,-1,-1,-1,-1,-1,-1}, {-1,-1,-1,-1,-1,-1,-1,-1}, {-1,-1,-1,-1,-1,-1,-1,-1} }; // 4 joysticks buttons 0 -5 and start / select
 
 void setup_kemaps(void)
@@ -317,6 +318,17 @@ static int SDLinpJoystickInit(int i)
 	return 0;
 }
 
+// Read one d-pad direction off a pad.  Returns 0 when the device isn't a
+// recognised game controller (a bare joystick has no d-pad mapping to read).
+static int SDLinpDPad(int i, SDL_GameControllerButton nButton)
+{
+	if (GCList[i] == NULL) {
+		return 0;
+	}
+
+	return SDL_GameControllerGetButton(GCList[i], nButton) ? 1 : 0;
+}
+
 // Set up the keyboard
 static int SDLinpKeyboardInit()
 {
@@ -386,11 +398,30 @@ int SDLinpInit()
 		SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 	}
 
-	// Set up the joysticks
+	// Set up the joysticks.  Device discovery is asynchronous on sdl2-compat/SDL3
+	// (macOS enumerates pads through GameController.framework), so SDL_NumJoysticks()
+	// reads 0 for the first few hundred ms after init.  Pump the queue until a device
+	// shows up, capped so a keyboard-only setup isn't held up for long.
 	nJoystickCount = SDL_NumJoysticks();
+
+	for (int nWait = 0; nJoystickCount == 0 && nWait < JOYSTICK_DETECT_MS; nWait += 20) {
+		SDL_PumpEvents();
+		SDL_Delay(20);
+		nJoystickCount = SDL_NumJoysticks();
+	}
+
 	for (int i = 0; i < nJoystickCount; i++) {
 		SDLinpJoystickInit(i);
 	}
+
+	if (nJoystickCount > 0) {
+		printf("Found %d joystick(s):\n", nJoystickCount);
+		for (int i = 0; i < nJoystickCount; i++) {
+			printf("  Joy %d: %s%s\n", i, SDL_JoystickNameForIndex(i),
+				SDL_IsGameController(i) ? " (game controller)" : "");
+		}
+	}
+
 	SDL_GameControllerEventState(SDL_IGNORE);
 	SDL_JoystickEventState(SDL_IGNORE);
 
@@ -546,10 +577,17 @@ static int JoystickState(int i, int nSubCode)
 		}
 
 		switch (nSubCode) {
-		case 0x00: return SDL_JoystickGetAxis(JoyList[i], 0) < -JOYSTICK_DEAD_ZONE;		// Left
-		case 0x01: return SDL_JoystickGetAxis(JoyList[i], 0) > JOYSTICK_DEAD_ZONE;		// Right
-		case 0x02: return SDL_JoystickGetAxis(JoyList[i], 1) < -JOYSTICK_DEAD_ZONE;		// Up
-		case 0x03: return SDL_JoystickGetAxis(JoyList[i], 1) > JOYSTICK_DEAD_ZONE;		// Down
+		// The first stick doubles as the d-pad: on a gamepad the digital direction
+		// an arcade game wants is the pad, not the stick.  Neither is exposed as an
+		// SDL hat here, so ask the game controller layer for it.
+		case 0x00: return (SDL_JoystickGetAxis(JoyList[i], 0) < -JOYSTICK_DEAD_ZONE)
+							|| SDLinpDPad(i, SDL_CONTROLLER_BUTTON_DPAD_LEFT);			// Left
+		case 0x01: return (SDL_JoystickGetAxis(JoyList[i], 0) > JOYSTICK_DEAD_ZONE)
+							|| SDLinpDPad(i, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);			// Right
+		case 0x02: return (SDL_JoystickGetAxis(JoyList[i], 1) < -JOYSTICK_DEAD_ZONE)
+							|| SDLinpDPad(i, SDL_CONTROLLER_BUTTON_DPAD_UP);			// Up
+		case 0x03: return (SDL_JoystickGetAxis(JoyList[i], 1) > JOYSTICK_DEAD_ZONE)
+							|| SDLinpDPad(i, SDL_CONTROLLER_BUTTON_DPAD_DOWN);			// Down
 		case 0x04: return SDL_JoystickGetAxis(JoyList[i], 2) < -JOYSTICK_DEAD_ZONE;
 		case 0x05: return SDL_JoystickGetAxis(JoyList[i], 2) > JOYSTICK_DEAD_ZONE;
 		case 0x06: return SDL_JoystickGetAxis(JoyList[i], 3) < -JOYSTICK_DEAD_ZONE;

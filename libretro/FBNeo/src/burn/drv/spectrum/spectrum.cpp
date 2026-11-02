@@ -5,16 +5,15 @@
 // media: .tap, .tzx, .z80 snapshots
 // input: kbd, kempston: joy1, sinclair intf.2: joy1 & joy2
 
-#include <math.h>
-#if defined (_MSC_VER)
-#define strcasecmp _stricmp
-#endif
-
 #include "tiles_generic.h"
 #include "spectrum.h"
 #include "z80_intf.h"
 #include "ay8910.h"
+#include <math.h>
 
+#if defined (_MSC_VER) && !defined(strcasecmp)
+#define strcasecmp stricmp
+#endif
 
 static INT32 SpecMode = 0;
 #define SPEC_TAP		(1 << 0)
@@ -1020,7 +1019,8 @@ static void SpecTZXOperation()
 					leader_pulse_count = tapword();
 					last8 = tapbyte();
 					pause_len = tapword();
-					block_len = tapword() | (tapbyte() << 16);
+					block_len = tapword(); // this and the next line must not be optimized into 1 line, MS compiler is retarted
+					block_len |= tapbyte() << 16;
 					emit_leader(leader_pulse_len, leader_pulse_count);
 					tap_op_num++;
 					break;
@@ -1065,7 +1065,8 @@ static void SpecTZXOperation()
 					one_bit_len = tapword();
 					last8 = tapbyte();
 					pause_len = tapword();
-					block_len = tapword() | tapbyte() << 16;
+					block_len = tapword(); // this and the next line must not be optimized into 1 line, MS compiler is retarted
+					block_len |= tapbyte() << 16;
 					emit_block(block_len, zero_bit_len, one_bit_len, last8);
 					tap_op_num++;
 					break;

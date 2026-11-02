@@ -27,6 +27,9 @@
 #define RETRO_GAME_TYPE_NGP		14
 #define RETRO_GAME_TYPE_CHF		15
 #define RETRO_GAME_TYPE_SNES	16
+#define RETRO_GAME_TYPE_ASTRO	17
+#define RETRO_GAME_TYPE_PCECD	18
+#define RETRO_GAME_TYPE_GBA		19
 
 #define PERCENT_VALUES \
 	  {"25%",	NULL }, \
@@ -271,7 +274,6 @@ void set_environment();
 void check_variables(void);
 int HandleMessage(enum retro_log_level level, TCHAR* szFormat, ...);
 char* strqtoken(char* s, const char* delims);
-char* TCHARToANSI(const TCHAR* pszInString, char* pszOutString, int /*nOutSize*/);
 INT32 create_variables_from_ipses();
 INT32 reset_ipses_from_variables();
 INT32 apply_ipses_from_variables();
