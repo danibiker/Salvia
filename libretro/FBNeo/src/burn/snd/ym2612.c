@@ -159,6 +159,17 @@
 #endif
 #include "ym2612.h"
 
+/* Salvia (Xbox 360 / MSVC): el proyecto define INLINE=__inline, que en MSVC da
+   enlace EXTERNO. fm.c, ym2612.c, fmopl.c, ym2413.c y ymf262.cpp tienen funciones
+   con el mismo nombre (set_timers, FM_KEYON, op_calc, set_ar_ksr...) y el linker
+   se queda con una sola: p.ej. MDYM2612Reset() acababa llamando al set_timers()
+   de fm.c -> access violation escribiendo en 0x5C al iniciar Paprium/MD.
+   Forzamos enlace interno en este modulo. */
+#ifdef _MSC_VER
+#undef INLINE
+#define INLINE static __inline
+#endif
+
 static INT32 in_reset = 0;
 
 /* envelope generator */

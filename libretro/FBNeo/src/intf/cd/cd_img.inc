@@ -402,8 +402,11 @@ static INT32 CDImageCollectSourceFiles(CDImage* pImage)
 static INT32 CDImageParseChd(CDImage* pImage)
 {
 	pImage->pChd = ChdOpenFile(pImage->szPath);
-	if (!pImage->pChd || (ChdGetContainerType(pImage->pChd) != CHD_CONTAINER_CD && ChdGetContainerType(pImage->pChd) != CHD_CONTAINER_GDROM))
+	if (!pImage->pChd || (ChdGetContainerType(pImage->pChd) != CHD_CONTAINER_CD && ChdGetContainerType(pImage->pChd) != CHD_CONTAINER_GDROM)) {
+		bprintf(PRINT_ERROR, _T("CHD: open/container failed (pChd=%p)\n"), pImage->pChd);
 		return 1;
+	}
+	bprintf(PRINT_IMPORTANT, _T("CHD: %d tracks, %d frames\n"), ChdGetNumTracks(pImage->pChd), ChdGetTotalFrames(pImage->pChd)); // Salvia debug
 
 	pImage->nTrackCount  = ChdGetNumTracks(pImage->pChd);
 	pImage->nSectorCount = ChdGetTotalFrames(pImage->pChd);
@@ -736,6 +739,22 @@ const  INT32 cdimgOUT_SIZE         = 2352;
 static INT32 cdimgOutputbufferSize = 0;
 
 static INT16* cdimgOutputbuffer    = NULL;
+
+// Salvia (Xbox 360 / big-endian): el audio CD-DA de BIN/WAV es PCM 16-bit
+// little-endian. Las rutas que hacen memcpy/fread directo al buffer INT16 lo
+// dejan en orden LE y la mezcla (cdimgGetSoundBuffer) lo usa como nativo ->
+// en hosts BE sale ruido. Lo convertimos a orden del host al cargarlo.
+// La ruta CHD ya construye los INT16 byte a byte (independiente del host).
+// En hosts LE es un no-op.
+static void cdimgPcmLEToHost(INT16* buf, INT32 nSamples16)
+{
+#ifndef LSB_FIRST
+	for (INT32 k = 0; k < nSamples16; k++)
+		buf[k] = (INT16)BURN_ENDIAN_SWAP_INT16((UINT16)buf[k]);
+#else
+	(void)buf; (void)nSamples16;
+#endif
+}
 
 static INT32 cdimgOutputPosition;
 static INT32 cdimgAudioFilePos;		// Track audio read position within file (file sector index)
@@ -1585,6 +1604,7 @@ static INT32 cdimgPlayLBA(INT32 LBA)	// audio play start
 				}
 			} else {
 				memcpy((UINT8*)cdimgOutputbuffer + i * 2352, sector_buf, 2352);
+				cdimgPcmLEToHost(cdimgOutputbuffer + (i * 2352) / 2, 2352 / 2);
 			}
 			read_count++;
 		}
@@ -1608,6 +1628,7 @@ static INT32 cdimgPlayLBA(INT32 LBA)	// audio play start
 
 		// fill the input buffer (size returned as count of 4-byte sample units)
 		cdimgOutputbufferSize = (INT32)fread(cdimgOutputbuffer, 4, sectors_to_read * (2352 / 4), cdimgFile);
+		if (cdimgOutputbufferSize > 0) cdimgPcmLEToHost(cdimgOutputbuffer, cdimgOutputbufferSize * 2);
 		cdimgAudioFilePos     = (INT32)(cdimgFtell(cdimgFile) / 2352);
 		if (cdimgOutputbufferSize <= 0) {
 			cdimgStop();
@@ -1881,6 +1902,7 @@ static INT32 cdimgGetSoundBuffer(INT16* buffer, INT32 samples)
 						}
 					} else {
 						memcpy((UINT8*)cdimgOutputbuffer + i * 2352, sectorBuffer, 2352);
+						cdimgPcmLEToHost(cdimgOutputbuffer + (i * 2352) / 2, 2352 / 2);
 					}
 					readCount++;
 				}
@@ -1894,6 +1916,7 @@ static INT32 cdimgGetSoundBuffer(INT16* buffer, INT32 samples)
 					}
 				}
 				cdimgOutputbufferSize = cdimgFile ? (INT32)fread(cdimgOutputbuffer, 4, sectorsToRead * (2352 / 4), cdimgFile) : 0;
+				if (cdimgOutputbufferSize > 0) cdimgPcmLEToHost(cdimgOutputbuffer, cdimgOutputbufferSize * 2);
 				if (cdimgFile) cdimgAudioFilePos = (INT32)(cdimgFtell(cdimgFile) / 2352);
 			}
 

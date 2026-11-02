@@ -703,7 +703,7 @@ static void execute_fc84(INT32 offset, UINT16 data)
 
 static void execute_f790(INT32 offset, UINT16 data)
 {
-	cop_dist = sqrt(cpu_read_long(cop_regs[4] + 8));
+	cop_dist = (UINT16)sqrt((double)cpu_read_long(cop_regs[4] + 8));
 }
 
 static void execute_ede5(INT32 offset, UINT16 data)

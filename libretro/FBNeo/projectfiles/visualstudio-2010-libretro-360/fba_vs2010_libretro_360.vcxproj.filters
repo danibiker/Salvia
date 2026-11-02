@@ -234,6 +234,9 @@
     <Filter Include="Source Files\cpu\t11">
       <UniqueIdentifier>{9f846f1b-2e5c-446b-9f18-943c2a984fea}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\cpu\mips3">
+      <UniqueIdentifier>{108a9704-1f22-4e6d-ba93-479178bb2711}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp">
@@ -3485,6 +3488,45 @@
     <ClCompile Include="..\..\src\burn\drv\galaxian\cclimber_audio.cpp">
       <Filter>Source Files\burn\drv\galaxian</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\burn_hdd.cpp">
+      <Filter>Source Files\burn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\cd\cd_chd.cpp">
+      <Filter>Source Files\intf</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\cxd1095.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\atari\d_atarisy2.cpp">
+      <Filter>Source Files\burn\drv\atari</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tx1.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\cdlist.cpp">
+      <Filter>Source Files\burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\mips3\mips3.cpp">
+      <Filter>Source Files\cpu\mips3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tattack.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_cbasebal.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_galgame.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_spbactn.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tankbatt.cpp">
+      <Filter>Source Files\burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_cyclwarr.cpp">
+      <Filter>Source Files\burn\drv\pst90s</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\dep\generated\driverlist.h">
@@ -3492,6 +3534,9 @@
     </ClInclude>
     <ClInclude Include="..\..\src\burn\drv\megadrive\paprium.h">
       <Filter>Source Files\burn\drv\megadrive</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\burn\burn_endian.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

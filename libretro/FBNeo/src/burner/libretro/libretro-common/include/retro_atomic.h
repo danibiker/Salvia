@@ -523,7 +523,11 @@ typedef size_t retro_atomic_size_t;
  * on the legacy x86 / Xbox 360 / Itanium paths.
  */
 
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 
 #if defined(_M_ARM) || defined(_M_ARM64)
 #include <intrin.h>

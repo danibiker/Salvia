@@ -1096,7 +1096,7 @@ static void cop_cmd_write(INT32 offset, UINT16 data)
 	}
 
 	case 0xf790: {
-		cop_dist = sqrt(VezReadLong(cop_regs[4] + 8));
+		cop_dist = (UINT16)sqrt((double)VezReadLong(cop_regs[4] + 8));
 		break;
 	}
 

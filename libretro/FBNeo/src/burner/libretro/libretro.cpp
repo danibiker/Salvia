@@ -55,6 +55,13 @@ static unsigned libretro_msg_interface_version = 0;
 int kNetGame = 0;
 INT32 nReplayStatus = 0;
 unsigned nGameType = 0;
+
+// Salvia (VS2010 / Xbox 360): el Makefile de libretro define INCLUDE_CHD_SUPPORT,
+// pero el vcxproj no. cd_chd.cpp y libchdr ya se compilan en el proyecto, asi que
+// lo activamos aqui para que .chd sea una extension valida para Neo Geo CD / PCE CD.
+#if defined(_MSC_VER) && !defined(INCLUDE_CHD_SUPPORT)
+#define INCLUDE_CHD_SUPPORT
+#endif
 static INT32 nGameWidth = 640;
 static INT32 nGameHeight = 480;
 static INT32 nGameMaximumGeometry;
@@ -790,6 +797,7 @@ char* TCHARToANSI(const TCHAR* pszInString, char* pszOutString, int /*nOutSize*/
 	return (char*)pszInString;
 }
 
+#undef ANSIToTCHAR
 TCHAR* ANSIToTCHAR(const char* pszInString, TCHAR* pszOutString, int nOutSize)
 {
 	if (pszOutString) {
@@ -1391,6 +1399,7 @@ void retro_run()
 	bool bEmulateAudio = true;
 	bool bPresentAudio = true;
 
+#ifndef SALVIA_GUI
 	if (gui_show && nGameWidth > 0 && nGameHeight > 0)
 	{
 		gui_draw();
@@ -1402,6 +1411,7 @@ void retro_run()
 			environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
 		return;
 	}
+#endif
 
 #ifndef FBNEO_DEBUG
 	// Setting RA's video or audio driver to null will disable video/audio bits,
@@ -1893,12 +1903,21 @@ static unsigned int BurnDrvGetIndexByName(const char* name)
 
 static void SetUguiError(const char* error)
 {
+#ifndef SALVIA_GUI
 	gui_set_message(error);
 	gui_show = true;
 	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 	environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
 	gui_init(nGameWidth, nGameHeight, sizeof(unsigned));
 	gui_set_window_title("FBNeo Error");
+#else
+	struct retro_message msg =
+	{
+		error,
+		300
+	};
+	environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+#endif
 }
 
 #if defined(BUILD_NEOGEO) || defined(BUILD_PCE)
@@ -2283,7 +2302,14 @@ end:
 	RomDataExit();
 	IpsPatchExit();
 
+#ifdef SALVIA_GUI
+	// Salvia: no hay pantalla de error ugui (gui_show desactivado), asi que hay
+	// que informar del fallo al frontend. Si devolvemos true, Salvia llama a
+	// retro_run() con nBurnDrvActive = ~0U y peta en BurnDrvGetFlags().
+	return false;
+#else
 	return true;
+#endif
 }
 
 static int retro_dat_romset_path(const struct retro_game_info* info)
@@ -2499,9 +2525,23 @@ bool retro_load_game(const struct retro_game_info *info)
 #endif
 
 	// prepare g_driver_name
-	static bool ready = false;
+	// Salvia: NO static. Con static, tras cargar el primer CD 'ready' se quedaba a
+	// true para siempre y las siguientes cargas usaban el nombre del fichero
+	// (p.ej. "juego.chd") como romset -> "romset desconocido".
+	bool ready = false;
+	// Salvia: resetear el tipo para poder cargar otros sistemas tras un CD.
+	nGameType = 0;
 #ifdef BUILD_NEOGEO
-	if (!ready && (strcmp(g_rom_parent_dir, "neocd")==0 || strncmp(g_driver_name, "neocd_", 6)==0)) {
+	// Salvia: una imagen de CD (.cue/.ccd/.chd) se trata como Neo Geo CD aunque
+	// la carpeta no se llame "neocd", salvo que la carpeta indique PC Engine CD.
+	bool is_neocd_extension = false;
+	{
+		const char* ext = path_get_extension(szRomsetPath);
+		bool is_cd_image = ext && (string_is_equal_noncase(ext, "cue") || string_is_equal_noncase(ext, "ccd") || string_is_equal_noncase(ext, "chd"));
+		bool is_pcecd_dir = strcmp(g_rom_parent_dir, "pcecd")==0 || strncmp(g_driver_name, "pcecd_", 6)==0;
+		is_neocd_extension = is_cd_image && !is_pcecd_dir;
+	}
+	if (!ready && (is_neocd_extension || strcmp(g_rom_parent_dir, "neocd")==0 || strncmp(g_driver_name, "neocd_", 6)==0)) {
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] subsystem neocd identified from parent folder\n");
 		prefix = "";
 		nGameType = RETRO_GAME_TYPE_NEOCD;
@@ -2682,7 +2722,11 @@ void retro_unload_game(void)
 	if (bCDEmuStarted) {
 		CDEmuExit();
 	}
+	// Salvia: limpiar el estado de CD para que el siguiente juego no herede el modo Neo Geo CD
+	bCDEmuStarted = false;
+	CDEmuImage[0] = '\0';
 #endif
+	nGameType = 0;
 #ifdef BUILD_PGM2
 	retro_pgm2_cards_reset();
 #endif

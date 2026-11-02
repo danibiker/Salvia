@@ -3953,6 +3953,7 @@ INT32 MegadriveExit()
 
 	if (papriummode) {
 		paprium_exit();
+		papriummode = 0; // Salvia: evitar que el modo Paprium contamine la siguiente carga MD
 	}
 
 	if (sot4wmode) {

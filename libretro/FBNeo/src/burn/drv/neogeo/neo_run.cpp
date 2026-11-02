@@ -4163,8 +4163,8 @@ static INT32 NeoInitCommon()
 	NEO_RASTER_IRQ_TWEAK = 0;
 
 	// These games rely on reading the line counter for synchronising raster effects
-	const static char * drv_name   = BurnDrvGetTextA(DRV_NAME);
-	const static char * drv_parent = BurnDrvGetTextA(DRV_PARENT);
+	const char * drv_name   = BurnDrvGetTextA(DRV_NAME);
+	const char * drv_parent = BurnDrvGetTextA(DRV_PARENT);
 	if (!strcmp(drv_name, "moshougi")) {
 		bRenderLineByLine = true;
 	}

@@ -2,13 +2,10 @@
 
 #include "retro_common.h"
 
-#if defined(BUILD_NEOGEO) || defined(BUILD_PCE)
 #include "cd_interface.h"
 #include "burner.h"
 #include "burnint.h"
-#ifdef INCLUDE_CHD_SUPPORT
 #include "cd_chd.h"
-#endif
 
 // libretro wrapper for dprint function
 
@@ -150,5 +147,3 @@ INT32 CDEmuScan(INT32 nAction, INT32 *pnMin)
 	}
 	return cdimgScan(nAction, pnMin);
 }
-
-#endif
