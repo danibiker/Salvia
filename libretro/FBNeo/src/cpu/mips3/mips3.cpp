@@ -7,14 +7,16 @@
 //
 // Based in part on the MAME MIPS III core by Aaron Giles (BSD-3-Clause).
 
-#include "burnint.h"
-#include "mips3.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <map>
 #include <vector>
+
+#include "burnint.h"
+#include "mips3.h"
+
 
 #ifndef MIPS3_CACHED_INTERPRETER
 #define MIPS3_CACHED_INTERPRETER	1
