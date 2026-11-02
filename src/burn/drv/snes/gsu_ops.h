@@ -1,22 +1,8 @@
 // =============================================================================
 //  FBNeo SNES  -  SuperFX (GSU) instruction set
 // =============================================================================
-//  Derived from ares/component/processor/gsu/instructions.cpp (ISC, see
-//  license.txt).  ares implemented these as GSU member functions using nall
-//  Register/BitField operator overloads; here they are file-scope statics
-//  operating on the flat SnesGsuState.  Two structural notes:
-//    * ares' packed SFR BitField assignment (`sfr.s = value & 0x8000`) coerces
-//      the RHS to bool; the equivalent here writes an explicit 0/1 ((x)!=0) into
-//      the expanded flag byte, since a bare store would truncate (e.g. a UINT8
-//      taking 0x8000 would wrongly become 0).
-//    * ares' `regs.dr() = v` / `regs.r[n] = v` go through Register::operator=,
-//      which records the "modified" flag consulted for r14 (ROM buffering) and
-//      r15 (branch suppression); snes_gsu_reg_write() preserves that exactly.
-//
-//  Included by gsu.cpp.  Not a standalone translation unit.
-// =============================================================================
 
-// decode POR from a source byte (ares POR::operator=)
+// decode POR from a source byte
 static inline void snes_gsu_por_set(UINT8 d)
 {
 	gsu.por_obj = (d & 0x10) != 0;
@@ -29,12 +15,13 @@ static inline void snes_gsu_por_set(UINT8 d)
 //$00 stop
 static void snes_gsu_i_stop()
 {
+	if (gsu_type == SNES_GSU_3) snes_gsu_reg_write(15, 0);
 	if (gsu.cfgr_irq == 0) {
 		gsu.sfr_irq = 1;
 		snes_gsu_stop();
 	}
 	gsu.sfr_g    = 0;
-	gsu.pipeline = 0x01;  //nop
+	gsu.pipeline = 0x01;	//nop
 	snes_gsu_regs_reset();
 }
 
@@ -234,6 +221,11 @@ static void snes_gsu_i_sub_sbc_cmp(UINT32 n)
 //$70 merge
 static void snes_gsu_i_merge()
 {
+	if (gsu_type == SNES_GSU_3) {
+		snes_gsu_fx3_command();
+		return;
+	}
+
 	UINT16 d   = (gsu.r[7] & 0xff00) | (gsu.r[8] >> 8);
 	SNES_GSU_DR_WRITE(d);
 	gsu.sfr_ov = (d & 0xc0c0) != 0;
@@ -341,7 +333,7 @@ static void snes_gsu_i_lob()
 	snes_gsu_regs_reset();
 }
 
-//$9f(alt0) fmult  /  (alt1) lmult
+//$9f(alt0) fmult / (alt1) lmult
 static void snes_gsu_i_fmult_lmult()
 {
 	UINT32 result = (UINT32)((INT16)SNES_GSU_SR() * (INT16)gsu.r[6]);
@@ -419,7 +411,7 @@ static void snes_gsu_i_inc(UINT32 n)
 	snes_gsu_regs_reset();
 }
 
-//$df(alt0) getc  /  (alt2) ramb  /  (alt3) romb
+//$df(alt0) getc / (alt2) ramb / (alt3) romb
 static void snes_gsu_i_getc_ramb_romb()
 {
 	if (!gsu.sfr_alt2) {

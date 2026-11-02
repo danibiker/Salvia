@@ -20,6 +20,7 @@ COLECO_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/coleco
 CPS3_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/cps3
 DATAEAST_DIR			:= $(FBNEO_BURN_DRIVERS_DIR)/dataeast
 GALAXIAN_DIR			:= $(FBNEO_BURN_DRIVERS_DIR)/galaxian
+GBA_DIR					:= $(FBNEO_BURN_DRIVERS_DIR)/gba
 IREM_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/irem
 KONAMI_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/konami
 MD_DIR					:= $(FBNEO_BURN_DRIVERS_DIR)/megadrive
@@ -63,7 +64,6 @@ M6809_CPU_DIR			:= $(FBNEO_CPU_DIR)/m6809
 M68K_CPU_DIR			:= $(FBNEO_CPU_DIR)/m68k
 MB88XX_CPU_DIR			:= $(FBNEO_CPU_DIR)/mb88xx
 MIPS3_CPU_DIR			:= $(FBNEO_CPU_DIR)/mips3
-MIPS3_X64_DRC_CPU_DIR	:= $(MIPS3_CPU_DIR)/x64
 NEC_CPU_DIR				:= $(FBNEO_CPU_DIR)/nec
 PIC16C5X_CPU_DIR		:= $(FBNEO_CPU_DIR)/pic16c5x
 SH2_CPU_DIR				:= $(FBNEO_CPU_DIR)/sh2
@@ -77,6 +77,7 @@ TMS34010_CPU_DIR		:= $(FBNEO_CPU_DIR)/tms34
 UPD7725_CPU_DIR			:= $(FBNEO_CPU_DIR)/upd7725
 UPD7810_CPU_DIR			:= $(FBNEO_CPU_DIR)/upd7810
 V60_CPU_DIR				:= $(FBNEO_CPU_DIR)/v60
+XA_CPU_DIR				:= $(FBNEO_CPU_DIR)/xa
 Z180_CPU_DIR			:= $(FBNEO_CPU_DIR)/z180
 Z80_CPU_DIR				:= $(FBNEO_CPU_DIR)/z80
 
@@ -92,6 +93,7 @@ FBNEO_BURN_DRIVERS_DIRS := $(ATARI_DIR) \
 	$(CPS3_DIR) \
 	$(DATAEAST_DIR) \
 	$(GALAXIAN_DIR) \
+	$(GBA_DIR) \
 	$(IREM_DIR) \
 	$(KONAMI_DIR) \
 	$(MD_DIR) \
@@ -155,6 +157,7 @@ FBNEO_CPU_DIRS := $(FBNEO_CPU_DIR) \
 	$(TLCS900_CPU_DIR) \
 	$(TMS32010_CPU_DIR) \
 	$(UPD7810_CPU_DIR) \
+	$(XA_CPU_DIR) \
 	$(Z80_CPU_DIR) \
 	$(Z180_CPU_DIR)
 
@@ -234,6 +237,7 @@ INCLUDE_DIRS := $(FBNEO_BURNER_DIR)/win32 \
 	$(UPD7810_CPU_DIR) \
 	$(V60_CPU_DIR) \
 	$(T11_CPU_DIR) \
+	$(XA_CPU_DIR) \
 	$(Z80_CPU_DIR) \
 	$(Z180_CPU_DIR) \
 	$(SH4_CPU_DIR) \
@@ -241,6 +245,8 @@ INCLUDE_DIRS := $(FBNEO_BURNER_DIR)/win32 \
 	$(FBNEO_LIB_DIR)/zlib \
 	$(FBNEO_LIB_DIR)/lib7z \
 	$(FBNEO_LIB_DIR)/dr_libs \
+	$(FBNEO_LIB_DIR)/stb_vorbis \
+	$(FBNEO_LIB_DIR)/r8brain \
 	$(CAPCOM_DIR) \
 	$(KONAMI_DIR) \
 	$(DATAEAST_DIR) \
@@ -266,18 +272,6 @@ endif
 ifeq (,$(findstring msvc,$(platform)))
 	CXXFLAGS += -std=gnu++98
 endif
-
-#ifeq ($(USE_X64_DRC), 1)
-#	FBNEO_DEFINES  += -DXBYAK_NO_OP_NAMES -DMIPS3_X64_DRC
-#	FBNEO_SRC_DIRS += $(MIPS3_X64_DRC_CPU_DIR)
-#	ifeq (,$(findstring msvc,$(platform)))
-#		CXXFLAGS += -std=gnu++11
-#	endif
-#else
-#	ifeq (,$(findstring msvc,$(platform)))
-#		CXXFLAGS += -std=gnu++98
-#	endif
-#endif
 
 NEON_FLAGS=
 
@@ -317,24 +311,27 @@ endif
 ifeq ($(INCLUDE_7Z_SUPPORT), 1)
 	FBNEO_DEFINES += -DINCLUDE_7Z_SUPPORT -DZ7_PPMD_SUPPORT -DZ7_ST
 	SOURCES_CXX += $(FBNEO_BURNER_DIR)/un7z.cpp
-	ifneq ($(STATIC_LINKING), 1)
-		SOURCES_C += $(FBNEO_LIB_DIR)/lib7z/7zArcIn.c \
-			$(FBNEO_LIB_DIR)/lib7z/7zBuf.c \
-			$(FBNEO_LIB_DIR)/lib7z/7zCrc.c \
-			$(FBNEO_LIB_DIR)/lib7z/7zCrcOpt.c \
-			$(FBNEO_LIB_DIR)/lib7z/7zDec.c \
-			$(FBNEO_LIB_DIR)/lib7z/7zStream.c \
-			$(FBNEO_LIB_DIR)/lib7z/Bcj2.c \
-			$(FBNEO_LIB_DIR)/lib7z/Bra.c \
-			$(FBNEO_LIB_DIR)/lib7z/Bra86.c \
-			$(FBNEO_LIB_DIR)/lib7z/BraIA64.c \
-			$(FBNEO_LIB_DIR)/lib7z/CpuArch.c \
-			$(FBNEO_LIB_DIR)/lib7z/Delta.c \
-			$(FBNEO_LIB_DIR)/lib7z/Lzma2Dec.c \
-			$(FBNEO_LIB_DIR)/lib7z/LzmaDec.c \
-			$(FBNEO_LIB_DIR)/lib7z/Ppmd7.c \
-			$(FBNEO_LIB_DIR)/lib7z/Ppmd7Dec.c
-	endif
+	# Statically linked builds used to borrow the 7-Zip SDK from the frontend,
+	# but RetroArch dropped deps/7zip in favour of its own r7z_* reader, so the
+	# SzArEx_*/LookToRead2_* symbols are no longer exported. Always compile our
+	# own copy: archive members are only pulled in when still undefined at link
+	# time, so this cannot clash with a frontend that does provide them.
+	SOURCES_C += $(FBNEO_LIB_DIR)/lib7z/7zArcIn.c \
+		$(FBNEO_LIB_DIR)/lib7z/7zBuf.c \
+		$(FBNEO_LIB_DIR)/lib7z/7zCrc.c \
+		$(FBNEO_LIB_DIR)/lib7z/7zCrcOpt.c \
+		$(FBNEO_LIB_DIR)/lib7z/7zDec.c \
+		$(FBNEO_LIB_DIR)/lib7z/7zStream.c \
+		$(FBNEO_LIB_DIR)/lib7z/Bcj2.c \
+		$(FBNEO_LIB_DIR)/lib7z/Bra.c \
+		$(FBNEO_LIB_DIR)/lib7z/Bra86.c \
+		$(FBNEO_LIB_DIR)/lib7z/BraIA64.c \
+		$(FBNEO_LIB_DIR)/lib7z/CpuArch.c \
+		$(FBNEO_LIB_DIR)/lib7z/Delta.c \
+		$(FBNEO_LIB_DIR)/lib7z/Lzma2Dec.c \
+		$(FBNEO_LIB_DIR)/lib7z/LzmaDec.c \
+		$(FBNEO_LIB_DIR)/lib7z/Ppmd7.c \
+		$(FBNEO_LIB_DIR)/lib7z/Ppmd7Dec.c
 endif
 
 SOURCES_CXX += $(LIBRETRO_DIR)/libretro.cpp \
@@ -354,6 +351,39 @@ SOURCES_C += $(UGUI_DIR)/ugui.c \
 	$(LIBRETRO_DIR)/ugui_tools.c
 
 SOURCES_C += $(FBNEO_LIB_DIR)/libchdr/libchdr_flac.c
+
+ifeq ($(INCLUDE_CHD_SUPPORT), 1)
+	FBNEO_DEFINES += -DINCLUDE_CHD_SUPPORT -DUSE_LIBRETRO_VFS
+	SOURCES_CXX += $(FBNEO_INTERFACE_DIR)/cd/cd_chd.cpp
+	ifeq ($(CHD_LIBRETRO), 1)
+		SOURCES_C += $(LIBRETRO_COMM_DIR)/formats/libchdr/libchdr_chd.c \
+			$(LIBRETRO_COMM_DIR)/formats/libchdr/libchdr_zlib.c \
+			$(LIBRETRO_COMM_DIR)/formats/libchdr/libchdr_huffman.c \
+			$(LIBRETRO_COMM_DIR)/formats/libchdr/libchdr_bitstream.c \
+			$(LIBRETRO_COMM_DIR)/encodings/encoding_deflate.c \
+			$(LIBRETRO_COMM_DIR)/formats/libchdr/libchdr_cdrom.c
+		INCLUDE_DIRS += $(LIBRETRO_COMM_DIR)/include/libchdr/
+	else
+		FBNEO_DEFINES += -DCHDR_SYSTEM_ZLIB
+		SOURCES_C += $(FBNEO_LIB_DIR)/libchdr/libchdr_chd.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_zlib.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_cdzl.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_bitstream.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_huffman.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_huff.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_flac.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_lzma.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_zstd.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_cdlz.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_cdfl.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_codec_cdzs.c \
+			$(FBNEO_LIB_DIR)/libchdr/libchdr_cdrom.c \
+			$(FBNEO_LIB_DIR)/lzma/libchdr_lzma.c \
+			$(FBNEO_LIB_DIR)/zstd/zstddeclib.c
+		INCLUDE_DIRS += $(FBNEO_LIB_DIR)/libchdr/include/ \
+			$(FBNEO_LIB_DIR)/lzma/
+	endif
+endif
 
 # GIT HASH
 GIT_VERSION := $(shell git rev-parse --short HEAD || echo unknown)

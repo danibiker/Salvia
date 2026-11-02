@@ -12,6 +12,7 @@ TCHAR szAppTitlesPath[MAX_PATH]		= _T("support/titles/");
 TCHAR szAppCheatsPath[MAX_PATH]		= _T("support/cheats/");
 TCHAR szAppHiscorePath[MAX_PATH]	= _T("support/hiscores/");
 TCHAR szAppSamplesPath[MAX_PATH]	= _T("support/samples/");
+TCHAR szAppSnesMsu1Path[MAX_PATH]	= _T("support/snesmsu1/");
 TCHAR szAppHDDPath[MAX_PATH]		= _T("support/hdd/");
 TCHAR szAppIpsPath[MAX_PATH]		= _T("support/ips/");
 TCHAR szAppRomdataPath[MAX_PATH]	= _T("support/romdata/");
@@ -41,9 +42,9 @@ static TCHAR* pszSupportPath[][2] = {
 	{ szAppSamplesPath,  _T("support/samples/")  },
 	{ szAppIpsPath,      _T("support/ips/")      },
 	{ szAppRomdataPath,  _T("support/romdata/")  },
-	{ szNeoCDGamesDir,   _T("neocdiso/")         },
-	{ szNeoCDCoverDir,   _T("support/neocdzcovers/")   },
-	{ szNeoCDPreviewDir, _T("support/neocdzpreviews/") },
+	{ szNeoCDGamesDir,   _T("cdiso/")         	 },
+	{ szNeoCDCoverDir,   _T("support/cdcovers/") },
+	{ szNeoCDPreviewDir, _T("support/cdpreviews/")},
 	{ szAppBlendPath,    _T("support/blend/")    },
 	{ szAppSelectPath,   _T("support/select/")   },
 	{ szAppVersusPath,   _T("support/versus/")   },

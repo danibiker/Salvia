@@ -73,6 +73,11 @@ struct VezContext {
 	UINT8 (__cdecl *ReadPort)(UINT32 a);
 	void (__cdecl *WritePort)(UINT32 a, UINT8 d);
  #endif
+	// optional, for 16-bit databus w/word access
+	UINT16 (*ReadWordHandler)(UINT32 a);
+	void (*WriteWordHandler)(UINT32 a, UINT16 d);
+	UINT16 (*ReadPortWord)(UINT32 a);
+	void (*WritePortWord)(UINT32 a, UINT16 d);
 };
 
 static struct VezContext *VezCPUContext[MAX_VEZ] = { NULL, NULL, NULL, NULL };
@@ -98,6 +103,26 @@ UINT8 cpu_readport(UINT32 p)
 void cpu_writeport(UINT32 p,UINT32 d)
 {
 	VezCurrentCPU->WritePort(p, d);
+}
+
+UINT16 cpu_readport_word(UINT32 p)
+{
+	if ((p & 1) == 0 && VezCurrentCPU->ReadPortWord)
+		return VezCurrentCPU->ReadPortWord(p);
+
+	UINT16 d = VezCurrentCPU->ReadPort(p);
+	return d | (VezCurrentCPU->ReadPort((p + 1) & 0xffff) << 8);
+}
+
+void cpu_writeport_word(UINT32 p, UINT32 d)
+{
+	if ((p & 1) == 0 && VezCurrentCPU->WritePortWord) {
+		VezCurrentCPU->WritePortWord(p, d);
+		return;
+	}
+
+	VezCurrentCPU->WritePort(p, d & 0xff);
+	VezCurrentCPU->WritePort((p + 1) & 0xffff, (d >> 8) & 0xff);
 }
 
 UINT8 cpu_readmem20(UINT32 a)
@@ -142,6 +167,30 @@ void cpu_writemem20(UINT32 a, UINT8 d)
 		*(p + a) = d;
 	else
 		VezCurrentCPU->WriteHandler(a, d);
+}
+
+UINT16 cpu_readmem20_word(UINT32 a)
+{
+	a &= 0xFFFFF;
+
+	if ((a & 1) == 0 && VezCurrentCPU->ReadWordHandler && VezCurrentCPU->ppMemRead[a >> VEZ_MEM_SHIFT] == NULL)
+		return VezCurrentCPU->ReadWordHandler(a);
+
+	UINT16 d = cpu_readmem20(a);
+	return d | (cpu_readmem20(a + 1) << 8);
+}
+
+void cpu_writemem20_word(UINT32 a, UINT16 d)
+{
+	a &= 0xFFFFF;
+
+	if ((a & 1) == 0 && VezCurrentCPU->WriteWordHandler && VezCurrentCPU->ppMemWrite[a >> VEZ_MEM_SHIFT] == NULL) {
+		VezCurrentCPU->WriteWordHandler(a, d);
+		return;
+	}
+
+	cpu_writemem20(a, d & 0xff);
+	cpu_writemem20(a + 1, d >> 8);
 }
 
 void VezWriteByte(UINT32 a, UINT8 d)
@@ -257,6 +306,26 @@ void VezSetWriteHandler(void (__fastcall *pHandler)(UINT32, UINT8))
 #endif
 
 	VezCurrentCPU->WriteHandler = pHandler;
+}
+
+void VezSetReadWordHandler(UINT16 (*pHandler)(UINT32))
+{
+	VezCurrentCPU->ReadWordHandler = pHandler;
+}
+
+void VezSetWriteWordHandler(void (*pHandler)(UINT32, UINT16))
+{
+	VezCurrentCPU->WriteWordHandler = pHandler;
+}
+
+void VezSetReadPortWord(UINT16 (*pHandler)(UINT32))
+{
+	VezCurrentCPU->ReadPortWord = pHandler;
+}
+
+void VezSetWritePortWord(void (*pHandler)(UINT32, UINT16))
+{
+	VezCurrentCPU->WritePortWord = pHandler;
 }
 
 void VezSetReadPort(UINT8 (__fastcall *pHandler)(UINT32))
@@ -375,7 +444,9 @@ INT32 VezInit(INT32 cpu, INT32 type, INT32 clock)
 
 	switch (type)
 	{
-		case i86_TYPE:
+		case i80186_TYPE:
+		case i8086_TYPE:
+		case i8088_TYPE:
 		case V20_TYPE:
 		case V30_TYPE:
 		case V33_TYPE:

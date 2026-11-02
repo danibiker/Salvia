@@ -1,0 +1,975 @@
+<?xml version="1.0"?>
+<!DOCTYPE datafile PUBLIC "-//FinalBurn Neo//DTD ROM Management Datafile//EN" "http://www.logiqx.com/Dats/datafile.dtd">
+
+<datafile>
+	<header>
+		<name>FinalBurn Neo - Astrocade Home Computer Games</name>
+		<description>FinalBurn Neo v1.0.0.03 Astrocade Home Computer Games</description>
+		<category>Standard DatFile</category>
+		<version>1.0.0.03</version>
+		<author>FinalBurn Neo</author>
+		<homepage>https://neo-source.com/</homepage>
+		<url>https://neo-source.com/</url>
+		<clrmamepro forcenodump="ignore"/>
+	</header>
+	<game name="280zzap" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>280 Zzzap / Dodgem (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="280 Zzzap - Dodgem (1978)(Bally).bin" size="2048" crc="e4d285e5"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="adssm" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>ADS System Monitor (Prototype)</description>
+		<year>19??</year>
+		<manufacturer>&lt;unknown&gt;</manufacturer>
+		<rom name="ADS System Monitor (Proto)(19xx).bin" size="2048" crc="b8d4df61"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="amazmaze" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Amazing Maze / Tic-Tac-Toe (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Amazing Maze - Tic-Tac-Toe (1978)(Bally).bin" size="2048" crc="cd57c485"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="artiduelp1" cloneof="artiduel" romof="artiduel" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Artillery Duel (Prototype)</description>
+		<year>1982</year>
+		<manufacturer>Xonox</manufacturer>
+		<rom name="Artillery Duel (Proto)(1982)(Xonox).bin" size="4096" crc="2227f488"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="artiduelp3" cloneof="artiduel" romof="artiduel" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Artillery Duel (Prototype, Alt 2)</description>
+		<year>1982</year>
+		<manufacturer>Xonox</manufacturer>
+		<rom name="Artillery Duel (Proto, Alt 2)(1982)(Xonox).bin" size="2048" crc="2521a6ec"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="artiduelp2" cloneof="artiduel" romof="artiduel" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Artillery Duel (Prototype, Alt)</description>
+		<year>1982</year>
+		<manufacturer>Xonox</manufacturer>
+		<rom name="Artillery Duel (Proto, Alt)(1982)(Xonox).bin" size="4096" crc="53f75720"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="artiduel" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Artillery Duel (USA)</description>
+		<year>1982</year>
+		<manufacturer>Xonox</manufacturer>
+		<rom name="Artillery Duel (1982)(Xonox).bin" size="4096" crc="4f372019"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="astrobat" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Astro Battle (USA)</description>
+		<year>1979</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Astro Battle (1979)(Bally).bin" size="4096" crc="0b5298bc"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ballypin" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Bally Pin (USA)</description>
+		<year>1979</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Bally Pin (1979)(Bally).bin" size="4096" crc="3f431613"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="biorhy" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>BioRhythm (USA)</description>
+		<year>1981</year>
+		<manufacturer>Astrovision</manufacturer>
+		<rom name="BioRhythm (1981)(Astrovision).bin" size="4096" crc="fc4bd27c"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="blckjack" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Black Jack / Acey Deucey / Poker (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Black Jack - Acey Deucey - Poker (1978)(Bally).bin" size="4096" crc="78d45a11"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="bstdroid" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Blast Droids (USA)</description>
+		<year>1983</year>
+		<manufacturer>Esoterica</manufacturer>
+		<rom name="Blast Droids (1983)(Esoterica).bin" size="4096" crc="79fe386b"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="bowling" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Bowling (Prototype)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Bowling (Proto)(1978)(Bally).bin" size="4096" crc="1f8bc8ba"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="brckyard" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Brickyard / Clowns (USA)</description>
+		<year>1979</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Brickyard - Clowns (1979)(Bally).bin" size="4096" crc="28f9e502"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="buylove" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Can't Buy Me Love (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Can't Buy Me Love (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="8192" crc="fc6f4f7b"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="candyman" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Candyman (USA)</description>
+		<year>198?</year>
+		<manufacturer>L&amp;M Software &amp; Mike White</manufacturer>
+		<rom name="Candyman (198x)(L&amp;M Software &amp; Mike White).bin" size="8192" crc="0fc97852"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="checkers" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Checkers (Prototype)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Checkers (Proto)(19xx)(Bally).bin" size="2048" crc="757bab8f"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="claim" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Claim Jumper (USA)</description>
+		<year>198?</year>
+		<manufacturer>L&amp;M Software &amp; Mike White</manufacturer>
+		<rom name="Claim Jumper (198x)(L&amp;M Software &amp; Mike White).bin" size="8192" crc="1edeae0e"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="colbook" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Coloring Book (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Coloring Book (Proto)(198x)(Astrocade).bin" size="8192" crc="14f36aba"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="conanp" cloneof="conan" romof="conan" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Conan The Barbarian! (Prototype)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Conan The Barbarian (Proto)(1982)(Astrocade).bin" size="8192" crc="15b1afea"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="conan" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Conan The Barbarian! (USA)</description>
+		<year>1985</year>
+		<manufacturer>Dave Carson Software</manufacturer>
+		<rom name="Conan The Barbarian (1985)(Dave Carson Software).bin" size="8192" crc="8a6adbfe"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cosmicrdb" cloneof="cosmicrd" romof="cosmicrd" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Cosmic Raiders (Prototype, Alt 2)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Cosmic Raider (Proto, Alt 2)(198x)(Astrocade).bin" size="8192" crc="37670f78"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cosmicrda" cloneof="cosmicrd" romof="cosmicrd" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Cosmic Raiders (Prototype, Alt)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Cosmic Raider (Proto, Alt)(198x)(Astrocade).bin" size="8192" crc="869b692e"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cosmicrd35" cloneof="cosmicrd" romof="cosmicrd" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Cosmic Raiders (Prototype, v3.5)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Cosmic Raider (Proto, v3.5)(198x)(Astrocade).bin" size="8192" crc="e3d723a0"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cosmicrd36" cloneof="cosmicrd" romof="cosmicrd" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Cosmic Raiders (Prototype, v3.6)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Cosmic Raider (Proto, v3.6)(198x)(Astrocade).bin" size="8192" crc="00b6fe88"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cosmicrd" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Cosmic Raiders (USA)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Cosmic Raider (1982)(Astrocade).bin" size="8192" crc="2a77b3fb"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cclimber" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Homebrew</comment>
+		<description>Crazy Climber (HB)</description>
+		<year>2011</year>
+		<manufacturer>RiffRaff Games</manufacturer>
+		<rom name="Crazy Climber (2011)(RiffRaff Games).bin" size="8187" crc="bf864c44"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="dealdemo" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Dealer Demo (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Dealer Demo (1978)(Bally).bin" size="4096" crc="16b77b44"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="dogpatch" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Dog Patch (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Dog Patch (1978)(Bally).bin" size="2048" crc="77bed6ba"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="eightday" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Eight Days A Week (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Eight Days A Week (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="4096" crc="0bac683f"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="fawn" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Fawn Dungeon (Prototype, first version)</description>
+		<year>1981</year>
+		<manufacturer>Barry McCleave</manufacturer>
+		<rom name="Fawn Dungeon (Proto 1)(1981)(Barry McCleave).bin" size="2048" crc="2ff0fbef"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="fawna" cloneof="fawn" romof="fawn" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Fawn Dungeon (Prototype, second version)</description>
+		<year>1981</year>
+		<manufacturer>Barry McCleave</manufacturer>
+		<rom name="Fawn Dungeon (Proto 2)(1981)(Barry McCleave).bin" size="2048" crc="72dd4512"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="football" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Football (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Football (1978)(Bally).bin" size="4096" crc="fc8998a9"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ziggyjx" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Fun With Vectors - Ziggy (Prototype JX label)</description>
+		<year>1985</year>
+		<manufacturer>Richard Degler</manufacturer>
+		<rom name="Fun With Vectors - Ziggy (Proto JX label)(1985)(Richard Degler).bin" size="4096" crc="286d4dd4"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ziggymo" cloneof="ziggyjx" romof="ziggyjx" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Fun With Vectors - Ziggy (Prototype MO label)</description>
+		<year>1985</year>
+		<manufacturer>Richard Degler</manufacturer>
+		<rom name="Fun With Vectors - Ziggy (Proto MO label)(1985)(Richard Degler).bin" size="4096" crc="18a2eb1e"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="galactic" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Galactic Invasion (USA)</description>
+		<year>1981</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Galactic Invasion (1981)(Astrocade).bin" size="4096" crc="ba558eb7"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="galaxian" cloneof="galactic" romof="galactic" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Galaxian (USA)</description>
+		<year>1981</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Galaxian (1981)(Astrocade).bin" size="4096" crc="d75e9672"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="golddig" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Golddigger / Goldrush (Prototype)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson &amp; Ken Lill</manufacturer>
+		<rom name="Golddigger - Goldrush (Proto)(1984)(Dave Carson &amp; Ken Lill).bin" size="2048" crc="20755476"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="golddigb" cloneof="golddig" romof="golddig" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Golddigger / Goldrush (Prototype, Alt 2)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson &amp; Ken Lill</manufacturer>
+		<rom name="Golddigger - Goldrush (Proto, Alt 2)(1984)(Dave Carson &amp; Ken Lill).bin" size="2048" crc="face3b05"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="golddiga" cloneof="golddig" romof="golddig" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Golddigger / Goldrush (Prototype, Alt)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson &amp; Ken Lill</manufacturer>
+		<rom name="Golddigger - Goldrush (Proto, Alt)(1984)(Dave Carson &amp; Ken Lill).bin" size="2048" crc="994661a1"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="grandprx" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Grand Prix / Demolition Derby (USA)</description>
+		<year>1981</year>
+		<manufacturer>Astrovision Inc.</manufacturer>
+		<rom name="Grand Prix - Demolition Derby (1981)(Astrovision).bin" size="4096" crc="7b3b7b70"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="hardday" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Hard Day's Night, A (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Hard Day's Night, A (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="2048" crc="9234ddf6"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="feelfine" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>I Feel Fine (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="I Feel Fine (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="4096" crc="2d9d9eb0"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="icbmatkp" cloneof="icbmatk" romof="icbmatk" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>ICBM Attack (Prototype)</description>
+		<year>1982</year>
+		<manufacturer>Spectre Systems</manufacturer>
+		<rom name="ICBM Attack (Proto)(1982)(Spectre Systems).bin" size="4096" crc="49ed3563"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="icbmatk" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>ICBM Attack (USA)</description>
+		<year>1982</year>
+		<manufacturer>Spectre Systems</manufacturer>
+		<rom name="ICBM Attack (1982)(Spectre Systems).bin" size="4096" crc="bc2b6fe3"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="wizard" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>(aka Wizard of Wor)</comment>
+		<description>Incredible Wizard, The (USA)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Incredible Wizard, The (1982)(Astrocade).bin" size="8192" crc="1395b130"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="letitbe" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Let It Be (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Let It Be (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="4096" crc="baf0019d"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="lttrmtch" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Letter Match / Spell 'n Score / Crosswords (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Letter Match - Spell 'n Score - Crosswords (1978)(Bally).bin" size="4096" crc="2cf68f93"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="life" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Life (USA)</description>
+		<year>1985</year>
+		<manufacturer>Richard Degler</manufacturer>
+		<rom name="Life (1985)(Ricard Degler).bin" size="2048" crc="752d13fd"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="mlangman" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Machine Language Manager (USA)</description>
+		<year>1982</year>
+		<manufacturer>The Bit Fiddlers</manufacturer>
+		<rom name="Machine Language Manager (1982)(The Bit Fiddlers).bin" size="2048" crc="5393f920"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="mazemanp" cloneof="mazeman" romof="mazeman" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Mazeman (Prototype)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson Software</manufacturer>
+		<rom name="Mazeman (Proto)(1984)(Dave Carson Software).bin" size="4096" crc="af649678"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="mazeman" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Mazeman (USA)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson Software</manufacturer>
+		<rom name="Mazeman (1984)(Dave Carson Software).bin" size="4096" crc="565a644c"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="matk" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Missile Attack (USA)</description>
+		<year>1985</year>
+		<manufacturer>Spectre Systems &amp; Mike White</manufacturer>
+		<rom name="Missile Attack (1985)(Spectre Systems &amp; Mike White).bin" size="4096" crc="88f56c4e"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="mscandy" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Ms. Candyman (USA)</description>
+		<year>1983</year>
+		<manufacturer>L&amp;M Software</manufacturer>
+		<rom name="Ms. Candyman (1983)(L&amp;M Software).bin" size="4096" crc="14e93a41"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="muncher" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Muncher (USA)</description>
+		<year>1983</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Muncher (1983)(Astrocade).bin" size="8192" crc="e4726657"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="musicmakp2" cloneof="musicmak" romof="musicmak" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Music Maker (Prototype, Alt)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Music Maker (Proto, Alt)(1982)(Astrocade).bin" size="7376" crc="cc97a150"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="musicmakp" cloneof="musicmak" romof="musicmak" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Music Maker (Prototype, v3.7)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Music Maker (Proto, v3.7)(1982)(Astrocade).bin" size="8192" crc="a76828d0"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="musicmak" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Music Maker (USA)</description>
+		<year>1985</year>
+		<manufacturer>Dave Carson Software</manufacturer>
+		<rom name="Music Maker (1985)(Dave Carson Software).bin" size="8192" crc="b242ef84"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="nodie" cloneof="muncher" romof="muncher" sourcefile="pre90s/d_astrocde.cpp">
+		<description>No-Die! (USA)</description>
+		<year>1984</year>
+		<manufacturer>Dave Carson &amp; Mike White</manufacturer>
+		<rom name="No-Die (1984)(Dave Carson &amp; Mike White).bin" size="8192" crc="784b256a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="pacman" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Pac-Man (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Pac-Man (Proto)(198x)(Astrocade).bin" size="8192" crc="17363546"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="pacmana" cloneof="pacman" romof="pacman" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Pac-Man (Prototype, Alt)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Pac-Man (Proto, Alt)(198x)(Astrocade).bin" size="8192" crc="ca3a67dd"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="pacmaze" cloneof="mscandy" romof="mscandy" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Pacmaze (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Dave Carson Software</manufacturer>
+		<rom name="Pacmaze (198x)(Dave Carson Software).bin" size="4096" crc="cff3a6cc"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="paperbck" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Paperback Writer (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Paperback Writer (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="4096" crc="274766cd"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="pirate" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Pirate's Chase (USA)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Pirate's Chase (1982)(Astrocade).bin" size="4096" crc="7b1b206a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="rainbow2" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Rainbow v2 (Prototype)</description>
+		<year>19??</year>
+		<manufacturer>Hanson</manufacturer>
+		<rom name="Rainbow v2 (Proto)(19xx)(Hanson).bin" size="2048" crc="3883484a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="redbaron" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Red Baron / Panzer Attack (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Red Baron - Panzer Attack (1978)(Bally).bin" size="4096" crc="a1c7e129"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="seadevil" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Sea Devil (USA)</description>
+		<year>1983</year>
+		<manufacturer>L&amp;M Software</manufacturer>
+		<rom name="Sea Devil (1983)(L&amp;M Software).bin" size="4096" crc="960b6f86"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="seawolf" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Seawolf / Missile (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Seawolf - Missile (1978)(Bally).bin" size="2048" crc="a021735e"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="sheloves" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>She Loves You (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="She Loves You (Proto)(198x)(Richard Degler &amp; George Moses).bin" size="4096" crc="7b360d3f"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="sloshed" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Sloshed! (USA)</description>
+		<year>1982-86</year>
+		<manufacturer>New Image</manufacturer>
+		<rom name="Sloshed (1982-86)(New Image).bin" size="8192" crc="a33ced19"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="sneaky" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Sneaky Snake (USA)</description>
+		<year>1983</year>
+		<manufacturer>New Image</manufacturer>
+		<rom name="Sneaky Snake (1983)(New Image).bin" size="4096" crc="3e9f4f0d"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccerp" cloneof="soccer" romof="soccer" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Soccer (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Soccer (Proto)(198x)(Astrocade).bin" size="8192" crc="7de08d9a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccera3" cloneof="soccer" romof="soccer" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Soccer (Prototype, Alt 3)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Soccer (Proto, Alt 3)(198x)(Astrocade).bin" size="8192" crc="5cb41426"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccera4" cloneof="soccer" romof="soccer" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Soccer (Prototype, Alt 4)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Soccer (Proto, Alt 4)(198x)(Astrocade).bin" size="8192" crc="4f5e93d5"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccer" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Soccer (USA)</description>
+		<year>1985</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Soccer (1985)(Astrocade).bin" size="8192" crc="56d28b62"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccera2" cloneof="soccer" romof="soccer" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Socer (Prototype, Alt 2)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Socer (Proto, Alt 2)(198x)(Astrocade).bin" size="8192" crc="7c2858dd"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="soccera" cloneof="soccer" romof="soccer" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Socer (Prototype, Alt)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Socer (Proto, Alt)(198x)(Astrocade).bin" size="4096" crc="fd633ca9"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="solarcnqp" cloneof="solarcnq" romof="solarcnq" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Solar Conqueror (Prototype)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Solar Conqueror (Proto)(1982)(Astrocade).bin" size="8192" crc="4a229478"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="solarcnqp28" cloneof="solarcnq" romof="solarcnq" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Solar Conqueror (Prototype, v2.8)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Solar Conqueror (Proto, v2.8)(198x)(Astrocade).bin" size="8192" crc="0709b022"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="solarcnqp39" cloneof="solarcnq" romof="solarcnq" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Solar Conqueror (Prototype, v3.9)</description>
+		<year>198?</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Solar Conqueror (Proto, v3.9)(198x)(Astrocade).bin" size="8192" crc="8612cc7a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="solarcnq" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Solar Conqueror (USA)</description>
+		<year>1982</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Solar Conqueror (1982)(Astrocade).bin" size="8192" crc="d15ce025"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="songs" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Songs (Prototype)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Songs (Proto)(19xx)(Bally).bin" size="4096" crc="fe6182b3"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="songsa" cloneof="songs" romof="songs" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Songs (Prototype, Alt)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Songs (Proto, Alt)(19xx)(Bally).bin" size="8192" crc="36a3d077"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="songsu" cloneof="songs" romof="songs" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Songs (Prototype, unfinished)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Songs (Proto, unfinished)(19xx)(Bally).bin.bin" size="8192" crc="16326f8c"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="spacefrtp" cloneof="spacefrt" romof="spacefrt" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Space Fortress (Prototype)</description>
+		<year>1981</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Space Fortress (Proto)(1981)(Astrocade).bin" size="2048" crc="cf5012bd"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="spacefrt" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Space Fortress (USA)</description>
+		<year>1981</year>
+		<manufacturer>Astrocade Inc.</manufacturer>
+		<rom name="Space Fortress (1981)(Astrocade).bin" size="4096" crc="519cc707"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="spaceinvp" cloneof="spaceinv" romof="spaceinv" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Space Invaders (Prototype)</description>
+		<year>197?</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Space Invaders (Proto)(197x)(Bally).bin" size="2048" crc="a542f4b2"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="spaceinv" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Space Invaders (USA)</description>
+		<year>1979</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Space Invaders (1979)(Bally).bin" size="4096" crc="52964c1f"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="spedmath" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Speed Math / Bingo Math (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Speed Math - Bingo Math (1978)(Bally).bin" size="2048" crc="7d30312a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="starbttl" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Star Battle (USA)</description>
+		<year>1979</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Star Battle (1979)(Bally).bin" size="2048" crc="d54a74c8"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="stweek" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Stweek (USA)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Stweek (19xx)(Bally).bin" size="2048" crc="e4f3766a"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="sslope" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Super Slope (USA)</description>
+		<year>1982</year>
+		<manufacturer>Esoterica</manufacturer>
+		<rom name="Super Slope (1982)(Esoterica).bin" size="4096" crc="df6b2304"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="tests" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Tests (USA)</description>
+		<year>19??</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Tests (19xx)(Bally).bin" size="4096" crc="49df19eb"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="baseball" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Tornado Baseball / Handball / Hockey / Tennis (USA)</description>
+		<year>1978</year>
+		<manufacturer>Bally</manufacturer>
+		<rom name="Tornado Baseball - Handball - Hockey - Tennis (1978)(Bally).bin" size="4096" crc="5be548cc"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="treasurep" cloneof="treasure" romof="treasure" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Treasure Cove (Prototype)</description>
+		<year>198?</year>
+		<manufacturer>Spectre Systems</manufacturer>
+		<rom name="Treasure Cove (Provo)(198x)(Spectre Systems).bin" size="4096" crc="5379aabf"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="treasure" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Treasure Cove (USA)</description>
+		<year>1983</year>
+		<manufacturer>Spectre System</manufacturer>
+		<rom name="Treasure Cove (1983)(Spectre Systems).bin" size="8192" crc="1447f854"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="vidstory" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Video Story Book (Prototype)</description>
+		<year>19??</year>
+		<manufacturer>&lt;unknown&gt;</manufacturer>
+		<rom name="Video Story Book (Proto)(19xx).bin" size="8192" crc="2cc8cc3c"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="war" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Homebrew</comment>
+		<description>War (second printing) (HB)</description>
+		<year>2012</year>
+		<manufacturer>RiffRaff Games</manufacturer>
+		<rom name="War (second printing)(2012)(RiffRaff Games).bin" size="7931" crc="c1faf1bf"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="yesternv" cloneof="yesterv" romof="yesterv" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Yesterday (Prototype, no vibrato)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Yesterday (Proto, NV)(198x)(Richard Degler &amp; George Moses).bin" size="2048" crc="f400e5d4"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="yesterv" romof="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<comment>Prototype</comment>
+		<description>Yesterday (Prototype, with vibrato)</description>
+		<year>198?</year>
+		<manufacturer>Richard Degler &amp; George Moses</manufacturer>
+		<rom name="Yesterday (Proto, V)(198x)(Richard Degler &amp; George Moses).bin" size="2048" crc="a4edba84"/>
+		<rom name="astro.bin" merge="astro.bin" size="8192" crc="ebc77f3a"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game isbios="yes" name="astrocde" sourcefile="pre90s/d_astrocde.cpp">
+		<description>Bally Professional Arcade</description>
+		<year>1978</year>
+		<manufacturer>Bally Manufacturing</manufacturer>
+		<rom name="astro.bin" size="8192" crc="ebc77f3a"/>
+	</game>
+</datafile>

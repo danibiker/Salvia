@@ -242,6 +242,7 @@ extern int bDrvOkay;								// 1 if the Driver has been initted okay, and it's o
 extern TCHAR szAppRomPaths[DIRS_MAX][MAX_PATH];
 extern TCHAR szAppQuickPath[MAX_PATH];
 int DrvInit(int nDrvNum, bool bRestore);
+
 int DrvInitCallback();								// Used when Burn library needs to load a game. DrvInit(nBurnSelect, false)
 int DrvExit();
 void NeoCDZRateChangeback();
@@ -268,6 +269,7 @@ int RunFrame(int bDraw, int bPause);
 int RunMessageLoop();
 int RunReset();
 void ToggleLayer(unsigned char thisLayer);
+bool EmulatorAppIsFast();
 
 // scrn.cpp
 extern HWND hScrnWnd;								// Handle to the screen window
@@ -380,6 +382,22 @@ extern bool bIconsOnlyParents;
 extern int nIconsSize, nIconsSizeXY, nIconsYDiff;
 extern bool bGameInfoOpen;
 extern bool bIconsByHardwares;
+extern UINT uiBackGroundColor;
+extern UINT uiMenuItemColor;
+extern UINT uiSelectedMenuItemColor;
+extern UINT uiTextFontColor;
+extern UINT nUiColorTheme;
+extern bool uiOwnerDrawActive;
+extern UINT uiLightModeCode;
+extern UINT uiDarkModeCode;
+
+struct CurrentItemInfo
+{
+	TCHAR sText[256];
+	UINT menuItemTypeFlag;
+	UINT menuItemStateFlag;
+	bool itemHasCheckMark;
+};
 
 extern HICON* pIconsCache;
 
@@ -392,7 +410,6 @@ void UnloadDrvIcons();
 // neocdsel.cpp
 int NeoCDList_Init();
 extern bool  bNeoCDListScanSub;
-extern bool  bNeoCDListScanOnlyISO;
 extern TCHAR szNeoCDCoverDir[MAX_PATH];
 extern TCHAR szNeoCDPreviewDir[MAX_PATH];
 extern TCHAR szNeoCDGamesDir[MAX_PATH];
@@ -403,10 +420,7 @@ HBITMAP PNGLoadBitmap(HWND hWnd, FILE* fp, int nWidth, int nHeight, int nPreset)
 HBITMAP PNGLoadBitmapBuffer(HWND hWnd, void *buffer, int bufferLength, int nWidth, int nHeight, int nPreset);
 HBITMAP LoadBitmap(HWND hWnd, FILE* fp, int nWidth, int nHeight, int nPreset);
 int NeoCDList_CheckISO(TCHAR* pszFile, void (*pfEntryCallBack)(INT32, TCHAR*));
-TCHAR* ParseCueGetImageFile(const TCHAR* cueFullPath);
-void  FreeNGCDGame(NGCDGAME** ppGame);
-INT32 GetNGCDGameTitle(const UINT32 nGameID, NGCDGAME** ppOutGame, bool bPrintLog = false);
-INT32 cdimgCountChdAudioTracks(TCHAR* pszFile);
+#include "cd_img.h"
 
 // romdata.cpp
 extern bool bRDListScanSub;
@@ -422,6 +436,10 @@ INT32 RomDataCheck(const TCHAR* pszDatFile);
 void RomDataStateBackup();
 void RomDataStateRestore();
 bool RomDataExportTemplate(HWND hWnd, const INT32 nDrvSelect);
+
+// bzip.cpp (rom scan acceleration)
+void BzipScanBegin();
+void BzipScanEnd();
 
 // cona.cpp
 struct SubDirInfo {
@@ -493,10 +511,61 @@ int StatedLoad(int nSlot);
 int StatedUNDO(int nSlot);
 int StatedSave(int nSlot);
 
+// hotkeys.cpp
+#define HOTKEY_MOD_SHIFT	0x0100
+#define HOTKEY_MOD_CTRL		0x0200
+#define HOTKEY_MOD_ALT		0x0400
+#define HOTKEY_MOD_MASK		(HOTKEY_MOD_SHIFT | HOTKEY_MOD_CTRL | HOTKEY_MOD_ALT)
+#define HOTKEY_KEY_MASK		(HOTKEY_MOD_MASK | 0xFF)
+enum {
+	HOTKEY_ACT_NONE = 0,
+	HOTKEY_ACT_FFWD,					// fast forward while held, frame advance when paused
+	HOTKEY_ACT_FFWD_TOGGLE,
+	HOTKEY_ACT_REWIND,					// while held
+	HOTKEY_ACT_EXIT_FULLSCREEN,
+	HOTKEY_ACT_TOGGLE_MENU,
+	HOTKEY_ACT_TOGGLE_FPS,
+	HOTKEY_ACT_TOGGLE_FRAMECOUNTER,
+	HOTKEY_ACT_MUTE,
+	HOTKEY_ACT_VOLUME_UP,
+	HOTKEY_ACT_VOLUME_DOWN,
+	HOTKEY_ACT_VOLUME_UP_FINE,
+	HOTKEY_ACT_VOLUME_DOWN_FINE,
+	HOTKEY_ACT_LUA_OPEN,
+	HOTKEY_ACT_LUA_CLOSE,
+	HOTKEY_ACT_LUA_RUN,
+	HOTKEY_ACT_LUA_STOP,
+	HOTKEY_ACT_LUA_BROWSE,
+	HOTKEY_ACT_NETPLAY_CHAT,
+};
+UINT32 HotkeyGetModifiers(const MSG* pMsg);
+INT32 HotkeyFindAction(UINT nVK, UINT32 nMods);
+bool HotkeyActionUsesKey(INT32 nAction, UINT nVK);
+void HotkeyToString(UINT16 nKey, TCHAR* szString, INT32 nLen);
+void HotkeysApply();						// (re)builds the accelerator table and updates the menu labels
+void HotkeysUpdateMenu();
+void HotkeysConfigLoadLine(TCHAR* szLine);
+void HotkeysConfigSave(FILE* h);
+int HotkeysCreate();
+
 // numdial.cpp
 int NumDialCreate(int bDial);
 void GammaDialog();
 void HardFXShaderSettingsDialog();
+
+// d3d11shaderparams.cpp
+int D3D11ShaderParamsDialog(HWND hParent);
+
+// vid_d3d11.cpp (shaders for the Direct3D 11 blitter)
+#define D3D11_SHADER_MRU_SIZE 8
+extern TCHAR szVidD3D11Shader[MAX_PATH];					// current shader / preset ("" = none)
+extern TCHAR szVidD3D11ShaderMRU[D3D11_SHADER_MRU_SIZE][MAX_PATH];	// recently used shaders
+int VidD3D11SetShader(const TCHAR* szPath);					// select (and load, if the blitter is running) a shader
+int VidD3D11ShaderParamCount();							// -1 = no shader loaded
+int VidD3D11ShaderGetParam(int n, TCHAR* szDesc, int nDescSize, float* pValue, float* pMin, float* pMax, float* pStep, float* pDefault);
+void VidD3D11ShaderSetParam(int n, float fValue);			// takes effect immediately
+int VidD3D11ShaderSaveParams();								// to config/shaders/<name>.ini
+int VidD3D11ShaderName(TCHAR* szName, int nSize);
 void ScanlineDialog();
 void PhosphorDialog();
 void ScreenAngleDialog();
@@ -515,6 +584,7 @@ INT32 RomsDirCreate(HWND hParentWND);
 INT32 CreateROMInfo(HWND hParentWND);
 void FreeROMInfo();
 INT32 WriteGameAvb();
+void MarkGameAvScanned(UINT32 nDrv);
 
 // support_paths.cpp
 extern INT32 nSupportDlgWidth;
@@ -652,6 +722,10 @@ int ChooseMonitorCreate();
 // placeholder.cpp
 int SelectPlaceHolder();
 void ResetPlaceHolder();
+
+void UpdateUiColorMode(UINT uiColorMode);
+void ApplyDarkMode();
+void ApplyLightMode();
 
 // Misc
 #define _TtoA(a)	TCHARToANSI(a, NULL, 0)

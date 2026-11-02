@@ -3,7 +3,7 @@
 #include "burnint.h"
 #include "samples.h"
 
-#if defined(BUILD_WIN32) || defined(__LIBRETRO__)	// Already tested platforms are added here
+#if defined(BUILD_WIN32) || defined(BUILD_SDL) || defined(BUILD_SDL2) || defined(__LIBRETRO__)	// Already tested platforms are added here
 #define INCLUDE_FLACMP3_SUPPORT
 #endif // BUILD_WIN32
 
@@ -569,7 +569,7 @@ void BurnSampleChannelPlay(INT32 channel, INT32 sample, INT32 loop)
 
 	if (sample_channels[channel] != sample) {
 		// different sample on this channel, stop previous sample first
-		BurnSampleChannelStop(channel);
+		BurnSampleChannelStop(channel, true);
 	}
 
 	sample_channels[channel] = sample;

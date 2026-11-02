@@ -71,6 +71,7 @@ enum
 void Z80Init();
 void Z80InitContention(int is_on_type, void (*rastercallback)(int));
 void Z80Contention_set_bank(int bankno);
+void Z80SetInsnCB(int (*insncallback)(int)); // note: only supports 1 z80!
 void Z80Reset();
 void Z80Exit();
 int  Z80Execute(int cycles);
@@ -120,6 +121,7 @@ int ActiveZ80GetIX();
 int ActiveZ80GetIM();
 int ActiveZ80GetSP();
 int ActiveZ80GetPrevPC();
+int ActiveZ80GetHALT();
 void ActiveZ80SetCarry(int carry);
 int ActiveZ80GetCarry();
 int ActiveZ80GetCarry2();

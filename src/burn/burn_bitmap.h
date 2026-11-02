@@ -1,4 +1,4 @@
-// FB Alpha Bitmap Management System
+// FB Neo Bitmap Management System
 
 #ifndef BURNBITMAP
 
@@ -23,6 +23,8 @@ struct bitmap_struct
 	clip_struct clipdims;
 };
 
+// Special overflow pool for bitmap #0 (see tiles_generic.cpp, BurnTransferFindSpill())
+#define nTransferOverflow 		16
 
 // Get pointer to this bitmap
 UINT16 *BurnBitmapGetBitmap(INT32 nBitmapNumber);
@@ -65,6 +67,12 @@ void BurnBitmapAllocate(INT32 nBitmapNumber, INT32 nWidth, INT32 nHeight, bool u
 
 // Exit bitmap functions and free memory (Call in GenericTilesExit())
 void BurnBitmapExit();
+
+// draw a box shape on the selected bitmap
+void draw_plot_box(INT32 bitmap, INT32 sx, INT32 sy, INT32 width, INT32 height, UINT16 color);
+
+// draw a pixel on the selected bitmap
+void draw_plot_pixel(INT32 bitmap, INT32 sx, INT32 sy, UINT16 color);
 
 #endif
 

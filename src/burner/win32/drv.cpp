@@ -1,6 +1,7 @@
 // Driver Init module
 #include "burner.h"
 #include "neocdlist.h"
+#include "pcecdlist.h"
 
 int bDrvOkay = 0;						// 1 if the Driver has been initted okay, and it's okay to use the BurnDrv functions
 
@@ -17,13 +18,14 @@ TCHAR szAppRomPaths[DIRS_MAX][MAX_PATH] = {
 	{ _T("roms/sms/")		},
 	{ _T("roms/msx/")		},
 	{ _T("roms/spectrum/")	},
-	{ _T("roms/snes/")		},
-	{ _T("roms/fds/")		},
 	{ _T("roms/nes/")		},
+	{ _T("roms/fds/")		},
+	{ _T("roms/snes/")		},
+	{ _T("roms/gba/")		},
 	{ _T("roms/ngp/")		},
 	{ _T("roms/channelf/")	},
+	{ _T("roms/astrocade/")	},
 	{ _T("roms/romdata/")	},
-	{ _T("")				},
 	{ _T("")				}
 };
 
@@ -171,7 +173,7 @@ static void NeoCDZRateChange()
 {
 	if (nAudSampleRate[nAudSelect] != 44100) {
 		nNeoCDZnAudSampleRateSave = nAudSampleRate[nAudSelect];
-		bprintf(PRINT_IMPORTANT, _T("Switching sound rate to 44100hz (from %dhz) as required by NeoGeo CDZ\n"), nNeoCDZnAudSampleRateSave);
+		bprintf(PRINT_IMPORTANT, _T("Switching sound rate to 44100hz (from %dhz) as required by NeoGeo & PCE CD\n"), nNeoCDZnAudSampleRateSave);
 		nAudSampleRate[nAudSelect] = 44100; // force 44100hz for CDDA
 	}
 }
@@ -197,7 +199,8 @@ int DrvInit(int nDrvNum, bool bRestore)
 		}
 	}
 
-	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOCD) {
+	INT32 nHardware = BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK;
+	if (nHardware == HARDWARE_SNK_NEOCD || nHardware == HARDWARE_PCENGINE_PCE_CD) {
 		if (CDEmuInit()) {
 			FBAPopupAddText(PUF_TEXT_DEFAULT, MAKEINTRESOURCE(IDS_ERR_CDEMU_INI_FAIL));
 			FBAPopupDisplay(PUF_TYPE_ERROR);
@@ -206,9 +209,13 @@ int DrvInit(int nDrvNum, bool bRestore)
 			return 0;
 		}
 
-		NeoCDInfo_Init();
-
-		NeoCDZRateChange();
+		if (nHardware == HARDWARE_SNK_NEOCD) {
+			NeoCDInfo_Init();
+			NeoCDZRateChange();
+		} else if (nHardware == HARDWARE_PCENGINE_PCE_CD) {
+			PceCDInfo_Init();
+			NeoCDZRateChange();
+		}
 	}
 
 	{ // Init input, save audio and blitter init for later. (reduce # of mode changes, nice for emu front-ends)
@@ -252,6 +259,7 @@ int DrvInit(int nDrvNum, bool bRestore)
 		}
 
 		NeoCDZRateChangeback();
+		CDEmuExit();
 
 		POST_INITIALISE_MESSAGE;
 		return 1;

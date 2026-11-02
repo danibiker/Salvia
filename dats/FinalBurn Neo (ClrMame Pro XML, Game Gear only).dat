@@ -1831,11 +1831,29 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="hadgg" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Heroes Against Demons - GG Edition (HB)</description>
+		<year>2021</year>
+		<manufacturer>Ichigo Bankai</manufacturer>
+		<rom name="Heroes Against Demons - GG Edition (2021)(Ichigo).gg" size="262144" crc="73fbf79a"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="homea" sourcefile="sms/d_sms.cpp">
 		<description>Home Alone (Euro, USA)</description>
 		<year>1992</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Home Alone (Euro, USA)(1992)(Sega).gg" size="262144" crc="dde29f74"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="hongkong97" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Hong Kong '97 (HB, v0.0.1)</description>
+		<year>2026</year>
+		<manufacturer>SirVH</manufacturer>
+		<rom name="Hong Kong '97 v0.0.1 (2026)(SirVH).gg" size="524288" crc="d2f8b283"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2426,6 +2444,15 @@
 		<year>1994</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Magic Knight Rayearth (Japan)(1994)(Sega).gg" size="524288" crc="8f82a6b9"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="rayeart2e" cloneof="rayeart2" romof="rayeart2" sourcefile="sms/d_sms.cpp">
+		<comment>Hack</comment>
+		<description>Magic Knight Rayearth 2: Making of Magic Knight (Hack, English v1.5 Build 126)</description>
+		<year>2026</year>
+		<manufacturer>Patch Clan</manufacturer>
+		<rom name="Magic Knight Rayearth 2 - Making of Magic Knight T-Eng v1.5 Build 126 (2026)(Patch Clan).gg" size="524288" crc="6210fbe6"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -3177,6 +3204,15 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="pedrisco" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Pedrisco (HB, v1.2)</description>
+		<year>2026</year>
+		<manufacturer>vosges6128</manufacturer>
+		<rom name="Pedrisco v1.2 (2026)(vosges6128).gg" size="131072" crc="9534946e"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="pegged" sourcefile="sms/d_sms.cpp">
 		<comment>Homebrew</comment>
 		<description>Pegged (HB, v1.02)</description>
@@ -3358,8 +3394,8 @@
 	<game name="pstrike2" sourcefile="sms/d_sms.cpp">
 		<description>Power Strike II (Euro) ~ GG Aleste II (Japan)</description>
 		<year>1993</year>
-		<manufacturer>Sega</manufacturer>
-		<rom name="Power Strike II - GG Aleste II (Euro, Japan)(1993)(Sega).gg" size="262144" crc="09de1528"/>
+		<manufacturer>Sega - Compile</manufacturer>
+		<rom name="Power Strike II - GG Aleste II (Euro, Japan)(1993)(Sega - Compile).gg" size="262144" crc="09de1528"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4833,10 +4869,10 @@
 	</game>
 	<game name="tetris4gg" sourcefile="sms/d_sms.cpp">
 		<comment>Homebrew</comment>
-		<description>Tetris4GG (HB, v0.9)</description>
-		<year>2022</year>
+		<description>Tetris4GG (HB, v1.1)</description>
+		<year>2026</year>
 		<manufacturer>Armix</manufacturer>
-		<rom name="Tetris4GG v0.9 (2022)(Armix).gg" size="65536" crc="e0654d27"/>
+		<rom name="Tetris4GG v1.1 (2026)(Armix).gg" size="131072" crc="38878aea"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4877,6 +4913,15 @@
 		<year>1995</year>
 		<manufacturer>Acclaim Entertainment</manufacturer>
 		<rom name="True Lies (World)(1995)(Acclaim).gg" size="524288" crc="5173b02a"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="uchotosm" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Uchotos Micro (HB)</description>
+		<year>2026</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Uchotos Micro (2026)(Inufuto).gg" size="16384" crc="fcb06b02"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

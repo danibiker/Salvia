@@ -1,7 +1,7 @@
 // Based on MAME driver by Aaron Giles
 
-// coin up doesn't work - forcing freeplay dip for now
-// the hdd image get corrupted over time
+// the hdd is a MAME CHD (a raw dump also works), never written: the game's writes (audits, settings)
+// go to <romset>.diff in the EEPROM path
 // the games are also known for crashing, freezing, and having visual glitchs
 
 #include "tiles_generic.h"
@@ -32,6 +32,7 @@ static UINT32 DrvVRAMBase;
 static UINT32 DrvInputs[3];
 static UINT32 nSoundData;
 static UINT32 nSoundCtrl;
+static UINT8 DrvDcsHeld;	// DCS held in reset while the reset bit is low
 static ide::ide_disk *DrvDisk;
 static UINT8 DrvReset = 0;
 
@@ -241,10 +242,12 @@ static void DrvDoReset()
 {
 	Mips3Reset();
 	DrvDisk->reset();
+	Dcs2kReset();
 	
 	DrvRecalc = 1;
 	nSoundData = 0;
 	nSoundCtrl = 0;
+	DrvDcsHeld = 0;
 }
 
 static void IDESetIRQState(INT32 state)
@@ -297,7 +300,6 @@ static UINT32 kinstRead(UINT32 address)
 			
 			case 0xa0: {
 				tmp = DrvDSW[0] | (DrvDSW[1] << 8);
-				tmp &= ~0x3e00; // coins don't work - force free play option
 				return tmp;
 			}
 		}
@@ -332,7 +334,6 @@ static UINT32 kinst2Read(UINT32 address)
 			
 			case 0x88: {
 				tmp = DrvDSW[0] | (DrvDSW[1] << 8);
-				tmp &= ~0x3e00; // coins don't work - force free play option
 				return tmp;
 			}
 		}
@@ -357,6 +358,7 @@ static void kinstWrite(UINT32 address, UINT64 value)
 			}
 			
 			case 0x88: {
+				DrvDcsHeld = ~value & 1;
 				Dcs2kResetWrite(~value & 1);
 				break;
 			}
@@ -394,6 +396,7 @@ static void kinst2Write(UINT32 address, UINT64 value)
 			}
 			
 			case 0x90: {
+				DrvDcsHeld = ~value & 1;
 				Dcs2kResetWrite(~value & 1);
 				break;
 			}
@@ -470,6 +473,36 @@ static INT32 LoadSoundBanks()
     return 0;
 }
 
+// EPROM accesses get RdRdy wait states: the boot sequence (blue screen) takes about 6 seconds,
+// booting faster makes the attract mode music go missing (as MAME)
+#define ROM_WAIT_CYCLES		128
+
+static UINT8 RomReadByte(UINT32 address)
+{
+	Mips3BurnCycles(ROM_WAIT_CYCLES);
+	return DrvBootROM[address & 0x7ffff];
+}
+
+static UINT16 RomReadHalf(UINT32 address)
+{
+	Mips3BurnCycles(ROM_WAIT_CYCLES);
+	return BURN_ENDIAN_SWAP_INT16(*(UINT16*)(DrvBootROM + (address & 0x7fffe)));
+}
+
+static UINT32 RomReadWord(UINT32 address)
+{
+	Mips3BurnCycles(ROM_WAIT_CYCLES);
+	return BURN_ENDIAN_SWAP_INT32(*(UINT32*)(DrvBootROM + (address & 0x7fffc)));
+}
+
+static UINT64 RomReadDouble(UINT32 address)
+{
+	Mips3BurnCycles(ROM_WAIT_CYCLES);
+	UINT64 v;
+	memcpy(&v, DrvBootROM + (address & 0x7fff8), 8);
+	return BURN_ENDIAN_SWAP_INT64(v);
+}
+
 static INT32 kinstSetup()
 {
     Mips3SetReadByteHandler(1, kinstReadByte);
@@ -511,6 +544,9 @@ static INT32 DrvInit(INT32 version)
 
     if ((AllMem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
 
+	// 50MHz / 8 pixel clock, 406 x 261 total
+	BurnSetRefreshRate(6250000.0 / (406 * 261));
+
     DrvDisk = new ide::ide_disk();
     DrvDisk->set_irq_callback(IDESetIRQState);
 
@@ -527,14 +563,17 @@ static INT32 DrvInit(INT32 version)
 
     Dcs2kInit(DCS_2K, MHz(10));
 
-#ifdef MIPS3_X64_DRC
-    Mips3UseRecompiler(true);
-#endif
     Mips3Init();
     
     DrvVRAMBase = 0x30000;
 
-    Mips3MapMemory(DrvBootROM,  0x1FC00000, 0x1FC7FFFF, MAP_READ);
+    // code is fetched (and cached) from the EPROM directly, data reads go through the wait state handler
+    Mips3MapMemory(DrvBootROM,  0x1FC00000, 0x1FC7FFFF, MAP_ROM);
+    Mips3SetReadByteHandler(2, RomReadByte);
+    Mips3SetReadHalfHandler(2, RomReadHalf);
+    Mips3SetReadWordHandler(2, RomReadWord);
+    Mips3SetReadDoubleHandler(2, RomReadDouble);
+    Mips3MapHandler(2, 0x1FC00000, 0x1FC7FFFF, MAP_READ);
     Mips3MapMemory(DrvRAM0,     0x00000000, 0x0007FFFF, MAP_RAM);
     Mips3MapMemory(DrvRAM1,     0x08000000, 0x087FFFFF, MAP_RAM);
 
@@ -584,7 +623,7 @@ static INT32 DrvDraw()
         UINT16 *dst = (UINT16*) pTransDraw + (y * 320);
 
         for (INT32 x = 0; x < nScreenWidth; x++) {
-            *dst = *src & 0x7FFF;
+            *dst = BURN_ENDIAN_SWAP_INT16(*src) & 0x7FFF;
             dst++;
             src++;
         }
@@ -596,9 +635,7 @@ static INT32 DrvDraw()
 }
 
 // R4600: 100 MHz
-// VIDEO:  60  Hz
-// VBLANK: 20 kHz, 50us (from MAME))
-//                 50us = 20kHz
+// VIDEO: 58.98 Hz, 261 lines, vblank on lines 240-260 (as MAME)
 //
 static INT32 DrvFrame()
 {
@@ -611,10 +648,9 @@ static INT32 DrvFrame()
 	
 	MakeInputs();
 
-    const UINT64 FPS = 60;
-    const UINT64 nMipsCycPerFrame = MHz(100) / FPS;
-    const UINT64 nMipsVblankCyc = nMipsCycPerFrame - kHz(20);
-    const UINT64 nDcsCycPerFrame = MHz(10) / FPS;
+    const UINT64 nMipsCycPerFrame = (UINT64)MHz(100) * 100 / nBurnFPS;
+    const UINT64 nMipsVblankCyc = nMipsCycPerFrame * 240 / 261;
+    const UINT64 nDcsCycPerFrame = (UINT64)MHz(10) * 100 / nBurnFPS;
 
     UINT64 nNextMipsSegment = 0;
     UINT64 nNextDcsSegment = 0;
@@ -632,17 +668,8 @@ static INT32 DrvFrame()
     Mips3SetIRQLine(VBLANK_IRQ, 0);
 
     bool isVblank = false;
-	bool dcsIrq = false;
 
     while ((nMipsTotalCyc < nMipsCycPerFrame) || (nDcsTotalCyc < nDcsCycPerFrame)) {
-		// @ 60hz, dcs needs 2 IRQs/frame
-		if (nDcsTotalCyc == 0) DcsCheckIRQ();
-		
-		if (nDcsTotalCyc >= (nDcsCycPerFrame / 2) && !dcsIrq) {
-			DcsCheckIRQ();
-			dcsIrq = true;
-		}
-
         if ((nNextMipsSegment + nMipsTotalCyc) > nMipsCycPerFrame) {
 			nNextMipsSegment -= (nNextMipsSegment + nMipsTotalCyc) - nMipsCycPerFrame;
 		}
@@ -658,7 +685,6 @@ static INT32 DrvFrame()
             if (nMipsTotalCyc == nMipsVblankCyc) {
                 isVblank = true;
                 Mips3SetIRQLine(VBLANK_IRQ, 1);
-				DcsCheckIRQ();
                 if (pBurnDraw) {
                     DrvDraw();
                 }
@@ -671,7 +697,7 @@ static INT32 DrvFrame()
         }
 		
         if (nNextDcsSegment) {
-            Dcs2kRun(nNextDcsSegment);
+            if (!DrvDcsHeld) Dcs2kRun(nNextDcsSegment);
             nDcsTotalCyc += nNextDcsSegment;
         }
 
@@ -688,11 +714,32 @@ static INT32 DrvFrame()
 
 static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
-    return 0;
+	struct BurnArea ba;
+
+	if (pnMin) *pnMin = 0x029702;
+
+	if (nAction & ACB_VOLATILE) {
+		memset(&ba, 0, sizeof(ba));
+		ba.Data	  = AllRam;
+		ba.nLen	  = RamEnd - AllRam;
+		ba.szName = "All Ram";
+		BurnAcb(&ba);
+
+		Mips3Scan(nAction);
+		Dcs2kScan(nAction, pnMin);
+		DrvDisk->scan(nAction);
+
+		SCAN_VAR(DrvVRAMBase);
+		SCAN_VAR(nSoundData);
+		SCAN_VAR(nSoundCtrl);
+		SCAN_VAR(DrvDcsHeld);
+	}
+
+	return 0;
 }
 
 static struct BurnHDDInfo kinstHDDDesc[] = {
-	{ "kinst.img",		0x7d01200, 0x2b9b6c0d }
+	{ "kinst", "81d833236e994528d1482979261401b198d1ca53" }
 };
 
 STD_HDD_PICK(kinst)
@@ -721,11 +768,11 @@ static struct BurnRomInfo kinstRomDesc[] = {
 STD_ROM_PICK(kinst)
 STD_ROM_FN(kinst)
 
-struct BurnDriverD BurnDrvKinst = {
+struct BurnDriver BurnDrvKinst = {
     "kinst", NULL, NULL, NULL, "1994",
-    "Killer Instinct (ROM ver. 1.5d)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct (ROM ver. 1.5d)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinstRomInfo, kinstRomName, kinstHDDInfo, kinstHDDName, NULL, NULL, kinstInputInfo, kinstDIPInfo,
     kinstDrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -747,11 +794,11 @@ static struct BurnRomInfo kinst14RomDesc[] = {
 STD_ROM_PICK(kinst14)
 STD_ROM_FN(kinst14)
 
-struct BurnDriverD BurnDrvKinst14 = {
+struct BurnDriver BurnDrvKinst14 = {
     "kinst14", "kinst", NULL, NULL, "1994",
-    "Killer Instinct (ROM ver. 1.4)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct (ROM ver. 1.4)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst14RomInfo, kinst14RomName, kinstHDDInfo, kinstHDDName, NULL, NULL, kinstInputInfo, kinstDIPInfo,
     kinstDrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -773,11 +820,11 @@ static struct BurnRomInfo kinst13RomDesc[] = {
 STD_ROM_PICK(kinst13)
 STD_ROM_FN(kinst13)
 
-struct BurnDriverD BurnDrvKinst13 = {
+struct BurnDriver BurnDrvKinst13 = {
     "kinst13", "kinst", NULL, NULL, "1994",
-    "Killer Instinct (ROM ver. 1.3)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct (ROM ver. 1.3)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst13RomInfo, kinst13RomName, kinstHDDInfo, kinstHDDName, NULL, NULL, kinstInputInfo, kinstDIPInfo,
     kinstDrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -799,11 +846,11 @@ static struct BurnRomInfo kinstp47RomDesc[] = {
 STD_ROM_PICK(kinstp47)
 STD_ROM_FN(kinstp47)
 
-struct BurnDriverD BurnDrvKinstp47 = {
+struct BurnDriver BurnDrvKinstp47 = {
     "kinstp47", "kinst", NULL, NULL, "1994",
-    "Killer Instinct (ROM proto ver. 4.7)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct (ROM proto ver. 4.7)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_CLONE | BDF_PROTOTYPE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE | BDF_PROTOTYPE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinstp47RomInfo, kinstp47RomName, kinstHDDInfo, kinstHDDName, NULL, NULL, kinstInputInfo, kinstDIPInfo,
     kinstDrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -825,18 +872,18 @@ static struct BurnRomInfo kinst15aiRomDesc[] = {
 STD_ROM_PICK(kinst15ai)
 STD_ROM_FN(kinst15ai)
 
-struct BurnDriverD BurnDrvKinst15ai = {
+struct BurnDriver BurnDrvKinst15ai = {
     "kinst15ai", "kinst", NULL, NULL, "1994",
-    "Killer Instinct (ROM ver. 1.5 AnyIDE)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct (ROM ver. 1.5 AnyIDE)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE | BDF_HACK, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst15aiRomInfo, kinst15aiRomName, kinstHDDInfo, kinstHDDName, NULL, NULL, kinstInputInfo, kinstDIPInfo,
     kinstDrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
 };
 
 static struct BurnHDDInfo kinst2HDDDesc[] = {
-	{ "kinst2.img",		0x1b478a00, 0x63bc7789 }
+	{ "kinst2", "e7c9291b4648eae0012ea0cc230731ed4987d1d5" }
 };
 
 STD_HDD_PICK(kinst2)
@@ -865,11 +912,11 @@ static struct BurnRomInfo kinst2RomDesc[] = {
 STD_ROM_PICK(kinst2)
 STD_ROM_FN(kinst2)
 
-struct BurnDriverD BurnDrvKinst2 = {
+struct BurnDriver BurnDrvKinst2 = {
     "kinst2", NULL, NULL, NULL, "1995",
-    "Killer Instinct II (ROM ver. 1.4)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct II (ROM ver. 1.4)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst2RomInfo, kinst2RomName, kinst2HDDInfo, kinst2HDDName, NULL, NULL, kinstInputInfo, kinst2DIPInfo,
     kinst2DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -891,11 +938,11 @@ static struct BurnRomInfo kinst213RomDesc[] = {
 STD_ROM_PICK(kinst213)
 STD_ROM_FN(kinst213)
 
-struct BurnDriverD BurnDrvKinst213 = {
+struct BurnDriver BurnDrvKinst213 = {
     "kinst213", "kinst2", NULL, NULL, "1995",
-    "Killer Instinct II (ROM ver. 1.3)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct II (ROM ver. 1.3)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst213RomInfo, kinst213RomName, kinst2HDDInfo, kinst2HDDName, NULL, NULL, kinstInputInfo, kinst2DIPInfo,
     kinst2DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -917,11 +964,11 @@ static struct BurnRomInfo kinst211RomDesc[] = {
 STD_ROM_PICK(kinst211)
 STD_ROM_FN(kinst211)
 
-struct BurnDriverD BurnDrvKinst211 = {
+struct BurnDriver BurnDrvKinst211 = {
     "kinst211", "kinst2", NULL, NULL, "1995",
-    "Killer Instinct II (ROM ver. 1.1)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct II (ROM ver. 1.1)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst211RomInfo, kinst211RomName, kinst2HDDInfo, kinst2HDDName, NULL, NULL, kinstInputInfo, kinst2DIPInfo,
     kinst2DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -943,11 +990,11 @@ static struct BurnRomInfo kinst210RomDesc[] = {
 STD_ROM_PICK(kinst210)
 STD_ROM_FN(kinst210)
 
-struct BurnDriverD BurnDrvKinst210 = {
+struct BurnDriver BurnDrvKinst210 = {
     "kinst210", "kinst2", NULL, NULL, "1995",
-    "Killer Instinct II (ROM ver. 1.0)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct II (ROM ver. 1.0)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst210RomInfo, kinst210RomName, kinst2HDDInfo, kinst2HDDName, NULL, NULL, kinstInputInfo, kinst2DIPInfo,
     kinst2DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3
@@ -969,11 +1016,11 @@ static struct BurnRomInfo kinst214aiRomDesc[] = {
 STD_ROM_PICK(kinst214ai)
 STD_ROM_FN(kinst214ai)
 
-struct BurnDriverD BurnDrvKinst214ai = {
+struct BurnDriver BurnDrvKinst214ai = {
     "kinst214ai", "kinst2", NULL, NULL, "1995",
-    "Killer Instinct II (ROM ver. 1.4 AnyIDE)\0", "Works best in 64-bit build", "Rare/Nintendo", "MIDWAY",
+    "Killer Instinct II (ROM ver. 1.4 AnyIDE)\0", NULL, "Rare/Nintendo", "MIDWAY",
     NULL, NULL, NULL, NULL,
-    BDF_GAME_NOT_WORKING | BDF_CLONE, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
+    BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 2, HARDWARE_MIDWAY_KINST, GBF_VSFIGHT, 0,
     NULL, kinst214aiRomInfo, kinst214aiRomName, kinst2HDDInfo, kinst2HDDName, NULL, NULL, kinstInputInfo, kinst2DIPInfo,
     kinst2DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x8000,
     320, 240, 4, 3

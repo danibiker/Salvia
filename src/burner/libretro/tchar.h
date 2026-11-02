@@ -72,6 +72,11 @@ extern int bRunPause;
 #define stricmp strcasecmp
 #define _ftprintf fprintf
 #define _tcsstr strstr
+#define _sntprintf snprintf
+#define _tcsrchr strrchr
+#define _tcscmp strcmp
+#define _totlower(c) tolower((unsigned char)(c))
+#define _AtoT(a) ANSIToTCHAR(a, NULL, 0)
 
 typedef char TCHAR;
 

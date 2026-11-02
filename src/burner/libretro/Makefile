@@ -9,6 +9,9 @@ FASTMATH = 1
 USE_SPEEDHACKS = 1
 EXTERNAL_ZLIB = 0
 INCLUDE_7Z_SUPPORT = 1
+INCLUDE_CHD_SUPPORT = 1
+# it seems libretro chd implementation won't work with this core
+CHD_LIBRETRO = 0
 # enable x86_64 dynarec used in killer instinct
 USE_X64_DRC = 0
 AUTOGEN_DATS = 0
@@ -235,9 +238,10 @@ else ifneq (,$(filter $(platform), ps3 psl1ght))
        PLATFORM_DEFINES += -D__PSL1GHT__
 	endif
 	ENDIANNESS_DEFINES =  -DWORDS_BIGENDIAN
-	EXTERNAL_ZLIB = 1
+	# RetroArch no longer vendors zlib, build our own copy
+	EXTERNAL_ZLIB = 0
 	STATIC_LINKING = 1
-	INCLUDE_7Z_SUPPORT = 0
+	INCLUDE_7Z_SUPPORT = 1
 
 	CC = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)gcc$(EXE_EXT)
 	CXX = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)g++$(EXE_EXT)
@@ -254,7 +258,8 @@ else ifeq ($(platform), vita)
 	ENDIANNESS_DEFINES := -DLSB_FIRST
 	CFLAGS += -mfloat-abi=hard -fsingle-precision-constant
 	CXXFLAGS += -mfloat-abi=hard -fsingle-precision-constant -fpermissive -fno-rtti
-	EXTERNAL_ZLIB = 1
+	# RetroArch no longer vendors zlib, build our own copy
+	EXTERNAL_ZLIB = 0
 	STATIC_LINKING = 1
 	USE_CYCLONE = 1
 
@@ -268,7 +273,8 @@ else ifeq ($(platform), ctr)
 	ENDIANNESS_DEFINES := -DLSB_FIRST
 	CFLAGS += -march=armv6k -mtune=mpcore -mfloat-abi=hard
 	CXXFLAGS += -march=armv6k -mtune=mpcore -mfloat-abi=hard -fpermissive -fno-rtti
-	EXTERNAL_ZLIB = 1
+	# RetroArch no longer vendors zlib, build our own copy
+	EXTERNAL_ZLIB = 0
 	STATIC_LINKING = 1
 	USE_CYCLONE = 1
 
@@ -307,7 +313,7 @@ else ifeq ($(platform), libnx)
 	CFLAGS += -std=gnu11
 	STATIC_LINKING = 1
 	# 2021-05-18 : disabling 7z again for libnx, it seems the lib version linked to RA is old
-	INCLUDE_7Z_SUPPORT = 0
+	INCLUDE_7Z_SUPPORT = 1
 	ENDIANNESS_DEFINES := -DLSB_FIRST
 
 # Funkey S
@@ -387,7 +393,8 @@ else ifneq (,$(filter $(platform), ngc wii wiiu))
 	AR = powerpc-eabi-ar$(EXE_EXT)
 	ENDIANNESS_DEFINES =  -DWORDS_BIGENDIAN
 	PLATFORM_DEFINES := -ffunction-sections -fdata-sections -D__wiiu__ -D__wut__ -UPPC
-	EXTERNAL_ZLIB = 1
+	# RetroArch no longer vendors zlib, build our own copy
+	EXTERNAL_ZLIB = 0
 	STATIC_LINKING = 1
 
 	# Nintendo WiiU
@@ -407,7 +414,7 @@ else ifneq (,$(filter $(platform), ngc wii wiiu))
 else ifeq ($(platform), emscripten)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
 	ENDIANNESS_DEFINES := -DLSB_FIRST
-	INCLUDE_7Z_SUPPORT = 0
+	INCLUDE_7Z_SUPPORT = 1
 	EXTERNAL_ZLIB = 1
 	STATIC_LINKING = 1
 	FASTMATH = 0

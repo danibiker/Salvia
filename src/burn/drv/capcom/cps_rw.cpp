@@ -1,6 +1,8 @@
 #include "cps.h"
 // CPS - Read/Write
 
+CpsRwGetInpCallback CpsRwGetInpCallbackFunction = NULL;
+
 // Input bits
 #define INP(nnn) UINT8 CpsInp##nnn[8];
 CPSINPSET
@@ -47,7 +49,6 @@ INT32 Ssf2tb = 0;
 INT32 Dinohunt = 0;
 INT32 Port6SoundWrite = 0;
 INT32 CpsBootlegEEPROM = 0;
-INT32 Cps2Turbo = 0;
 INT32 Jurassic99 = 0;
 INT32 Dinoh = 0;
 INT32 Wofhfh = 0;
@@ -503,20 +504,9 @@ void __fastcall CpsWriteByte(UINT32 a,UINT8 d)
 	
 	if (Cps == 2) {
 		// 0x400000 registers
-		if (Cps2Turbo) {
-			if ((a & 0xFFFFF0) == 0x665000)	{
-				CpsFrg[a & 0x0F] = d;
-				return;
-			}
-			if ((a & 0xFFFFF0) == 0xfffff0)	{
-				CpsFrg[a & 0x0F] = d;
-				return;
-			}
-		} else {
-			if ((a & 0xFFFFF0) == 0x400000)	{
-				CpsFrg[a & 0x0F] = d;
-				return;
-			}
+		if ((a & 0xFFFFF0) == 0x400000) {
+			CpsFrg[a & 0x0F] = d;
+			return;
 		}
 		if ((a & 0xFF8000) == 0x660000) {
 			if (a == 0x664001) {
@@ -600,6 +590,7 @@ INT32 CpsRwInit()
 
 INT32 CpsRwExit()
 {
+	CpsRwGetInpCallbackFunction = NULL;
 	InpBlank();
 	CpsRWSoundCommandCallbackFunction = NULL;
 	return 0;
@@ -607,6 +598,8 @@ INT32 CpsRwExit()
 
 INT32 CpsRwGetInp()
 {
+	INT32 nPortPlayers = CpsRwGetInpCallbackFunction ? CpsRwGetInpCallbackFunction() : nMaxPlayers;
+
 	// Compile separate buttons into Inpxxx
 #define INP(nnn) \
   { INT32 i = 0; Inp##nnn = 0; \
@@ -716,20 +709,20 @@ INT32 CpsRwGetInp()
 		}
 	}
 
-	if (nMaxPlayers > 2) {
+	if (nPortPlayers > 2) {
 		if (Cps == 2) {
 			clear_opposite.check(2, Inp011, 0x08, 0x04, 0x02, 0x01, nSocd[2]);
-			if (nMaxPlayers == 4) {
+			if (nPortPlayers == 4) {
 				clear_opposite.check(3, Inp010, 0x08, 0x04, 0x02, 0x01, nSocd[3]);
 			}
 		} else {
 			clear_opposite.check(2, Inp177, 0x08, 0x04, 0x02, 0x01, nSocd[2]);
-			if (nMaxPlayers == 4) {
+			if (nPortPlayers == 4) {
 				clear_opposite.check(3, Inp179, 0x08, 0x04, 0x02, 0x01, nSocd[3]);
 			}
 			if (Cps1Qs) {
 				clear_opposite.check(2, Inpc001, 0x08, 0x04, 0x02, 0x01, nSocd[2]);
-				if (nMaxPlayers == 4) {
+				if (nPortPlayers == 4) {
 					clear_opposite.check(3, Inpc003, 0x08, 0x04, 0x02, 0x01, nSocd[3]);
 				}
 			}

@@ -47,6 +47,7 @@ struct InputInOut {
 
 INT32 InputInit();
 INT32 InputExit();
+INT32 InputSelect(UINT32 nPlugIn);
 INT32 InputSetCooperativeLevel(const bool bExclusive, const bool bForeGround);
 INT32 InputMake(bool bCopy);
 INT32 InputFind(const INT32 nFlags);
@@ -68,8 +69,11 @@ struct CDEmuDo {
 	INT32			   (*CDEmuStop)();
 	INT32			   (*CDEmuPlay)(UINT8 M, UINT8 S, UINT8 F);
 	INT32			   (*CDEmuLoadSector)(INT32 LBA, char* pBuffer);
+	INT32              (*CDEmuReadDataSector)(INT32 nLba, UINT8* pBuffer);
 	UINT8*             (*CDEmuReadTOC)(INT32 track);
 	UINT8*             (*CDEmuReadQChannel)();
+	INT32			   (*CDEmuSetVolume)(double dVolume);
+	INT32			   (*CDEmuGetCurrentLBA)();
 	INT32			   (*CDEmuGetSoundBuffer)(INT16* buffer, INT32 samples);
 	INT32              (*CDEmuScan)(INT32 nAction, INT32 *pnMin);
 	// Get plugin info
@@ -237,6 +241,7 @@ extern INT64 nVidBlitterOpt[];
 extern INT32 bVidFullStretch;
 extern INT32 bVidTripleBuffer;
 extern INT32 bVidVSync;
+extern INT32 bVidVRR;
 extern double dVidCubicB;
 extern double dVidCubicC;
 extern INT32 bVidDX9Bilinear;

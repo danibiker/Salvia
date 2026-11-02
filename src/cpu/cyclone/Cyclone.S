@@ -7,31 +7,48 @@
 ;@ This code is licensed under the GNU General Public License version 2.0 and the MAME License.
 ;@ You can choose the license that has the most advantages for you.
 
-;@ SVN repository can be found at http://code.google.com/p/cyclone68000/
+;@ git repository can be found at https://github.com/notaz/cyclone68000/
 
+  .syntax unified
   .arm
 
   .text
-  .align 4
+  .balign 4
 
-  .global CycloneInit
-  .type CycloneInit, %function
-  .global CycloneReset
-  .type CycloneReset, %function
+  .global CycloneInitJT
+  .type CycloneInitJT,%function
+  .global CycloneResetJT
+  .type CycloneResetJT,%function
   .global CycloneRun
-  .type CycloneRun, %function
+  .type CycloneRun,%function
   .global CycloneSetSr
-  .type CycloneSetSr, %function
+  .type CycloneSetSr,%function
   .global CycloneGetSr
-  .type CycloneGetSr, %function
+  .type CycloneGetSr,%function
   .global CycloneFlushIrq
-  .type CycloneFlushIrq, %function
+  .type CycloneFlushIrq,%function
   .global CyclonePack
-  .type CyclonePack, %function
+  .type CyclonePack,%function
   .global CycloneUnpack
-  .type CycloneUnpack, %function
+  .type CycloneUnpack,%function
   .global CycloneVer
-  .type CycloneVer, %function
+  .type CycloneVer,%object
+  .global CycloneJumpTab
+  .type CycloneJumpTab,%object
+  .global CycloneSetRealTAS_JT
+  .type CycloneSetRealTAS_JT,%function
+  .global CycloneDoInterrupt
+  .type CycloneDoInterrupt,%function
+  .global CycloneDoTrace
+  .type CycloneDoTrace,%function
+  .global Op____
+  .type Op____,%function
+  .global Op6002
+  .type Op6002,%function
+  .global Op6602
+  .type Op6602,%function
+  .global Op6702
+  .type Op6702,%function
 
 CycloneVer: .long 0x0099
 
@@ -41,14 +58,13 @@ CycloneRun:
   mov r7,r0          ;@ r7 = Pointer to Cpu Context
                      ;@ r0-3 = Temporary registers
   ldrb r10,[r7,#0x46]    ;@ r10 = Flags (NZCV)
-  ldr r6,=CycloneJumpTab ;@ r6 = Opcode Jump table
+  ldr r6,[r7,#0x54]  ;@ r6 = Opcode Jump table (from reset)
   ldr r5,[r7,#0x5c]  ;@ r5 = Cycles
   ldr r4,[r7,#0x40]  ;@ r4 = Current PC + Memory Base
                      ;@ r8 = Current Opcode
   ldr r1,[r7,#0x44]  ;@ Get SR high T_S__III and irq level
   mov r10,r10,lsl #28;@ r10 = Flags 0xf0000000, cpsr format
                      ;@ r11 = Source value / Memory Base
-  str r6,[r7,#0x54]  ;@ make a copy to avoid literal pools
 
   mov r2,#0
   str r2,[r7,#0x98]  ;@ clear custom CycloneEnd
@@ -92,23 +108,25 @@ CycloneEndNoBack:
   .ltorg
 
 
-CycloneInit:
+CycloneInitJT:
 ;@ decompress jump table
-  ldr r12,=CycloneJumpTab
+  mov r12,r0 ;@ jump table
   add r0,r12,#0xe000*4 ;@ ctrl code pointer
   ldr r1,[r0,#-4]
   tst r1,r1
-  movne pc,lr ;@ already uncompressed
+  bxne lr ;@ already uncompressed
+  stmfd sp!,{r7,lr}
+  mov r7,r12 ;@ jump table
   add r3,r12,#0xa000*4 ;@ handler table pointer, r12=dest
 unc_loop:
   ldrh r1,[r0],#2
   and r2,r1,#0xf
-  bic r1,r1,#0xf
-  ldr r1,[r3,r1,lsr #2] ;@ r1=handler
+  mov r1,r1,lsr #4
+  ldr r1,[r3,r1,lsl #2] ;@ r1=handler
   cmp r2,#0xf
   addeq r2,r2,#1 ;@ 0xf is really 0x10
   tst r2,r2
-  ldreqh r2,[r0],#2 ;@ counter is in next word
+  ldrheq r2,[r0],#2 ;@ counter is in next word
   tst r2,r2
   beq unc_finish ;@ done decompressing
   tst r1,r1
@@ -120,9 +138,8 @@ unc_loop_in:
   bgt unc_loop_in
   b unc_loop
 unc_finish:
-  ldr r12,=CycloneJumpTab
   ;@ set a-line and f-line handlers
-  add r0,r12,#0xa000*4
+  add r0,r7,#0xa000*4
   ldr r1,[r0,#4] ;@ a-line handler
   ldr r3,[r0,#8] ;@ f-line handler
   mov r2,#0x1000
@@ -130,18 +147,19 @@ unc_fill3:
   subs r2,r2,#1
   str r1,[r0],#4
   bgt unc_fill3
-  add r0,r12,#0xf000*4
+  add r0,r7,#0xf000*4
   mov r2,#0x1000
 unc_fill4:
   subs r2,r2,#1
   str r3,[r0],#4
   bgt unc_fill4
-  bx lr
+  ldmfd sp!,{r7,pc}
   .ltorg
 
-CycloneReset:
+CycloneResetJT:
   stmfd sp!,{r7,lr}
   mov r7,r0
+  str r1,[r7,#0x54] ;@ save CycloneJumpTab avoid literal pools
   mov r0,#0
   str r0,[r7,#0x58] ;@ state_flags
   str r0,[r7,#0x48] ;@ OSP
@@ -160,6 +178,82 @@ CycloneReset:
   str r0,[r7,#0x40] ;@ PC + base
   ldmfd sp!,{r7,pc}
 
+CycloneSetRealTAS_JT:
+  tst r0,r0
+  add r12,r1,#0x4a00*4
+  add r12,r12,#0x00d0*4
+  adr r2,CycloneOT_TAS_
+  addeq r2,r2,#9*4
+  ldr r0,[r2,#0*4] ;@ Op4ad0
+  add r0,r0,r2
+  mov r1,#8
+setrtas_loop0: ;@ 4ad0-4ad7
+  subs r1,r1,#1
+  str r0,[r12],#4
+  bne setrtas_loop0
+  ldr r0,[r2,#1*4] ;@ Op4ad8
+  add r0,r0,r2
+  mov r1,#7
+setrtas_loop1: ;@ 4ad8-4ade
+  subs r1,r1,#1
+  str r0,[r12],#4
+  bne setrtas_loop1
+  ldr r0,[r2,#2*4] ;@ Op4adf
+  add r0,r0,r2
+  str r0,[r12],#4
+  ldr r0,[r2,#3*4] ;@ Op4ae0
+  add r0,r0,r2
+  mov r1,#7
+setrtas_loop2: ;@ 4ae0-4ae6
+  subs r1,r1,#1
+  str r0,[r12],#4
+  bne setrtas_loop2
+  ldr r0,[r2,#4*4] ;@ Op4ae7
+  add r0,r0,r2
+  str r0,[r12],#4
+  ldr r0,[r2,#5*4] ;@ Op4ae8
+  add r0,r0,r2
+  mov r1,#8
+setrtas_loop3: ;@ 4ae8-4aef
+  subs r1,r1,#1
+  str r0,[r12],#4
+  bne setrtas_loop3
+  ldr r0,[r2,#6*4] ;@ Op4af0
+  add r0,r0,r2
+  mov r1,#8
+setrtas_loop4: ;@ 4af0-4af7
+  subs r1,r1,#1
+  str r0,[r12],#4
+  bne setrtas_loop4
+  ldr r0,[r2,#7*4] ;@ Op4af8
+  add r0,r0,r2
+  str r0,[r12],#4
+  ldr r0,[r2,#8*4] ;@ Op4af9
+  add r0,r0,r2
+  str r0,[r12],#4
+  bx lr
+
+CycloneOT_TAS_:
+  .long Op4ad0_-CycloneOT_TAS_
+  .long Op4ad8_-CycloneOT_TAS_
+  .long Op4adf_-CycloneOT_TAS_
+  .long Op4ae0_-CycloneOT_TAS_
+  .long Op4ae7_-CycloneOT_TAS_
+  .long Op4ae8_-CycloneOT_TAS_
+  .long Op4af0_-CycloneOT_TAS_
+  .long Op4af8_-CycloneOT_TAS_
+  .long Op4af9_-CycloneOT_TAS_
+CycloneOT_TAS:
+  .long Op4ad0-CycloneOT_TAS
+  .long Op4ad8-CycloneOT_TAS
+  .long Op4adf-CycloneOT_TAS
+  .long Op4ae0-CycloneOT_TAS
+  .long Op4ae7-CycloneOT_TAS
+  .long Op4ae8-CycloneOT_TAS
+  .long Op4af0-CycloneOT_TAS
+  .long Op4af8-CycloneOT_TAS
+  .long Op4af9-CycloneOT_TAS
+
 CycloneSetSr:
   mov r2,r1,lsr #8
   and r2,r2,#0xa7 ;@ only defined bits
@@ -167,20 +261,18 @@ CycloneSetSr:
   mov r2,r1,lsl #25
   str r2,[r0,#0x4c] ;@ the X flag
   bic r2,r1,#0xf3
-  tst r1,#1
-  orrne r2,r2,#2
-  tst r1,#2
-  orrne r2,r2,#1
+  movs r1,r1,lsl #31
+  orrmi r2,r2,#2
+  orrcs r2,r2,#1
   strb r2,[r0,#0x46] ;@ flags
   bx lr
 
 CycloneGetSr:
   ldrb r1,[r0,#0x46] ;@ flags
   bic r2,r1,#0xf3
-  tst r1,#1
-  orrne r2,r2,#2
-  tst r1,#2
-  orrne r2,r2,#1
+  movs r1,r1,lsl #31
+  orrmi r2,r2,#2
+  orrcs r2,r2,#1
   ldr r1,[r0,#0x4c] ;@ the X flag
   tst r1,#0x20000000
   orrne r2,r2,#0x10
@@ -264,7 +356,7 @@ CycloneFlushIrq:
   movle r0,#0
   bxle lr ;@ no ints
 
-  stmdb sp!,{r4,r5,r7,r8,r10,r11,lr}
+  stmdb sp!,{r4-r8,r10,r11,lr}
   mov r7,r0
   mov r0,r2
   ldrb r10,[r7,#0x46]  ;@ r10 = Flags (NZCV)
@@ -279,12 +371,9 @@ CycloneFlushIrqEnd:
   rsb r0,r5,#0
   str r4,[r7,#0x40]   ;@ Save Current PC + Memory Base
   strb r10,[r7,#0x46] ;@ Save Flags (NZCV)
-  ldmia sp!,{r4,r5,r7,r8,r10,r11,lr}
+  ldmia sp!,{r4-r8,r10,r11,lr}
   bx lr
 
-
-CycloneSetRealTAS:
-  bx lr
 
 ;@ DoInterrupt - r0=IRQ level
 CycloneDoInterruptGoBack:
@@ -311,6 +400,7 @@ CycloneDoInterrupt:
 ;@ Push old PC onto stack
   sub r0,r11,#4 ;@ Predecremented A7
   sub r1,r4,r1 ;@ r1 = Old PC
+  str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 ;@ Push old SR:
@@ -330,12 +420,15 @@ CycloneDoInterrupt:
   mov r11,r8,lsr #29
   mov r0,r11
 ;@ call IrqCallback if it is defined
+  mov r1,r10,lsr #28
+  strb r1,[r7,#0x46] ;@ Save Flags (NZCV)
+  str r5,[r7,#0x5c] ;@ Save Cycles
   ldr r3,[r7,#0x8c] ;@ IrqCallback
-  add lr,pc,#4*3
   tst r3,r3
-  streqb r3,[r7,#0x47] ;@ just clear IRQ if there is no callback
+  strbeq r3,[r7,#0x47] ;@ just clear IRQ if there is no callback
   mvneq r0,#0 ;@ and simulate -1 return
-  bxne r3
+  blxne r3
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
 ;@ get IRQ vector address:
   cmn r0,#1 ;@ returned -1?
   addeq r0,r11,#0x18 ;@ use autovector then
@@ -350,8 +443,8 @@ CycloneDoInterrupt:
   tst r0,r0 ;@ uninitialized int vector?
   moveq r0,#0x3c
   bleq m68k_read32 ;@ Call read32(r0) handler
-  add lr,pc,#4
-  add r0,r0,r11 ;@ r0 = Memory Base + New PC
+;@ Check Memory Base+pc
+  add r0,r11,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
 
@@ -387,6 +480,7 @@ Exception:
   sub r0,r0,#4 ;@ Predecremented A7
   str r0,[r7,#0x3c] ;@ Save A7
   sub r1,r4,r1 ;@ r1 = Old PC
+  str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 ;@ Push old SR:
@@ -409,9 +503,9 @@ Exception:
   mov r0,r0,lsl #2
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  ldr r3,[r7,#0x60] ;@ Get Memory base
-  add lr,pc,#4
-  add r0,r0,r3 ;@ r0 = Memory Base + New PC
+  ldr r2,[r7,#0x60] ;@ Get Memory base
+;@ Check Memory Base+pc
+  add r0,r2,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
 
@@ -478,6 +572,7 @@ ExceptionAddressError:
   sub r0,r0,#4 ;@ Predecremented A7
   sub r1,r4,r1 ;@ r1 = Old PC
   str r0,[r7,#0x3c] ;@ Save A7
+  str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 ;@ Push old SR:
@@ -520,9 +615,9 @@ ExceptionAddressError:
   mov r0,#0x0c
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  ldr r3,[r7,#0x60] ;@ Get Memory base
-  add lr,pc,#4
-  add r0,r0,r3 ;@ r0 = Memory Base + New PC
+  ldr r2,[r7,#0x60] ;@ Get Memory base
+;@ Check Memory Base+pc
+  add r0,r2,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
 
@@ -567,10 +662,9 @@ TraceEnd:
   tst r2,#2
   beq TraceDisabled
 ;@ trace exception
-  ldr r1,[r7,#0x58]
+  orr r2,r2,#4 ;@ set activity bit: 'not processing instruction'
+  str r2,[r7,#0x58]
   mov r0,#9
-  orr r1,r1,#4 ;@ set activity bit: 'not processing instruction'
-  str r1,[r7,#0x58]
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#34 ;@ Subtract cycles
@@ -603,7 +697,7 @@ Op__al: ;@ Unrecognised a-line opcode
   bl Exception
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#4 ;@ Subtract cycles
+  subs r5,r5,#34 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -613,7 +707,7 @@ Op__fl: ;@ Unrecognised f-line opcode
   bl Exception
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#4 ;@ Subtract cycles
+  subs r5,r5,#34 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -622,10 +716,9 @@ Op6702:
   tst r10,#0x40000000 ;@ eq: Z
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -643,10 +736,9 @@ Op6602:
   tst r10,#0x40000000 ;@ ne: !Z
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -656,22 +748,26 @@ Op6602:
 ;@ ---------- [51c8] dbra d0, 3335 uses Op51c8 ----------
 Op51c8:
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -726,12 +822,12 @@ Opd040:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -773,16 +869,14 @@ Op0240:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  ldrsh r0,[r7,r11]
 
-  mov r10,r10,asl #16
 ;@ Do arithmetic:
-  ands r1,r10,r0,asl #16
+  ands r1,r10,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: r1 into register[r11]:
-  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -838,7 +932,7 @@ Opb0b8:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -849,10 +943,9 @@ Opb0b8:
 
 ;@ ---------- [6002] bra 4 uses Op6002 ----------
 Op6002:
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -936,7 +1029,7 @@ Op0c40:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -965,7 +1058,7 @@ Op0c79:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -986,11 +1079,12 @@ Op4e75:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  ldr r1,[r7,#0x60] ;@ Get Memory base
-  add r0,r0,r1 ;@ Memory Base+PC
-
+  ldr r2,[r7,#0x60] ;@ Get Memory base
+;@ Check Memory Base+pc
+  add r0,r2,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -1035,14 +1129,9 @@ Op0839:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -1053,7 +1142,11 @@ Op0839:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -1064,12 +1157,14 @@ Op0839:
 
 ;@ ---------- [7000] moveq #$0, d0 uses Op7000 ----------
 Op7000:
-  movs r0,r8,asl #24
-  and r1,r8,#0x0e00
-  mov r0,r0,asr #24 ;@ Sign extended Quick value
-  and r10,r0,#0x80000000 ;@ r10=N_flag
+  mov r1,r8,asl #24
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0e00
+  movs r1,r1,asr #24 ;@ Sign extended Quick value
+  and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  str r0,[r7,r1,lsr #7] ;@ Store into Dn
+;@ EaWrite: r1 into register[r0]:
+  str r1,[r7,r0,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
@@ -1100,14 +1195,9 @@ Op0838:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
@@ -1116,7 +1206,11 @@ Op0838:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -1194,8 +1288,10 @@ Op6700:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -1236,7 +1332,7 @@ Opb038:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -1296,8 +1392,7 @@ Op4840:
 
 ;@ ---------- [6102] bsr 4 uses Op6102 ----------
 Op6102:
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
 ;@ Bsr - remember old PC
   ldr r12,[r7,#0x60] ;@ Get Memory base
@@ -1311,7 +1406,7 @@ Op6102:
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -1338,8 +1433,10 @@ Op6100:
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -1363,7 +1460,7 @@ Op5e40:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -1566,23 +1663,22 @@ Op3018:
 Opc040:
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
+  mov r0,r0,lsl #2
 ;@ EaRead : Read register[r0] into r0:
-  ldr r0,[r7,r0,lsl #2]
+  ldrsh r0,[r7,r0]
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -1609,17 +1705,13 @@ Op3180:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -1654,17 +1746,13 @@ Op1198:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -1683,10 +1771,9 @@ Op6502:
   tst r10,#0x20000000 ;@ cs: C
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -1703,8 +1790,10 @@ Op6500:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -1720,10 +1809,9 @@ Op6402:
   tst r10,#0x20000000 ;@ cc: !C
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -1735,10 +1823,9 @@ Op6a02:
   tst r10,r10 ;@ pl: !N
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -1753,13 +1840,11 @@ Op41f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r1:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -1807,14 +1892,9 @@ Op0828:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -1826,7 +1906,11 @@ Op0828:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -1850,7 +1934,7 @@ Op0640:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -2179,13 +2263,11 @@ Op0030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -2309,16 +2391,14 @@ Op0040:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  ldrsh r0,[r7,r11]
 
-  mov r10,r10,asl #16
 ;@ Do arithmetic:
-  orrs r1,r10,r0,asl #16
+  orrs r1,r10,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: r1 into register[r11]:
-  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -2482,13 +2562,11 @@ Op0070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -2798,13 +2876,11 @@ Op00b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -2899,21 +2975,19 @@ Op00b9:
 
 ;@ ---------- [0100] btst d0, d0 uses Op0100 ----------
 Op0100:
-;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r11:
-  ldr r11,[r7,r11,lsr #7]
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
+  ldr r2,[r7,r2,lsr #7]
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
 ;@ EaRead : Read register[r0] into r0:
   ldr r0,[r7,r0,lsl #2]
 
-  and r11,r11,#31 ;@ reg - do mod 32
-
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -2935,21 +3009,20 @@ Op0108:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r6,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r11,r0,asl #24
+  mov r11,r0
 
   add r0,r6,#2
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r0:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r1,r0,asl #24
+  and r0,r0,#0xff ;@ zero extend
 
-  orr r1,r11,r1,lsr #8 ;@ second byte
-;@ EaCalc : Get register index into r0:
-  and r0,r8,#0x0e00
-  mov r0,r0,lsr #7
-;@ EaWrite: r1 into register[r0]:
-  mov r1,r1,lsr #16
-  strh r1,[r7,r0]
+  orr r0,r0,r11,lsl #8
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+  mov r8,r8,lsr #7
+;@ EaWrite: r0 into register[r8]:
+  strh r0,[r7,r8]
 
   ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -2977,11 +3050,11 @@ Op0110:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3010,11 +3083,11 @@ Op0118:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3042,11 +3115,11 @@ Op011f:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3076,11 +3149,11 @@ Op0120:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3108,11 +3181,11 @@ Op0127:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3141,11 +3214,11 @@ Op0128:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3167,13 +3240,11 @@ Op0130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -3183,11 +3254,11 @@ Op0130:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3213,11 +3284,11 @@ Op0138:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3245,11 +3316,11 @@ Op0139:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3278,11 +3349,11 @@ Op013a:
   bic r0,r0,#0xff000000
   bl m68k_fetch8 ;@ Call fetch8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3306,24 +3377,22 @@ Op013b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch8 ;@ Call fetch8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3343,44 +3412,46 @@ Op013c:
   ldrsb r0,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r0) into r0:
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#8 ;@ Subtract cycles
+  subs r5,r5,#10 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 ;@ ---------- [0140] bchg d0, d0 uses Op0140 ----------
 Op0140:
-;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r11:
-  ldr r11,[r7,r11,lsr #7]
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
+  ldr r2,[r7,r2,lsr #7]
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  and r11,r11,#31 ;@ reg - do mod 32
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#8 ;@ Subtract cycles
+  subs r5,r5,#6 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -3401,30 +3472,30 @@ Op0148:
   mov r11,r0,asl #24
 
   add r0,r6,#2
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r0:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r1,r0,asl #24
+  and r0,r0,#0xff ;@ zero extend
 
-  orr r11,r11,r1,lsr #8 ;@ second byte
+  orr r11,r11,r0,lsl #16
   add r0,r6,#4
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r0:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r1,r0,asl #24
+  and r0,r0,#0xff ;@ zero extend
 
-  orr r11,r11,r1,lsr #16 ;@ third byte
+  orr r11,r11,r0,lsl #8
   add r0,r6,#6
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r0:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r1,r0,asl #24
+  and r0,r0,#0xff ;@ zero extend
 
-  orr r1,r11,r1,lsr #24 ;@ fourth byte
-;@ EaCalc : Get register index into r0:
-  and r0,r8,#0x0e00
-;@ EaWrite: r1 into register[r0]:
-  str r1,[r7,r0,lsr #7]
+  orr r11,r11,r0
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaWrite: r11 into register[r8]:
+  str r11,[r7,r8,lsr #7]
 
   ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -3452,17 +3523,17 @@ Op0150:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3492,17 +3563,17 @@ Op0158:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3531,17 +3602,17 @@ Op015f:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3572,17 +3643,17 @@ Op0160:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3611,17 +3682,17 @@ Op0167:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3651,17 +3722,17 @@ Op0168:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3684,13 +3755,11 @@ Op0170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -3700,17 +3769,17 @@ Op0170:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3737,17 +3806,17 @@ Op0178:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3776,17 +3845,17 @@ Op0179:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r1,lsl r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3798,30 +3867,32 @@ Op0179:
 
 ;@ ---------- [0180] bclr d0, d0 uses Op0180 ----------
 Op0180:
-;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r11:
-  ldr r11,[r7,r11,lsr #7]
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
+  ldr r2,[r7,r2,lsr #7]
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  and r11,r11,#31 ;@ reg - do mod 32
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#10 ;@ Subtract cycles
+  subs r5,r5,#8 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -3841,17 +3912,15 @@ Op0188:
   ldr r2,[r7,r2,lsl #2]
   add r8,r0,r2 ;@ Add on offset
   mov r0,r8
-  mov r1,r11,lsr #8 ;@ first or third byte
+  uxtb r1,r11,ror #8 ;@ first or third byte
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
   add r0,r8,#2
-  and r1,r11,#0xff
-;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
+;@ EaWrite: Write r11 into '($3333,a0)' (address in r0):
+  and r1,r11,#0xff ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3880,17 +3949,17 @@ Op0190:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3920,17 +3989,17 @@ Op0198:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -3959,17 +4028,17 @@ Op019f:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4000,17 +4069,17 @@ Op01a0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4039,17 +4108,17 @@ Op01a7:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4079,17 +4148,17 @@ Op01a8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4112,13 +4181,11 @@ Op01b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -4128,17 +4195,17 @@ Op01b0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4165,17 +4232,17 @@ Op01b8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4204,17 +4271,17 @@ Op01b9:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r1,lsl r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4226,30 +4293,32 @@ Op01b9:
 
 ;@ ---------- [01c0] bset d0, d0 uses Op01c0 ----------
 Op01c0:
-;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r11:
-  ldr r11,[r7,r11,lsr #7]
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
+  ldr r2,[r7,r2,lsr #7]
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  and r11,r11,#31 ;@ reg - do mod 32
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#8 ;@ Subtract cycles
+  subs r5,r5,#6 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -4268,31 +4337,27 @@ Op01c8:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r8,r0,r2 ;@ Add on offset
-  mov r1,r11,lsr #24 ;@ first byte
-;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+;@ EaWrite: Write r11 into '($3333,a0)' (address in r8):
+  mov r1,r11,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
   add r0,r8,#2
-  mov r1,r11,lsr #16 ;@ second byte
+  uxtb r1,r11,ror #16 ;@ second byte
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
   add r0,r8,#4
-  mov r1,r11,lsr #8 ;@ first or third byte
+  uxtb r1,r11,ror #8 ;@ first or third byte
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
   add r0,r8,#6
-  and r1,r11,#0xff
-;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
+;@ EaWrite: Write r11 into '($3333,a0)' (address in r0):
+  and r1,r11,#0xff ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4321,17 +4386,17 @@ Op01d0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4361,17 +4426,17 @@ Op01d8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4400,17 +4465,17 @@ Op01df:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4441,17 +4506,17 @@ Op01e0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4480,17 +4545,17 @@ Op01e7:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4520,17 +4585,17 @@ Op01e8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4553,13 +4618,11 @@ Op01f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -4569,17 +4632,17 @@ Op01f0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4606,17 +4669,17 @@ Op01f8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4645,17 +4708,17 @@ Op01f9:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  and r11,r11,#7  ;@ mem - do mod 8
+  and r2,r11,#7  ;@ mem - do mod 8
 
   mov r1,#1
-  tst r0,r1,lsl r11 ;@ Do arithmetic
-  bicne r10,r10,#0x40000000
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r1,lsl r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -4917,13 +4980,11 @@ Op0230:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -5193,13 +5254,11 @@ Op0270:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -5360,7 +5419,7 @@ Op0280:
   str r1,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#14 ;@ Subtract cycles
+  subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -5522,13 +5581,11 @@ Op02b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -5635,7 +5692,7 @@ Op0400:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5669,7 +5726,7 @@ Op0410:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5706,7 +5763,7 @@ Op0418:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5742,7 +5799,7 @@ Op041f:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5780,7 +5837,7 @@ Op0420:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5816,7 +5873,7 @@ Op0427:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5853,7 +5910,7 @@ Op0428:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5880,13 +5937,11 @@ Op0430:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -5899,7 +5954,7 @@ Op0430:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5933,7 +5988,7 @@ Op0438:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5969,7 +6024,7 @@ Op0439:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -5999,7 +6054,7 @@ Op0440:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6033,7 +6088,7 @@ Op0450:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6070,7 +6125,7 @@ Op0458:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6108,7 +6163,7 @@ Op0460:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6145,7 +6200,7 @@ Op0468:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6172,13 +6227,11 @@ Op0470:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -6191,7 +6244,7 @@ Op0470:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6225,7 +6278,7 @@ Op0478:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6261,7 +6314,7 @@ Op0479:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6291,7 +6344,7 @@ Op0480:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6325,7 +6378,7 @@ Op0490:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6362,7 +6415,7 @@ Op0498:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6400,7 +6453,7 @@ Op04a0:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6437,7 +6490,7 @@ Op04a8:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6465,13 +6518,11 @@ Op04b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -6483,7 +6534,7 @@ Op04b0:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6517,7 +6568,7 @@ Op04b8:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6553,7 +6604,7 @@ Op04b9:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -6581,7 +6632,7 @@ Op0600:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -6614,7 +6665,7 @@ Op0610:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -6650,7 +6701,7 @@ Op0618:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -6685,7 +6736,7 @@ Op061f:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
@@ -6722,7 +6773,7 @@ Op0620:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -6757,7 +6808,7 @@ Op0627:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
@@ -6793,7 +6844,7 @@ Op0628:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -6819,13 +6870,11 @@ Op0630:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -6838,7 +6887,7 @@ Op0630:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -6871,7 +6920,7 @@ Op0638:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -6906,7 +6955,7 @@ Op0639:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -6941,7 +6990,7 @@ Op0650:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -6977,7 +7026,7 @@ Op0658:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -7014,7 +7063,7 @@ Op0660:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -7050,7 +7099,7 @@ Op0668:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -7076,13 +7125,11 @@ Op0670:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -7095,7 +7142,7 @@ Op0670:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -7128,7 +7175,7 @@ Op0678:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -7163,7 +7210,7 @@ Op0679:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   adds r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -7192,7 +7239,7 @@ Op0680:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -7225,7 +7272,7 @@ Op0690:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -7261,7 +7308,7 @@ Op0698:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -7298,7 +7345,7 @@ Op06a0:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -7334,7 +7381,7 @@ Op06a8:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -7361,13 +7408,11 @@ Op06b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -7379,7 +7424,7 @@ Op06b0:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -7412,7 +7457,7 @@ Op06b8:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -7447,7 +7492,7 @@ Op06b9:
 
 ;@ Do arithmetic:
   adds r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -7463,21 +7508,18 @@ Op06b9:
 ;@ ---------- [0800] btst #$33, d0 uses Op0800 ----------
 Op0800:
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#0x1F ;@ reg - do mod 32
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r2:
+  ldrsb r2,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r2) into r2:
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
 ;@ EaRead : Read register[r0] into r0:
   ldr r0,[r7,r0,lsl #2]
 
-  tst r0,r11 ;@ Do arithmetic
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -7491,14 +7533,9 @@ Op0810:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
@@ -7509,7 +7546,11 @@ Op0810:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7524,14 +7565,9 @@ Op0818:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -7543,7 +7579,11 @@ Op0818:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7558,14 +7598,9 @@ Op081f:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
@@ -7576,7 +7611,11 @@ Op081f:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7591,14 +7630,9 @@ Op0820:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -7611,7 +7645,11 @@ Op0820:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7626,14 +7664,9 @@ Op0827:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
@@ -7644,7 +7677,11 @@ Op0827:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7659,25 +7696,18 @@ Op0830:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -7687,7 +7717,11 @@ Op0830:
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7702,14 +7736,9 @@ Op083a:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($3333,pc)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
@@ -7721,7 +7750,11 @@ Op083a:
   bic r0,r0,#0xff000000
   bl m68k_fetch8 ;@ Call fetch8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7736,34 +7769,31 @@ Op083b:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch8 ;@ Call fetch8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -7775,30 +7805,31 @@ Op083b:
 ;@ ---------- [0840] bchg #$33, d0 uses Op0840 ----------
 Op0840:
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#0x1F ;@ reg - do mod 32
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r2:
+  ldrsb r2,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r2) into r2:
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  tst r0,r11 ;@ Do arithmetic
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#12 ;@ Subtract cycles
+  subs r5,r5,#10 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -7808,14 +7839,9 @@ Op0850:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)' into r8:
   and r2,r8,#0x000f
@@ -7826,13 +7852,17 @@ Op0850:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -7848,14 +7878,9 @@ Op0858:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)+' into r8:
   and r2,r8,#0x000f
@@ -7867,13 +7892,17 @@ Op0858:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -7889,14 +7918,9 @@ Op085f:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a7)+' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -7907,13 +7931,17 @@ Op085f:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -7929,14 +7957,9 @@ Op0860:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x000f
@@ -7949,13 +7972,17 @@ Op0860:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -7971,14 +7998,9 @@ Op0867:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -7989,13 +8011,17 @@ Op0867:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8011,14 +8037,9 @@ Op0868:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($3333,a0)' into r8:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -8030,13 +8051,17 @@ Op0868:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8052,25 +8077,18 @@ Op0870:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -8080,13 +8098,17 @@ Op0870:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8102,14 +8124,9 @@ Op0878:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$3333.w' into r8:
   ldrsh r8,[r4],#2 ;@ Fetch Absolute Short address
@@ -8118,13 +8135,17 @@ Op0878:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8140,14 +8161,9 @@ Op0879:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$33333333.l' into r8:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -8158,13 +8174,17 @@ Op0879:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  eor r1,r0,r11 ;@ Toggle bit
+  eor r1,r0,r1,lsl r2 ;@ Toggle bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8177,30 +8197,31 @@ Op0879:
 ;@ ---------- [0880] bclr #$33, d0 uses Op0880 ----------
 Op0880:
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#0x1F ;@ reg - do mod 32
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r2:
+  ldrsb r2,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r2) into r2:
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  tst r0,r11 ;@ Do arithmetic
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#14 ;@ Subtract cycles
+  subs r5,r5,#12 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -8210,14 +8231,9 @@ Op0890:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)' into r8:
   and r2,r8,#0x000f
@@ -8228,13 +8244,17 @@ Op0890:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8250,14 +8270,9 @@ Op0898:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)+' into r8:
   and r2,r8,#0x000f
@@ -8269,13 +8284,17 @@ Op0898:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8291,14 +8310,9 @@ Op089f:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a7)+' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -8309,13 +8323,17 @@ Op089f:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8331,14 +8349,9 @@ Op08a0:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x000f
@@ -8351,13 +8364,17 @@ Op08a0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8373,14 +8390,9 @@ Op08a7:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -8391,13 +8403,17 @@ Op08a7:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8413,14 +8429,9 @@ Op08a8:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($3333,a0)' into r8:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -8432,13 +8443,17 @@ Op08a8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8454,25 +8469,18 @@ Op08b0:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -8482,13 +8490,17 @@ Op08b0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8504,14 +8516,9 @@ Op08b8:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$3333.w' into r8:
   ldrsh r8,[r4],#2 ;@ Fetch Absolute Short address
@@ -8520,13 +8527,17 @@ Op08b8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8542,14 +8553,9 @@ Op08b9:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$33333333.l' into r8:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -8560,13 +8566,17 @@ Op08b9:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  bic r1,r0,r11 ;@ Clear bit
+  bic r1,r0,r1,lsl r2 ;@ Clear bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8579,30 +8589,31 @@ Op08b9:
 ;@ ---------- [08c0] bset #$33, d0 uses Op08c0 ----------
 Op08c0:
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#0x1F ;@ reg - do mod 32
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r2:
+  ldrsb r2,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r2) into r2:
 
 ;@ EaCalc : Get register index into r8:
   and r8,r8,#0x000f
 ;@ EaRead : Read register[r8] into r0:
   ldr r0,[r7,r8,lsl #2]
 
-  tst r0,r11 ;@ Do arithmetic
+  movs r2,r2,lsl #27 ;@ reg - do mod 32
+  submi r5,r5,#2 ;@ extra cycles
+  mov r2,r2,lsr #27
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: r1 into register[r8]:
   str r1,[r7,r8,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#12 ;@ Subtract cycles
+  subs r5,r5,#10 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -8612,14 +8623,9 @@ Op08d0:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)' into r8:
   and r2,r8,#0x000f
@@ -8630,13 +8636,17 @@ Op08d0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8652,14 +8662,9 @@ Op08d8:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a0)+' into r8:
   and r2,r8,#0x000f
@@ -8671,13 +8676,17 @@ Op08d8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8693,14 +8702,9 @@ Op08df:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '(a7)+' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -8711,13 +8715,17 @@ Op08df:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8733,14 +8741,9 @@ Op08e0:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x000f
@@ -8753,13 +8756,17 @@ Op08e0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8775,14 +8782,9 @@ Op08e7:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
@@ -8793,13 +8795,17 @@ Op08e7:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8815,14 +8821,9 @@ Op08e8:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($3333,a0)' into r8:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -8834,13 +8835,17 @@ Op08e8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8856,25 +8861,18 @@ Op08f0:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r8:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -8884,13 +8882,17 @@ Op08f0:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8906,14 +8908,9 @@ Op08f8:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$3333.w' into r8:
   ldrsh r8,[r4],#2 ;@ Fetch Absolute Short address
@@ -8922,13 +8919,17 @@ Op08f8:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -8944,14 +8945,9 @@ Op08f9:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 
-;@ EaCalc : Get '#$33' into r0:
-  ldrsb r0,[r4],#2 ;@ Fetch immediate value
-;@ EaRead : Read '#$33' (address in r0) into r0:
-
-  mov r11,#1
-  bic r10,r10,#0x40000000 ;@ Blank Z flag
-  and r0,r0,#7    ;@ mem - do mod 8
-  mov r11,r11,lsl r0 ;@ Make bit mask
+;@ EaCalc : Get '#$33' into r11:
+  ldrsb r11,[r4],#2 ;@ Fetch immediate value
+;@ EaRead : Read '#$33' (address in r11) into r11:
 
 ;@ EaCalc : Get '$33333333.l' into r8:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -8962,13 +8958,17 @@ Op08f9:
   bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  tst r0,r11 ;@ Do arithmetic
+  and r2,r11,#7  ;@ mem - do mod 8
+
+  mov r1,#1
+  bic r10,r10,#0x40000000 ;@ Clear Z flag
+  tst r1,r0,ror r2 ;@ Test bit
   orreq r10,r10,#0x40000000 ;@ Get Z flag
 
-  orr r1,r0,r11 ;@ Set bit
+  orr r1,r0,r1,lsl r2 ;@ Set bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r8):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -9230,13 +9230,11 @@ Op0a30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -9360,16 +9358,14 @@ Op0a40:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  ldrsh r0,[r7,r11]
 
-  mov r10,r10,asl #16
 ;@ Do arithmetic:
-  eors r1,r10,r0,asl #16
+  eors r1,r10,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: r1 into register[r11]:
-  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -9533,13 +9529,11 @@ Op0a70:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -9867,13 +9861,11 @@ Op0ab0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -9980,7 +9972,7 @@ Op0c00:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -10009,7 +10001,7 @@ Op0c10:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10040,7 +10032,7 @@ Op0c18:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10070,7 +10062,7 @@ Op0c1f:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10102,7 +10094,7 @@ Op0c20:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10132,7 +10124,7 @@ Op0c27:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10163,7 +10155,7 @@ Op0c28:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10184,13 +10176,11 @@ Op0c30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -10203,7 +10193,7 @@ Op0c30:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10231,7 +10221,7 @@ Op0c38:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10261,7 +10251,7 @@ Op0c39:
   mov r10,r10,asl #24
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #24 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10291,7 +10281,7 @@ Op0c50:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10322,7 +10312,7 @@ Op0c58:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10354,7 +10344,7 @@ Op0c60:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10385,7 +10375,7 @@ Op0c68:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10406,13 +10396,11 @@ Op0c70:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -10425,7 +10413,7 @@ Op0c70:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10453,7 +10441,7 @@ Op0c78:
   mov r10,r10,asl #16
 ;@ Do arithmetic:
   rsbs r1,r10,r0,asl #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10477,7 +10465,7 @@ Op0c80:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -10507,7 +10495,7 @@ Op0c90:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10539,7 +10527,7 @@ Op0c98:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10572,7 +10560,7 @@ Op0ca0:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10604,7 +10592,7 @@ Op0ca8:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10627,13 +10615,11 @@ Op0cb0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -10645,7 +10631,7 @@ Op0cb0:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10674,7 +10660,7 @@ Op0cb8:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10705,7 +10691,7 @@ Op0cb9:
 
 ;@ Do arithmetic:
   rsbs r1,r10,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -10896,13 +10882,11 @@ Op1030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -10997,13 +10981,11 @@ Op103b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -11029,17 +11011,16 @@ Op103b:
 ;@ ---------- [103c] move.b #$33, d0 uses Op103c ----------
 Op103c:
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x0e00
 ;@ EaWrite: r1 into register[r0]:
-  mov r1,r1,lsr #24
   strb r1,[r7,r0,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -11279,13 +11260,11 @@ Op10b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -11418,13 +11397,11 @@ Op10bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -11455,18 +11432,17 @@ Op10bc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x1e00
   ldr r0,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -11658,13 +11634,11 @@ Op10f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -11805,13 +11779,11 @@ Op10fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -11844,11 +11816,11 @@ Op10fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a0)+' into r0:
@@ -11857,7 +11829,6 @@ Op10fc:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -12114,13 +12085,11 @@ Op1130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -12261,13 +12230,11 @@ Op113b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -12300,11 +12267,11 @@ Op113c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r0:
@@ -12313,7 +12280,6 @@ Op113c:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -12341,8 +12307,7 @@ Op1140:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -12376,8 +12341,7 @@ Op1150:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12413,8 +12377,7 @@ Op1158:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12449,8 +12412,7 @@ Op115f:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12487,8 +12449,7 @@ Op1160:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12523,8 +12484,7 @@ Op1167:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12560,8 +12520,7 @@ Op1168:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12583,13 +12542,11 @@ Op1170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -12606,8 +12563,7 @@ Op1170:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12640,8 +12596,7 @@ Op1178:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12676,8 +12631,7 @@ Op1179:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12713,8 +12667,7 @@ Op117a:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12738,13 +12691,11 @@ Op117b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -12758,8 +12709,7 @@ Op117b:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #24
@@ -12779,21 +12729,19 @@ Op117c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -12821,17 +12769,13 @@ Op1180:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -12865,17 +12809,13 @@ Op1190:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -12910,17 +12850,13 @@ Op119f:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -12957,17 +12893,13 @@ Op11a0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13002,17 +12934,13 @@ Op11a7:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13048,17 +12976,13 @@ Op11a8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13080,13 +13004,11 @@ Op11b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -13103,17 +13025,13 @@ Op11b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13146,17 +13064,13 @@ Op11b8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13191,17 +13105,13 @@ Op11b9:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13237,17 +13147,13 @@ Op11ba:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13271,13 +13177,11 @@ Op11bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -13291,17 +13195,13 @@ Op11bb:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #24
@@ -13321,30 +13221,25 @@ Op11bc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -13586,13 +13481,11 @@ Op11f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -13725,13 +13618,11 @@ Op11fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -13762,17 +13653,16 @@ Op11fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -14028,13 +13918,11 @@ Op13f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -14175,13 +14063,11 @@ Op13fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -14214,11 +14100,11 @@ Op13fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '$33333333.l' into r0:
@@ -14226,7 +14112,6 @@ Op13fc:
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -14476,13 +14361,11 @@ Op1ef0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -14619,13 +14502,11 @@ Op1efb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -14657,11 +14538,11 @@ Op1efc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a7)+' into r0:
@@ -14669,7 +14550,6 @@ Op1efc:
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -14919,13 +14799,11 @@ Op1f30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -15062,13 +14940,11 @@ Op1f3b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -15100,11 +14976,11 @@ Op1f3c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$33' into r1:
-  ldrsb r1,[r4],#2 ;@ Fetch immediate value
+  ldrb r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$33' (address in r1) into r1:
-  movs r1,r1,asl #24
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #24
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r0:
@@ -15112,7 +14988,6 @@ Op1f3c:
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  mov r1,r1,lsr #24
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -15272,13 +15147,11 @@ Op2030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -15372,13 +15245,11 @@ Op203b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -15405,9 +15276,8 @@ Op203c:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -15560,13 +15430,11 @@ Op2070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -15679,13 +15547,11 @@ Op207b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -15893,13 +15759,11 @@ Op20b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -16032,13 +15896,11 @@ Op20bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -16071,9 +15933,8 @@ Op20bc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -16241,13 +16102,11 @@ Op20f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -16388,13 +16247,11 @@ Op20fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -16429,9 +16286,8 @@ Op20fc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -16458,13 +16314,13 @@ Op2100:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get register index into r1:
-  and r1,r8,#0x000f
-;@ EaRead : Read register[r1] into r1:
-  ldr r1,[r7,r1,lsl #2]
-  tst r1,r1
+;@ EaCalc : Get register index into r11:
+  and r11,r8,#0x000f
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
+  tst r11,r11
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16473,10 +16329,9 @@ Op2100:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -16501,13 +16356,13 @@ Op2110:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)' (address in r0) into r1:
+;@ EaRead : Read '(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16516,10 +16371,9 @@ Op2110:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16544,13 +16398,13 @@ Op2118:
   ldr r0,[r7,r2,lsl #2]
   add r3,r0,#4 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)+' (address in r0) into r1:
+;@ EaRead : Read '(a0)+' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16559,10 +16413,9 @@ Op2118:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16588,13 +16441,13 @@ Op2120:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#4 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r1:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16603,10 +16456,9 @@ Op2120:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16631,13 +16483,13 @@ Op2128:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16646,10 +16498,9 @@ Op2128:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16672,24 +16523,22 @@ Op2130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
-;@ EaRead : Read '($33,a0,d3.w*2)' (address in r0) into r1:
+;@ EaRead : Read '($33,a0,d3.w*2)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16698,10 +16547,9 @@ Op2130:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16723,13 +16571,13 @@ Op2138:
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
-;@ EaRead : Read '$3333.w' (address in r0) into r1:
+;@ EaRead : Read '$3333.w' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16738,10 +16586,9 @@ Op2138:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16765,13 +16612,13 @@ Op2139:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
-;@ EaRead : Read '$33333333.l' (address in r0) into r1:
+;@ EaRead : Read '$33333333.l' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16780,10 +16627,9 @@ Op2139:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16808,13 +16654,13 @@ Op213a:
   sub r0,r4,r0 ;@ Real PC
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r0,r2,r0 ;@ ($nn,PC)
-;@ EaRead : Read '($3333,pc)' (address in r0) into r1:
+;@ EaRead : Read '($3333,pc)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16823,10 +16669,9 @@ Op213a:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16851,21 +16696,19 @@ Op213b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
-;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
+;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16874,10 +16717,9 @@ Op213b:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -16897,14 +16739,13 @@ Op213c:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '#$33333333' into r1:
+;@ EaCalc : Get '#$33333333' into r11:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
-;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
+  orrs r11,r3,r2,lsl #16
+;@ EaRead : Read '#$33333333' (address in r11) into r11:
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r8:
@@ -16913,10 +16754,9 @@ Op213c:
   ldr r8,[r7,r2,lsr #7]
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,r2,lsr #7]
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a0)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -16950,8 +16790,7 @@ Op2140:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -16986,8 +16825,7 @@ Op2150:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17023,8 +16861,7 @@ Op2158:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17061,8 +16898,7 @@ Op2160:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17098,8 +16934,7 @@ Op2168:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17120,13 +16955,11 @@ Op2170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -17144,8 +16977,7 @@ Op2170:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17178,8 +17010,7 @@ Op2178:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17214,8 +17045,7 @@ Op2179:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17251,8 +17081,7 @@ Op217a:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17275,13 +17104,11 @@ Op217b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -17296,8 +17123,7 @@ Op217b:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17318,9 +17144,8 @@ Op217c:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -17329,8 +17154,7 @@ Op217c:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17360,17 +17184,14 @@ Op2180:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17404,17 +17225,14 @@ Op2190:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17449,17 +17267,14 @@ Op2198:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17495,17 +17310,14 @@ Op21a0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17540,17 +17352,14 @@ Op21a8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17571,13 +17380,11 @@ Op21b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -17594,17 +17401,14 @@ Op21b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17636,17 +17440,14 @@ Op21b8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17680,17 +17481,14 @@ Op21b9:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17725,17 +17523,14 @@ Op21ba:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17758,13 +17553,11 @@ Op21bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -17778,17 +17571,14 @@ Op21bb:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -17809,9 +17599,8 @@ Op21bc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -17819,17 +17608,14 @@ Op21bc:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -18005,13 +17791,11 @@ Op21f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -18140,13 +17924,11 @@ Op21fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -18178,9 +17960,8 @@ Op21fc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -18371,13 +18152,11 @@ Op23f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -18514,13 +18293,11 @@ Op23fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -18554,9 +18331,8 @@ Op23fc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -18745,13 +18521,11 @@ Op2ef0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -18884,13 +18658,11 @@ Op2efb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -18923,9 +18695,8 @@ Op2efc:
 ;@ EaCalc : Get '#$33333333' into r1:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
+  orrs r1,r3,r2,lsl #16
 ;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
 
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
@@ -18950,23 +18721,22 @@ Op2f00:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get register index into r1:
-  and r1,r8,#0x000f
-;@ EaRead : Read register[r1] into r1:
-  ldr r1,[r7,r1,lsl #2]
-  tst r1,r1
+;@ EaCalc : Get register index into r11:
+  and r11,r8,#0x000f
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
+  tst r11,r11
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -18991,23 +18761,22 @@ Op2f10:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)' (address in r0) into r1:
+;@ EaRead : Read '(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19032,23 +18801,22 @@ Op2f18:
   ldr r0,[r7,r2,lsl #2]
   add r3,r0,#4 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)+' (address in r0) into r1:
+;@ EaRead : Read '(a0)+' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19074,23 +18842,22 @@ Op2f20:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#4 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r1:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19115,23 +18882,22 @@ Op2f28:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
-;@ EaRead : Read '($3333,a0)' (address in r0) into r1:
+;@ EaRead : Read '($3333,a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19154,34 +18920,31 @@ Op2f30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
-;@ EaRead : Read '($33,a0,d3.w*2)' (address in r0) into r1:
+;@ EaRead : Read '($33,a0,d3.w*2)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19203,23 +18966,22 @@ Op2f38:
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
-;@ EaRead : Read '$3333.w' (address in r0) into r1:
+;@ EaRead : Read '$3333.w' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19243,23 +19005,22 @@ Op2f39:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
-;@ EaRead : Read '$33333333.l' (address in r0) into r1:
+;@ EaRead : Read '$33333333.l' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19284,23 +19045,22 @@ Op2f3a:
   sub r0,r4,r0 ;@ Real PC
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r0,r2,r0 ;@ ($nn,PC)
-;@ EaRead : Read '($3333,pc)' (address in r0) into r1:
+;@ EaRead : Read '($3333,pc)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19325,31 +19085,28 @@ Op2f3b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
-;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
+;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
-  movs r1,r0
+  movs r11,r0
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -19369,24 +19126,22 @@ Op2f3c:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '#$33333333' into r1:
+;@ EaCalc : Get '#$33333333' into r11:
   ldrh r2,[r4],#2 ;@ Fetch immediate value
   ldrh r3,[r4],#2
-  orr r1,r3,r2,lsl #16
-;@ EaRead : Read '#$33333333' (address in r1) into r1:
-  tst r1,r1
+  orrs r11,r3,r2,lsl #16
+;@ EaRead : Read '#$33333333' (address in r11) into r11:
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  and r10,r11,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r8:
   ldr r8,[r7,#0x3c] ;@ A7
   sub r8,r8,#4 ;@ Pre-decrement An
   str r8,[r7,#0x3c] ;@ A7
-  mov r11,r1
   add r0,r8,#2
-;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  uxth r1,r1 ;@ zero extend
+;@ EaWrite: Write r11 into '-(a7)' (address in r0):
+  uxth r1,r11 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -19474,13 +19229,11 @@ Op3030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -19578,13 +19331,11 @@ Op303b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -19611,18 +19362,17 @@ Op303b:
 ;@ ---------- [303c] move.w #$3333, d0 uses Op303c ----------
 Op303c:
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x0e00
   mov r0,r0,lsr #7
 ;@ EaWrite: r1 into register[r0]:
-  mov r1,r1,lsr #16
   strh r1,[r7,r0]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -19746,13 +19496,11 @@ Op3070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -19861,13 +19609,11 @@ Op307b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -20042,13 +19788,11 @@ Op30b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -20181,13 +19925,11 @@ Op30bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -20218,18 +19960,17 @@ Op30bc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x1e00
   ldr r0,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -20354,13 +20095,11 @@ Op30f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -20501,13 +20240,11 @@ Op30fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -20540,11 +20277,11 @@ Op30fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a0)+' into r0:
@@ -20553,7 +20290,6 @@ Op30fc:
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -20743,13 +20479,11 @@ Op3130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -20890,13 +20624,11 @@ Op313b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -20929,11 +20661,11 @@ Op313c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a0)' into r0:
@@ -20942,7 +20674,6 @@ Op313c:
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,r2,lsr #7]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -20971,8 +20702,7 @@ Op3140:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   str r4,[r7,#0x40] ;@ Save PC
@@ -21006,8 +20736,7 @@ Op3150:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21043,8 +20772,7 @@ Op3158:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21081,8 +20809,7 @@ Op3160:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21118,8 +20845,7 @@ Op3168:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21141,13 +20867,11 @@ Op3170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -21164,8 +20888,7 @@ Op3170:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21198,8 +20921,7 @@ Op3178:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21234,8 +20956,7 @@ Op3179:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21271,8 +20992,7 @@ Op317a:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21296,13 +21016,11 @@ Op317b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -21316,8 +21034,7 @@ Op317b:
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
   mov r1,r1,lsr #16
@@ -21337,21 +21054,19 @@ Op317c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x1e00
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -21383,17 +21098,13 @@ Op3190:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21429,17 +21140,13 @@ Op3198:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21476,17 +21183,13 @@ Op31a0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21522,17 +21225,13 @@ Op31a8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21554,13 +21253,11 @@ Op31b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -21577,17 +21274,13 @@ Op31b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21620,17 +21313,13 @@ Op31b8:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21665,17 +21354,13 @@ Op31b9:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21711,17 +21396,13 @@ Op31ba:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21745,13 +21426,11 @@ Op31bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -21765,17 +21444,13 @@ Op31bb:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
   mov r1,r1,lsr #16
@@ -21795,30 +21470,25 @@ Op31bc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x1e00
-  orr r2,r2,#0x1000 ;@ A0-7
-  mov r2,r2,lsr #9
-  ldr r2,[r7,r2,lsl #2]
+  ldr r2,[r7,r2,lsr #7]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -21997,13 +21667,11 @@ Op31f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -22136,13 +21804,11 @@ Op31fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -22173,17 +21839,16 @@ Op31fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -22337,13 +22002,11 @@ Op33f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -22484,13 +22147,11 @@ Op33fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -22523,11 +22184,11 @@ Op33fc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '$33333333.l' into r0:
@@ -22535,7 +22196,6 @@ Op33fc:
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -22720,13 +22380,11 @@ Op3ef0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -22863,13 +22521,11 @@ Op3efb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -22901,11 +22557,11 @@ Op3efc:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '(a7)+' into r0:
@@ -22913,7 +22569,6 @@ Op3efc:
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -23098,13 +22753,11 @@ Op3f30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -23241,13 +22894,11 @@ Op3f3b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r1:
   str r4,[r7,#0x40] ;@ Save PC
@@ -23279,11 +22930,11 @@ Op3f3c:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
 ;@ EaCalc : Get '#$3333' into r1:
-  ldrsh r1,[r4],#2 ;@ Fetch immediate value
+  ldrh r1,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r1) into r1:
-  movs r1,r1,asl #16
 
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  movs r2,r1,lsl #16
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaCalc : Get '-(a7)' into r0:
@@ -23291,7 +22942,6 @@ Op3f3c:
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  mov r1,r1,lsr #16
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -23310,22 +22960,19 @@ Op4000:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -23348,23 +22995,19 @@ Op4010:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23390,23 +23033,19 @@ Op4018:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23431,23 +23070,19 @@ Op401f:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23474,23 +23109,19 @@ Op4020:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23515,23 +23146,19 @@ Op4027:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23557,23 +23184,19 @@ Op4028:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23591,13 +23214,11 @@ Op4030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -23608,23 +23229,19 @@ Op4030:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23647,23 +23264,19 @@ Op4038:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23688,23 +23301,19 @@ Op4039:
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #24
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #24
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -23723,22 +23332,19 @@ Op4040:
   ldr r0,[r7,r11]
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -23761,23 +23367,19 @@ Op4050:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -23803,23 +23405,19 @@ Op4058:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -23846,23 +23444,19 @@ Op4060:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -23888,23 +23482,19 @@ Op4068:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -23922,13 +23512,11 @@ Op4070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -23939,23 +23527,19 @@ Op4070:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -23978,23 +23562,19 @@ Op4078:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -24019,23 +23599,19 @@ Op4079:
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  mov r0,r0,asl #16
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r0,r0,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+  sbcs r1,r0,#0 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r1,r1,asr #16
-  orreq r10,r10,#0x40000000 ;@ possily missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -24053,17 +23629,14 @@ Op4080:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsl #2]
@@ -24088,17 +23661,14 @@ Op4090:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
   bic r0,r11,#0xff000000
@@ -24126,17 +23696,14 @@ Op4098:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
   bic r0,r11,#0xff000000
@@ -24165,17 +23732,14 @@ Op40a0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
   bic r0,r11,#0xff000000
@@ -24203,17 +23767,14 @@ Op40a8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
   bic r0,r11,#0xff000000
@@ -24233,13 +23794,11 @@ Op40b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -24250,17 +23809,14 @@ Op40b0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
   bic r0,r11,#0xff000000
@@ -24285,17 +23841,14 @@ Op40b8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
   bic r0,r11,#0xff000000
@@ -24322,17 +23875,14 @@ Op40b9:
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Negx:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r0,#0 ;@ do arithmetic
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  sbcs r1,r0,#0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
   bic r0,r11,#0xff000000
@@ -24389,7 +23939,6 @@ Op40d0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24422,7 +23971,6 @@ Op40d8:
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24456,7 +24004,6 @@ Op40e0:
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24489,7 +24036,6 @@ Op40e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24519,19 +24065,16 @@ Op40f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24561,7 +24104,6 @@ Op40f8:
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24593,7 +24135,6 @@ Op40f9:
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -24618,30 +24159,30 @@ Op4180:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap4180
+  bmi chktrapneg4180
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap4180
-;@ old N remains
-  orr r10,r10,r3
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg4180: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap4180: ;@ CHK exception:
   mov r0,#6
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#50 ;@ Subtract cycles
+  subs r5,r5,#38 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24649,6 +24190,7 @@ chktrap4180: ;@ CHK exception:
 Op4190:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '(a0)' into r0:
@@ -24666,32 +24208,33 @@ Op4190:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap4190
+  bmi chktrapneg4190
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap4190
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg4190: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap4190: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#54 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24699,6 +24242,7 @@ chktrap4190: ;@ CHK exception:
 Op4198:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '(a0)+' into r0:
@@ -24717,32 +24261,33 @@ Op4198:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap4198
+  bmi chktrapneg4198
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap4198
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg4198: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap4198: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#54 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24750,6 +24295,7 @@ chktrap4198: ;@ CHK exception:
 Op41a0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '-(a0)' into r0:
@@ -24769,32 +24315,33 @@ Op41a0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41a0
+  bmi chktrapneg41a0
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41a0
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41a0: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41a0: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#56 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#44 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24802,6 +24349,7 @@ chktrap41a0: ;@ CHK exception:
 Op41a8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '($3333,a0)' into r0:
@@ -24820,32 +24368,33 @@ Op41a8:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41a8
+  bmi chktrapneg41a8
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41a8
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41a8: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41a8: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24853,18 +24402,17 @@ chktrap41a8: ;@ CHK exception:
 Op41b0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -24880,32 +24428,33 @@ Op41b0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41b0
+  bmi chktrapneg41b0
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41b0
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41b0: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41b0: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#60 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24913,6 +24462,7 @@ chktrap41b0: ;@ CHK exception:
 Op41b8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '$3333.w' into r0:
@@ -24928,32 +24478,33 @@ Op41b8:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41b8
+  bmi chktrapneg41b8
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41b8
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41b8: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41b8: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -24961,6 +24512,7 @@ chktrap41b8: ;@ CHK exception:
 Op41b9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '$33333333.l' into r0:
@@ -24978,32 +24530,33 @@ Op41b9:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41b9
+  bmi chktrapneg41b9
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41b9
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#22 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41b9: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41b9: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#50 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -25011,6 +24564,7 @@ chktrap41b9: ;@ CHK exception:
 Op41ba:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '($3333,pc)' into r0:
@@ -25029,32 +24583,33 @@ Op41ba:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41ba
+  bmi chktrapneg41ba
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41ba
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41ba: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41ba: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -25062,6 +24617,7 @@ chktrap41ba: ;@ CHK exception:
 Op41bb:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ Get value into r0:
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
@@ -25069,13 +24625,11 @@ Op41bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -25088,32 +24642,33 @@ Op41bb:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41bb
+  bmi chktrapneg41bb
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41bb
-;@ old N remains
-  orr r10,r10,r3
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41bb: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41bb: ;@ CHK exception:
   mov r0,#6
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#60 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -25130,30 +24685,30 @@ Op41bc:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
   movs r1,r1,asl #16
 
 ;@ get flags, including undocumented ones
-  and r3,r10,#0x80000000
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 ;@ is reg negative?
-  bmi chktrap41bc
+  bmi chktrapneg41bc
 ;@ Do arithmetic:
-  cmp r1,r0
+  cmp r1,r0,asl #16
   bgt chktrap41bc
-;@ old N remains
-  orr r10,r10,r3
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
+chktrapneg41bc: ;@ CHK negative exception:
+;@ Delayed negative trap only if !(N||V), which is !N for a negative subtrahend
+  rsbs r0,r1,r0,asl #16
+  subpl r5,r5,#2
 chktrap41bc: ;@ CHK exception:
   mov r0,#6
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#54 ;@ Subtract cycles
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -25272,13 +24827,11 @@ Op41fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r1,r2,r0 ;@ r1=Disp+PC+Rn
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x0e00
@@ -25296,7 +24849,6 @@ Op41fb:
 Op4200:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x000f
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25318,13 +24870,11 @@ Op4210:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25345,13 +24895,11 @@ Op4218:
   ldr r11,[r7,r2,lsl #2]
   add r3,r11,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25371,13 +24919,11 @@ Op421f:
   ldr r11,[r7,#0x3c] ;@ A7
   add r3,r11,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25399,13 +24945,11 @@ Op4220:
   ldr r11,[r7,r2,lsl #2]
   sub r11,r11,#1 ;@ Pre-decrement An
   str r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25425,13 +24969,11 @@ Op4227:
   ldr r11,[r7,#0x3c] ;@ A7
   sub r11,r11,#2 ;@ Pre-decrement An
   str r11,[r7,#0x3c] ;@ A7
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25452,13 +24994,11 @@ Op4228:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r11,r0,r2 ;@ Add on offset
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25477,24 +25017,20 @@ Op4230:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r11,r2,r3 ;@ r11=Disp+An+Rn
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25512,13 +25048,11 @@ Op4238:
 
 ;@ EaCalc : Get '$3333.w' into r11:
   ldrsh r11,[r4],#2 ;@ Fetch Absolute Short address
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25538,13 +25072,11 @@ Op4239:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r11,r0,r2,lsl #16
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -25560,7 +25092,6 @@ Op4240:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25582,13 +25113,11 @@ Op4250:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25609,13 +25138,11 @@ Op4258:
   ldr r11,[r7,r2,lsl #2]
   add r3,r11,#2 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25637,13 +25164,11 @@ Op4260:
   ldr r11,[r7,r2,lsl #2]
   sub r11,r11,#2 ;@ Pre-decrement An
   str r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25664,13 +25189,11 @@ Op4268:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r11,r0,r2 ;@ Add on offset
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25689,24 +25212,20 @@ Op4270:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r11,r2,r3 ;@ r11=Disp+An+Rn
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25724,13 +25243,11 @@ Op4278:
 
 ;@ EaCalc : Get '$3333.w' into r11:
   ldrsh r11,[r4],#2 ;@ Fetch Absolute Short address
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25750,13 +25267,11 @@ Op4279:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r11,r0,r2,lsl #16
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
@@ -25771,7 +25286,6 @@ Op4279:
 Op4280:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x000f
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25793,7 +25307,6 @@ Op4290:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25819,7 +25332,6 @@ Op4298:
   ldr r11,[r7,r2,lsl #2]
   add r3,r11,#4 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25846,7 +25358,6 @@ Op42a0:
   ldr r11,[r7,r2,lsl #2]
   sub r11,r11,#4 ;@ Pre-decrement An
   str r11,[r7,r2,lsl #2]
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25872,7 +25383,6 @@ Op42a8:
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
   add r11,r0,r2 ;@ Add on offset
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25896,18 +25406,15 @@ Op42b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r11,r2,r3 ;@ r11=Disp+An+Rn
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25930,7 +25437,6 @@ Op42b8:
 
 ;@ EaCalc : Get '$3333.w' into r11:
   ldrsh r11,[r4],#2 ;@ Fetch Absolute Short address
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25955,7 +25461,6 @@ Op42b9:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r11,r0,r2,lsl #16
-
 ;@ Clear:
   mov r1,#0
   mov r10,#0x40000000 ;@ NZCV=0100
@@ -25981,12 +25486,12 @@ Op4400:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -26011,13 +25516,12 @@ Op4410:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26045,13 +25549,12 @@ Op4418:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26078,13 +25581,12 @@ Op441f:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26113,13 +25615,12 @@ Op4420:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26146,13 +25647,12 @@ Op4427:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26180,13 +25680,12 @@ Op4428:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26204,13 +25703,11 @@ Op4430:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -26223,13 +25720,12 @@ Op4430:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26254,13 +25750,12 @@ Op4438:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26287,13 +25782,12 @@ Op4439:
 ;@ Neg:
   mov r0,r0,asl #24
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #24
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -26314,12 +25808,12 @@ Op4440:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -26344,13 +25838,12 @@ Op4450:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26378,13 +25871,12 @@ Op4458:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26413,13 +25905,12 @@ Op4460:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26447,13 +25938,12 @@ Op4468:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26471,13 +25961,11 @@ Op4470:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -26490,13 +25978,12 @@ Op4470:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26521,13 +26008,12 @@ Op4478:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26554,13 +26040,12 @@ Op4479:
 ;@ Neg:
   mov r0,r0,asl #16
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
-  mov r1,r1,asr #16
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -26579,7 +26064,7 @@ Op4480:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26607,7 +26092,7 @@ Op4490:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26638,7 +26123,7 @@ Op4498:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26670,7 +26155,7 @@ Op44a0:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26701,7 +26186,7 @@ Op44a8:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26723,13 +26208,11 @@ Op44b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -26741,7 +26224,7 @@ Op44b0:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26769,7 +26252,7 @@ Op44b8:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26799,7 +26282,7 @@ Op44b9:
 
 ;@ Neg:
   rsbs r1,r0,#0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -26952,13 +26435,11 @@ Op44f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -27071,13 +26552,11 @@ Op44fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -27119,17 +26598,17 @@ Op44fc:
 Op4600:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x000f
+  mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
+  ldrsb r0,[r7,r11]
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: r1 into register[r11]:
-  strb r1,[r7,r11,lsl #2]
+  strb r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
@@ -27149,15 +26628,15 @@ Op4610:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27181,15 +26660,15 @@ Op4618:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27212,15 +26691,15 @@ Op461f:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27245,15 +26724,15 @@ Op4620:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27276,15 +26755,15 @@ Op4627:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27308,15 +26787,15 @@ Op4628:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27334,13 +26813,11 @@ Op4630:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -27349,15 +26826,15 @@ Op4630:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27378,15 +26855,15 @@ Op4638:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27409,15 +26886,15 @@ Op4639:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
+  sxtb r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #24
-  mvns r1,r0,asr #24
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  and r1,r1,#0xff ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -27433,11 +26910,10 @@ Op4640:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  ldrsh r0,[r7,r11]
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27462,10 +26938,10 @@ Op4650:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27494,10 +26970,10 @@ Op4658:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27527,10 +27003,10 @@ Op4660:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27559,10 +27035,10 @@ Op4668:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27585,13 +27061,11 @@ Op4670:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -27600,10 +27074,10 @@ Op4670:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27629,10 +27103,10 @@ Op4678:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27660,10 +27134,10 @@ Op4679:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ Not:
-  mov r0,r0,asl #16
-  mvns r1,r0,asr #16
+  mvns r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -27826,13 +27300,11 @@ Op46b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -28196,13 +27668,11 @@ Op46f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -28427,13 +27897,11 @@ Op46fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -28527,40 +27995,30 @@ no_sp_swap46fc:
 
 ;@ ---------- [4800] nbcd d0 uses Op4800 ----------
 Op4800:
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x000f
-;@ EaRead : Read register[r6] into r0:
-  ldr r0,[r7,r6,lsl #2]
+;@ EaCalc : Get register index into r11:
+  and r11,r8,#0x000f
+;@ EaRead : Read register[r11] into r0:
+  ldr r0,[r7,r11,lsl #2]
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4800
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
+;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
+  strb r1,[r7,r11,lsl #2]
 
-;@ EaWrite: r1 into register[r6]:
-  strb r1,[r7,r6,lsl #2]
-
-finish4800:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -28571,46 +28029,35 @@ Op4810:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '(a0)' into r6:
+;@ EaCalc : Get '(a0)' into r11:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
-  ldr r6,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)' (address in r6) into r0:
+  ldr r11,[r7,r2,lsl #2]
+;@ EaRead : Read '(a0)' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4810
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '(a0)' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '(a0)' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4810:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#12 ;@ Subtract cycles
@@ -28622,47 +28069,36 @@ Op4818:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '(a0)+' into r6:
+;@ EaCalc : Get '(a0)+' into r11:
   and r2,r8,#0x000f
-  ldr r6,[r7,r2,lsl #2]
-  add r3,r6,#1 ;@ Post-increment An
+  ldr r11,[r7,r2,lsl #2]
+  add r3,r11,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
-;@ EaRead : Read '(a0)+' (address in r6) into r0:
+;@ EaRead : Read '(a0)+' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4818
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '(a0)+' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '(a0)+' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4818:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#12 ;@ Subtract cycles
@@ -28674,46 +28110,35 @@ Op481f:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '(a7)+' into r6:
-  ldr r6,[r7,#0x3c] ;@ A7
-  add r3,r6,#2 ;@ Post-increment An
+;@ EaCalc : Get '(a7)+' into r11:
+  ldr r11,[r7,#0x3c] ;@ A7
+  add r3,r11,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '(a7)+' (address in r6) into r0:
+;@ EaRead : Read '(a7)+' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish481f
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '(a7)+' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '(a7)+' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish481f:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#12 ;@ Subtract cycles
@@ -28725,48 +28150,37 @@ Op4820:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '-(a0)' into r6:
+;@ EaCalc : Get '-(a0)' into r11:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
-  ldr r6,[r7,r2,lsl #2]
-  sub r6,r6,#1 ;@ Pre-decrement An
-  str r6,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r6) into r0:
+  ldr r11,[r7,r2,lsl #2]
+  sub r11,r11,#1 ;@ Pre-decrement An
+  str r11,[r7,r2,lsl #2]
+;@ EaRead : Read '-(a0)' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4820
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '-(a0)' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4820:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#14 ;@ Subtract cycles
@@ -28778,46 +28192,35 @@ Op4827:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '-(a7)' into r6:
-  ldr r6,[r7,#0x3c] ;@ A7
-  sub r6,r6,#2 ;@ Pre-decrement An
-  str r6,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r6) into r0:
+;@ EaCalc : Get '-(a7)' into r11:
+  ldr r11,[r7,#0x3c] ;@ A7
+  sub r11,r11,#2 ;@ Pre-decrement An
+  str r11,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4827
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '-(a7)' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '-(a7)' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4827:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#14 ;@ Subtract cycles
@@ -28829,47 +28232,36 @@ Op4828:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '($3333,a0)' into r6:
+;@ EaCalc : Get '($3333,a0)' into r11:
   ldrsh r0,[r4],#2 ;@ Fetch offset
   and r2,r8,#0x000f
   ldr r2,[r7,r2,lsl #2]
-  add r6,r0,r2 ;@ Add on offset
-;@ EaRead : Read '($3333,a0)' (address in r6) into r0:
+  add r11,r0,r2 ;@ Add on offset
+;@ EaRead : Read '($3333,a0)' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4828
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '($3333,a0)' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4828:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#16 ;@ Subtract cycles
@@ -28881,56 +28273,43 @@ Op4830:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '($33,a0,d3.w*2)' into r6:
+;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
-  add r6,r2,r3 ;@ r6=Disp+An+Rn
-;@ EaRead : Read '($33,a0,d3.w*2)' (address in r6) into r0:
+  add r11,r2,r3 ;@ r11=Disp+An+Rn
+;@ EaRead : Read '($33,a0,d3.w*2)' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4830
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4830:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -28942,44 +28321,33 @@ Op4838:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '$3333.w' into r6:
-  ldrsh r6,[r4],#2 ;@ Fetch Absolute Short address
-;@ EaRead : Read '$3333.w' (address in r6) into r0:
+;@ EaCalc : Get '$3333.w' into r11:
+  ldrsh r11,[r4],#2 ;@ Fetch Absolute Short address
+;@ EaRead : Read '$3333.w' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4838
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '$3333.w' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '$3333.w' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4838:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#16 ;@ Subtract cycles
@@ -28991,46 +28359,35 @@ Op4839:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-;@ EaCalc : Get '$33333333.l' into r6:
+;@ EaCalc : Get '$33333333.l' into r11:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
-  orr r6,r0,r2,lsl #16
-;@ EaRead : Read '$33333333.l' (address in r6) into r0:
+  orr r11,r0,r2,lsl #16
+;@ EaRead : Read '$33333333.l' (address in r11) into r0:
   str r4,[r7,#0x40] ;@ Save PC
-  bic r0,r6,#0xff000000
+  bic r0,r11,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  ldr r2,[r7,#0x4c]
-  bic r10,r10,#0xb0000000 ;@ clear all flags, except Z
-  mov r0,r0,asl #24
-  and r2,r2,#0x20000000
-  add r2,r0,r2,lsr #5 ;@ add X
-  rsb r11,r2,#0x9a000000 ;@ do arithmetic
-  cmp r11,#0x9a000000
-  beq finish4839
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  mov r1,r1,lsl #2 ;@ X into sign
+  rsb r1,r0,r1,asr #31 ;@ r1=0-r0-X
+  eor r0,r0,r1 ;@ borrows from each bit of SBC
+  and r0,r0,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r2,r0,r0,lsr #1
+  mov r1,r1,lsl #24
+  subs r1,r1,r2,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r0,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  mvn r3,r11,lsr #31 ;@ Undefined V behavior
-  and r2,r11,#0x0f000000
-  cmp r2,#0x0a000000
-  andeq r11,r11,#0xf0000000
-  addeq r11,r11,#0x10000000
-  and r3,r3,r11,lsr #31 ;@ Undefined V behavior part II
-  movs r1,r11,asr #24
-  bicne r10,r10,#0x40000000 ;@ Z
-  orr r10,r10,r3,lsl #28 ;@ save V
-  orr r10,r10,#0x20000000 ;@ C
-
-;@ EaWrite: Write r1 into '$33333333.l' (address in r6):
-  and r1,r1,#0xff
-  bic r0,r6,#0xff000000
+;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
+  mov r1,r1,lsr #24
+  bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-finish4839:
-  tst r11,r11
-  orrmi r10,r10,#0x80000000 ;@ N
-  str r10,[r7,#0x4c] ;@ Save X
-
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#20 ;@ Subtract cycles
@@ -29095,13 +28452,11 @@ Op4870:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r1:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -29202,13 +28557,11 @@ Op487b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r1,r2,r0 ;@ r1=Disp+PC+Rn
 
   sub r0,r11,#4 ;@ Predecrement A7
@@ -29229,13 +28582,12 @@ Op4880:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+;@ EaRead : Read register[r11] into r1:
+  ldrsb r1,[r7,r11]
+  tst r1,r1
 
-  movs r0,r0,asl #24
-  and r10,r0,#0x80000000 ;@ r10=N_flag
+  and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r0,asr #24
 
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
@@ -29259,8 +28611,8 @@ Op4890:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4890
@@ -29271,9 +28623,8 @@ Movemloop4890:
   bcc Movemloop4890
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '(a0)' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29308,8 +28659,8 @@ Op48a0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#0x40 ;@ order reversed for -(An)
+;@ r4=Register Pointer:
+  add r4,r7,#0x40 ;@ order reversed for -(An)
 
   tst r11,r11
   beq NoRegs48a0
@@ -29321,9 +28672,8 @@ Movemloop48a0:
 
   sub r6,r6,#2 ;@ Pre-decrement address
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '-(a0)' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29365,8 +28715,8 @@ Op48a8:
   ldr r2,[r7,r2,lsl #2]
   add r6,r0,r2 ;@ Add on offset
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48a8
@@ -29377,9 +28727,8 @@ Movemloop48a8:
   bcc Movemloop48a8
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29412,20 +28761,18 @@ Op48b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r6:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r6,r2,r3 ;@ r6=Disp+An+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48b0
@@ -29436,9 +28783,8 @@ Movemloop48b0:
   bcc Movemloop48b0
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29471,8 +28817,8 @@ Op48b8:
 ;@ EaCalc : Get '$3333.w' into r6:
   ldrsh r6,[r4],#2 ;@ Fetch Absolute Short address
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48b8
@@ -29483,9 +28829,8 @@ Movemloop48b8:
   bcc Movemloop48b8
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '$3333.w' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29520,8 +28865,8 @@ Op48b9:
   ldrh r0,[r4],#2
   orr r6,r0,r2,lsl #16
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48b9
@@ -29532,9 +28877,8 @@ Movemloop48b9:
   bcc Movemloop48b9
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r6):
-  uxth r1,r1 ;@ zero extend
   bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -29559,16 +28903,16 @@ NoRegs48b9:
 Op48c0:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
+  mov r11,r11,lsl #2
+;@ EaRead : Read register[r11] into r1:
+  ldrsh r1,[r7,r11]
+  tst r1,r1
 
-  movs r0,r0,asl #16
-  and r10,r0,#0x80000000 ;@ r10=N_flag
+  and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r0,asr #16
 
 ;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsl #2]
+  str r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
@@ -29589,8 +28933,8 @@ Op48d0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48d0
@@ -29601,7 +28945,7 @@ Movemloop48d0:
   bcc Movemloop48d0
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldr r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '(a0)' (address in r6):
   bic r0,r6,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
@@ -29637,8 +28981,8 @@ Op48e0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#0x40 ;@ order reversed for -(An)
+;@ r4=Register Pointer:
+  add r4,r7,#0x40 ;@ order reversed for -(An)
 
   tst r11,r11
   beq NoRegs48e0
@@ -29650,18 +28994,15 @@ Movemloop48e0:
 
   sub r6,r6,#4 ;@ Pre-decrement address
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldrh r1,[r4] ;@ Load value from lower half of Dn/An
   add r0,r6,#2
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  uxth r1,r1 ;@ zero extend
   bic r0,r0,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
-  mov r0,r6
-;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  mov r1,r1,lsr #16
-  bic r0,r0,#0xff000000
+  ldrh r1,[r4,#2] ;@ Load value from upper half of Dn/An
+;@ EaWrite: Write r1 into '-(a0)' (address in r6):
+  bic r0,r6,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
   sub r5,r5,#8 ;@ Take some cycles
@@ -29702,8 +29043,8 @@ Op48e8:
   ldr r2,[r7,r2,lsl #2]
   add r6,r0,r2 ;@ Add on offset
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48e8
@@ -29714,7 +29055,7 @@ Movemloop48e8:
   bcc Movemloop48e8
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldr r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r6):
   bic r0,r6,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
@@ -29748,20 +29089,18 @@ Op48f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r6:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r6,r2,r3 ;@ r6=Disp+An+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48f0
@@ -29772,7 +29111,7 @@ Movemloop48f0:
   bcc Movemloop48f0
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldr r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r6):
   bic r0,r6,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
@@ -29806,8 +29145,8 @@ Op48f8:
 ;@ EaCalc : Get '$3333.w' into r6:
   ldrsh r6,[r4],#2 ;@ Fetch Absolute Short address
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48f8
@@ -29818,7 +29157,7 @@ Movemloop48f8:
   bcc Movemloop48f8
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldr r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '$3333.w' (address in r6):
   bic r0,r6,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
@@ -29854,8 +29193,8 @@ Op48f9:
   ldrh r0,[r4],#2
   orr r6,r0,r2,lsl #16
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs48f9
@@ -29866,7 +29205,7 @@ Movemloop48f9:
   bcc Movemloop48f9
 
   ;@ Copy register to memory:
-  ldr r1,[r7,r4] ;@ Load value from Dn/An
+  ldr r1,[r4] ;@ Load value from Dn/An
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r6):
   bic r0,r6,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
@@ -30035,13 +29374,11 @@ Op4a30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -30186,13 +29523,11 @@ Op4a70:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -30358,13 +29693,11 @@ Op4ab0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -30469,6 +29802,25 @@ Op4ad0:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#14 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4ad0_:
+;@ EaCalc : Get '(a0)' into r11:
+  and r2,r8,#0x000f
+  orr r2,r2,#0x8 ;@ A0-7
+  ldr r11,[r7,r2,lsl #2]
+;@ EaRead : Read '(a0)' (address in r11) into r1:
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
   mov r1,r1,lsr #24
@@ -30477,7 +29829,7 @@ Op4ad0:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#18 ;@ Subtract cycles
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30500,6 +29852,26 @@ Op4ad8:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#14 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4ad8_:
+;@ EaCalc : Get '(a0)+' into r11:
+  and r2,r8,#0x000f
+  ldr r11,[r7,r2,lsl #2]
+  add r3,r11,#1 ;@ Post-increment An
+  str r3,[r7,r2,lsl #2]
+;@ EaRead : Read '(a0)+' (address in r11) into r1:
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
   mov r1,r1,lsr #24
@@ -30508,7 +29880,7 @@ Op4ad8:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#18 ;@ Subtract cycles
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30530,6 +29902,25 @@ Op4adf:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#14 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4adf_:
+;@ EaCalc : Get '(a7)+' into r11:
+  ldr r11,[r7,#0x3c] ;@ A7
+  add r3,r11,#2 ;@ Post-increment An
+  str r3,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '(a7)+' (address in r11) into r1:
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
   mov r1,r1,lsr #24
@@ -30538,7 +29929,7 @@ Op4adf:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#18 ;@ Subtract cycles
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30562,6 +29953,27 @@ Op4ae0:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#16 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4ae0_:
+;@ EaCalc : Get '-(a0)' into r11:
+  and r2,r8,#0x000f
+  orr r2,r2,#0x8 ;@ A0-7
+  ldr r11,[r7,r2,lsl #2]
+  sub r11,r11,#1 ;@ Pre-decrement An
+  str r11,[r7,r2,lsl #2]
+;@ EaRead : Read '-(a0)' (address in r11) into r1:
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
   mov r1,r1,lsr #24
@@ -30570,7 +29982,7 @@ Op4ae0:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#20 ;@ Subtract cycles
+  subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30592,6 +30004,25 @@ Op4ae7:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#16 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4ae7_:
+;@ EaCalc : Get '-(a7)' into r11:
+  ldr r11,[r7,#0x3c] ;@ A7
+  sub r11,r11,#2 ;@ Pre-decrement An
+  str r11,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r11) into r1:
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
   mov r1,r1,lsr #24
@@ -30600,7 +30031,7 @@ Op4ae7:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#20 ;@ Subtract cycles
+  subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30623,6 +30054,27 @@ Op4ae8:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#18 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4ae8_:
+;@ EaCalc : Get '($3333,a0)' into r11:
+  ldrsh r0,[r4],#2 ;@ Fetch offset
+  and r2,r8,#0x000f
+  ldr r2,[r7,r2,lsl #2]
+  add r11,r0,r2 ;@ Add on offset
+;@ EaRead : Read '($3333,a0)' (address in r11) into r1:
+  str r4,[r7,#0x40] ;@ Save PC
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
   mov r1,r1,lsr #24
@@ -30631,7 +30083,7 @@ Op4ae8:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#22 ;@ Subtract cycles
+  subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30643,13 +30095,39 @@ Op4af0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
+  and r2,r8,#0x000f
+  orr r2,r2,#0x8 ;@ A0-7
+  ldr r2,[r7,r2,lsl #2]
+  add r11,r2,r3 ;@ r11=Disp+An+Rn
+;@ EaRead : Read '($33,a0,d3.w*2)' (address in r11) into r1:
+  str r4,[r7,#0x40] ;@ Save PC
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#20 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4af0_:
+;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
+;@ Get extension word into r3:
+  ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -30671,7 +30149,7 @@ Op4af0:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#24 ;@ Subtract cycles
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30691,6 +30169,24 @@ Op4af8:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#18 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4af8_:
+;@ EaCalc : Get '$3333.w' into r11:
+  ldrsh r11,[r4],#2 ;@ Fetch Absolute Short address
+;@ EaRead : Read '$3333.w' (address in r11) into r1:
+  str r4,[r7,#0x40] ;@ Save PC
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
   mov r1,r1,lsr #24
@@ -30699,7 +30195,7 @@ Op4af8:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#22 ;@ Subtract cycles
+  subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30721,6 +30217,26 @@ Op4af9:
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
+  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldrh r8,[r4],#2 ;@ Fetch next opcode
+  subs r5,r5,#22 ;@ Subtract cycles
+  ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
+  b CycloneEnd
+
+Op4af9_:
+;@ EaCalc : Get '$33333333.l' into r11:
+  ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
+  ldrh r0,[r4],#2
+  orr r11,r0,r2,lsl #16
+;@ EaRead : Read '$33333333.l' (address in r11) into r1:
+  str r4,[r7,#0x40] ;@ Save PC
+  bic r0,r11,#0xff000000
+  bl m68k_read8 ;@ Call read8(r0) handler
+  movs r1,r0,asl #24
+
+  and r10,r1,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+
   orr r1,r1,#0x80000000 ;@ set bit7
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
   mov r1,r1,lsr #24
@@ -30729,7 +30245,7 @@ Op4af9:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#26 ;@ Subtract cycles
+  subs r5,r5,#22 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -30747,8 +30263,8 @@ Op4c90:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4c90
@@ -30764,7 +30280,7 @@ Movemloop4c90:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -30795,8 +30311,8 @@ Op4c98:
   and r2,r8,#0x000f
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4c98
@@ -30812,7 +30328,7 @@ Movemloop4c98:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -30851,8 +30367,8 @@ Op4ca8:
   ldr r2,[r7,r2,lsl #2]
   add r6,r0,r2 ;@ Add on offset
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4ca8
@@ -30868,7 +30384,7 @@ Movemloop4ca8:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -30898,20 +30414,18 @@ Op4cb0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r6:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r6,r2,r3 ;@ r6=Disp+An+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cb0
@@ -30927,7 +30441,7 @@ Movemloop4cb0:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -30957,8 +30471,8 @@ Op4cb8:
 ;@ EaCalc : Get '$3333.w' into r6:
   ldrsh r6,[r4],#2 ;@ Fetch Absolute Short address
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cb8
@@ -30974,7 +30488,7 @@ Movemloop4cb8:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -31006,8 +30520,8 @@ Op4cb9:
   ldrh r0,[r4],#2
   orr r6,r0,r2,lsl #16
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cb9
@@ -31023,7 +30537,7 @@ Movemloop4cb9:
   bl m68k_read16 ;@ Call read16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -31056,8 +30570,8 @@ Op4cba:
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r6,r2,r0 ;@ ($nn,PC)
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cba
@@ -31073,7 +30587,7 @@ Movemloop4cba:
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -31105,17 +30619,15 @@ Op4cbb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r6,r2,r0 ;@ r6=Disp+PC+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cbb
@@ -31131,7 +30643,7 @@ Movemloop4cbb:
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
   sxth r0,r0 ;@ sign extend
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#2 ;@ Post-increment address
   sub r5,r5,#4 ;@ Take some cycles
   tst r11,r11
@@ -31163,8 +30675,8 @@ Op4cd0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cd0
@@ -31179,7 +30691,7 @@ Movemloop4cd0:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31210,8 +30722,8 @@ Op4cd8:
   and r2,r8,#0x000f
   ldr r6,[r7,r2,lsl #2]
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cd8
@@ -31226,7 +30738,7 @@ Movemloop4cd8:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31265,8 +30777,8 @@ Op4ce8:
   ldr r2,[r7,r2,lsl #2]
   add r6,r0,r2 ;@ Add on offset
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4ce8
@@ -31281,7 +30793,7 @@ Movemloop4ce8:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31311,20 +30823,18 @@ Op4cf0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r6:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r6,r2,r3 ;@ r6=Disp+An+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cf0
@@ -31339,7 +30849,7 @@ Movemloop4cf0:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31369,8 +30879,8 @@ Op4cf8:
 ;@ EaCalc : Get '$3333.w' into r6:
   ldrsh r6,[r4],#2 ;@ Fetch Absolute Short address
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cf8
@@ -31385,7 +30895,7 @@ Movemloop4cf8:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31417,8 +30927,8 @@ Op4cf9:
   ldrh r0,[r4],#2
   orr r6,r0,r2,lsl #16
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cf9
@@ -31433,7 +30943,7 @@ Movemloop4cf9:
   bic r0,r6,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31466,8 +30976,8 @@ Op4cfa:
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r6,r2,r0 ;@ ($nn,PC)
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cfa
@@ -31482,7 +30992,7 @@ Movemloop4cfa:
   bic r0,r6,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31514,17 +31024,15 @@ Op4cfb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r6,r2,r0 ;@ r6=Disp+PC+Rn
   str r4,[r7,#0x40] ;@ Save PC
-;@ r4=Register Index*4:
-  mov r4,#-4
+;@ r4=Register Pointer:
+  sub r4,r7,#4
 
   tst r11,r11
   beq NoRegs4cfb
@@ -31539,7 +31047,7 @@ Movemloop4cfb:
   bic r0,r6,#0xff000000
   bl m68k_fetch32 ;@ Call fetch32(r0) handler
 
-  str r0,[r7,r4] ;@ Save value into Dn/An
+  str r0,[r4] ;@ Save value into Dn/An
   add r6,r6,#4 ;@ Post-increment address
   sub r5,r5,#8 ;@ Take some cycles
   tst r11,r11
@@ -31568,7 +31076,7 @@ Op4e40:
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#38 ;@ Subtract cycles
+  subs r5,r5,#34 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -31615,10 +31123,9 @@ Op4e57:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  ldr r0,[r7,#0x3c] ;@ Get A7
-  sub r0,r0,#4 ;@ A7-=4
+  ldr r1,[r7,#0x3c] ;@ Get A7
+  sub r0,r1,#4 ;@ A7-=4
   mov r8,r0 ;@ abuse r8
-  mov r1,r0
 
 ;@ Write An to Stack
   str r4,[r7,#0x40] ;@ Save PC
@@ -31716,10 +31223,9 @@ Op4e70:
   mov r1,r10,lsr #28
   strb r1,[r7,#0x46] ;@ Save Flags (NZCV)
   str r5,[r7,#0x5c] ;@ Save Cycles
-  ldr r11,[r7,#0x90] ;@ ResetCallback
-  tst r11,r11
-  movne lr,pc
-  bxne r11 ;@ call ResetCallback if it is defined
+  ldr r0,[r7,#0x90] ;@ ResetCallback
+  tst r0,r0
+  blxne r0 ;@ call ResetCallback if it is defined
   ldrb r10,[r7,#0x46] ;@ r10 = Load Flags (NZCV)
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldr r4,[r7,#0x40] ;@ Load PC
@@ -31801,11 +31307,12 @@ Op4e73:
   str r1,[r7,#0x3c] ;@ Save A7
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  ldr r1,[r7,#0x60] ;@ Get Memory base
-  add r0,r0,r1 ;@ Memory Base+PC
-
+  ldr r2,[r7,#0x60] ;@ Get Memory base
+;@ Check Memory Base+pc
+  add r0,r2,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   ldr r1,[r7,#0x44] ;@ reload SR high
 ;@ A7 <-> OSP?
   eor r0,r1,r11
@@ -31847,7 +31354,7 @@ Op4e76:
   mov r5,#0
 
   tst r10,#0x10000000
-  subne r5,r5,#34
+  subne r5,r5,#30
   movne r0,#7 ;@ TRAPV exception
   blne Exception
   ldr r0,[r7,#0x5c] ;@ Load Cycles
@@ -31883,11 +31390,12 @@ Op4e77:
   str r1,[r7,#0x3c] ;@ Save A7
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  ldr r1,[r7,#0x60] ;@ Get Memory base
-  add r0,r0,r1 ;@ Memory Base+PC
-
+  ldr r2,[r7,#0x60] ;@ Get Memory base
+;@ Check Memory Base+pc
+  add r0,r2,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -31908,9 +31416,10 @@ Op4e90:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r12,[r7,r2,lsl #2]
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -31941,9 +31450,10 @@ Op4ea8:
   ldr r2,[r7,r2,lsl #2]
   add r12,r0,r2 ;@ Add on offset
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -31971,21 +31481,20 @@ Op4eb0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r12:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r12,r2,r3 ;@ r12=Disp+An+Rn
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -32013,9 +31522,10 @@ Op4eb8:
 ;@ EaCalc : Get '$3333.w' into r12:
   ldrsh r12,[r4],#2 ;@ Fetch Absolute Short address
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -32045,9 +31555,10 @@ Op4eb9:
   ldrh r0,[r4],#2
   orr r12,r0,r2,lsl #16
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -32078,9 +31589,10 @@ Op4eba:
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r12,r2,r0 ;@ ($nn,PC)
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -32110,18 +31622,17 @@ Op4ebb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r12,r2,r0 ;@ r12=Disp+PC+Rn
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   ldr r2,[r7,#0x3c]
   sub r1,r4,r11 ;@ r1 = Old PC
   mov r4,r0
@@ -32148,9 +31659,10 @@ Op4ed0:
   orr r2,r2,#0x8 ;@ A0-7
   ldr r12,[r7,r2,lsl #2]
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32169,9 +31681,10 @@ Op4ee8:
   ldr r2,[r7,r2,lsl #2]
   add r12,r0,r2 ;@ Add on offset
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32187,21 +31700,20 @@ Op4ef0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r12:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r12,r2,r3 ;@ r12=Disp+An+Rn
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32217,9 +31729,10 @@ Op4ef8:
 ;@ EaCalc : Get '$3333.w' into r12:
   ldrsh r12,[r4],#2 ;@ Fetch Absolute Short address
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32237,9 +31750,10 @@ Op4ef9:
   ldrh r0,[r4],#2
   orr r12,r0,r2,lsl #16
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32258,9 +31772,10 @@ Op4efa:
   ldrsh r2,[r4],#2 ;@ Fetch extension
   add r12,r2,r0 ;@ ($nn,PC)
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32278,18 +31793,17 @@ Op4efb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r12,r2,r0 ;@ r12=Disp+PC+Rn
 ;@ Jump - Get new PC from r12
-  add r0,r12,r11 ;@ Memory Base + New PC
-
+;@ Check Memory Base+pc
+  add r0,r11,r12 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -32308,7 +31822,7 @@ Op5000:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -32337,7 +31851,7 @@ Op5010:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -32369,7 +31883,7 @@ Op5018:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -32400,7 +31914,7 @@ Op501f:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
@@ -32433,7 +31947,7 @@ Op5020:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -32464,7 +31978,7 @@ Op5027:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
@@ -32496,7 +32010,7 @@ Op5028:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -32518,13 +32032,11 @@ Op5030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -32537,7 +32049,7 @@ Op5030:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -32566,7 +32078,7 @@ Op5038:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -32597,7 +32109,7 @@ Op5039:
   mov r0,r0,asl #24
 
   adds r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -32622,7 +32134,7 @@ Op5040:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -32647,7 +32159,7 @@ Op5048:
   str r1,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#4 ;@ Subtract cycles
+  subs r5,r5,#8 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -32668,7 +32180,7 @@ Op5050:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -32700,7 +32212,7 @@ Op5058:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -32733,7 +32245,7 @@ Op5060:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -32765,7 +32277,7 @@ Op5068:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -32787,13 +32299,11 @@ Op5070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -32806,7 +32316,7 @@ Op5070:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -32835,7 +32345,7 @@ Op5078:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -32866,7 +32376,7 @@ Op5079:
   mov r0,r0,asl #16
 
   adds r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -32888,7 +32398,7 @@ Op5080:
   ldr r0,[r7,r11,lsl #2]
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -32931,7 +32441,7 @@ Op5090:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -32960,7 +32470,7 @@ Op5098:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -32990,7 +32500,7 @@ Op50a0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -33019,7 +32529,7 @@ Op50a8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -33040,13 +32550,11 @@ Op50b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -33057,7 +32565,7 @@ Op50b0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -33083,7 +32591,7 @@ Op50b8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -33111,7 +32619,7 @@ Op50b9:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   adds r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -33126,7 +32634,7 @@ Op50b9:
 
 ;@ ---------- [50c0] st d0 uses Op50c0 ----------
 Op50c0:
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
@@ -33154,14 +32662,13 @@ Op50d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33177,7 +32684,7 @@ Op50d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -33185,7 +32692,6 @@ Op50d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33201,14 +32707,13 @@ Op50df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33224,7 +32729,7 @@ Op50e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -33233,7 +32738,6 @@ Op50e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33249,14 +32753,13 @@ Op50e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33272,7 +32775,7 @@ Op50e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -33280,7 +32783,6 @@ Op50e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33296,24 +32798,21 @@ Op50f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33329,12 +32828,11 @@ Op50f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33350,14 +32848,13 @@ Op50f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mvn r1,#0
+  mov r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -33378,7 +32875,7 @@ Op5100:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33408,7 +32905,7 @@ Op5110:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33441,7 +32938,7 @@ Op5118:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33473,7 +32970,7 @@ Op511f:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33507,7 +33004,7 @@ Op5120:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33539,7 +33036,7 @@ Op5127:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33572,7 +33069,7 @@ Op5128:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33595,13 +33092,11 @@ Op5130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -33614,7 +33109,7 @@ Op5130:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33644,7 +33139,7 @@ Op5138:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33676,7 +33171,7 @@ Op5139:
   mov r0,r0,asl #24
 
   subs r1,r0,#0x8000000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33702,7 +33197,7 @@ Op5140:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33749,7 +33244,7 @@ Op5150:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33782,7 +33277,7 @@ Op5158:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33816,7 +33311,7 @@ Op5160:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33849,7 +33344,7 @@ Op5168:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33872,13 +33367,11 @@ Op5170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -33891,7 +33384,7 @@ Op5170:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33921,7 +33414,7 @@ Op5178:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33953,7 +33446,7 @@ Op5179:
   mov r0,r0,asl #16
 
   subs r1,r0,#0x80000
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -33976,7 +33469,7 @@ Op5180:
   ldr r0,[r7,r11,lsl #2]
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34020,7 +33513,7 @@ Op5190:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34050,7 +33543,7 @@ Op5198:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34081,7 +33574,7 @@ Op51a0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34111,7 +33604,7 @@ Op51a8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34133,13 +33626,11 @@ Op51b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -34150,7 +33641,7 @@ Op51b0:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34177,7 +33668,7 @@ Op51b8:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34206,7 +33697,7 @@ Op51b9:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   subs r1,r0,#0x0008
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -34222,7 +33713,7 @@ Op51b9:
 
 ;@ ---------- [51c0] sf d0 uses Op51c0 ----------
 Op51c0:
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
@@ -34239,14 +33730,13 @@ Op51d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34262,7 +33752,7 @@ Op51d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -34270,7 +33760,6 @@ Op51d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34286,14 +33775,13 @@ Op51df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34309,7 +33797,7 @@ Op51e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -34318,7 +33806,6 @@ Op51e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34334,14 +33821,13 @@ Op51e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34357,7 +33843,7 @@ Op51e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -34365,7 +33851,6 @@ Op51e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34381,24 +33866,21 @@ Op51f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34414,12 +33896,11 @@ Op51f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34435,14 +33916,13 @@ Op51f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34455,9 +33935,9 @@ Op51f9:
 
 ;@ ---------- [52c0] shi d0 uses Op52c0 ----------
 Op52c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
   subeq r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -34478,22 +33958,26 @@ Op52c8:
   beq DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -34506,16 +33990,15 @@ Op52d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34531,9 +34014,9 @@ Op52d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -34541,7 +34024,6 @@ Op52d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34557,16 +34039,15 @@ Op52df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34582,9 +34063,9 @@ Op52e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -34593,7 +34074,6 @@ Op52e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34609,16 +34089,15 @@ Op52e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34634,9 +34113,9 @@ Op52e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -34644,7 +34123,6 @@ Op52e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34660,26 +34138,23 @@ Op52f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34695,14 +34170,13 @@ Op52f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34718,16 +34192,15 @@ Op52f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ hi: !C && !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34740,9 +34213,9 @@ Op52f9:
 
 ;@ ---------- [53c0] sls d0 uses Op53c0 ----------
 Op53c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
   subne r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -34763,22 +34236,26 @@ Op53c8:
   bne DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -34791,16 +34268,15 @@ Op53d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34816,9 +34292,9 @@ Op53d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -34826,7 +34302,6 @@ Op53d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34842,16 +34317,15 @@ Op53df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34867,9 +34341,9 @@ Op53e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -34878,7 +34352,6 @@ Op53e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34894,16 +34367,15 @@ Op53e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34919,9 +34391,9 @@ Op53e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -34929,7 +34401,6 @@ Op53e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34945,26 +34416,23 @@ Op53f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -34980,14 +34448,13 @@ Op53f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35003,16 +34470,15 @@ Op53f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x60000000 ;@ ls: C || Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35025,9 +34491,9 @@ Op53f9:
 
 ;@ ---------- [54c0] scc d0 uses Op54c0 ----------
 Op54c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
   subeq r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -35048,22 +34514,26 @@ Op54c8:
   beq DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -35076,16 +34546,15 @@ Op54d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35101,9 +34570,9 @@ Op54d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -35111,7 +34580,6 @@ Op54d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35127,16 +34595,15 @@ Op54df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35152,9 +34619,9 @@ Op54e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -35163,7 +34630,6 @@ Op54e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35179,16 +34645,15 @@ Op54e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35204,9 +34669,9 @@ Op54e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -35214,7 +34679,6 @@ Op54e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35230,26 +34694,23 @@ Op54f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35265,14 +34726,13 @@ Op54f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35288,16 +34748,15 @@ Op54f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cc: !C
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35310,9 +34769,9 @@ Op54f9:
 
 ;@ ---------- [55c0] scs d0 uses Op55c0 ----------
 Op55c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
   subne r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -35333,22 +34792,26 @@ Op55c8:
   bne DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -35361,16 +34824,15 @@ Op55d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35386,9 +34848,9 @@ Op55d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -35396,7 +34858,6 @@ Op55d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35412,16 +34873,15 @@ Op55df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35437,9 +34897,9 @@ Op55e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -35448,7 +34908,6 @@ Op55e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35464,16 +34923,15 @@ Op55e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35489,9 +34947,9 @@ Op55e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -35499,7 +34957,6 @@ Op55e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35515,26 +34972,23 @@ Op55f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35550,14 +35004,13 @@ Op55f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35573,16 +35026,15 @@ Op55f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x20000000 ;@ cs: C
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35595,9 +35047,9 @@ Op55f9:
 
 ;@ ---------- [56c0] sne d0 uses Op56c0 ----------
 Op56c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
   subeq r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -35618,22 +35070,26 @@ Op56c8:
   beq DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -35646,16 +35102,15 @@ Op56d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35671,9 +35126,9 @@ Op56d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -35681,7 +35136,6 @@ Op56d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35697,16 +35151,15 @@ Op56df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35722,9 +35175,9 @@ Op56e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -35733,7 +35186,6 @@ Op56e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35749,16 +35201,15 @@ Op56e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35774,9 +35225,9 @@ Op56e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -35784,7 +35235,6 @@ Op56e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35800,26 +35250,23 @@ Op56f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35835,14 +35282,13 @@ Op56f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35858,16 +35304,15 @@ Op56f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ ne: !Z
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35880,9 +35325,9 @@ Op56f9:
 
 ;@ ---------- [57c0] seq d0 uses Op57c0 ----------
 Op57c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
   subne r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -35903,22 +35348,26 @@ Op57c8:
   bne DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -35931,16 +35380,15 @@ Op57d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35956,9 +35404,9 @@ Op57d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -35966,7 +35414,6 @@ Op57d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -35982,16 +35429,15 @@ Op57df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36007,9 +35453,9 @@ Op57e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -36018,7 +35464,6 @@ Op57e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36034,16 +35479,15 @@ Op57e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36059,9 +35503,9 @@ Op57e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -36069,7 +35513,6 @@ Op57e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36085,26 +35528,23 @@ Op57f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36120,14 +35560,13 @@ Op57f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36143,16 +35582,15 @@ Op57f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x40000000 ;@ eq: Z
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36165,9 +35603,9 @@ Op57f9:
 
 ;@ ---------- [58c0] svc d0 uses Op58c0 ----------
 Op58c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
   subeq r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -36188,22 +35626,26 @@ Op58c8:
   beq DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -36216,16 +35658,15 @@ Op58d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36241,9 +35682,9 @@ Op58d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -36251,7 +35692,6 @@ Op58d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36267,16 +35707,15 @@ Op58df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36292,9 +35731,9 @@ Op58e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -36303,7 +35742,6 @@ Op58e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36319,16 +35757,15 @@ Op58e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36344,9 +35781,9 @@ Op58e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -36354,7 +35791,6 @@ Op58e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36370,26 +35806,23 @@ Op58f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36405,14 +35838,13 @@ Op58f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36428,16 +35860,15 @@ Op58f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vc: !V
-  mvneq r1,#0
+  moveq r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36450,9 +35881,9 @@ Op58f9:
 
 ;@ ---------- [59c0] svs d0 uses Op59c0 ----------
 Op59c0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
   subne r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -36473,22 +35904,26 @@ Op59c8:
   bne DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -36501,16 +35936,15 @@ Op59d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36526,9 +35960,9 @@ Op59d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -36536,7 +35970,6 @@ Op59d8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36552,16 +35985,15 @@ Op59df:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36577,9 +36009,9 @@ Op59e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -36588,7 +36020,6 @@ Op59e0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36604,16 +36035,15 @@ Op59e7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36629,9 +36059,9 @@ Op59e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -36639,7 +36069,6 @@ Op59e8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36655,26 +36084,23 @@ Op59f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36690,14 +36116,13 @@ Op59f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36713,16 +36138,15 @@ Op59f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,#0x10000000 ;@ vs: V
-  mvnne r1,#0
+  movne r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36735,9 +36159,9 @@ Op59f9:
 
 ;@ ---------- [5ac0] spl d0 uses Op5ac0 ----------
 Op5ac0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
   subpl r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -36758,22 +36182,26 @@ Op5ac8:
   bpl DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -36786,16 +36214,15 @@ Op5ad0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36811,9 +36238,9 @@ Op5ad8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -36821,7 +36248,6 @@ Op5ad8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36837,16 +36263,15 @@ Op5adf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36862,9 +36287,9 @@ Op5ae0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -36873,7 +36298,6 @@ Op5ae0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36889,16 +36313,15 @@ Op5ae7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36914,9 +36337,9 @@ Op5ae8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -36924,7 +36347,6 @@ Op5ae8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36940,26 +36362,23 @@ Op5af0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36975,14 +36394,13 @@ Op5af8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -36998,16 +36416,15 @@ Op5af9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ pl: !N
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37020,9 +36437,9 @@ Op5af9:
 
 ;@ ---------- [5bc0] smi d0 uses Op5bc0 ----------
 Op5bc0:
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
   submi r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -37043,22 +36460,26 @@ Op5bc8:
   bmi DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -37071,16 +36492,15 @@ Op5bd0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37096,9 +36516,9 @@ Op5bd8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -37106,7 +36526,6 @@ Op5bd8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37122,16 +36541,15 @@ Op5bdf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37147,9 +36565,9 @@ Op5be0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -37158,7 +36576,6 @@ Op5be0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37174,16 +36591,15 @@ Op5be7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37199,9 +36615,9 @@ Op5be8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -37209,7 +36625,6 @@ Op5be8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37225,26 +36640,23 @@ Op5bf0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37260,14 +36672,13 @@ Op5bf8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37283,16 +36694,15 @@ Op5bf9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   tst r10,r10 ;@ mi: N
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37305,9 +36715,9 @@ Op5bf9:
 
 ;@ ---------- [5cc0] sge d0 uses Op5cc0 ----------
 Op5cc0:
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
   subpl r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -37328,22 +36738,26 @@ Op5cc8:
   bpl DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -37356,16 +36770,15 @@ Op5cd0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37381,9 +36794,9 @@ Op5cd8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -37391,7 +36804,6 @@ Op5cd8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37407,16 +36819,15 @@ Op5cdf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37432,9 +36843,9 @@ Op5ce0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -37443,7 +36854,6 @@ Op5ce0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37459,16 +36869,15 @@ Op5ce7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37484,9 +36893,9 @@ Op5ce8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -37494,7 +36903,6 @@ Op5ce8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37510,26 +36918,23 @@ Op5cf0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37545,14 +36950,13 @@ Op5cf8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37568,16 +36972,15 @@ Op5cf9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ ge: N == V
-  mvnpl r1,#0
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37590,9 +36993,9 @@ Op5cf9:
 
 ;@ ---------- [5dc0] slt d0 uses Op5dc0 ----------
 Op5dc0:
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
   submi r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -37613,22 +37016,26 @@ Op5dc8:
   bmi DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -37641,16 +37048,15 @@ Op5dd0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37666,9 +37072,9 @@ Op5dd8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -37676,7 +37082,6 @@ Op5dd8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37692,16 +37097,15 @@ Op5ddf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37717,9 +37121,9 @@ Op5de0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -37728,7 +37132,6 @@ Op5de0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37744,16 +37147,15 @@ Op5de7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37769,9 +37171,9 @@ Op5de8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -37779,7 +37181,6 @@ Op5de8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37795,26 +37196,23 @@ Op5df0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37830,14 +37228,13 @@ Op5df8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37853,16 +37250,15 @@ Op5df9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   teq r10,r10,lsl #3 ;@ lt: N != V
-  mvnmi r1,#0
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -37885,7 +37281,7 @@ Op5e00:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -37916,7 +37312,7 @@ Op5e10:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -37950,7 +37346,7 @@ Op5e18:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -37983,7 +37379,7 @@ Op5e1f:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
@@ -38018,7 +37414,7 @@ Op5e20:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -38051,7 +37447,7 @@ Op5e27:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
@@ -38085,7 +37481,7 @@ Op5e28:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -38107,13 +37503,11 @@ Op5e30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -38128,7 +37522,7 @@ Op5e30:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -38159,7 +37553,7 @@ Op5e38:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -38192,7 +37586,7 @@ Op5e39:
   mov r0,r0,asl #24
 
   adds r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -38221,7 +37615,7 @@ Op5e48:
   str r1,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#4 ;@ Subtract cycles
+  subs r5,r5,#8 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -38244,7 +37638,7 @@ Op5e50:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -38278,7 +37672,7 @@ Op5e58:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -38313,7 +37707,7 @@ Op5e60:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -38347,7 +37741,7 @@ Op5e68:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -38369,13 +37763,11 @@ Op5e70:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -38390,7 +37782,7 @@ Op5e70:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -38421,7 +37813,7 @@ Op5e78:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -38454,7 +37846,7 @@ Op5e79:
   mov r0,r0,asl #16
 
   adds r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -38478,7 +37870,7 @@ Op5e80:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r1 into register[r11]:
@@ -38525,7 +37917,7 @@ Op5e90:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
@@ -38556,7 +37948,7 @@ Op5e98:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
@@ -38588,7 +37980,7 @@ Op5ea0:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
@@ -38619,7 +38011,7 @@ Op5ea8:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
@@ -38640,13 +38032,11 @@ Op5eb0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -38659,7 +38049,7 @@ Op5eb0:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
@@ -38687,7 +38077,7 @@ Op5eb8:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
@@ -38717,7 +38107,7 @@ Op5eb9:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   adds r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
@@ -38732,10 +38122,10 @@ Op5eb9:
 
 ;@ ---------- [5ec0] sgt d0 uses Op5ec0 ----------
 Op5ec0:
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
   subpl r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -38752,27 +38142,31 @@ Op5ec0:
 Op5ec8:
 ;@ Is the condition true?
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
 ;@ If so, don't dbra
   bpl DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -38785,17 +38179,16 @@ Op5ed0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38811,10 +38204,10 @@ Op5ed8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -38822,7 +38215,6 @@ Op5ed8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38838,17 +38230,16 @@ Op5edf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38864,10 +38255,10 @@ Op5ee0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -38876,7 +38267,6 @@ Op5ee0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38892,17 +38282,16 @@ Op5ee7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38918,10 +38307,10 @@ Op5ee8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -38929,7 +38318,6 @@ Op5ee8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38945,27 +38333,24 @@ Op5ef0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -38981,15 +38366,14 @@ Op5ef8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -39005,17 +38389,16 @@ Op5ef9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
-  mvnpl r1,#0
+  orrs r0,r0,r10,lsl #1
+  movpl r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -39038,7 +38421,7 @@ Op5f00:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39070,7 +38453,7 @@ Op5f10:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39105,7 +38488,7 @@ Op5f18:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39139,7 +38522,7 @@ Op5f1f:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39175,7 +38558,7 @@ Op5f20:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39209,7 +38592,7 @@ Op5f27:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39244,7 +38627,7 @@ Op5f28:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39267,13 +38650,11 @@ Op5f30:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -39288,7 +38669,7 @@ Op5f30:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39320,7 +38701,7 @@ Op5f38:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39354,7 +38735,7 @@ Op5f39:
   mov r0,r0,asl #24
 
   subs r1,r0,r2,lsl #15
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39382,7 +38763,7 @@ Op5f40:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39433,7 +38814,7 @@ Op5f50:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39468,7 +38849,7 @@ Op5f58:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39504,7 +38885,7 @@ Op5f60:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39539,7 +38920,7 @@ Op5f68:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39562,13 +38943,11 @@ Op5f70:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -39583,7 +38962,7 @@ Op5f70:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39615,7 +38994,7 @@ Op5f78:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39649,7 +39028,7 @@ Op5f79:
   mov r0,r0,asl #16
 
   subs r1,r0,r2,lsl #7
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39674,7 +39053,7 @@ Op5f80:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39722,7 +39101,7 @@ Op5f90:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39754,7 +39133,7 @@ Op5f98:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39787,7 +39166,7 @@ Op5fa0:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39819,7 +39198,7 @@ Op5fa8:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39841,13 +39220,11 @@ Op5fb0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -39860,7 +39237,7 @@ Op5fb0:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39889,7 +39266,7 @@ Op5fb8:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39920,7 +39297,7 @@ Op5fb9:
   and r2,r8,#0x0e00 ;@ Get quick value
 
   subs r1,r0,r2,lsr #9
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -39936,10 +39313,10 @@ Op5fb9:
 
 ;@ ---------- [5fc0] sle d0 uses Op5fc0 ----------
 Op5fc0:
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
   submi r5,r5,#2 ;@ Extra cycles
 
 ;@ EaCalc : Get register index into r0:
@@ -39956,27 +39333,31 @@ Op5fc0:
 Op5fc8:
 ;@ Is the condition true?
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
 ;@ If so, don't dbra
   bmi DbraTrue
 
 ;@ Decrement Dn.w
-  and r1,r8,#0x0007
-  mov r1,r1,lsl #2
-  ldrsh r0,[r7,r1]
-  strb r8,[r7,#0x45] ;@ not polling
-  sub r0,r0,#1
-  strh r0,[r7,r1]
+;@ EaCalc : Get register index into r0:
+  and r0,r8,#0x0007
+  mov r0,r0,lsl #2
+;@ EaRead : Read register[r0] into r1:
+  ldrsh r1,[r7,r0]
 
-;@ Check if Dn.w is -1
-  cmn r0,#1
-  beq DbraMin1
+  strb r8,[r7,#0x45] ;@ not polling
+  subs r1,r1,#1 ;@ Decrement Dn.w and check for borrow
+;@ EaWrite: r1 into register[r0]:
+  strh r1,[r7,r0]
+
+  blo DbraMin1
 
 ;@ Get Branch offset:
   ldrsh r0,[r4]
+;@ Check Memory Base+pc
   add r0,r4,r0 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
   mov r4,r0
+
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -39989,17 +39370,16 @@ Op5fd0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40015,10 +39395,10 @@ Op5fd8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -40026,7 +39406,6 @@ Op5fd8:
   add r3,r0,#1 ;@ Post-increment An
   str r3,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '(a0)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40042,17 +39421,16 @@ Op5fdf:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '(a7)+' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   add r3,r0,#2 ;@ Post-increment An
   str r3,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '(a7)+' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40068,10 +39446,10 @@ Op5fe0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -40080,7 +39458,6 @@ Op5fe0:
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
 ;@ EaWrite: Write r1 into '-(a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40096,17 +39473,16 @@ Op5fe7:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '-(a7)' into r0:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
 ;@ EaWrite: Write r1 into '-(a7)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40122,10 +39498,10 @@ Op5fe8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -40133,7 +39509,6 @@ Op5fe8:
   ldr r2,[r7,r2,lsl #2]
   add r0,r0,r2 ;@ Add on offset
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40149,27 +39524,24 @@ Op5ff0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
   add r0,r2,r3 ;@ r0=Disp+An+Rn
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40185,15 +39557,14 @@ Op5ff8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
 ;@ EaWrite: Write r1 into '$3333.w' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40209,17 +39580,16 @@ Op5ff9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
 
-  mov r1,#0
+  mov r1,#0x00
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
-  mvnmi r1,#0
+  orrs r0,r0,r10,lsl #1
+  movmi r1,#0xff
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
   ldrh r0,[r4],#2
   orr r0,r0,r2,lsl #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r0):
-  and r1,r1,#0xff
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
@@ -40237,8 +39607,10 @@ Op6000:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40251,10 +39623,9 @@ Op6000:
 
 ;@ ---------- [6003] bra 5 uses Op6003 ----------
 Op6003:
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40264,8 +39635,7 @@ Op6003:
 
 ;@ ---------- [6103] bsr 5 uses Op6103 ----------
 Op6103:
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
 ;@ Bsr - remember old PC
   ldr r12,[r7,#0x60] ;@ Get Memory base
@@ -40279,7 +39649,7 @@ Op6103:
   bic r0,r0,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40297,8 +39667,10 @@ Op6200:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40314,10 +39686,9 @@ Op6202:
   tst r10,#0x60000000 ;@ hi: !C && !Z
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40329,10 +39700,9 @@ Op6203:
   tst r10,#0x60000000 ;@ hi: !C && !Z
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40350,8 +39720,10 @@ Op6300:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40367,10 +39739,9 @@ Op6302:
   tst r10,#0x60000000 ;@ ls: C || Z
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40382,10 +39753,9 @@ Op6303:
   tst r10,#0x60000000 ;@ ls: C || Z
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40403,8 +39773,10 @@ Op6400:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40420,10 +39792,9 @@ Op6403:
   tst r10,#0x20000000 ;@ cc: !C
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40436,10 +39807,9 @@ Op6503:
   tst r10,#0x20000000 ;@ cs: C
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40457,8 +39827,10 @@ Op6600:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40474,10 +39846,9 @@ Op6603:
   tst r10,#0x40000000 ;@ ne: !Z
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40490,10 +39861,9 @@ Op6703:
   tst r10,#0x40000000 ;@ eq: Z
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40511,8 +39881,10 @@ Op6800:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40528,10 +39900,9 @@ Op6802:
   tst r10,#0x10000000 ;@ vc: !V
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40543,10 +39914,9 @@ Op6803:
   tst r10,#0x10000000 ;@ vc: !V
   bne BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40564,8 +39934,10 @@ Op6900:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40581,10 +39953,9 @@ Op6902:
   tst r10,#0x10000000 ;@ vs: V
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40596,10 +39967,9 @@ Op6903:
   tst r10,#0x10000000 ;@ vs: V
   beq BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40617,8 +39987,10 @@ Op6a00:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40634,10 +40006,9 @@ Op6a03:
   tst r10,r10 ;@ pl: !N
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40655,8 +40026,10 @@ Op6b00:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40672,10 +40045,9 @@ Op6b02:
   tst r10,r10 ;@ mi: N
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40687,10 +40059,9 @@ Op6b03:
   tst r10,r10 ;@ mi: N
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40708,8 +40079,10 @@ Op6c00:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40725,10 +40098,9 @@ Op6c02:
   teq r10,r10,lsl #3 ;@ ge: N == V
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40740,10 +40112,9 @@ Op6c03:
   teq r10,r10,lsl #3 ;@ ge: N == V
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40761,8 +40132,10 @@ Op6d00:
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40778,10 +40151,9 @@ Op6d02:
   teq r10,r10,lsl #3 ;@ lt: N != V
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40793,10 +40165,9 @@ Op6d03:
   teq r10,r10,lsl #3 ;@ lt: N != V
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40810,13 +40181,15 @@ Op6e00:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bmi BccDontBranch16
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40830,13 +40203,12 @@ Op6e00:
 ;@ ---------- [6e02] bgt 4 uses Op6e02 ----------
 Op6e02:
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40846,13 +40218,12 @@ Op6e02:
 ;@ ---------- [6e03] bgt 5 uses Op6e03 ----------
 Op6e03:
   eor r0,r10,r10,lsl #3 ;@ gt: !Z && N == V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bmi BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40866,13 +40237,15 @@ Op6f00:
   str r5,[r7,#0x5c] ;@ Save Cycles
 
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bpl BccDontBranch16
 
   ldrsh r11,[r4] ;@ Fetch Branch offset
 ;@ Branch taken - Add on r0 to PC
-  add r0,r4,r11 ;@ New PC
+;@ Check Memory Base+pc
+  add r0,r4,r11 ;@ r0 = New PC
   bl m68k_checkpc ;@ Call checkpc()
+
   mov r4,r0
   tst r4,#1 ;@ address error?
   bne ExceptionAddressError_r_prg_r4
@@ -40886,13 +40259,12 @@ Op6f00:
 ;@ ---------- [6f02] ble 4 uses Op6f02 ----------
 Op6f02:
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#10 ;@ Subtract cycles
@@ -40902,13 +40274,12 @@ Op6f02:
 ;@ ---------- [6f03] ble 5 uses Op6f03 ----------
 Op6f03:
   eor r0,r10,r10,lsl #3 ;@ le: Z || N != V
-  orrs r0,r10,lsl #1
+  orrs r0,r0,r10,lsl #1
   bpl BccDontBranch8
 
-  mov r11,r8,asl #24 ;@ Shift 8-bit signed offset up...
-
+  sxtb r11,r8 ;@ sign extend
 ;@ Branch taken - Add on r0 to PC
-  add r4,r4,r11,asr #24 ;@ r4 = New PC
+  add r4,r4,r11 ;@ r4 = New PC
   b ExceptionAddressError_r_prg_r4
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40935,8 +40306,8 @@ Op8000:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -40970,8 +40341,8 @@ Op8010:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41007,8 +40378,8 @@ Op8018:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41043,8 +40414,8 @@ Op801f:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41081,8 +40452,8 @@ Op8020:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41117,8 +40488,8 @@ Op8027:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41154,8 +40525,8 @@ Op8028:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41172,13 +40543,11 @@ Op8030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -41200,8 +40569,8 @@ Op8030:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41234,8 +40603,8 @@ Op8038:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41270,8 +40639,8 @@ Op8039:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41307,8 +40676,8 @@ Op803a:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41327,13 +40696,11 @@ Op803b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -41352,8 +40719,8 @@ Op803b:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -41380,8 +40747,8 @@ Op803c:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -41393,23 +40760,22 @@ Op803c:
 Op8040:
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
+  mov r0,r0,lsl #2
 ;@ EaRead : Read register[r0] into r0:
-  ldr r0,[r7,r0,lsl #2]
+  ldrsh r0,[r7,r0]
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41436,16 +40802,15 @@ Op8050:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41474,16 +40839,15 @@ Op8058:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41513,16 +40877,15 @@ Op8060:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41551,16 +40914,15 @@ Op8068:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41578,13 +40940,11 @@ Op8070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -41598,16 +40958,15 @@ Op8070:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41633,16 +40992,15 @@ Op8078:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41670,16 +41028,15 @@ Op8079:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41708,16 +41065,15 @@ Op807a:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41737,13 +41093,11 @@ Op807b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -41754,16 +41108,15 @@ Op807b:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41783,16 +41136,14 @@ Op807c:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  orrs r1,r0,r1,asl #16
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -41814,7 +41165,7 @@ Op8080:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -41847,7 +41198,7 @@ Op8090:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -41882,7 +41233,7 @@ Op8098:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -41918,7 +41269,7 @@ Op80a0:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -41953,7 +41304,7 @@ Op80a8:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -41975,13 +41326,11 @@ Op80b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -41997,7 +41346,7 @@ Op80b0:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42029,7 +41378,7 @@ Op80b8:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42063,7 +41412,7 @@ Op80b9:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42098,7 +41447,7 @@ Op80ba:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42122,13 +41471,11 @@ Op80bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -42141,7 +41488,7 @@ Op80bb:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42169,7 +41516,7 @@ Op80bc:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  orrs r1,r0,r1
+  orrs r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -42181,6 +41528,83 @@ Op80bc:
   subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
+
+;@ ---------- Common unrolled division subroutine ----------
+;@ Fully unrolled unsigned division, with accurate cycle counting.
+;@ Assumes divide-by-zero and unsigned overflow checks have passed.
+;@ Inputs: r2=dividend, r1=divisor<<16
+;@ Output: r2=(quotient<<16)|remainder
+;@ Destroys: r0,r1,r3,r10
+;@ r5 is adjusted with the per-iteration penalty cycles.
+DivideCommon:
+  rsbs r0,r1,#0 ;@ negate divisor and clear carry
+  sbc r10,r1,r1,lsr #1 ;@ r10=(divisor<<15)-1
+;@ calculate number of skipped initial iterations
+  orr r3,r2,r1,lsr #16 ;@ make sure the rounded difference is at most 15
+  clz r3,r3 ;@ leading zeros of dividend, clamped to clz(divisor)+16
+  clz r1,r1 ;@ leading zeros of divisor
+  sbcs r3,r3,r1 ;@ subtract and round down (carry is still clear)
+  mov r3,r3,lsl #1 ;@ each skipped iteration has 2 penalty cycle pairs
+;@ add branch offset (12 bytes per iteration)
+  add r1,r3,r3,lsl #1
+  addhi pc,pc,r1,lsl #1 ;@ fallthrough if max iterations
+  mov r3,#0 ;@ saturate negative cycles to 0
+
+;@ For each iteration:
+;@ Shift remainder into upper bits and compare the pre-shifted divisor to it.
+;@ This resets carry if non-restoring, and sets overflow if remainder MSB was 1.
+;@ Then, conditionally shift and add the negated divisor, setting an upper quotient bit.
+;@ Finally, add 0, 1, or 2 penalty cycle pairs based on the overflow and carry flags.
+  cmp r10,r2,lsl #0
+  addcc r2,r2,r0,lsr #0+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #1
+  addcc r2,r2,r0,lsr #1+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #2
+  addcc r2,r2,r0,lsr #2+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #3
+  addcc r2,r2,r0,lsr #3+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #4
+  addcc r2,r2,r0,lsr #4+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #5
+  addcc r2,r2,r0,lsr #5+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #6
+  addcc r2,r2,r0,lsr #6+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #7
+  addcc r2,r2,r0,lsr #7+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #8
+  addcc r2,r2,r0,lsr #8+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #9
+  addcc r2,r2,r0,lsr #9+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #10
+  addcc r2,r2,r0,lsr #10+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #11
+  addcc r2,r2,r0,lsr #11+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #12
+  addcc r2,r2,r0,lsr #12+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #13
+  addcc r2,r2,r0,lsr #13+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #14
+  addcc r2,r2,r0,lsr #14+1
+  adcvc r3,r3,#1
+  cmp r10,r2,lsl #15
+  addcc r2,r2,r0,lsr #15+1
+
+  sub r5,r5,r3,lsl #1 ;@ Count penalty cycle pairs
+  bx lr
 
 ;@ ---------- [80c0] divu.w d0, d0 uses Op80c0 ----------
 Op80c0:
@@ -42197,43 +41621,28 @@ Op80c0:
   movs r1,r0,asl #16
   beq divzero80c0 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80c0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80c0
-
-Divide80c0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80c0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80c0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80c0 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80c0:
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#140 ;@ Subtract cycles
+  subs r5,r5,#10 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42241,7 +41650,7 @@ divzero80c0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#178 ;@ Subtract cycles
+  subs r5,r5,#38 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42250,6 +41659,7 @@ divzero80c0:
 Op80d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
@@ -42268,53 +41678,40 @@ Op80d0:
   movs r1,r0,asl #16
   beq divzero80d0 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80d0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80d0
-
-Divide80d0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80d0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80d0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80d0 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80d0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#144 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80d0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#182 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42323,6 +41720,7 @@ divzero80d0:
 Op80d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -42342,53 +41740,40 @@ Op80d8:
   movs r1,r0,asl #16
   beq divzero80d8 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80d8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80d8
-
-Divide80d8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80d8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80d8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80d8 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80d8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#144 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80d8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#182 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42397,6 +41782,7 @@ divzero80d8:
 Op80e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -42417,53 +41803,40 @@ Op80e0:
   movs r1,r0,asl #16
   beq divzero80e0 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80e0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80e0
-
-Divide80e0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80e0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80e0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80e0 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80e0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#146 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80e0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#184 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#44 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42472,6 +41845,7 @@ divzero80e0:
 Op80e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -42491,53 +41865,40 @@ Op80e8:
   movs r1,r0,asl #16
   beq divzero80e8 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80e8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80e8
-
-Divide80e8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80e8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80e8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80e8 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80e8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#148 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80e8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#186 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42546,17 +41907,16 @@ divzero80e8:
 Op80f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -42574,53 +41934,40 @@ Op80f0:
   movs r1,r0,asl #16
   beq divzero80f0 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80f0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80f0
-
-Divide80f0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80f0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80f0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80f0 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80f0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#150 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80f0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#188 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42629,6 +41976,7 @@ divzero80f0:
 Op80f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
@@ -42645,53 +41993,40 @@ Op80f8:
   movs r1,r0,asl #16
   beq divzero80f8 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80f8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80f8
-
-Divide80f8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80f8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80f8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80f8 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80f8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#148 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80f8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#186 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42700,6 +42035,7 @@ divzero80f8:
 Op80f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -42718,53 +42054,40 @@ Op80f9:
   movs r1,r0,asl #16
   beq divzero80f9 ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80f9:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80f9
-
-Divide80f9:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80f9
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80f9 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80f9 ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80f9:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#152 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#22 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80f9:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#190 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#50 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42773,6 +42096,7 @@ divzero80f9:
 Op80fa:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,pc)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
@@ -42792,53 +42116,40 @@ Op80fa:
   movs r1,r0,asl #16
   beq divzero80fa ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80fa:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80fa
-
-Divide80fa:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80fa
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80fa ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80fa ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80fa:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#148 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#18 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80fa:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#186 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42847,19 +42158,18 @@ divzero80fa:
 Op80fb:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -42874,53 +42184,40 @@ Op80fb:
   movs r1,r0,asl #16
   beq divzero80fb ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80fb:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80fb
-
-Divide80fb:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80fb
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80fb ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80fb ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80fb:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#150 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero80fb:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#188 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42939,43 +42236,28 @@ Op80fc:
   movs r1,r0,asl #16
   beq divzero80fc ;@ division by zero
 
-  mov r0,r1,lsr #16 ;@ use only 16 bits of divisor
 
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift80fc:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift80fc
-
-Divide80fc:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide80fc
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop80fc ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  movs r1,r3,lsr #16 ;@ check for overflow condition
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
-  bne endofop80fc ;@ overflow!
+  sub r5,r5,#66 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  mov r0,r2,ror #16 ;@ swap quotient and remainder
+  movs r2,r0,lsl #16 ;@ set flags based on quotient
+  and r10,r2,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop80fc:
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#144 ;@ Subtract cycles
+  subs r5,r5,#14 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42983,7 +42265,7 @@ divzero80fc:
   mov r0,#5 ;@ Divide by zero
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#182 ;@ Subtract cycles
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -42991,45 +42273,37 @@ divzero80fc:
 ;@ ---------- [8100] sbcd d0, d0 uses Op8100 ----------
 Op8100:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #24
-  mov r1,r0,asl #24
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r6,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r1,lsr #4
-  sub r0,r0,r2
-  subne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  subhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  sub r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0xa0000000 ;@ N and C
-  addhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  adc r1,r11,#0
+  eor r2,r11,r0
+  sub r0,r0,r1
+  eor r2,r2,r0 ;@ borrows from each bit of SBC
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  subs r0,r0,r1,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-;@ EaWrite: r0 into register[r11]:
+;@ EaWrite: r0 into register[r8]:
   mov r0,r0,lsr #24
-  strb r0,[r7,r11,lsr #7]
+  strb r0,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -43046,51 +42320,44 @@ Op8108:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  adc r1,r11,#0
+  eor r2,r11,r0
+  sub r0,r0,r1
+  eor r2,r2,r0 ;@ borrows from each bit of SBC
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  subs r0,r0,r1,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r6,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r1,lsr #4
-  sub r0,r0,r2
-  subne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  subhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  sub r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0xa0000000 ;@ N and C
-  addhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a0)' (address in r11):
+;@ EaWrite: Write r0 into '-(a0)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -43107,51 +42374,44 @@ Op810f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  adc r1,r11,#0
+  eor r2,r11,r0
+  sub r0,r0,r1
+  eor r2,r2,r0 ;@ borrows from each bit of SBC
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  subs r0,r0,r1,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r6,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r1,lsr #4
-  sub r0,r0,r2
-  subne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  subhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  sub r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0xa0000000 ;@ N and C
-  addhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a0)' (address in r11):
+;@ EaWrite: Write r0 into '-(a0)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -43184,9 +42444,8 @@ Op8110:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43223,9 +42482,8 @@ Op8118:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43261,9 +42519,8 @@ Op811f:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43301,9 +42558,8 @@ Op8120:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43339,9 +42595,8 @@ Op8127:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43378,9 +42633,8 @@ Op8128:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43398,13 +42652,11 @@ Op8130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -43426,9 +42678,8 @@ Op8130:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43462,9 +42713,8 @@ Op8138:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43500,9 +42750,8 @@ Op8139:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -43538,9 +42787,8 @@ Op8150:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43577,9 +42825,8 @@ Op8158:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43617,9 +42864,8 @@ Op8160:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43656,9 +42902,8 @@ Op8168:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43676,13 +42921,11 @@ Op8170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -43704,9 +42947,8 @@ Op8170:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43740,9 +42982,8 @@ Op8178:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43778,9 +43019,8 @@ Op8179:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -43942,13 +43182,11 @@ Op81b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -44062,63 +43300,47 @@ Op81c0:
   movs r1,r0,asl #16
   beq divzero81c0 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81c0
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81c0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81c0
-
-Divide81c0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81c0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81c0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81c0 ;@ overflow!
 
-wrendofop81c0:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81c0:
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#158 ;@ Subtract cycles
+  subs r5,r5,#16 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44126,7 +43348,7 @@ divzero81c0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#196 ;@ Subtract cycles
+  subs r5,r5,#44 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44135,6 +43357,7 @@ divzero81c0:
 Op81d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
@@ -44153,73 +43376,59 @@ Op81d0:
   movs r1,r0,asl #16
   beq divzero81d0 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81d0
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81d0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81d0
-
-Divide81d0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81d0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81d0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81d0 ;@ overflow!
 
-wrendofop81d0:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81d0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#162 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81d0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#200 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44228,6 +43437,7 @@ divzero81d0:
 Op81d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -44247,73 +43457,59 @@ Op81d8:
   movs r1,r0,asl #16
   beq divzero81d8 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81d8
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81d8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81d8
-
-Divide81d8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81d8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81d8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81d8 ;@ overflow!
 
-wrendofop81d8:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81d8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#162 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81d8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#200 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44322,6 +43518,7 @@ divzero81d8:
 Op81e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -44342,73 +43539,59 @@ Op81e0:
   movs r1,r0,asl #16
   beq divzero81e0 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81e0
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81e0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81e0
-
-Divide81e0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81e0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81e0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81e0 ;@ overflow!
 
-wrendofop81e0:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81e0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#164 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#22 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81e0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#202 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#50 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44417,6 +43600,7 @@ divzero81e0:
 Op81e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -44436,73 +43620,59 @@ Op81e8:
   movs r1,r0,asl #16
   beq divzero81e8 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81e8
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81e8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81e8
-
-Divide81e8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81e8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81e8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81e8 ;@ overflow!
 
-wrendofop81e8:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81e8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#166 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#24 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81e8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#204 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#52 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44511,17 +43681,16 @@ divzero81e8:
 Op81f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -44539,73 +43708,59 @@ Op81f0:
   movs r1,r0,asl #16
   beq divzero81f0 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81f0
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81f0:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81f0
-
-Divide81f0:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81f0
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81f0 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81f0 ;@ overflow!
 
-wrendofop81f0:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81f0:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#168 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#26 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81f0:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#206 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#54 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44614,6 +43769,7 @@ divzero81f0:
 Op81f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
@@ -44630,73 +43786,59 @@ Op81f8:
   movs r1,r0,asl #16
   beq divzero81f8 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81f8
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81f8:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81f8
-
-Divide81f8:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81f8
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81f8 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81f8 ;@ overflow!
 
-wrendofop81f8:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81f8:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#166 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#24 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81f8:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#204 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#52 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44705,6 +43847,7 @@ divzero81f8:
 Op81f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -44723,73 +43866,59 @@ Op81f9:
   movs r1,r0,asl #16
   beq divzero81f9 ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81f9
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81f9:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81f9
-
-Divide81f9:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81f9
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81f9 ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81f9 ;@ overflow!
 
-wrendofop81f9:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81f9:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#170 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#28 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81f9:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#208 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#56 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44798,6 +43927,7 @@ divzero81f9:
 Op81fa:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,pc)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
@@ -44817,73 +43947,59 @@ Op81fa:
   movs r1,r0,asl #16
   beq divzero81fa ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81fa
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81fa:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81fa
-
-Divide81fa:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81fa
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81fa ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81fa ;@ overflow!
 
-wrendofop81fa:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81fa:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#166 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#24 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81fa:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#204 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#52 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -44892,19 +44008,18 @@ divzero81fa:
 Op81fb:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -44919,73 +44034,59 @@ Op81fb:
   movs r1,r0,asl #16
   beq divzero81fb ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81fb
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81fb:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81fb
-
-Divide81fb:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81fb
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81fb ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81fb ;@ overflow!
 
-wrendofop81fb:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81fb:
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#168 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#26 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 divzero81fb:
   mov r0,#5 ;@ Divide by zero
   bl Exception
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#206 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#54 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -45004,63 +44105,47 @@ Op81fc:
   movs r1,r0,asl #16
   beq divzero81fc ;@ division by zero
 
-  mov r12,#0 ;@ r12 = 1 or 2 if the result is negative
-  tst r2,r2
-  orrmi r12,r12,#2
+  ands r12,r2,#0x80000000 ;@ r12 = odd parity if the result is negative
+  submi r5,r5,#2
   rsbmi r2,r2,#0 ;@ Make r2 positive
 
-  movs r0,r1,asr #16
-  orrmi r12,r12,#1
-  rsbmi r0,r0,#0 ;@ Make r0 positive
+  tst r1,r1
+  orrmi r12,r12,#0x40000000
+  rsbmi r1,r1,#0 ;@ Make r1 positive
 
-;@ detect the nasty 0x80000000 / -1 situation
-  mov r3,r2,asr #31
-  eors r3,r3,r1,asr #16
-  beq wrendofop81fc
-
-;@ Divide r2 by r0
-  mov r3,#0
-  mov r1,r0
-
-;@ Shift up divisor till it's just less than numerator
-Shift81fc:
-  cmp r1,r2,lsr #1
-  movls r1,r1,lsl #1
-  bcc Shift81fc
-
-Divide81fc:
+;@ Overflow?
   cmp r2,r1
-  adc r3,r3,r3 ;@ Double r3 and add 1 if carry set
-  subcs r2,r2,r1
-  teq r1,r0
-  movne r1,r1,lsr #1
-  bne Divide81fc
+  movhs r10,#0x90000000 ;@ set overflow/negative flags
+  bhs endofop81fc ;@ overflow!
 
-;@r3==quotient,r2==remainder
-  and r1,r12,#1
-  teq r1,r12,lsr #1
-  rsbne r3,r3,#0 ;@ negate if quotient is negative
-  tst r12,#2
-  rsbne r2,r2,#0 ;@ negate the remainder if divident was negative
+  sub r5,r5,#74 ;@ Minimum cycles divide loop can take
+  bl DivideCommon ;@ Divide r2 by (r1>>16)
+;@r2==(quotient<<16)|remainder
 
-  mov r1,r3,asl #16
-  cmp r3,r1,asr #16 ;@ signed overflow?
-  orrne r10,r10,#0x10000000 ;@ set overflow flag
+  mov r3,r2,lsr #16
+  cmn r12,r12
+  rsbvs r3,r3,#0 ;@ negate if quotient is negative
+  subvs r5,r5,#2
+  rsbcs r2,r2,#0 ;@ negate the remainder if dividend was negative
+  subcs r5,r5,#2
+
+  movs r0,r3,lsl #16 ;@ set flags based on quotient
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  cmp r3,r0,asr #16 ;@ signed overflow?
+  movne r10,#0x90000000 ;@ set overflow/negative flags
   bne endofop81fc ;@ overflow!
 
-wrendofop81fc:
-  movs r1,r3,lsl #16 ;@ Clip to 16-bits
-  and r10,r1,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  mov r1,r1,lsr #16
-  orr r1,r1,r2,lsl #16 ;@ Insert remainder
+  mov r0,r0,lsr #16
+  orr r0,r0,r2,lsl #16 ;@ Insert remainder
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11,lsr #7]
 
 endofop81fc:
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#162 ;@ Subtract cycles
+  subs r5,r5,#20 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -45068,7 +44153,7 @@ divzero81fc:
   mov r0,#5 ;@ Divide by zero
   bl Exception
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#200 ;@ Subtract cycles
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -45084,49 +44169,42 @@ Op8f08:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  adc r1,r11,#0
+  eor r2,r11,r0
+  sub r0,r0,r1
+  eor r2,r2,r0 ;@ borrows from each bit of SBC
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  subs r0,r0,r1,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r6,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r1,lsr #4
-  sub r0,r0,r2
-  subne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  subhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  sub r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0xa0000000 ;@ N and C
-  addhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a7)' (address in r11):
+;@ EaWrite: Write r0 into '-(a7)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -45143,49 +44221,42 @@ Op8f0f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  adc r1,r11,#0
+  eor r2,r11,r0
+  sub r0,r0,r1
+  eor r2,r2,r0 ;@ borrows from each bit of SBC
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  subs r0,r0,r1,lsl #22 ;@ subtract adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  eor r10,r10,#0x20000000 ;@ Invert carry
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r6,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r1,lsr #4
-  sub r0,r0,r2
-  subne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  subhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  sub r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0xa0000000 ;@ N and C
-  addhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a7)' (address in r11):
+;@ EaWrite: Write r0 into '-(a7)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -45207,13 +44278,13 @@ Op9000:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -45243,13 +44314,13 @@ Op9010:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45281,13 +44352,13 @@ Op9018:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45318,13 +44389,13 @@ Op901f:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45357,13 +44428,13 @@ Op9020:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45394,13 +44465,13 @@ Op9027:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45432,13 +44503,13 @@ Op9028:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45455,13 +44526,11 @@ Op9030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -45479,13 +44548,13 @@ Op9030:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45514,13 +44583,13 @@ Op9038:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45551,13 +44620,13 @@ Op9039:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45589,13 +44658,13 @@ Op903a:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45614,13 +44683,11 @@ Op903b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -45635,13 +44702,13 @@ Op903b:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45664,13 +44731,13 @@ Op903c:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -45694,13 +44761,13 @@ Op9040:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -45731,13 +44798,13 @@ Op9050:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45770,13 +44837,13 @@ Op9058:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45810,13 +44877,13 @@ Op9060:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45849,13 +44916,13 @@ Op9068:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45872,13 +44939,11 @@ Op9070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -45897,13 +44962,13 @@ Op9070:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45933,13 +44998,13 @@ Op9078:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -45971,13 +45036,13 @@ Op9079:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -46010,13 +45075,13 @@ Op907a:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -46035,13 +45100,11 @@ Op907b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -46057,13 +45120,13 @@ Op907b:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -46087,13 +45150,13 @@ Op907c:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -46115,7 +45178,7 @@ Op9080:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46149,7 +45212,7 @@ Op9090:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46185,7 +45248,7 @@ Op9098:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46222,7 +45285,7 @@ Op90a0:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46258,7 +45321,7 @@ Op90a8:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46280,13 +45343,11 @@ Op90b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -46303,7 +45364,7 @@ Op90b0:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46336,7 +45397,7 @@ Op90b8:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46371,7 +45432,7 @@ Op90b9:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46407,7 +45468,7 @@ Op90ba:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46431,13 +45492,11 @@ Op90bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -46451,7 +45510,7 @@ Op90bb:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46480,7 +45539,7 @@ Op90bc:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -46505,9 +45564,8 @@ Op90c0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46536,9 +45594,8 @@ Op90d0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46569,9 +45626,8 @@ Op90d8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46603,9 +45659,8 @@ Op90e0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46636,9 +45691,8 @@ Op90e8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46657,13 +45711,11 @@ Op90f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -46678,9 +45730,8 @@ Op90f0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46708,9 +45759,8 @@ Op90f8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46740,9 +45790,8 @@ Op90f9:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46773,9 +45822,8 @@ Op90fa:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46796,13 +45844,11 @@ Op90fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -46814,9 +45860,8 @@ Op90fb:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46838,9 +45883,7 @@ Op90fc:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  sub r1,r1,r0,asr #16
+  sub r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -46853,39 +45896,34 @@ Op90fc:
 ;@ ---------- [9100] subx.b d0, d0 uses Op9100 ----------
 Op9100:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #24
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #24 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
+;@ EaWrite: r1 into register[r8]:
   mov r1,r1,lsr #24
-  strb r1,[r7,r11,lsr #7]
+  strb r1,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -46902,43 +45940,40 @@ Op9108:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #24 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -46955,43 +45990,40 @@ Op910f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #24 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -47020,14 +46052,13 @@ Op9110:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47060,14 +46091,13 @@ Op9118:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47099,14 +46129,13 @@ Op911f:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47140,14 +46169,13 @@ Op9120:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47179,14 +46207,13 @@ Op9127:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47219,14 +46246,13 @@ Op9128:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47244,13 +46270,11 @@ Op9130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -47268,14 +46292,13 @@ Op9130:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47305,14 +46328,13 @@ Op9138:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47344,14 +46366,13 @@ Op9139:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   subs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -47364,40 +46385,35 @@ Op9139:
 ;@ ---------- [9140] subx.w d0, d0 uses Op9140 ----------
 Op9140:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-  mov r11,r11,lsr #7
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #16
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+  mov r8,r8,lsr #7
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #16
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #16 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #16
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
+;@ EaWrite: r1 into register[r8]:
   mov r1,r1,lsr #16
-  strh r1,[r7,r11]
+  strh r1,[r7,r8]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -47414,43 +46430,40 @@ Op9148:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r6,r0,asl #16
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #16
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #16 ;@ Defines CV
+  orr r1,r1,r2,lsr #16 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #16
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #16
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -47479,14 +46492,13 @@ Op9150:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47519,14 +46531,13 @@ Op9158:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47560,14 +46571,13 @@ Op9160:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47600,14 +46610,13 @@ Op9168:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47625,13 +46634,11 @@ Op9170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -47649,14 +46656,13 @@ Op9170:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47686,14 +46692,13 @@ Op9178:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47725,14 +46730,13 @@ Op9179:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   subs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -47745,34 +46749,31 @@ Op9179:
 ;@ ---------- [9180] subx.l d0, d0 uses Op9180 ----------
 Op9180:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
+
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+
+  sbcs r1,r11,r0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r1 into register[r8]:
+  str r1,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#8 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -47789,40 +46790,37 @@ Op9188:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#4 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  mov r6,r0
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#4 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#4 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+
+  sbcs r1,r11,r0 ;@ Defines CV
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  bic r0,r11,#0xff000000
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
+  bic r0,r8,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#30 ;@ Subtract cycles
@@ -47850,7 +46848,7 @@ Op9190:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -47887,7 +46885,7 @@ Op9198:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -47925,7 +46923,7 @@ Op91a0:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -47962,7 +46960,7 @@ Op91a8:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -47985,13 +46983,11 @@ Op91b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -48008,7 +47004,7 @@ Op91b0:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -48042,7 +47038,7 @@ Op91b8:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -48078,7 +47074,7 @@ Op91b9:
 
 ;@ Do arithmetic:
   subs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
   str r10,[r7,#0x4c] ;@ Save X bit
 
@@ -48247,13 +47243,11 @@ Op91f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -48378,13 +47372,11 @@ Op91fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -48441,42 +47433,39 @@ Op9f08:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #24 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a7)' (address in r11):
+;@ EaWrite: Write r1 into '-(a7)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -48493,42 +47482,39 @@ Op9f0f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  mvn r2,r2 ;@ Invert it
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  rscs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
-  eor r10,r10,#0x20000000 ;@ Invert carry
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+
+  sbcs r1,r11,r0,asl #24 ;@ Defines CV
+  orr r1,r1,r2,lsr #8 ;@ Set lower bits of result
+  mvns r1,r1 ;@ Defines NZ
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a7)' (address in r11):
+;@ EaWrite: Write r1 into '-(a7)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -48553,7 +47539,7 @@ Opb000:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -48586,7 +47572,7 @@ Opb010:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48621,7 +47607,7 @@ Opb018:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48655,7 +47641,7 @@ Opb01f:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48691,7 +47677,7 @@ Opb020:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48725,7 +47711,7 @@ Opb027:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48760,7 +47746,7 @@ Opb028:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48778,13 +47764,11 @@ Opb030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -48804,7 +47788,7 @@ Opb030:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48838,7 +47822,7 @@ Opb039:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48873,7 +47857,7 @@ Opb03a:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48893,13 +47877,11 @@ Opb03b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -48916,7 +47898,7 @@ Opb03b:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -48942,7 +47924,7 @@ Opb03c:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -48968,7 +47950,7 @@ Opb040:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -49001,7 +47983,7 @@ Opb050:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49036,7 +48018,7 @@ Opb058:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49072,7 +48054,7 @@ Opb060:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49107,7 +48089,7 @@ Opb068:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49125,13 +48107,11 @@ Opb070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -49151,7 +48131,7 @@ Opb070:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49183,7 +48163,7 @@ Opb078:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49217,7 +48197,7 @@ Opb079:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49252,7 +48232,7 @@ Opb07a:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49272,13 +48252,11 @@ Opb07b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -49295,7 +48273,7 @@ Opb07b:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49321,7 +48299,7 @@ Opb07c:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -49345,7 +48323,7 @@ Opb080:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -49376,7 +48354,7 @@ Opb090:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49409,7 +48387,7 @@ Opb098:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49443,7 +48421,7 @@ Opb0a0:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49476,7 +48454,7 @@ Opb0a8:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49494,13 +48472,11 @@ Opb0b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -49518,7 +48494,7 @@ Opb0b0:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49550,7 +48526,7 @@ Opb0b9:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49583,7 +48559,7 @@ Opb0ba:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49603,13 +48579,11 @@ Opb0bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -49624,7 +48598,7 @@ Opb0bb:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49650,7 +48624,7 @@ Opb0bc:
 
 ;@ Do arithmetic:
   rsbs r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -49670,10 +48644,9 @@ Opb0c0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -49700,10 +48673,9 @@ Opb0d0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49732,10 +48704,9 @@ Opb0d8:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49765,10 +48736,9 @@ Opb0e0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49797,10 +48767,9 @@ Opb0e8:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49817,13 +48786,11 @@ Opb0f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -49838,10 +48805,9 @@ Opb0f0:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49867,10 +48833,9 @@ Opb0f8:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49898,10 +48863,9 @@ Opb0f9:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49930,10 +48894,9 @@ Opb0fa:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49952,13 +48915,11 @@ Opb0fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -49970,10 +48931,9 @@ Opb0fb:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  sxth r0,r0 ;@ sign extend
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -49993,10 +48953,8 @@ Opb0fc:
 ;@ EaRead : Read register[r1] into r1:
   ldr r1,[r7,r1,lsr #7]
 
-  mov r0,r0,asl #16
-
-  cmp r1,r0,asr #16 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  cmp r1,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -50062,7 +49020,7 @@ Opb108:
   bl m68k_read8 ;@ Call read8(r0) handler
 
   rsbs r0,r11,r0,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -50098,7 +49056,7 @@ Opb10f:
   bl m68k_read8 ;@ Call read8(r0) handler
 
   rsbs r0,r11,r0,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -50354,13 +49312,11 @@ Opb130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -50477,23 +49433,21 @@ Opb140:
   and r11,r8,#0x000f
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  ldrsh r0,[r7,r11]
 
 ;@ Get register operand into r1:
 ;@ EaCalc : Get register index into r1:
   and r1,r8,#0x0e00
+  mov r1,r1,lsr #7
 ;@ EaRead : Read register[r1] into r1:
-  ldr r1,[r7,r1,lsr #7]
-
-  mov r0,r0,asl #16
+  ldrsh r1,[r7,r1]
 
 ;@ Do arithmetic:
-  eors r1,r0,r1,asl #16
+  eors r1,r0,r1
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ EaWrite: r1 into register[r11]:
-  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -50529,7 +49483,7 @@ Opb148:
   bl m68k_read16 ;@ Call read16(r0) handler
 
   rsbs r0,r11,r0,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -50707,13 +49661,11 @@ Opb170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -50878,7 +49830,7 @@ Opb188:
   bl m68k_read32 ;@ Call read32(r0) handler
 
   rsbs r0,r11,r0
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51044,13 +49996,11 @@ Opb1b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -51164,7 +50114,7 @@ Opb1c0:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -51192,7 +50142,7 @@ Opb1d0:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51222,7 +50172,7 @@ Opb1d8:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51253,7 +50203,7 @@ Opb1e0:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51283,7 +50233,7 @@ Opb1e8:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51300,13 +50250,11 @@ Opb1f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -51322,7 +50270,7 @@ Opb1f0:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51349,7 +50297,7 @@ Opb1f8:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51378,7 +50326,7 @@ Opb1f9:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51408,7 +50356,7 @@ Opb1fa:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51427,13 +50375,11 @@ Opb1fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -51446,7 +50392,7 @@ Opb1fb:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51469,7 +50415,7 @@ Opb1fc:
   ldr r1,[r7,r1,lsr #7]
 
   cmp r1,r0 ;@ Defines NZCV
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -51504,7 +50450,7 @@ Opbf08:
   bl m68k_read8 ;@ Call read8(r0) handler
 
   rsbs r0,r11,r0,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51539,7 +50485,7 @@ Opbf0f:
   bl m68k_read8 ;@ Call read8(r0) handler
 
   rsbs r0,r11,r0,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   eor r10,r10,#0x20000000 ;@ Invert carry
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51567,8 +50513,8 @@ Opc000:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -51602,8 +50548,8 @@ Opc010:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51639,8 +50585,8 @@ Opc018:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51675,8 +50621,8 @@ Opc01f:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51713,8 +50659,8 @@ Opc020:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51749,8 +50695,8 @@ Opc027:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51786,8 +50732,8 @@ Opc028:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51804,13 +50750,11 @@ Opc030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -51832,8 +50776,8 @@ Opc030:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51866,8 +50810,8 @@ Opc038:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51902,8 +50846,8 @@ Opc039:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51939,8 +50883,8 @@ Opc03a:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -51959,13 +50903,11 @@ Opc03b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -51984,8 +50926,8 @@ Opc03b:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -52012,8 +50954,8 @@ Opc03c:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -52039,16 +50981,15 @@ Opc050:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52077,16 +51018,15 @@ Opc058:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52116,16 +51056,15 @@ Opc060:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52154,16 +51093,15 @@ Opc068:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52181,13 +51119,11 @@ Opc070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -52201,16 +51137,15 @@ Opc070:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52236,16 +51171,15 @@ Opc078:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52273,16 +51207,15 @@ Opc079:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52311,16 +51244,15 @@ Opc07a:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52340,13 +51272,11 @@ Opc07b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -52357,16 +51287,15 @@ Opc07b:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  sxth r0,r0 ;@ sign extend
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52386,16 +51315,14 @@ Opc07c:
   and r11,r8,#0x0e00
   mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r1:
-  ldr r1,[r7,r11]
+  ldrsh r1,[r7,r11]
 
 ;@ Do arithmetic:
-  mov r0,r0,asl #16
-  ands r1,r0,r1,asl #16
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
   strh r1,[r7,r11]
 
@@ -52417,7 +51344,7 @@ Opc080:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52450,7 +51377,7 @@ Opc090:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52485,7 +51412,7 @@ Opc098:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52521,7 +51448,7 @@ Opc0a0:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52556,7 +51483,7 @@ Opc0a8:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52578,13 +51505,11 @@ Opc0b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -52600,7 +51525,7 @@ Opc0b0:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52632,7 +51557,7 @@ Opc0b8:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52666,7 +51591,7 @@ Opc0b9:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52701,7 +51626,7 @@ Opc0ba:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52725,13 +51650,11 @@ Opc0bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -52744,7 +51667,7 @@ Opc0bb:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52772,7 +51695,7 @@ Opc0bc:
   ldr r1,[r7,r11,lsr #7]
 
 ;@ Do arithmetic:
-  ands r1,r0,r1
+  ands r1,r1,r0
   and r10,r1,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
@@ -52789,29 +51712,40 @@ Opc0bc:
 Opc0c0:
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
+  mov r0,r0,lsl #2
 ;@ EaRead : Read register[r0] into r0:
-  ldr r0,[r7,r0,lsl #2]
+  ldrh r0,[r7,r0]
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#54 ;@ Subtract cycles
+  subs r5,r5,#38 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -52819,6 +51753,7 @@ Opc0c0:
 Opc0d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
@@ -52828,28 +51763,40 @@ Opc0d0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -52857,6 +51804,7 @@ Opc0d0:
 Opc0d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -52867,28 +51815,40 @@ Opc0d8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -52896,6 +51856,7 @@ Opc0d8:
 Opc0e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -52907,28 +51868,40 @@ Opc0e0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#60 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#44 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -52936,6 +51909,7 @@ Opc0e0:
 Opc0e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -52946,28 +51920,40 @@ Opc0e8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -52975,17 +51961,16 @@ Opc0e8:
 Opc0f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -52994,28 +51979,40 @@ Opc0f0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#64 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -53023,6 +52020,7 @@ Opc0f0:
 Opc0f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
@@ -53030,28 +52028,40 @@ Opc0f8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -53059,6 +52069,7 @@ Opc0f8:
 Opc0f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -53068,28 +52079,40 @@ Opc0f9:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#66 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#50 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -53097,6 +52120,7 @@ Opc0f9:
 Opc0fa:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,pc)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
@@ -53107,28 +52131,40 @@ Opc0fa:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -53136,121 +52172,134 @@ Opc0fa:
 Opc0fb:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
+  uxth r0,r0 ;@ zero extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#64 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 ;@ ---------- [c0fc] mulu.w #$3333, d0 uses Opc0fc ----------
 Opc0fc:
 ;@ EaCalc : Get '#$3333' into r0:
-  ldrsh r0,[r4],#2 ;@ Fetch immediate value
+  ldrh r0,[r4],#2 ;@ Fetch immediate value
 ;@ EaRead : Read '#$3333' (address in r0) into r0:
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,lsr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,lsr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r0,lsl #13
+  bic r10,r0,r10,lsr #15
+  rsb r1,r3,r0,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
 ;@ ---------- [c100] abcd d0, d0 uses Opc100 ----------
 Opc100:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #24
-  mov r1,r0,asl #24
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r1,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r6,lsr #4
-  add r0,r0,r2
-  addne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  addhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  add r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0x20000000 ;@ C
-  subhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  orrmi r10,r10,#0x90000000 ;@ Undefined N+V behavior
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  eor r1,r0,r11
+  adc r0,r0,r11
+  eor r1,r1,r0 ;@ carries from each bit of ADC
+  add r2,r0,#0x66
+  eor r2,r2,r0 ;@ carries from each bit of adjust
+  orr r2,r2,r1 ;@ combine carries
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  adds r0,r0,r1,lsl #22 ;@ add adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-;@ EaWrite: r0 into register[r11]:
+;@ EaWrite: r0 into register[r8]:
   mov r0,r0,lsr #24
-  strb r0,[r7,r11,lsr #7]
+  strb r0,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -53267,52 +52316,45 @@ Opc108:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  eor r1,r0,r11
+  adc r0,r0,r11
+  eor r1,r1,r0 ;@ carries from each bit of ADC
+  add r2,r0,#0x66
+  eor r2,r2,r0 ;@ carries from each bit of adjust
+  orr r2,r2,r1 ;@ combine carries
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  adds r0,r0,r1,lsl #22 ;@ add adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r1,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r6,lsr #4
-  add r0,r0,r2
-  addne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  addhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  add r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0x20000000 ;@ C
-  subhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  orrmi r10,r10,#0x90000000 ;@ Undefined N+V behavior
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a0)' (address in r11):
+;@ EaWrite: Write r0 into '-(a0)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -53329,52 +52371,45 @@ Opc10f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x0e00
   orr r2,r2,#0x1000 ;@ A0-7
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  eor r1,r0,r11
+  adc r0,r0,r11
+  eor r1,r1,r0 ;@ carries from each bit of ADC
+  add r2,r0,#0x66
+  eor r2,r2,r0 ;@ carries from each bit of adjust
+  orr r2,r2,r1 ;@ combine carries
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  adds r0,r0,r1,lsl #22 ;@ add adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r1,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r6,lsr #4
-  add r0,r0,r2
-  addne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  addhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  add r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0x20000000 ;@ C
-  subhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  orrmi r10,r10,#0x90000000 ;@ Undefined N+V behavior
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a0)' (address in r11):
+;@ EaWrite: Write r0 into '-(a0)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -53407,9 +52442,8 @@ Opc110:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53446,9 +52480,8 @@ Opc118:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53484,9 +52517,8 @@ Opc11f:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53524,9 +52556,8 @@ Opc120:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53562,9 +52593,8 @@ Opc127:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53601,9 +52631,8 @@ Opc128:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53621,13 +52650,11 @@ Opc130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -53649,9 +52676,8 @@ Opc130:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53685,9 +52711,8 @@ Opc138:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53723,9 +52748,8 @@ Opc139:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -53737,14 +52761,24 @@ Opc139:
 
 ;@ ---------- [c140] exg d0, d0 uses Opc140 ----------
 Opc140:
-  and r2,r8,#0x0e00 ;@ Find T register
-  and r3,r8,#0x000f ;@ Find S register
+;@ Find T register
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ Find S register
+;@ EaCalc : Get register index into r3:
+  and r3,r8,#0x000f
 
-  ldr r0,[r7,r2,lsr #7] ;@ Get T
-  ldr r1,[r7,r3,lsl #2] ;@ Get S
+;@ EaRead : Read register[r2] into r0:
+  ldr r0,[r7,r2,lsr #7]
 
-  str r0,[r7,r3,lsl #2] ;@ T->S
-  str r1,[r7,r2,lsr #7] ;@ S->T
+;@ EaRead : Read register[r3] into r1:
+  ldr r1,[r7,r3,lsl #2]
+
+;@ EaWrite: r0 into register[r3]:
+  str r0,[r7,r3,lsl #2]
+
+;@ EaWrite: r1 into register[r2]:
+  str r1,[r7,r2,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
@@ -53753,15 +52787,25 @@ Opc140:
 
 ;@ ---------- [c148] exg a0, a0 uses Opc148 ----------
 Opc148:
-  and r2,r8,#0x0e00 ;@ Find T register
-  and r3,r8,#0x000f ;@ Find S register
-  orr r2,r2,#0x1000 ;@ T is an address register
+;@ Find T register
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+  orr r2,r2,#0x1000 ;@ A0-7
+;@ Find S register
+;@ EaCalc : Get register index into r3:
+  and r3,r8,#0x000f
 
-  ldr r0,[r7,r2,lsr #7] ;@ Get T
-  ldr r1,[r7,r3,lsl #2] ;@ Get S
+;@ EaRead : Read register[r2] into r0:
+  ldr r0,[r7,r2,lsr #7]
 
-  str r0,[r7,r3,lsl #2] ;@ T->S
-  str r1,[r7,r2,lsr #7] ;@ S->T
+;@ EaRead : Read register[r3] into r1:
+  ldr r1,[r7,r3,lsl #2]
+
+;@ EaWrite: r0 into register[r3]:
+  str r0,[r7,r3,lsl #2]
+
+;@ EaWrite: r1 into register[r2]:
+  str r1,[r7,r2,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
@@ -53794,9 +52838,8 @@ Opc150:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -53833,9 +52876,8 @@ Opc158:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -53873,9 +52915,8 @@ Opc160:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -53912,9 +52953,8 @@ Opc168:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -53932,13 +52972,11 @@ Opc170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -53960,9 +52998,8 @@ Opc170:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -53996,9 +53033,8 @@ Opc178:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -54034,9 +53070,8 @@ Opc179:
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -54048,14 +53083,24 @@ Opc179:
 
 ;@ ---------- [c188] exg a0, d0 uses Opc188 ----------
 Opc188:
-  and r2,r8,#0x0e00 ;@ Find T register
-  and r3,r8,#0x000f ;@ Find S register
+;@ Find T register
+;@ EaCalc : Get register index into r2:
+  and r2,r8,#0x0e00
+;@ Find S register
+;@ EaCalc : Get register index into r3:
+  and r3,r8,#0x000f
 
-  ldr r0,[r7,r2,lsr #7] ;@ Get T
-  ldr r1,[r7,r3,lsl #2] ;@ Get S
+;@ EaRead : Read register[r2] into r0:
+  ldr r0,[r7,r2,lsr #7]
 
-  str r0,[r7,r3,lsl #2] ;@ T->S
-  str r1,[r7,r2,lsr #7] ;@ S->T
+;@ EaRead : Read register[r3] into r1:
+  ldr r1,[r7,r3,lsl #2]
+
+;@ EaWrite: r0 into register[r3]:
+  str r0,[r7,r3,lsl #2]
+
+;@ EaWrite: r1 into register[r2]:
+  str r1,[r7,r2,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
@@ -54214,13 +53259,11 @@ Opc1b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -54323,29 +53366,41 @@ Opc1b9:
 Opc1c0:
 ;@ EaCalc : Get register index into r0:
   and r0,r8,#0x000f
+  mov r0,r0,lsl #2
 ;@ EaRead : Read register[r0] into r0:
-  ldr r0,[r7,r0,lsl #2]
+  ldrsh r0,[r7,r0]
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#54 ;@ Subtract cycles
+  subs r5,r5,#38 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54353,6 +53408,7 @@ Opc1c0:
 Opc1d0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)' into r0:
   and r2,r8,#0x000f
@@ -54362,28 +53418,41 @@ Opc1d0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54391,6 +53460,7 @@ Opc1d0:
 Opc1d8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '(a0)+' into r0:
   and r2,r8,#0x000f
@@ -54401,28 +53471,41 @@ Opc1d8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54430,6 +53513,7 @@ Opc1d8:
 Opc1e0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '-(a0)' into r0:
   and r2,r8,#0x000f
@@ -54441,28 +53525,41 @@ Opc1e0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#60 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#44 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54470,6 +53567,7 @@ Opc1e0:
 Opc1e8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,a0)' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch offset
@@ -54480,28 +53578,41 @@ Opc1e8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54509,17 +53620,16 @@ Opc1e8:
 Opc1f0:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -54528,28 +53638,41 @@ Opc1f0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#64 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54557,6 +53680,7 @@ Opc1f0:
 Opc1f8:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$3333.w' into r0:
   ldrsh r0,[r4],#2 ;@ Fetch Absolute Short address
@@ -54564,28 +53688,41 @@ Opc1f8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54593,6 +53730,7 @@ Opc1f8:
 Opc1f9:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '$33333333.l' into r0:
   ldrh r2,[r4],#2 ;@ Fetch Absolute Long address
@@ -54602,28 +53740,41 @@ Opc1f9:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#66 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#50 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54631,6 +53782,7 @@ Opc1f9:
 Opc1fa:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($3333,pc)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
@@ -54641,28 +53793,41 @@ Opc1fa:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#62 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#46 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54670,46 +53835,58 @@ Opc1fa:
 Opc1fb:
   str r4,[r7,#0x50] ;@ Save prev PC + 2
   str r5,[r7,#0x5c] ;@ Save Cycles
+  mov r5,#0
 
 ;@ EaCalc : Get '($33,pc,d3.w*2)' into r0:
   ldr r0,[r7,#0x60] ;@ Get Memory base
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_fetch16 ;@ Call fetch16(r0) handler
+  sxth r0,r0 ;@ sign extend
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
-  ldr r5,[r7,#0x5c] ;@ Load Cycles
+  ldr r0,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#64 ;@ Subtract cycles
+  add r5,r0,r5
+  subs r5,r5,#48 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54721,24 +53898,35 @@ Opc1fc:
 
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0e00
+  mov r11,r11,lsr #7
 ;@ EaRead : Read register[r11] into r2:
-  ldr r2,[r7,r11,lsr #7]
+  ldrsh r2,[r7,r11]
 
-  movs r1,r0,asl #16
-;@ Get 16-bit signs right:
-  mov r0,r1,asr #16
-  mov r2,r2,lsl #16
-  mov r2,r2,asr #16
+;@ Calculate cycles needed: 2*(#bits set in multiplier engine mask)
+  eor r1,r0,r0,lsl #1 ;@ zeros upper 16 bits
+;@ count bottom 16 bits, the O(1) way
+  mov r12,#0x38C00000
+  orr r12,r12,#0x00238000 ;@ r12 = 0o070707 << 15
+  eor r10,r12,r12,lsl #1  ;@ r10 = 0o111111 << 15
+  and r3,r10,r1,lsl #13
+  bic r10,r1,r10,lsr #15
+  rsb r1,r3,r1,lsl #15
+  sub r1,r1,r10,lsl #14
+  add r1,r1,r1,lsr #3
+  and r1,r12,r1
+  add r1,r1,r1,lsr #6
+  add r1,r1,r1,lsl #12
+  sub r5,r5,r1,lsr #26 ;@ cycles -= 2*bitcount(mask)
 
-  muls r1,r2,r0
-  and r10,r1,#0x80000000 ;@ r10=N_flag
+  muls r0,r2,r0
+  and r10,r0,#0x80000000 ;@ r10=N_flag
   orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
 
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r0 into register[r11]:
+  str r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
-  subs r5,r5,#58 ;@ Subtract cycles
+  subs r5,r5,#42 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
   b CycloneEnd
 
@@ -54753,50 +53941,43 @@ Opcf08:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  eor r1,r0,r11
+  adc r0,r0,r11
+  eor r1,r1,r0 ;@ carries from each bit of ADC
+  add r2,r0,#0x66
+  eor r2,r2,r0 ;@ carries from each bit of adjust
+  orr r2,r2,r1 ;@ combine carries
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  adds r0,r0,r1,lsl #22 ;@ add adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r1,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r6,lsr #4
-  add r0,r0,r2
-  addne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  addhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  add r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0x20000000 ;@ C
-  subhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  orrmi r10,r10,#0x90000000 ;@ Undefined N+V behavior
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a7)' (address in r11):
+;@ EaWrite: Write r0 into '-(a7)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -54813,50 +53994,43 @@ Opcf0f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
-  mov r1,r0,asl #24
+  ldr r1,[r7,#0x4c] ;@ Get X bit
+  orr r3,r10,#0xb0000000 ;@ for old Z
+  movs r1,r1,lsl #3 ;@ X into carry
+  eor r1,r0,r11
+  adc r0,r0,r11
+  eor r1,r1,r0 ;@ carries from each bit of ADC
+  add r2,r0,#0x66
+  eor r2,r2,r0 ;@ carries from each bit of adjust
+  orr r2,r2,r1 ;@ combine carries
+  and r2,r2,#0x110 ;@ generate adjustment, shifted left by 2
+  orr r1,r2,r2,lsr #1
+  mov r0,r0,lsl #24
+  adds r0,r0,r1,lsl #22 ;@ add adjustment, handles undefined V behavior
+  mrs r10,apsr ;@ r10=flags
+  orr r2,r10,r2,lsl #21 ;@ combine carry from adjustment check
+  and r10,r2,r3 ;@ fix Z
+  str r2,[r7,#0x4c] ;@ Save X bit
 
-  bic r10,r10,#0xb1000000 ;@ clear all flags except old Z
-  ldr r0,[r7,#0x4c] ;@ Get X bit
-  mov r3,#0x00f00000
-  and r2,r3,r1,lsr #4
-  tst r0,#0x20000000
-  and r0,r3,r6,lsr #4
-  add r0,r0,r2
-  addne r0,r0,#0x00100000
-  cmp r0,#0x00900000
-  addhi r0,r0,#0x00600000 ;@ Decimal adjust units
-  mov r2,r1,lsr #28
-  add r0,r0,r2,lsl #24
-  mov r2,r6,lsr #28
-  add r0,r0,r2,lsl #24
-  cmp r0,#0x09900000
-  orrhi r10,r10,#0x20000000 ;@ C
-  subhi r0,r0,#0x0a000000
-  movs r0,r0,lsl #4
-  orrmi r10,r10,#0x90000000 ;@ Undefined N+V behavior
-  bicne r10,r10,#0x40000000 ;@ Z flag
-  str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: Write r0 into '-(a7)' (address in r11):
+;@ EaWrite: Write r0 into '-(a7)' (address in r8):
   mov r1,r0,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -54878,12 +54052,12 @@ Opd000:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -54913,12 +54087,12 @@ Opd010:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -54950,12 +54124,12 @@ Opd018:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -54986,12 +54160,12 @@ Opd01f:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55024,12 +54198,12 @@ Opd020:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55060,12 +54234,12 @@ Opd027:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55097,12 +54271,12 @@ Opd028:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55119,13 +54293,11 @@ Opd030:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -55143,12 +54315,12 @@ Opd030:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55177,12 +54349,12 @@ Opd038:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55213,12 +54385,12 @@ Opd039:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55250,12 +54422,12 @@ Opd03a:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55274,13 +54446,11 @@ Opd03b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -55295,12 +54465,12 @@ Opd03b:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55323,12 +54493,12 @@ Opd03c:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #24
   strb r1,[r7,r11,lsr #7]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -55359,12 +54529,12 @@ Opd050:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55397,12 +54567,12 @@ Opd058:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55436,12 +54606,12 @@ Opd060:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55474,12 +54644,12 @@ Opd068:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55496,13 +54666,11 @@ Opd070:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -55521,12 +54689,12 @@ Opd070:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55556,12 +54724,12 @@ Opd078:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55593,12 +54761,12 @@ Opd079:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55631,12 +54799,12 @@ Opd07a:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55655,13 +54823,11 @@ Opd07b:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -55677,12 +54843,12 @@ Opd07b:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldr r5,[r7,#0x5c] ;@ Load Cycles
@@ -55706,12 +54872,12 @@ Opd07c:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: r1 into register[r11]:
+  mov r1,r1,lsr #16
   strh r1,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -55733,7 +54899,7 @@ Opd080:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55766,7 +54932,7 @@ Opd090:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55801,7 +54967,7 @@ Opd098:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55837,7 +55003,7 @@ Opd0a0:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55872,7 +55038,7 @@ Opd0a8:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55893,13 +55059,11 @@ Opd0b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -55916,7 +55080,7 @@ Opd0b0:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55948,7 +55112,7 @@ Opd0b8:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -55982,7 +55146,7 @@ Opd0b9:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -56017,7 +55181,7 @@ Opd0ba:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -56040,13 +55204,11 @@ Opd0bb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -56060,7 +55222,7 @@ Opd0bb:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -56088,7 +55250,7 @@ Opd0bc:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -56112,9 +55274,8 @@ Opd0c0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56143,9 +55304,8 @@ Opd0d0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56176,9 +55336,8 @@ Opd0d8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56210,9 +55369,8 @@ Opd0e0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56243,9 +55401,8 @@ Opd0e8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56264,13 +55421,11 @@ Opd0f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -56285,9 +55440,8 @@ Opd0f0:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56315,9 +55469,8 @@ Opd0f8:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56347,9 +55500,8 @@ Opd0f9:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56380,9 +55532,8 @@ Opd0fa:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56403,13 +55554,11 @@ Opd0fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -56421,9 +55570,8 @@ Opd0fb:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  sxth r0,r0 ;@ sign extend
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56445,9 +55593,7 @@ Opd0fc:
 ;@ EaRead : Read register[r11] into r1:
   ldr r1,[r7,r11,lsr #7]
 
-  mov r0,r0,asl #16
-
-  add r1,r1,r0,asr #16
+  add r1,r1,r0
 
 ;@ EaWrite: r1 into register[r11]:
   str r1,[r7,r11,lsr #7]
@@ -56460,41 +55606,34 @@ Opd0fc:
 ;@ ---------- [d100] addx.b d0, d0 uses Opd100 ----------
 Opd100:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #24
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #8
-
-  adcs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #8 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #24 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
+;@ EaWrite: r1 into register[r8]:
   mov r1,r1,lsr #24
-  strb r1,[r7,r11,lsr #7]
+  strb r1,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -56511,45 +55650,40 @@ Opd108:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #8
-
-  adcs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #8 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #24 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -56566,45 +55700,40 @@ Opd10f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#1 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#1 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #8
-
-  adcs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #8 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #24 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -56633,13 +55762,12 @@ Opd110:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56672,13 +55800,12 @@ Opd118:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56710,13 +55837,12 @@ Opd11f:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '(a7)+' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56750,13 +55876,12 @@ Opd120:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56788,13 +55913,12 @@ Opd127:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '-(a7)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56827,13 +55951,12 @@ Opd128:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56851,13 +55974,11 @@ Opd130:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -56875,13 +55996,12 @@ Opd130:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56911,13 +56031,12 @@ Opd138:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56949,13 +56068,12 @@ Opd139:
 ;@ Do arithmetic:
   mov r0,r0,asl #24
   adds r1,r0,r1,asl #24
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #24
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  and r1,r1,#0xff
+  mov r1,r1,lsr #24
   bic r0,r11,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
@@ -56968,42 +56086,35 @@ Opd139:
 ;@ ---------- [d140] addx.w d0, d0 uses Opd140 ----------
 Opd140:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-  mov r11,r11,lsr #7
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
 
-  mov r6,r6,asl #16
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+  mov r8,r8,lsr #7
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #16
-
-  adcs r1,r6,r0,asl #16
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #16 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #16 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #16
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
+;@ EaWrite: r1 into register[r8]:
   mov r1,r1,lsr #16
-  strh r1,[r7,r11]
+  strh r1,[r7,r8]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#4 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -57020,45 +56131,40 @@ Opd148:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r6,r0,asl #16
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #16
-
-  adcs r1,r6,r0,asl #16
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #16
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #16 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #16 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #16
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
   mov r1,r1,lsr #16
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -57087,13 +56193,12 @@ Opd150:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57126,13 +56231,12 @@ Opd158:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '(a0)+' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57166,13 +56270,12 @@ Opd160:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57205,13 +56308,12 @@ Opd168:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($3333,a0)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57229,13 +56331,11 @@ Opd170:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -57253,13 +56353,12 @@ Opd170:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '($33,a0,d3.w*2)' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57289,13 +56388,12 @@ Opd178:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$3333.w' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57327,13 +56425,12 @@ Opd179:
 ;@ Do arithmetic:
   mov r0,r0,asl #16
   adds r1,r0,r1,asl #16
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
-  mov r1,r1,asr #16
 ;@ EaWrite: Write r1 into '$33333333.l' (address in r11):
-  uxth r1,r1 ;@ zero extend
+  mov r1,r1,lsr #16
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -57346,32 +56443,30 @@ Opd179:
 ;@ ---------- [d180] addx.l d0, d0 uses Opd180 ----------
 Opd180:
 ;@ Get src/dest reg vals
-;@ EaCalc : Get register index into r6:
-  and r6,r8,#0x0007
-;@ EaRead : Read register[r6] into r6:
-  ldr r6,[r7,r6,lsl #2]
-
 ;@ EaCalc : Get register index into r11:
-  and r11,r8,#0x0e00
-;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsr #7]
+  and r11,r8,#0x0007
+;@ EaRead : Read register[r11] into r11:
+  ldr r11,[r7,r11,lsl #2]
+
+;@ EaCalc : Get register index into r8:
+  and r8,r8,#0x0e00
+;@ EaRead : Read register[r8] into r0:
+  ldr r0,[r7,r8,lsr #7]
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  adcs r1,r6,r0
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+
+  adcs r1,r11,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: r1 into register[r11]:
-  str r1,[r7,r11,lsr #7]
+;@ EaWrite: r1 into register[r8]:
+  str r1,[r7,r8,lsr #7]
 
-  ldr r6,[r7,#0x54]
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#8 ;@ Subtract cycles
   ldrgt pc,[r6,r8,asl #2] ;@ Jump to opcode handler
@@ -57388,38 +56483,36 @@ Opd188:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#4 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
-  mov r6,r0
+  mov r11,r0
 
-;@ EaCalc : Get '-(a0)' into r11:
+;@ EaCalc : Get '-(a0)' into r8:
   and r2,r8,#0x1e00
-  ldr r11,[r7,r2,lsr #7]
-  sub r11,r11,#4 ;@ Pre-decrement An
-  str r11,[r7,r2,lsr #7]
-;@ EaRead : Read '-(a0)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+  ldr r8,[r7,r2,lsr #7]
+  sub r8,r8,#4 ;@ Pre-decrement An
+  str r8,[r7,r2,lsr #7]
+;@ EaRead : Read '-(a0)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read32 ;@ Call read32(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-  adcs r1,r6,r0
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+
+  adcs r1,r11,r0 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a0)' (address in r11):
-  bic r0,r11,#0xff000000
+;@ EaWrite: Write r1 into '-(a0)' (address in r8):
+  bic r0,r8,#0xff000000
   bl m68k_write32 ;@ Call write32(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#30 ;@ Subtract cycles
@@ -57447,7 +56540,7 @@ Opd190:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57483,7 +56576,7 @@ Opd198:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57520,7 +56613,7 @@ Opd1a0:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57556,7 +56649,7 @@ Opd1a8:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57578,13 +56671,11 @@ Opd1b0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -57601,7 +56692,7 @@ Opd1b0:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57634,7 +56725,7 @@ Opd1b8:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57669,7 +56760,7 @@ Opd1b9:
 
 ;@ Do arithmetic:
   adds r1,r0,r1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ Save result:
@@ -57837,13 +56928,11 @@ Opd1f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r0:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -57968,13 +57057,11 @@ Opd1fb:
   ldrh r3,[r4] ;@ Get extension word
   sub r0,r4,r0 ;@ r0=PC
   add r4,r4,#2
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r3,r3,asl #24 ;@ r3=Get 8-bit signed Disp
-  add r2,r2,r3,asr #24 ;@ r2=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r2,r2,r3 ;@ r2=Disp+Rn
   add r0,r2,r0 ;@ r0=Disp+PC+Rn
 ;@ EaRead : Read '($33,pc,d3.w*2)' (address in r0) into r0:
   str r4,[r7,#0x40] ;@ Save PC
@@ -58031,44 +57118,39 @@ Opdf08:
   ldr r0,[r7,r2,lsl #2]
   sub r0,r0,#1 ;@ Pre-decrement An
   str r0,[r7,r2,lsl #2]
-;@ EaRead : Read '-(a0)' (address in r0) into r6:
+;@ EaRead : Read '-(a0)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #8
-
-  adcs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #8 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #24 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a7)' (address in r11):
+;@ EaWrite: Write r1 into '-(a7)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -58085,44 +57167,39 @@ Opdf0f:
   ldr r0,[r7,#0x3c] ;@ A7
   sub r0,r0,#2 ;@ Pre-decrement An
   str r0,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r0) into r6:
+;@ EaRead : Read '-(a7)' (address in r0) into r11:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r0,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
-  mov r6,r0,asl #24
+  mov r11,r0
 
-;@ EaCalc : Get '-(a7)' into r11:
-  ldr r11,[r7,#0x3c] ;@ A7
-  sub r11,r11,#2 ;@ Pre-decrement An
-  str r11,[r7,#0x3c] ;@ A7
-;@ EaRead : Read '-(a7)' (address in r11) into r0:
-  bic r0,r11,#0xff000000
+;@ EaCalc : Get '-(a7)' into r8:
+  ldr r8,[r7,#0x3c] ;@ A7
+  sub r8,r8,#2 ;@ Pre-decrement An
+  str r8,[r7,#0x3c] ;@ A7
+;@ EaRead : Read '-(a7)' (address in r8) into r0:
+  bic r0,r8,#0xff000000
   bl m68k_read8 ;@ Call read8(r0) handler
 
 ;@ Do arithmetic:
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
-;@ Make sure the carry bit will tip the balance:
-  mvn r2,#0
-  orr r6,r6,r2,lsr #8
-
-  adcs r1,r6,r0,asl #24
+  ldr r2,[r7,#0x4c] ;@ X bit
   orr r3,r10,#0xb0000000 ;@ for old Z
-  mrs r10,cpsr ;@ r10=flags
+  mov r11,r11,asl #24
+  mvns r2,r2,lsr #30 ;@ Get X bit into Carry, set upper bits of r2
+;@ Make sure the carry bit will tip the balance:
+  orrcs r11,r11,r2,lsr #8 ;@ Set lower bits of operand if Carry is set
+
+  adcs r1,r11,r0,asl #24 ;@ Defines NZCV
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  movs r2,r1,lsr #24
-  orreq r10,r10,#0x40000000 ;@ add potentially missed Z
-  andeq r10,r10,r3 ;@ fix Z
+  and r10,r10,r3 ;@ fix Z
 
 ;@ Save result:
-;@ EaWrite: Write r1 into '-(a7)' (address in r11):
+;@ EaWrite: Write r1 into '-(a7)' (address in r8):
   mov r1,r1,lsr #24
-  bic r0,r11,#0xff000000
+  bic r0,r8,#0xff000000
   bl m68k_write8 ;@ Call write8(r0,r1) handler
 
-  ldr r6,[r7,#0x54]
   ldr r5,[r7,#0x5c] ;@ Load Cycles
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#18 ;@ Subtract cycles
@@ -58133,24 +57210,18 @@ Opdf0f:
 Ope000:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
+  mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrsb r0,[r7,r11]
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #24
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,asr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #24
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
-  strb r0,[r7,r11,lsl #2]
+  strb r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#22 ;@ Subtract cycles
@@ -58162,23 +57233,15 @@ Ope008:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #24
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,lsr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #24
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58192,28 +57255,16 @@ Ope010:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
-  mov r2,#8
-  mov r0,r0,lsr #24 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
-;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
-
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  ldr r2,[r7,#0x4c] ;@ X bit
+  mov r0,r0,lsl #24
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-23 ;@ Clear V flag
+  movs r0,r0,lsl #1
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #24
+;@ EaWrite: r0 into register[r11]:
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58226,20 +57277,17 @@ Ope018:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58251,33 +57299,28 @@ Ope018:
 Ope020:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
+  mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrsb r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #24
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
-
-;@ restore after right shift:
-  movs r0,r0,lsl #24
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
-  strb r0,[r7,r11,lsl #2]
+  strb r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
@@ -58289,32 +57332,27 @@ Ope028:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #24
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
-
-;@ restore after right shift:
-  movs r0,r0,lsl #24
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
+  moveq r3,r0,lsr #7
+  orreq r10,r10,r3,lsl #31 ;@ if so, add missed N flag
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58327,51 +57365,35 @@ Ope030:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Reduce r2 until <0:
-Reduce_e030:
-  subs r2,r2,#9
-  bpl Reduce_e030
-  adds r2,r2,#9 ;@ Now r2=0-8
-  beq norotx_e030
+;@ Reduce rotation amount modulo 9:
+  and r1,r2,#7
+  subs r2,r1,r2,lsr #3
+  addmi r2,r2,#9 ;@ Now r2=0-8
+  rsbs r1,r2,#8 ;@ should also clear ARM V
 
-  mov r0,r0,lsr #24 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  mov r0,r0,lsr r2 ;@ Shift forward part
+  adds r0,r0,r3,lsl r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe030
-norotx_e030:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe030:
+  movs r1,r0,lsl #24 ;@ Shift up and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58384,27 +57406,26 @@ Ope038:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58418,22 +57439,15 @@ Ope040:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrsh r0,[r7,r11]
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,asr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58447,23 +57461,15 @@ Ope048:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,lsr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58477,29 +57483,21 @@ Ope050:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
-  mov r2,#8
-  mov r0,r0,lsr #16 ;@ Shift down
+  ldr r3,[r7,#0x4c] ;@ X bit
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  mov r0,r0,lsr #8 ;@ Shift forward part
+  adds r0,r0,r3,lsl #8 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r1,r0,lsl #16 ;@ Shift up and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58513,19 +57511,16 @@ Ope058:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58539,31 +57534,25 @@ Ope060:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrsh r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
-
-;@ restore after right shift:
-  movs r0,r0,lsl #16
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58577,32 +57566,27 @@ Ope068:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
-
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
+  moveq r3,r0,lsr #15
+  orreq r10,r10,r3,lsl #31 ;@ if so, add missed N flag
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58616,51 +57600,35 @@ Ope070:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Reduce r2 until <0:
-Reduce_e070:
-  subs r2,r2,#17
-  bpl Reduce_e070
-  adds r2,r2,#17 ;@ Now r2=0-16
-  beq norotx_e070
+;@ Reduce rotation amount modulo 17:
+  and r1,r2,#15
+  subs r2,r1,r2,lsr #4
+  addmi r2,r2,#17 ;@ Now r2=0-16
+  rsbs r1,r2,#16 ;@ should also clear ARM V
 
-  mov r0,r0,lsr #16 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  mov r0,r0,lsr r2 ;@ Shift forward part
+  adds r0,r0,r3,lsl r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe070
-norotx_e070:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe070:
+  movs r1,r0,lsl #16 ;@ Shift up and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58674,26 +57642,25 @@ Ope078:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -58708,9 +57675,10 @@ Ope080:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,asr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -58728,9 +57696,10 @@ Ope088:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,lsr #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -58748,20 +57717,16 @@ Ope090:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
-  mov r2,#8
+  ldr r3,[r7,#0x4c] ;@ X bit
+  adds r1,r1,#0 ;@ clear V flag
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  movs r0,r0,lsr #8 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsl #24 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -58780,9 +57745,9 @@ Ope098:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  adds r1,r1,#0 ;@ first clear V and C
   movs r0,r0,ror #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -58800,18 +57765,20 @@ Ope0a0:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -58829,18 +57796,20 @@ Ope0a8:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -58858,39 +57827,28 @@ Ope0b0:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
+;@ Reduce rotation amount modulo 33:
   subs r2,r2,#33
-  addmis r2,r2,#33 ;@ Now r2=0-32
-  beq norotx_e0b0
+  addmi r2,r2,#33 ;@ Now r2=0-32
+  rsbs r1,r2,#32 ;@ should also clear ARM V
 
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  movs r0,r0,lsr r2 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsl r1 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe0b0
-norotx_e0b0:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe0b0:
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -58908,16 +57866,18 @@ Ope0b8:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  adds r1,r1,#0 ;@ first clear V and C
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -58942,19 +57902,14 @@ Ope0d0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -58980,19 +57935,14 @@ Ope0d8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59019,19 +57969,14 @@ Ope0e0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59057,19 +58002,14 @@ Ope0e8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59087,13 +58027,11 @@ Ope0f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -59104,19 +58042,14 @@ Ope0f0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59139,19 +58072,14 @@ Ope0f8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59176,19 +58104,14 @@ Ope0f9:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,asr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
-  mov r1,r0,lsr #16
+  uxth r1,r0 ;@ zero extend
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -59206,18 +58129,14 @@ Ope100:
   ldr r0,[r7,r11,lsl #2]
   mov r0,r0,asl #24
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
 ;@ Shift register:
   movs r0,r0,asl #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #8
-  cmpne r3,r1,asr #8
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr #8
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59235,11 +58154,12 @@ Ope108:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
+  mov r0,r0,lsl #24
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,lsl #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59256,29 +58176,17 @@ Ope110:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
-  mov r2,#1 ;@ Reversed
-  mov r0,r0,lsr #24 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
-;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
-
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsl #24 ;@ Clear V flag
+  bic r0,r0,#0x1000000
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  movs r0,r0,rrx
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #24
+;@ EaWrite: r0 into register[r11]:
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59291,23 +58199,19 @@ Ope118:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #24
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  movs r0,r0,ror #25 ;@ rotate left by 7, get carry for 8
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59324,26 +58228,23 @@ Ope120:
   mov r0,r0,asl #24
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59361,21 +58262,23 @@ Ope128:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  mov r0,r0,lsl #24
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #24
@@ -59392,51 +58295,35 @@ Ope130:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Reduce r2 until <0:
-Reduce_e130:
-  subs r2,r2,#9
-  bpl Reduce_e130
-  adds r2,r2,#9 ;@ Now r2=0-8
-  beq norotx_e130
+;@ Reduce rotation amount modulo 9:
+  and r1,r2,#7
+  subs r2,r1,r2,lsr #3
+  addmi r2,r2,#9 ;@ Now r2=0-8
+  rsbs r1,r2,#8 ;@ should also clear ARM V
+  mov r0,r0,lsl #24 ;@ shift value to upper bits
 
-  rsb r2,r2,#9 ;@ Reverse direction
-  mov r0,r0,lsr #24 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  mov r0,r0,lsl r2 ;@ Shift forward part
+  adds r0,r0,r3,lsr r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe130
-norotx_e130:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe130:
+  movs r0,r0,asr #24 ;@ Shift down and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59449,32 +58336,30 @@ Ope138:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  rsb r2,r2,#32
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
+  rsbs r2,r2,#0 ;@ clears V flag
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  cmp r2,#32 ;@ rotating by 0?
-  tstne r0,#1 ;@ no, check bit 0
-  orrne r10,r10,#0x20000000
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  tst r2,r0,lsl #31 ;@ check non-zero rotation and bit 0 of result
+  orrmi r10,r10,#0x20000000 ;@ set C flag
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59491,18 +58376,14 @@ Ope140:
   ldr r0,[r7,r11]
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
 ;@ Shift register:
   movs r0,r0,asl #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #8
-  cmpne r3,r1,asr #8
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr #8
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59521,11 +58402,11 @@ Ope148:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #8
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #24
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59544,28 +58425,21 @@ Ope150:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
-  mov r2,#9 ;@ Reversed
-  mov r0,r0,lsr #16 ;@ Shift down
+  ldr r3,[r7,#0x4c] ;@ X bit
+  mov r0,r0,lsl #16 ;@ shift value to upper bits
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  mov r0,r0,lsl #8 ;@ Shift forward part
+  adds r0,r0,r3,lsr #8 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #16 ;@ Shift down and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59579,22 +58453,18 @@ Ope158:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #24
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  movs r0,r0,ror #25 ;@ rotate left by 7, get carry for 8
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59612,26 +58482,23 @@ Ope160:
   mov r0,r0,asl #16
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59650,21 +58517,23 @@ Ope168:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  mov r0,r0,lsl #16
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #16
@@ -59682,51 +58551,35 @@ Ope170:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Reduce r2 until <0:
-Reduce_e170:
-  subs r2,r2,#17
-  bpl Reduce_e170
-  adds r2,r2,#17 ;@ Now r2=0-16
-  beq norotx_e170
+;@ Reduce rotation amount modulo 17:
+  and r1,r2,#15
+  subs r2,r1,r2,lsr #4
+  addmi r2,r2,#17 ;@ Now r2=0-16
+  rsbs r1,r2,#16 ;@ should also clear ARM V
+  mov r0,r0,lsl #16 ;@ shift value to upper bits
 
-  rsb r2,r2,#17 ;@ Reverse direction
-  mov r0,r0,lsr #16 ;@ Shift down
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  mov r0,r0,lsl r2 ;@ Shift forward part
+  adds r0,r0,r3,lsr r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe170
-norotx_e170:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe170:
+  movs r0,r0,asr #16 ;@ Shift down and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59740,31 +58593,29 @@ Ope178:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  rsb r2,r2,#32
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
+  rsbs r2,r2,#0 ;@ clears V flag
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  cmp r2,#32 ;@ rotating by 0?
-  tstne r0,#1 ;@ no, check bit 0
-  orrne r10,r10,#0x20000000
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  tst r2,r0,lsl #31 ;@ check non-zero rotation and bit 0 of result
+  orrmi r10,r10,#0x20000000 ;@ set C flag
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -59779,18 +58630,14 @@ Ope180:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
 ;@ Shift register:
   movs r0,r0,asl #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #8
-  cmpne r3,r1,asr #8
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr #8
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59808,9 +58655,10 @@ Ope188:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
   movs r0,r0,lsl #8
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59828,20 +58676,16 @@ Ope190:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
-  mov r2,#25 ;@ Reversed
+  ldr r3,[r7,#0x4c] ;@ X bit
+  adds r1,r1,#0 ;@ clear V flag
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  movs r0,r0,lsl #8 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsr #24 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59860,12 +58704,10 @@ Ope198:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Rotate register:
-  movs r0,r0,ror #24
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  movs r0,r0,ror #25 ;@ rotate left by 7, get carry for 8
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -59883,26 +58725,23 @@ Ope1a0:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -59921,18 +58760,20 @@ Ope1a8:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   cmp r2,#0 ;@ shifting by 0?
-  biceq r10,r10,#0x20000000 ;@ if so, clear carry
-  strne r10,[r7,#0x4c] ;@ else Save X bit
+  strne r10,[r7,#0x4c] ;@ if not, Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -59950,40 +58791,28 @@ Ope1b0:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
 
+  ldr r3,[r7,#0x4c] ;@ X bit
+  and r2,r2,#63 ;@ Mask register shift amount
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
+;@ Reduce rotation amount modulo 33:
   subs r2,r2,#33
-  addmis r2,r2,#33 ;@ Now r2=0-32
-  beq norotx_e1b0
+  addmi r2,r2,#33 ;@ Now r2=0-32
+  rsbs r1,r2,#32 ;@ should also clear ARM V
 
-  rsb r2,r2,#33 ;@ Reverse direction
-
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  movs r0,r0,lsl r2 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsr r1 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
-  str r10,[r7,#0x4c] ;@ if not 0, Save X bit
-  b nozeroxe1b0
-norotx_e1b0:
-  ldr r2,[r7,#0x4c]
-  adds r0,r0,#0 ;@ Define flags
-  and r10,r0,#0x80000000 ;@ r10=N_flag
-  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
-  and r2,r2,#0x20000000
-  orr r10,r10,r2 ;@ C = old_X
-nozeroxe1b0:
+  mrs r10,apsr ;@ r10=flags
+  str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -60001,21 +58830,21 @@ Ope1b8:
   ldr r0,[r7,r11,lsl #2]
 
 ;@ Use Dn for count:
+;@ EaCalc : Get register index into r2:
   and r2,r8,#0x0e00
+;@ EaRead : Read register[r2] into r2:
   ldr r2,[r7,r2,lsr #7]
-  and r2,r2,#63
-
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Rotate register:
-  rsb r2,r2,#32
+  and r2,r2,#63 ;@ Mask register shift amount
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
+  rsbs r2,r2,#0 ;@ clears V flag
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  cmp r2,#32 ;@ rotating by 0?
-  tstne r0,#1 ;@ no, check bit 0
-  orrne r10,r10,#0x20000000
+  and r10,r0,#0x80000000 ;@ r10=N_flag
+  orreq r10,r10,#0x40000000 ;@ get NZ, clear CV
+  tst r2,r0,lsl #31 ;@ check non-zero rotation and bit 0 of result
+  orrmi r10,r10,#0x20000000 ;@ set C flag
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -60040,19 +58869,10 @@ Ope1d0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -60081,19 +58901,10 @@ Ope1d8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
   mov r1,r0,lsr #16
@@ -60123,19 +58934,10 @@ Ope1e0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -60164,19 +58966,10 @@ Ope1e8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -60197,13 +58990,11 @@ Ope1f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -60214,19 +59005,10 @@ Ope1f0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
   mov r1,r0,lsr #16
@@ -60252,19 +59034,10 @@ Ope1f8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
   mov r1,r0,lsr #16
@@ -60292,19 +59065,10 @@ Ope1f9:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
-  movs r0,r0,asl #1
-  mrs r10,cpsr ;@ r10=flags
+  adds r0,r0,r0 ;@ includes V flag
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-
-;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr #1
-  cmpne r3,r1,asr #1
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
-  orrne r10,r10,#0x10000000
 
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
   mov r1,r0,lsr #16
@@ -60322,21 +59086,17 @@ Ope210:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
-  orr r0,r0,r0,lsr #24
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsl #24 ;@ Clear V flag
   bic r0,r0,#0x1000000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #24
+;@ EaWrite: r0 into register[r11]:
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -60350,21 +59110,17 @@ Ope250:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsl #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #16
+;@ EaWrite: r0 into register[r11]:
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -60379,14 +59135,12 @@ Ope290:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r1,r1,#0 ;@ Clear V flag
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
 
@@ -60410,20 +59164,14 @@ Ope2d0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60449,20 +59197,14 @@ Ope2d8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60489,20 +59231,14 @@ Ope2e0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60528,20 +59264,14 @@ Ope2e8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60559,13 +59289,11 @@ Ope2f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -60576,20 +59304,14 @@ Ope2f0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60612,20 +59334,14 @@ Ope2f8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60650,20 +59366,14 @@ Ope2f9:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
-
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsr #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsr #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
-  mov r1,r0,lsr #16
+  mov r1,r0
   bic r0,r11,#0xff000000
   bl m68k_write16 ;@ Call write16(r0,r1) handler
 
@@ -60679,18 +59389,16 @@ Ope310:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  mov r0,r0,lsl #24
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-23 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x1000000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #24
+;@ EaWrite: r0 into register[r11]:
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -60705,18 +59413,16 @@ Ope350:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  mov r0,r0,lsl #16
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
-;@ EaWrite: r0 into register[r11]:
   mov r0,r0,lsr #16
+;@ EaWrite: r0 into register[r11]:
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -60731,14 +59437,12 @@ Ope390:
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
 
-  ldr r3,[r7,#0x4c]
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  ldr r2,[r7,#0x4c] ;@ X bit
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
+  adcs r0,r0,r0
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x1
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
 
@@ -60760,11 +59464,11 @@ Ope3d0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
@@ -60792,11 +59496,11 @@ Ope3d8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
@@ -60825,11 +59529,11 @@ Ope3e0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
@@ -60857,11 +59561,11 @@ Ope3e8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
@@ -60883,13 +59587,11 @@ Ope3f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -60898,11 +59600,11 @@ Ope3f0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
@@ -60927,11 +59629,11 @@ Ope3f8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
@@ -60958,11 +59660,11 @@ Ope3f9:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
 ;@ Shift register:
-  movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,lsl #17
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
@@ -60991,16 +59693,13 @@ Ope4d0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61028,16 +59727,13 @@ Ope4d8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61066,16 +59762,13 @@ Ope4e0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61103,16 +59796,13 @@ Ope4e8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61132,13 +59822,11 @@ Ope4f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -61149,16 +59837,13 @@ Ope4f0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61183,16 +59868,13 @@ Ope4f8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61219,16 +59901,13 @@ Ope4f9:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  orr r0,r0,r0,lsr #16
+  ldr r2,[r7,#0x4c] ;@ X bit
+  adds r0,r0,r0,lsr #16 ;@ Clear V flag
   bic r0,r0,#0x10000
-;@ Get X bit:
-  ldr r2,[r7,#0x4c]
-  tst r2,r2,lsl #3 ;@ Get into Carry
-
+  movs r2,r2,lsl #3 ;@ Get X bit into Carry
   movs r0,r0,rrx
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61255,14 +59934,12 @@ Ope5d0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61290,14 +59967,12 @@ Ope5d8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61326,14 +60001,12 @@ Ope5e0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61361,14 +60034,12 @@ Ope5e8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61388,13 +60059,11 @@ Ope5f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -61405,14 +60074,12 @@ Ope5f0:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61437,14 +60104,12 @@ Ope5f8:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61471,14 +60136,12 @@ Ope5f9:
   bl m68k_read16 ;@ Call read16(r0) handler
   mov r0,r0,asl #16
 
-  ldr r3,[r7,#0x4c]
+  ldr r2,[r7,#0x4c] ;@ X bit
+  and r2,r2,#0x20000000 ;@ Isolate X bit
+  adds r0,r0,r2,lsr #29-15 ;@ Clear V flag
   movs r0,r0,lsl #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
-  tst r3,#0x20000000
-  orrne r0,r0,#0x10000
-  bicne r10,r10,#0x40000000 ;@ clear Z in case it got there
-  bic r10,r10,#0x10000000 ;@ make suve V is clear
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
   mov r1,r0,lsr #16
   bic r0,r11,#0xff000000
@@ -61503,15 +60166,14 @@ Ope6d0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61538,15 +60200,14 @@ Ope6d8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
   mov r1,r0,lsr #16
@@ -61574,15 +60235,14 @@ Ope6e0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61609,15 +60269,14 @@ Ope6e8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61638,13 +60297,11 @@ Ope6f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -61653,15 +60310,14 @@ Ope6f0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
   mov r1,r0,lsr #16
@@ -61685,15 +60341,14 @@ Ope6f8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
   mov r1,r0,lsr #16
@@ -61719,15 +60374,14 @@ Ope6f9:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror #1
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
   mov r1,r0,lsr #16
@@ -61753,18 +60407,16 @@ Ope7d0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61791,18 +60443,16 @@ Ope7d8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '(a0)+' (address in r11):
   mov r1,r0,lsr #16
@@ -61830,18 +60480,16 @@ Ope7e0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '-(a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61868,18 +60516,16 @@ Ope7e8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '($3333,a0)' (address in r11):
   mov r1,r0,lsr #16
@@ -61900,13 +60546,11 @@ Ope7f0:
 ;@ EaCalc : Get '($33,a0,d3.w*2)' into r11:
 ;@ Get extension word into r3:
   ldrh r3,[r4],#2 ;@ ($Disp,PC,Rn)
-  mov r2,r3,lsr #10
-  tst r3,#0x0800 ;@ Is Rn Word or Long
-  and r2,r2,#0x3c ;@ r2=Index of Rn
-  ldreqsh r2,[r7,r2] ;@ r2=Rn.w
-  ldrne   r2,[r7,r2] ;@ r2=Rn.l
-  mov r0,r3,asl #24 ;@ r0=Get 8-bit signed Disp
-  add r3,r2,r0,asr #24 ;@ r3=Disp+Rn
+  movs r2,r3,lsr #12 ;@ r2=Index of Rn, carry set if Long
+  ldr r2,[r7,r2,lsl #2] ;@ r2=Rn.l
+  sxtb r3,r3 ;@ r3=Get 8-bit signed Disp
+  sxthcc r2,r2 ;@ r2=Rn.w
+  add r3,r3,r2 ;@ r3=Disp+Rn
   and r2,r8,#0x000f
   orr r2,r2,#0x8 ;@ A0-7
   ldr r2,[r7,r2,lsl #2]
@@ -61915,18 +60559,16 @@ Ope7f0:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '($33,a0,d3.w*2)' (address in r11):
   mov r1,r0,lsr #16
@@ -61950,18 +60592,16 @@ Ope7f8:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '$3333.w' (address in r11):
   mov r1,r0,lsr #16
@@ -61987,18 +60627,16 @@ Ope7f9:
   str r4,[r7,#0x40] ;@ Save PC
   bic r0,r11,#0xff000000
   bl m68k_read16 ;@ Call read16(r0) handler
-  mov r0,r0,asl #16
 
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  mov r0,r0,lsl #16
+  adds r0,r0,r0,lsr #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  movs r0,r0,ror #31
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  cmn r0,r0 ;@ get carry for rotation left by 1
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: Write r0 into '$33333333.l' (address in r11):
   mov r1,r0,lsr #16
@@ -62015,29 +60653,23 @@ Ope7f9:
 Opee00:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
+  mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrsb r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #24
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #24
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
-  strb r0,[r7,r11,lsl #2]
+  strb r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
   subs r5,r5,#6 ;@ Subtract cycles
@@ -62049,28 +60681,20 @@ Opee08:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #24
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #24
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62083,33 +60707,27 @@ Opee10:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  mov r0,r0,lsr #24 ;@ Shift down
+  rsbs r1,r2,#8 ;@ should also clear ARM V
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  mov r0,r0,lsr r2 ;@ Shift forward part
+  adds r0,r0,r3,lsl r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r1,r0,lsl #24 ;@ Shift up and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62122,25 +60740,22 @@ Opee18:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62154,27 +60769,20 @@ Opee40:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrsh r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,asr #16
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62188,28 +60796,20 @@ Opee48:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
-;@ For shift right, use loworder bits for the operation:
-  mov r0,r0,lsr #16
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
-;@ restore after right shift:
-  movs r0,r0,lsl #16
-  orrmi r10,r10,#0x80000000 ;@ Potentially missed N flag
-
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62223,33 +60823,27 @@ Opee50:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  mov r0,r0,lsr #16 ;@ Shift down
+  rsbs r1,r2,#16 ;@ should also clear ARM V
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  mov r0,r0,lsr r2 ;@ Shift forward part
+  adds r0,r0,r3,lsl r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r1,r0,lsl #16 ;@ Shift up and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62263,24 +60857,21 @@ Opee58:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62298,11 +60889,12 @@ Opee80:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,asr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62323,11 +60915,12 @@ Opee88:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsr r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62348,21 +60941,18 @@ Opee90:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
+  rsbs r1,r2,#32 ;@ should also clear ARM V
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  adc r3,r0,r0 ;@ Rotate X bit into reverse part, preserve V flag
+  movs r0,r0,lsr r2 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsl r1 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62383,12 +60973,12 @@ Opee98:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+;@ Rotate register:
+  adds r1,r1,#0 ;@ first clear V and C
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Rotate register:
-  adds r0,r0,#0 ;@ first clear V and C
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -62409,20 +60999,16 @@ Opef00:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62440,16 +61026,17 @@ Opef08:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  mov r0,r0,lsl #24
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62467,33 +61054,27 @@ Opef10:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  rsb r2,r2,#9 ;@ Reverse direction
-  mov r0,r0,lsr #24 ;@ Shift down
+  rsbs r1,r2,#8 ;@ should also clear ARM V
+  mov r0,r0,lsl #24 ;@ shift value to upper bits
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#8
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#9 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  mov r0,r0,lsl r2 ;@ Shift forward part
+  adds r0,r0,r3,lsr r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #24 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #24 ;@ Shift down and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62506,29 +61087,25 @@ Opef18:
 ;@ EaCalc : Get register index into r11:
   and r11,r8,#0x0007
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11,lsl #2]
-  mov r0,r0,asl #24
+  ldrb r0,[r7,r11,lsl #2]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #8
-  orr r0,r0,r0,lsr #16
+  orr r0,r0,r0,lsl #8
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  rsb r2,r2,#32
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
+  rsb r2,r2,#33 ;@ rotate left by N-1, get carry for N
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #24
   strb r0,[r7,r11,lsl #2]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62548,20 +61125,16 @@ Opef40:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62580,16 +61153,17 @@ Opef48:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  mov r0,r0,lsl #16
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62608,33 +61182,27 @@ Opef50:
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
   ldr r0,[r7,r11]
-  mov r0,r0,asl #16
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  rsb r2,r2,#17 ;@ Reverse direction
-  mov r0,r0,lsr #16 ;@ Shift down
+  rsbs r1,r2,#16 ;@ should also clear ARM V
+  mov r0,r0,lsl #16 ;@ shift value to upper bits
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#16
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#17 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  mov r0,r0,lsl r2 ;@ Shift forward part
+  adds r0,r0,r3,lsr r1 ;@ Add reverse part, clear V flag
 
-  movs r0,r0,lsl #16 ;@ Shift up and get correct NC flags
-  mrs r10,cpsr ;@ r10=flags
+  movs r0,r0,asr #16 ;@ Shift down and get correct NC flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62648,28 +61216,24 @@ Opef58:
   and r11,r8,#0x0007
   mov r11,r11,lsl #2
 ;@ EaRead : Read register[r11] into r0:
-  ldr r0,[r7,r11]
-  mov r0,r0,asl #16
+  ldrh r0,[r7,r11]
 
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
-  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
-
 ;@ Mirror value in whole 32 bits:
-  orr r0,r0,r0,lsr #16
+  adds r0,r0,r0,lsl #16 ;@ first clear V and C
 
 ;@ Rotate register:
-  rsb r2,r2,#32
+  sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
+
+  rsb r2,r2,#33 ;@ rotate left by N-1, get carry for N
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
-  mov r0,r0,lsr #16
   strh r0,[r7,r11]
 
   ldrh r8,[r4],#2 ;@ Fetch next opcode
@@ -62687,20 +61251,16 @@ Opef80:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r0,#0 ;@ clear C and V, also save old value for V flag calculation
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  adds r3,r0,#0 ;@ save old value for V flag calculation, also clear V
 ;@ Shift register:
   movs r0,r0,asl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ calculate V flag (set if sign bit changes at anytime):
-  mov r1,#0x80000000
-  ands r3,r3,r1,asr r2
-  cmpne r3,r1,asr r2
-  eoreq r1,r0,r3
-  tsteq r1,#0x80000000
+  cmp r3,r0,asr r2
   orrne r10,r10,#0x10000000
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62721,11 +61281,12 @@ Opef88:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  adds r3,r3,#0 ;@ clear C and V, avoiding false register dependency on r0
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
 ;@ Shift register:
   movs r0,r0,lsl r2
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62746,22 +61307,18 @@ Opef90:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+  ldr r3,[r7,#0x4c] ;@ X bit
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-  rsb r2,r2,#33 ;@ Reverse direction
+  rsbs r1,r2,#32 ;@ should also clear ARM V
 
-;@ First get X bit (middle):
-  ldr r3,[r7,#0x4c]
-  rsb r1,r2,#32
-  and r3,r3,#0x20000000
-  mov r3,r3,lsr #29
-  mov r3,r3,lsl r1
 ;@ Rotate bits:
-  orr r3,r3,r0,lsr r2 ;@ Orr right part
-  rsbs r2,r2,#33 ;@ should also clear ARM V
-  orrs r0,r3,r0,lsl r2 ;@ Orr left part, set flags
+  movs r3,r3,lsl #3 ;@ Get X bit into Carry
+  mov r3,r0,rrx ;@ Rotate X bit into reverse part
+  movs r0,r0,lsl r2 ;@ Shift forward part, set C flag
+  orrs r0,r0,r3,lsr r1 ;@ Orr reverse part, set flags
 
-  mrs r10,cpsr ;@ r10=flags
+  mrs r10,apsr ;@ r10=flags
   str r10,[r7,#0x4c] ;@ Save X bit
 
 ;@ EaWrite: r0 into register[r11]:
@@ -62782,16 +61339,14 @@ Opef98:
   mov r2,r8,lsr #9 ;@ Get 'n'
   and r2,r2,#7
 
+;@ Rotate register:
   sub r5,r5,r2,asl #1 ;@ Take 2*n cycles
 
-;@ Rotate register:
-  rsb r2,r2,#32
+  rsb r2,r2,#33 ;@ rotate left by N-1, get carry for N
   movs r0,r0,ror r2
-  mrs r10,cpsr ;@ r10=flags
-  bic r10,r10,#0x30000000 ;@ clear CV
-;@ Get carry bit from bit 0:
-  tst r0,#1
-  orrne r10,r10,#0x20000000
+  adcs r0,r0,r0 ;@ rotate left by 1, setting flags
+  mrs r10,apsr ;@ r10=flags
+  bic r10,r10,#0x10000000 ;@ make sure V is clear
 
 ;@ EaWrite: r0 into register[r11]:
   str r0,[r7,r11,lsl #2]
@@ -62818,7 +61373,7 @@ WrongPrivilegeMode:
 
 ;@ -------------------------- Jump Table --------------------------
   .data
-  .align 4
+  .balign 4
 
 CycloneJumpTab:
   .rept 0x1400

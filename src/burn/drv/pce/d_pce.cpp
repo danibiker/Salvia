@@ -71,6 +71,7 @@ static struct BurnInputInfo pceInputList[] = {
 	{"Dip A",			BIT_DIPSWITCH,	PCEDips + 0,	"dip"		},
 	{"Dip B",			BIT_DIPSWITCH,	PCEDips + 1,	"dip"		},
 	{"Dip C",			BIT_DIPSWITCH,	PCEDips + 2,	"dip"		},
+	{"Dip D",			BIT_DIPSWITCH,	PCEDips + 3,	"dip"		},
 };
 
 STDINPUTINFO(pce)
@@ -98,12 +99,7 @@ static struct BurnDIPInfo pceDIPList[] =
 	{0   , 0xfe, 0   ,    2, "Joystick Type Player 5"	},
 	{0x01, 0x01, 0x03, 0x00, "2-buttons"				},
 	{0x01, 0x01, 0x03, 0x02, "6-buttons"				},
-#if 0
-	// not supported yet..
-	{0   , 0xfe, 0   ,    2, "Arcade Card"				},
-	{0x02, 0x01, 0x01, 0x00, "Off"						},
-	{0x02, 0x01, 0x01, 0x01, "On"						},
-#endif
+
 	{0   , 0xfe, 0   ,    2, "Sprite Limit"				},
 	{0x02, 0x01, 0x10, 0x10, "Disabled (hack)"			},
 	{0x02, 0x01, 0x10, 0x00, "Enabled"					},
@@ -122,6 +118,7 @@ static struct BurnDIPInfo pcedefaultsDIPList[] =
 	{0x00, 0xff, 0xff, 0x00, NULL						},
 	{0x01, 0xff, 0xff, 0x00, NULL						},
 	{0x02, 0xff, 0xff, 0x01, NULL						},
+	{0x03, 0xff, 0xff, 0x00, NULL						},
 };
 
 static struct BurnDIPInfo pceHQSoundDIPList[] =
@@ -129,17 +126,71 @@ static struct BurnDIPInfo pceHQSoundDIPList[] =
 	{0x00, 0xff, 0xff, 0x00, NULL						},
 	{0x01, 0xff, 0xff, 0x00, NULL						},
 	{0x02, 0xff, 0xff, 0x81, NULL						},
+	{0x03, 0xff, 0xff, 0x00, NULL						},
 };
 
 STDDIPINFOEXT(pce, pcedefaults, pce)
 STDDIPINFOEXT(pce_hq_sound, pceHQSound, pce)
+
+static struct BurnDIPInfo pcecdDIPList[] =
+{
+	DIP_OFFSET(0x3d)
+
+	{0x00, 0xff, 0xff, 0x00, NULL						},
+	{0x01, 0xff, 0xff, 0x00, NULL						},
+	{0x02, 0xff, 0xff, 0x01, NULL						},
+	{0x03, 0xff, 0xff, 0x00, NULL						},
+
+	{0   , 0xfe, 0   ,    2, "Joystick Type Player 1"	},
+	{0x00, 0x01, 0x03, 0x00, "2-buttons"				},
+	{0x00, 0x01, 0x03, 0x02, "6-buttons"				},
+
+	{0   , 0xfe, 0   ,    2, "Joystick Type Player 2"	},
+	{0x00, 0x01, 0x0c, 0x00, "2-buttons"				},
+	{0x00, 0x01, 0x0c, 0x08, "6-buttons"				},
+
+	{0   , 0xfe, 0   ,    2, "Joystick Type Player 3"	},
+	{0x00, 0x01, 0x30, 0x00, "2-buttons"				},
+	{0x00, 0x01, 0x30, 0x20, "6-buttons"				},
+
+	{0   , 0xfe, 0   ,    2, "Joystick Type Player 4"	},
+	{0x00, 0x01, 0xc0, 0x00, "2-buttons"				},
+	{0x00, 0x01, 0xc0, 0x80, "6-buttons"				},
+
+	{0   , 0xfe, 0   ,    2, "Joystick Type Player 5"	},
+	{0x01, 0x01, 0x03, 0x00, "2-buttons"				},
+	{0x01, 0x01, 0x03, 0x02, "6-buttons"				},
+
+	{0   , 0xfe, 0   ,    2, "Arcade Card"				},
+	{0x02, 0x01, 0x01, 0x00, "Off"						},
+	{0x02, 0x01, 0x01, 0x01, "On"						},
+
+	{0   , 0xfe, 0   ,    2, "Sprite Limit"				},
+	{0x02, 0x01, 0x10, 0x10, "Disabled (hack)"			},
+	{0x02, 0x01, 0x10, 0x00, "Enabled"					},
+
+	{0   , 0xfe, 0   ,    2, "Alt Palette"				},
+	{0x02, 0x01, 0x20, 0x00, "Disabled"					},
+	{0x02, 0x01, 0x20, 0x20, "Enabled"					},
+
+	{0   , 0xfe, 0   ,    2, "Sound Synthesis"			},
+	{0x02, 0x01, 0x80, 0x00, "LQ (Low CPU Usage)"		},
+	{0x02, 0x01, 0x80, 0x80, "HQ (High CPU Usage)"		},
+
+	{0   , 0xfd, 0   ,    3, "Bios"													},
+	{0x03, 0x01, 0x03, 0x00, "Super CD-Rom System Card (Japan, v3.0)"				},
+	{0x03, 0x01, 0x03, 0x01, "Super CD-Rom System Card (Japan, v3.0, font hack)"	},
+	{0x03, 0x01, 0x03, 0x02, "TurboGrafx CD System Card (USA, v3.0)"				},
+};
+
+STDDIPINFO(pcecd)
 
 
 // -----------------------
 // CD-Rom System Firmwares
 // -----------------------
 
-
+/*
 // CD-Rom System Card (v1.0)
 
 static struct BurnRomInfo pce_cdsysbRomDesc[] = {
@@ -216,25 +267,6 @@ struct BurnDriverD BurnDrvpce_gecd = {
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 
-// Super CD-Rom System Card (v3.0)
-
-static struct BurnRomInfo pce_scdsysRomDesc[] = {
-	{ "Super CD-Rom System Card (Japan, v3.0)(1991).pce", 0x040000, 0x6d9a73ef, BRF_PRG | BRF_ESS },
-};
-
-STD_ROM_PICK(pce_scdsys)
-STD_ROM_FN(pce_scdsys)
-
-struct BurnDriverD BurnDrvpce_scdsys = {
-	"pce_scdsys", NULL, NULL, NULL, "1991",
-	"Super CD-Rom System Card (v3.0)\0", NULL, "NEC - Hudson Soft", "PC Engine",
-	NULL, NULL, NULL, NULL,
-	0, 1, HARDWARE_PCENGINE_PCENGINE, GBF_BIOS, 0,
-	PceGetZipName, pce_scdsysRomInfo, pce_scdsysRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
-	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
-	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
-};
-
 // TurboGrafx CD Super System Card (v3.0)
 
 static struct BurnRomInfo tg_scdsysRomDesc[] = {
@@ -270,6 +302,29 @@ struct BurnDriverD BurnDrvtg_cdsys = {
 	0, 1, HARDWARE_PCENGINE_TG16, GBF_BIOS, 0,
 	TgGetZipName, tg_cdsysRomInfo, tg_cdsysRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+*/
+
+// CD System Card
+
+static struct BurnRomInfo pce_scdsysRomDesc[] = {
+	{ "Super CD-Rom System Card (Japan, v3.0)(1991).pce"           , 0x040000, 0x6d9a73ef, BRF_PRG | BRF_ESS },
+	{ "Super CD-Rom System Card (Japan, v3.0, font hack)(2026).pce", 0x040000, 0x16a9fda2, BRF_PRG | BRF_ESS | BRF_OPT },
+	{ "TurboGrafx CD System Card (USA, v3.0)(1992).pce"            , 0x040000, 0x2b5b75fe, BRF_PRG | BRF_ESS | BRF_OPT },
+	{ "Games Express CD Card (Japan)(1993).pce"                    , 0x008000, 0x51a12d90, BRF_PRG | BRF_ESS | BRF_OPT }, // forced for games express discs
+};
+
+STD_ROM_PICK(pce_scdsys)
+STD_ROM_FN(pce_scdsys)
+
+struct BurnDriver BurnDrvpce_scdsys = {
+	"pce_scdsys", NULL, NULL, NULL, "1991",
+	"CD System Card\0", "System - media selected seperately", "NEC - Hudson Soft", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_PCE_CD, GBF_BIOS, 0,
+	PceGetZipName, pce_scdsysRomInfo, pce_scdsysRomName, NULL, NULL, NULL, NULL, pceInputInfo, pcecdDIPInfo,
+	PCECDInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 
@@ -5905,7 +5960,7 @@ struct BurnDriver BurnDrvpce_soldblas = {
 // Son Son II (Japan)
 
 static struct BurnRomInfo pce_sonson2RomDesc[] = {
-	{ "son son ii (japan).pce", 0x040000, 0xd7921df2, BRF_PRG | BRF_ESS },
+	{ "Son Son II (Japan)(1989)(NEC).pce", 0x040000, 0xd7921df2, BRF_PRG | BRF_ESS },
 };
 
 STD_ROM_PICK(pce_sonson2)
@@ -5917,6 +5972,26 @@ struct BurnDriver BurnDrvpce_sonson2 = {
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
 	PceGetZipName, pce_sonson2RomInfo, pce_sonson2RomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+
+// Son Son II (Hack, English)
+// https://romhackplaza.org/translations/sonson-ii-pc-engine-english-translation-english-translation-pc-engine-supergrafx
+static struct BurnRomInfo pce_sonson2teRomDesc[] = {
+	{ "Son Son II T-Eng (2026)(Jackic).pce", 524288, 0xef783f57, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_sonson2te)
+STD_ROM_FN(pce_sonson2te)
+
+struct BurnDriver BurnDrvpce_sonson2te = {
+	"pce_sonson2te", "pce_sonson2", NULL, NULL, "2026",
+	"Son Son II (Hack, English)\0", NULL, "Jackic", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
+	PceGetZipName, pce_sonson2teRomInfo, pce_sonson2teRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
@@ -9354,6 +9429,25 @@ struct BurnDriver BurnDrvpce_barbarianzxs = {
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 
+// Batman (HB)
+
+static struct BurnRomInfo pce_batmanhbRomDesc[] = {
+	{ "Batman (2026)(Magic Games).pce", 1048576, 0x0577fe88, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_batmanhb)
+STD_ROM_FN(pce_batmanhb)
+
+struct BurnDriver BurnDrvpce_batmanhb = {
+	"pce_batmanhb", NULL, NULL, NULL, "2026",
+	"Batman (HB)\0", NULL, "Magic Games", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_HOMEBREW, 1, HARDWARE_PCENGINE_PCENGINE, GBF_ADV | GBF_PLATFORM, 0,
+	PceGetZipName, pce_batmanhbRomInfo, pce_batmanhbRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
 // Death Sword - Apple II (HB)
 
 static struct BurnRomInfo pce_barbarianap2RomDesc[] = {
@@ -9807,6 +9901,25 @@ struct BurnDriver BurnDrvtg_chasehqnf = {
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 1, HARDWARE_PCENGINE_TG16, GBF_RACING, 0,
 	TgGetZipName, tg_chasehqnfRomInfo, tg_chasehqnfRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+// Tetris - Atari Games Arcade Port (HB, v1.02)
+
+static struct BurnRomInfo pce_tetrisarcRomDesc[] = {
+	{ "Tetris - Atari Games Arcade Port v1.02 (2026)(ShinobiZ).pce", 524288, 0x6e1de759, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_tetrisarc)
+STD_ROM_FN(pce_tetrisarc)
+
+struct BurnDriver BurnDrvpce_tetrisarc = {
+	"pce_tetrisarc", NULL, NULL, NULL, "2026",
+	"Tetris - Atari Games Arcade Port (HB, v1.02)\0", NULL, "ShinobiZ", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_HOMEBREW, 2, HARDWARE_PCENGINE_PCENGINE, GBF_PUZZLE, 0,
+	PceGetZipName, pce_tetrisarcRomInfo, pce_tetrisarcRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 

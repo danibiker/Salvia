@@ -57,6 +57,7 @@
 #define IDD_HARDFXSETTINGS                  84
 #define IDD_ROMDATA_MANAGER					85
 #define IDD_ROMDATA_COVER_DLG				86
+#define IDD_HOTKEYS							87
 
 #define IDR_MENU                        	100
 #define IDR_MENU_BLITTER_1					110
@@ -64,8 +65,10 @@
 #define IDR_MENU_BLITTER_3					112
 #define IDR_MENU_BLITTER_4					113
 #define IDR_MENU_BLITTER_5					114
+#define IDR_MENU_BLITTER_6					115
 #define IDR_MENU_AUD_PLUGIN_1				130
 #define IDR_MENU_AUD_PLUGIN_2				131
+#define IDR_MENU_AUD_PLUGIN_3				132
 #define	IDR_MENU_GAMESEL					140
 #define	IDR_MENU_LUAWINDOW					150
 #define IDR_ACCELERATOR                 	160
@@ -551,6 +554,14 @@
 #define IDC_ROMDATA_LABELDRIVER				21216
 #define IDC_ROMDATA_COVER_PREVIEW_PIC		21217
 
+#define IDC_HOTKEYS_LIST					21400
+#define IDC_HOTKEYS_STATUS					21401
+#define IDC_HOTKEYS_SET						21402
+#define IDC_HOTKEYS_SETALT					21403
+#define IDC_HOTKEYS_CLEAR					21404
+#define IDC_HOTKEYS_DEFAULT					21405
+#define IDC_HOTKEYS_RESETALL				21406
+
 #define MENU_LOAD                       	10001
 #define MENU_STARTNET			 			10002
 #define MENU_STARTREPLAY					10003
@@ -566,7 +577,7 @@
 #define MENU_RESET                       	10013
 #define MENU_LOAD_ROMDATA					10014
 #define MENU_LOAD_IPSPATCH					10015
-#define MENU_LOAD_NEOGEOCD					10016
+#define MENU_LOAD_CDIMAGE					10016
 #define MENU_LOAD_ARCHIVE					10017
 #define MENU_ROMDATA_MANAGER				10018
 #define MENU_MEMCARD_CREATE					10020
@@ -591,6 +602,7 @@
 #define MENU_WINFS                          10101
 #define MENU_FULL                       	10102
 #define MENU_DWMFIX							10103
+#define MENU_VRR							10104
 #define MENU_NOSTRETCH                  	10110
 #define MENU_STRETCH                    	10111
 #define MENU_ASPECT                     	10112
@@ -648,12 +660,16 @@
 #define MENU_DSOUND_BASS                    10201
 #define MENU_XAUDIO_BASS                    10202
 #define MENU_XAUDIO_REVERB                  10203
+#define MENU_WASAPI_BASS                    10204
 #define MENU_DSOUND_NOSOUND					10210
 #define MENU_DSOUND_44100               	10213
 #define MENU_DSOUND_48000               	10214
 #define MENU_XAUDIO_NOSOUND					10220
 #define MENU_XAUDIO_44100                   10223
 #define MENU_XAUDIO_48000                   10224
+#define MENU_WASAPI_NOSOUND					10225
+#define MENU_WASAPI_44100                   10226
+#define MENU_WASAPI_48000                   10227
 #define MENU_INTERPOLATE_0					10230
 #define MENU_INTERPOLATE_1					10231
 #define MENU_INTERPOLATE_3					10233
@@ -794,11 +810,13 @@
 #define MENU_AUDIO_VOLUME_80				10689
 #define MENU_AUDIO_VOLUME_90				10690
 #define MENU_AUDIO_VOLUME_100				10691
+#define MENU_AUDIO_VOLUME_150				10696
+#define MENU_AUDIO_VOLUME_200				10699
 
-#define MENU_ICONS_BY_GAME					10692
-#define MENU_ICONS_BY_HARDWARE				10693
+#define MENU_ICONS_BY_GAME					10892
+#define MENU_ICONS_BY_HARDWARE				10893
 
-#define MENU_ICONS_REFRESH					10694
+#define MENU_ICONS_REFRESH					10894
 
 #define MENU_RES_ARCADE_VERTICAL			10700
 #define MENU_RES_1_VERTICAL					10701
@@ -841,6 +859,8 @@
 #define MENU_CLRMAME_PRO_XML_SNES_ONLY      10738
 #define MENU_CLRMAME_PRO_XML_NGP_ONLY		10739
 #define MENU_CLRMAME_PRO_XML_CHANNELF_ONLY	10740
+#define MENU_CLRMAME_PRO_XML_ASTROHOME_ONLY	10741
+#define MENU_CLRMAME_PRO_XML_GBA_ONLY		10742
 
 #define MENU_INPUT_P1_DISABLE				10750
 #define MENU_INPUT_P1_SOCDN					10751
@@ -1089,6 +1109,12 @@
 #define MENU_DX9_ALT_HARDWAREVERTEX			11703
 #define MENU_DX9_ALT_MOTIONBLUR				11704
 
+#define MENU_D3D11_SHADER_LOAD				11720
+#define MENU_D3D11_SHADER_NONE				11721
+#define MENU_D3D11_SHADER_PARAMS			11722
+#define MENU_D3D11_SHADER_MRU_CLEAR			11723
+#define MENU_D3D11_SHADER_MRU				11730	// 11730 - 11739: recently used shaders
+
 #define ID_LUA_OPEN							11812
 #define ID_LUA_CLOSE_ALL					11813
 
@@ -1107,6 +1133,12 @@
 #define GAMESEL_MENU_VIEWEMMA				11902
 #define GAMESEL_MENU_FAVORITE				11903
 #define GAMESEL_MENU_ROMDATA				11904
+#define MENU_UI_LIGHT_MODE                  11905
+#define MENU_UI_DARK_MODE                   11906
+#define BMP_DARK_MODE_SPLASH                11907 
+#define MENU_UI_DEFAULT_MODE                11908
+
+#define MENU_HOTKEYS                        11960
 
 // Next default values for new objects
 //

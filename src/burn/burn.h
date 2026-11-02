@@ -25,6 +25,7 @@
 #include <time.h>
 
 #ifndef SUPPORT_SPLIT_DRIVER
+ #define BUILD_ASTROHOME
  #define BUILD_ATARI
  #define BUILD_CAPCOM
  #define BUILD_CAVE
@@ -33,6 +34,7 @@
  #define BUILD_CPS3
  #define BUILD_DATAEAST
  #define BUILD_GALAXIAN
+ #define BUILD_GBA
  #define BUILD_IREM
  #define BUILD_KONAMI
  #define BUILD_MEGADRIVE
@@ -60,6 +62,7 @@ extern TCHAR szAppSamplesPath[MAX_PATH];
 extern TCHAR szAppHDDPath[MAX_PATH];
 extern TCHAR szAppBlendPath[MAX_PATH];
 extern TCHAR szAppEEPROMPath[MAX_PATH];
+extern TCHAR szAppSnesMsu1Path[MAX_PATH];	// SNES MSU-1 media root
 
 // Macro to determine the size of a struct up to and including "member"
 #define STRUCT_SIZE_HELPER(type, member) offsetof(type, member) + sizeof(((type*)0)->member)
@@ -182,8 +185,7 @@ struct BurnSampleInfo {
 
 struct BurnHDDInfo {
 	char *szName;
-	UINT32 nLen;
-	UINT32 nCrc;
+	char *szSha1;
 };
 
 // ---------------------------------------------------------------------------
@@ -598,6 +600,8 @@ int BurnComputeSHA1(const UINT8 *buffer, int buffer_size, char *hash_str);
 #define HARDWARE_PREFIX_CHANNELF                        (0x21000000)
 #define HARDWARE_PREFIX_SNES                            (0x22000000)
 #define HARDWARE_PREFIX_IGS_PGM2						(0x23000000)
+#define HARDWARE_PREFIX_ASTROHOME                       (0x24000000)
+#define HARDWARE_PREFIX_GBA                             (0x25000000)
 
 #define HARDWARE_SNK_NGP								(HARDWARE_PREFIX_NGP | 0x00000000)
 #define HARDWARE_SNK_NGPC								(HARDWARE_PREFIX_NGP | 0x00000001) // must not be 0x10000
@@ -648,6 +652,7 @@ int BurnComputeSHA1(const UINT8 *buffer, int buffer_size, char *hash_str);
 #define HARDWARE_SEGA_YM2413							(0x0800)
 #define HARDWARE_SEGA_FD1094_ENC_CPU2					(0x1000)
 #define HARDWARE_SEGA_ISGSM								(0x2000)
+#define HARDWARE_SEGA_DFJAIL                            (0x4000)
 
 #define HARDWARE_KONAMI_68K_Z80							(HARDWARE_PREFIX_KONAMI | 0x00010000)
 #define HARDWARE_KONAMI_68K_ONLY						(HARDWARE_PREFIX_KONAMI | 0x00020000)
@@ -677,6 +682,8 @@ int BurnComputeSHA1(const UINT8 *buffer, int buffer_size, char *hash_str);
 #define HARDWARE_SNK_4_JOYSTICKS						(0x3000)	// Uses 4 joysticks
 #define HARDWARE_SNK_MAHJONG							(0x4000)	// Uses a special mahjong controller
 #define HARDWARE_SNK_GAMBLING							(0x5000)	// Uses gambling controls
+#define HARDWARE_SNK_NEOTAP								(0x6000)	// Uses the NeoTap 4P multitap
+#define HARDWARE_SNK_NEOFTC1B							(0x8000)	// Uses the NEO-FTC1B 4P JAMMA splitter
 
 #define HARDWARE_SNK_MVS								(HARDWARE_PREFIX_SNK | 0x00020000)
 #define HARDWARE_SNK_NEOCD								(HARDWARE_PREFIX_SNK | 0x00030000)
@@ -828,6 +835,7 @@ int BurnComputeSHA1(const UINT8 *buffer, int buffer_size, char *hash_str);
 #define HARDWARE_PCENGINE_PCENGINE						(HARDWARE_PREFIX_PCENGINE | 0x00010000)
 #define HARDWARE_PCENGINE_TG16							(HARDWARE_PREFIX_PCENGINE | 0x00020000)
 #define HARDWARE_PCENGINE_SGX							(HARDWARE_PREFIX_PCENGINE | 0x00030000)
+#define HARDWARE_PCENGINE_PCE_CD                        (HARDWARE_PREFIX_PCENGINE | 0x00040000)
 
 #define HARDWARE_SPECTRUM								(HARDWARE_PREFIX_SPECTRUM)
 
@@ -844,6 +852,10 @@ int BurnComputeSHA1(const UINT8 *buffer, int buffer_size, char *hash_str);
 #define HARDWARE_SNES_JUSTIFIER                         (HARDWARE_PREFIX_SNES | 0x0000002)
 
 #define HARDWARE_CHANNELF                               (HARDWARE_PREFIX_CHANNELF)
+
+#define HARDWARE_ASTROHOME                              (HARDWARE_PREFIX_ASTROHOME)
+
+#define HARDWARE_GBA                                    (HARDWARE_PREFIX_GBA)
 
 // flags for the genre member
 #define GBF_HORSHOOT									(1 << 0)

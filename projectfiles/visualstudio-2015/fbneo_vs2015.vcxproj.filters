@@ -40,6 +40,9 @@
     <ClCompile Include="..\..\src\burn\vector.cpp">
       <Filter>burn</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\burn_hdd.cpp">
+      <Filter>burn</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ay8910.c">
       <Filter>burn\snd</Filter>
     </ClCompile>
@@ -244,6 +247,9 @@
     <ClCompile Include="..\..\src\burn\drv\capcom\d_cps2.cpp">
       <Filter>burn\drv\capcom</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\d_cps2_custom.cpp">
+      <Filter>burn\drv\capcom</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\capcom\fcrash_snd.cpp">
       <Filter>burn\drv\capcom</Filter>
     </ClCompile>
@@ -418,6 +424,12 @@
     <ClCompile Include="..\..\src\burn\drv\galaxian\gal_stars.cpp">
       <Filter>burn\drv\galaxian</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\gba\d_gba.cpp">
+      <Filter>burn\drv\gba</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\gba\gba.cpp">
+      <Filter>burn\drv\gba</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\irem\d_m62.cpp">
       <Filter>burn\drv\irem</Filter>
     </ClCompile>
@@ -590,6 +602,9 @@
       <Filter>burn\drv\pce</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pce\pce.cpp">
+      <Filter>burn\drv\pce</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pce\pce_cd.cpp">
       <Filter>burn\drv\pce</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pgm\d_pgm.cpp">
@@ -1156,6 +1171,9 @@
     <ClCompile Include="..\..\src\burn\devices\taito_m68705.cpp">
       <Filter>burn\devices</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\cxd1095.cpp">
+      <Filter>burn\devices</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\taito\tc0100scn.cpp">
       <Filter>burn\drv\taito</Filter>
     </ClCompile>
@@ -1402,6 +1420,9 @@
     <ClCompile Include="..\..\src\burner\win32\cona.cpp">
       <Filter>burner\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burner\win32\d3d11shaderparams.cpp">
+      <Filter>burner\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burner\win32\debugger.cpp">
       <Filter>burner\win32</Filter>
     </ClCompile>
@@ -1453,7 +1474,10 @@
     <ClCompile Include="..\..\src\burner\win32\misc_win32.cpp">
       <Filter>burner\win32</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burner\win32\neocdlist.cpp">
+    <ClCompile Include="..\..\src\burner\cdlist.cpp">
+      <Filter>burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\win32\cdlistcache.cpp">
       <Filter>burner\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burner\win32\neocdsel.cpp">
@@ -1528,6 +1552,9 @@
     <ClCompile Include="..\..\src\intf\cd\cd_interface.cpp">
       <Filter>interfaces\cd</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\intf\cd\cd_chd.cpp">
+      <Filter>interfaces\cd</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\intf\input\inp_interface.cpp">
       <Filter>interfaces\input</Filter>
     </ClCompile>
@@ -1535,6 +1562,9 @@
       <Filter>interfaces\input\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\intf\input\win32\inp_dinput.cpp">
+      <Filter>interfaces\input\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\input\win32\inp_xinput.cpp">
       <Filter>interfaces\input\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\intf\video\vid_interface.cpp">
@@ -1553,6 +1583,12 @@
       <Filter>interfaces\video\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\intf\video\win32\vid_d3d.cpp">
+      <Filter>interfaces\video\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\video\win32\vid_d3d11.cpp">
+      <Filter>interfaces\video\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\video\win32\vid_d3d11_shader.cpp">
       <Filter>interfaces\video\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\intf\video\win32\vid_ddraw.cpp">
@@ -2086,6 +2122,9 @@
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_cultures.cpp">
       <Filter>burn\drv\pst90s</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_cyclwarr.cpp">
+      <Filter>burn\drv\pst90s</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_dooyong.cpp">
       <Filter>burn\drv\pst90s</Filter>
     </ClCompile>
@@ -2248,6 +2287,9 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_carjmbre.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_cbasebal.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_ccastles.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
@@ -2333,6 +2375,9 @@
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_freekick.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_galgame.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_galivan.cpp">
@@ -2533,7 +2578,13 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_tail2nose.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tankbatt.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_tankbust.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tattack.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_tbowl.cpp">
@@ -2800,12 +2851,6 @@
     <ClCompile Include="..\..\src\cpu\i8051\mcs51.cpp">
       <Filter>cpus\i8051</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\mips3\cop0.cpp">
-      <Filter>cpus\mips</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\mips3\cop1.cpp">
-      <Filter>cpus\mips</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\cpu\mips3\mips3.cpp">
       <Filter>cpus\mips</Filter>
     </ClCompile>
@@ -3007,8 +3052,8 @@
     <ClCompile Include="..\..\src\burn\snd\ymf262.cpp">
       <Filter>burn\snd</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\intf\cd\win32\cd_img.cpp">
-      <Filter>interfaces\cd\win32</Filter>
+    <ClCompile Include="..\..\src\intf\cd\cd_img.cpp">
+      <Filter>interfaces\cd</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\z80\z80ctc.cpp">
       <Filter>cpus\z80</Filter>
@@ -3063,9 +3108,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\dataeast\d_liberate.cpp">
       <Filter>burn\drv\dataeast</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\mips3\x64\mips3_x64.cpp">
-      <Filter>cpus\mips</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_berzerk.cpp">
       <Filter>burn\drv\pre90s</Filter>
@@ -3343,6 +3385,9 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_exprraid.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_spbactn.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_spdodgeb.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
@@ -3360,6 +3405,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burner\nvram.cpp">
       <Filter>burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\win32\romdata.cpp">
+      <Filter>burner\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burner\win32\luaconsole.cpp">
       <Filter>burner\win32</Filter>
@@ -3541,9 +3589,6 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_lockon.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burner\win32\romdata.cpp">
-      <Filter>burner\win32</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\taito\d_superqix.cpp">
       <Filter>burn\drv\taito</Filter>
     </ClCompile>
@@ -3637,6 +3682,15 @@
     <ClCompile Include="..\..\src\burn\drv\snes\input.cpp">
       <Filter>burn\drv\snes</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\msu1.cpp">
+      <Filter>burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\msu1_backend.cpp">
+      <Filter>burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\msu1_decoders.c">
+      <Filter>burn\drv\snes</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\snes\ppu.cpp">
       <Filter>burn\drv\snes</Filter>
     </ClCompile>
@@ -3656,6 +3710,9 @@
       <Filter>burn\drv\snes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\snes\spc7110.cpp">
+      <Filter>burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\st018.cpp">
       <Filter>burn\drv\snes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\snes\statehandler.cpp">
@@ -3743,6 +3800,9 @@
       <Filter>burn\drv\pst90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\atari\d_atarisy1.cpp">
+      <Filter>burn\drv\atari</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\atari\d_atarisy2.cpp">
       <Filter>burn\drv\atari</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\arm9\arm9.cpp">
@@ -3849,6 +3909,9 @@
     <Filter Include="burn\drv\galaxian">
       <UniqueIdentifier>{c4b93ffc-1f2a-4461-a73b-d7153fd1a1e6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="burn\drv\gba">
+      <UniqueIdentifier>{6b17d54b-49ca-4e1f-9f6f-418472209f26}</UniqueIdentifier>
+    </Filter>
     <Filter Include="burn\drv\irem">
       <UniqueIdentifier>{0937431a-c5c3-4079-86ff-f553d99ef136}</UniqueIdentifier>
     </Filter>
@@ -3917,9 +3980,6 @@
     </Filter>
     <Filter Include="interfaces\cd">
       <UniqueIdentifier>{30900300-8680-4de9-949f-e5730750f260}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="interfaces\cd\win32">
-      <UniqueIdentifier>{38ae639d-7a13-425e-8992-6ccfb38ebff9}</UniqueIdentifier>
     </Filter>
     <Filter Include="interfaces\input">
       <UniqueIdentifier>{abfb0299-f5db-42c5-9d0e-8d4f719efcc5}</UniqueIdentifier>

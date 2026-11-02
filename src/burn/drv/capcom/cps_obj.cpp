@@ -2,6 +2,7 @@
 // CPS Objs (sprites)
 
 INT32 nCpsObjectBank;
+INT32 nCpsObjExtraLen = 0;
 INT32 Sfa2ObjHack = 0;
 
 UINT8 *CpsBootlegSpriteRam = NULL;
@@ -11,9 +12,14 @@ INT32 Cps1DetectEndSpriteList8000 = 0;
 
 Cps1ObjGetCallback Cps1ObjGetCallbackFunction = NULL;
 Cps1ObjDrawCallback Cps1ObjDrawCallbackFunction = NULL;
+Cps2ObjGetCallback Cps2ObjGetCallbackFunction = NULL;
+Cps2ObjTileCallback Cps2ObjTileCallbackFunction = NULL;
+Cps2ObjPaletteCallback Cps2ObjPaletteCallbackFunction = NULL;
+INT32 bCpsUseParentBlend = 1;
 
 // Our copy of the sprite table
 static UINT8 *ObjMem = NULL;
+static INT32 nObjMemLen;
 
 static INT32 nMax = 0;
 static INT32 nGetNext = 0;
@@ -27,6 +33,7 @@ static INT32 nZOffset;
 struct ObjFrame {
 	INT32 nShiftX, nShiftY;
 	UINT8* Obj;
+	UINT8* Extra;
 	INT32 nCount;
 };
 
@@ -34,10 +41,12 @@ static INT32 nFrameCount = 0;
 static struct ObjFrame of[3];
 
 static UINT8 *blendtable;
+static UINT32 nBlendCount;
 
 static void CpsBlendInit()
 {
 	blendtable = NULL;
+	nBlendCount = 0;
 
 	TCHAR filename[MAX_PATH];
 
@@ -45,12 +54,8 @@ static void CpsBlendInit()
 
 	FILE *fa = _tfopen(filename, _T("rt"));
 
-	INT32 is_sfz3mix = strstr("sfz3mix", BurnDrvGetTextA(DRV_NAME)) != NULL;
-
 	if (fa == NULL) {
-		if (is_sfz3mix) {
-			// for sfz3mix, don't use parent's blend table. sfz3mix uses different
-			// sprite indexing
+		if (!bCpsUseParentBlend) {
 			return;
 		}
 
@@ -65,8 +70,15 @@ static void CpsBlendInit()
 
 	bprintf (PRINT_IMPORTANT, _T("Using sprite blending (.bld) table!\n"));
 
-	blendtable = (UINT8*)BurnMalloc(0x40000); // maximum number of sprites
-	memset (blendtable, 0, 0x40000); // no blend
+	// One entry per 16x16 tile; retain the native range for mirrored tile addresses.
+	nBlendCount = (nCpsGfxMask + 1) >> 7;
+	if (nBlendCount < 0x40000) nBlendCount = 0x40000;
+	blendtable = (UINT8*)BurnMalloc(nBlendCount);
+	if (blendtable == NULL) {
+		fclose(fa);
+		return;
+	}
+	memset(blendtable, 0, nBlendCount);
 
 	char szLine[64];
 
@@ -96,7 +108,7 @@ static void CpsBlendInit()
 		}
 
 		for (k = min; k <= max; k++) {
-			if (k < 0x40000)
+			if (k < nBlendCount)
 				blendtable[k] = table[type&3];
 		}
 	}
@@ -117,7 +129,8 @@ INT32 CpsObjInit()
 	nFrameCount = 2;			// CPS2 sprites lagged by 1 frame and double buffered
 								// CPS1 sprites lagged by 1 frame
 
-	ObjMem = (UINT8*)BurnMalloc((nMax << 3) * nFrameCount);
+	nObjMemLen = ((nMax << 3) + nCpsObjExtraLen) * nFrameCount;
+	ObjMem = (UINT8*)BurnMalloc(nObjMemLen);
 	if (ObjMem == NULL) {
 		return 1;
 	}
@@ -125,6 +138,7 @@ INT32 CpsObjInit()
 	// Set up the frame buffers
 	for (INT32 i = 0; i < nFrameCount; i++) {
 		of[i].Obj = ObjMem + (nMax << 3) * i;
+		of[i].Extra = nCpsObjExtraLen ? ObjMem + (nMax << 3) * nFrameCount + nCpsObjExtraLen * i : NULL;
 		of[i].nCount = 0;
 	}
 
@@ -141,11 +155,18 @@ INT32 CpsObjInit()
 
 INT32 CpsObjExit()
 {
+	Cps2ObjGetCallbackFunction = NULL;
+	Cps2ObjTileCallbackFunction = NULL;
+	Cps2ObjPaletteCallbackFunction = NULL;
+	bCpsUseParentBlend = 1;
+	nCpsObjExtraLen = 0;
+
 	if (blendtable)
 		BurnFree(blendtable);
 
 	for (INT32 i = 0; i < nFrameCount; i++) {
 		of[i].Obj = NULL;
+		of[i].Extra = NULL;
 		of[i].nCount = 0;
 	}
 
@@ -160,6 +181,17 @@ INT32 CpsObjExit()
 	Cps1ObjDrawCallbackFunction = NULL;
 
 	return 0;
+}
+
+void CpsObjReset()
+{
+	if (ObjMem == NULL) return;
+	memset(ObjMem, 0, nObjMemLen);
+	for (INT32 i = 0; i < nFrameCount; i++) {
+		of[i].nCount = 0;
+		of[i].nShiftX = of[i].nShiftY = 0;
+	}
+	nGetNext = 0;
 }
 
 // Get CPS sprites into Obj
@@ -231,6 +263,7 @@ INT32 CpsObjGet()
 
 		// Okay - this sprite is active:
 		memcpy(po, pg, 8); // copy it over
+		if (Cps2ObjGetCallbackFunction) Cps2ObjGetCallbackFunction(pof->Extra, pof->nCount, i);
 
 		pof->nCount++;
 		po += 8;
@@ -426,15 +459,18 @@ INT32 Cps2ObjDraw(INT32 nLevelFrom, INT32 nLevelTo)
 //		y -= CpsSaveFrg[0][0xB];
 
 #endif
-		if (Cps2Turbo) {
-			if (ps[1] & 0x1000) ps[1] |= 0x8000;
-			n |= (BURN_ENDIAN_SWAP_INT16(ps[1]) & 0xe000) << 3;	// high bits of address
-		} else {
-			n |= (BURN_ENDIAN_SWAP_INT16(ps[1]) & 0x6000) << 3;	// high bits of address
-		}
-		
+		n |= (BURN_ENDIAN_SWAP_INT16(ps[1]) & 0x6000) << 3;
+
 		// Find the palette for the tiles on this sprite
 		CpstPal = CpsPal + ((a & 0x1F) << 4);
+
+		UINT32* pStockPal = CpstPal;
+		UINT32 nObjectPal[16];
+		if (Cps2ObjPaletteCallbackFunction) {
+			INT32 nResult = Cps2ObjPaletteCallbackFunction(n, BURN_ENDIAN_SWAP_INT16(ps[0]), BURN_ENDIAN_SWAP_INT16(ps[1]), a, nObjectPal);
+			if (nResult < 0) continue;
+			if (nResult) CpstPal = nObjectPal;
+		}
 
 		nFlip = (a >> 5) & 3;
 		// Find out sprite size
@@ -473,7 +509,11 @@ INT32 Cps2ObjDraw(INT32 nLevelFrom, INT32 nLevelTo)
 				nCpstY = y + (ey << 4);
 
 //				nCpstTile = n + (dy << 4) + dx;								// normal version
-				nCpstTile = (n & ~0x0F) + (dy << 4) + ((n + dx) & 0x0F);	// pgear fix
+				nCpstTile = (n & ~0x0F) + (dy << 4) + ((n + dx) & 0x0F); // pgear fix
+				if (Cps2ObjTileCallbackFunction) {
+					INT32 nEntry = ((UINT8*)ps - pof->Obj) >> 3;
+					nCpstTile = Cps2ObjTileCallbackFunction(ps, nCpstTile, pof->Extra, nEntry);
+				}
 				
 				if (Sfa2ObjHack) {
 					// hack to not render blue squares on high score screen after name entry - they should be hidden by priority from what I can see
@@ -482,13 +522,15 @@ INT32 Cps2ObjDraw(INT32 nLevelFrom, INT32 nLevelTo)
 					//if (ps[2] == 0xa410) bprintf(PRINT_NORMAL, _T("%x, %x, %x, %x, %x, %x, %x\n"), nCpstTile, a & 0x1f, nCpstX, nCpstY, v, nLevelFrom, nLevelTo);
 				}
 				
-				nCpsBlend = (blendtable) ? blendtable[nCpstTile] : 0;
+				nCpsBlend = (blendtable && nCpstTile < nBlendCount) ? blendtable[nCpstTile] : 0;
 				nCpstTile <<= 7;						// Find real tile address					
 
 				pCpstOne();
 				nCpsBlend = 0;
 			}
 		}
+
+		CpstPal = pStockPal;	// never leave it pointing at nObjectPal
 	}
 
 	return 0;
@@ -881,5 +923,36 @@ INT32 FcrashObjDraw(INT32 nLevelFrom,INT32 nLevelTo)
 		CpstOneObjDoX[0]();
 	}
 	
+	return 0;
+}
+
+// Save the sprite lag buffers, but rebuild their pointers on initialization.
+// The Z buffer and counters are drawing scratch: saving them would make states
+// depend on which frames were drawn. Each frame starts above the old Z values.
+INT32 CpsObjScan(INT32 nAction, char* szName)
+{
+	if (!(nAction & ACB_DRIVER_DATA)) return 0;
+
+	struct BurnArea ba;
+	memset(&ba, 0, sizeof(ba));
+	ba.Data = ObjMem;
+	ba.nLen = nObjMemLen;
+	ba.szName = szName;
+	BurnAcb(&ba);
+
+	SCAN_VAR(nGetNext);
+	for (INT32 i = 0; i < nFrameCount; i++) {
+		SCAN_VAR(of[i].nShiftX);
+		SCAN_VAR(of[i].nShiftY);
+		SCAN_VAR(of[i].nCount);
+	}
+
+	if (nAction & ACB_WRITE) {
+		if (nGetNext < 0 || nGetNext >= nFrameCount) return 1;
+		for (INT32 i = 0; i < nFrameCount; i++) {
+			if (of[i].nCount < 0 || of[i].nCount > nMax) return 1;
+		}
+	}
+
 	return 0;
 }
