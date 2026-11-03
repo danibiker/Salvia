@@ -293,3 +293,63 @@ Hilo de GPU en Xbox (2026-10-31)
   tiempo del hilo de GPU, en paralelo con la emulacion.
 - PC sigue igual: DUCK_HW_GPU_THREAD 0.  La opcion de hilos del core
   (g_pcsxr_threading_enabled) lo desactiva tambien en Xbox.
+
+Escala de resolucion interna (2026-11-03)
+-----------------------------------------
+- Opcion pcsxr360_hw_resolution_scale (restart): Xbox 1x/2x, PC 1x..8x
+  (limitada por MaxTextureWidth/Height).  g_duck_hw_resolution_scale ->
+  m_scale en Initialize, antes de crear recursos.
+- La VRAM, su copia de lectura y la profundidad son de (1024 x 512) * N.
+  Todo lo demas sigue en unidades de la VRAM: el VS de los lotes ya pasa a
+  NDC con 2/1024, asi que solo se escalan el viewport, el scissor, los rect
+  de Resolve/StretchRect/Clear, el medio pixel de las utilidades
+  (DrawUtilRect: HALF_PIXEL / N) y las constantes de copia y salida.
+- Shaders: macro SCALE (CompilePS).  vram(p) lee el primer subpixel del
+  texel nativo; a escala > 1 las u/v se truncan (FloatToIntegerCoords de
+  upstream); dithering y entrelazado con el pixel nativo (natpix); subida
+  desde la textura nativa; copia y salida de 15 bits a resolucion completa;
+  salida de 24 bits (MDEC) leyendo palabras nativas.
+- Lectura a CPU nativa: PC baja con StretchRect POINT a m_down_surf;
+  Xbox D3DXLoadSurfaceFromSurface con D3DX_FILTER_POINT.
+- Xbox a x2: la VRAM son 1664 tiles de color; la profundidad no cabe en la
+  EDRAM.  Sin profundidad (m_has_depth = false) la prueba de mascara va POR
+  LA MEZCLA, con el bit de mascara en el alfa del destino (0/1):
+  opaco F*(1-Ad)+B*Ad; B+F y B+F/4 B+F*(1-Ad); B-F B-F*(1-Ad) (REVSUBTRACT);
+  alfa As*(1-Ad)+Ad*Ad.  Mismo orden que la GPU, tambien dentro del lote, y
+  sin resolver nada.  Solo B/2+F/2 no se puede (el factor del destino seria
+  0,5+0,5*Ad): ese modo mira la copia de lectura (c_p5), que se resuelve al
+  empezar cada lote de ese tipo, y con poner Y comprobar mascara va de
+  primitivo en primitivo.  La copia de VRAM con mascara, por la mezcla.
+  (1a version, 2026-11-03: todo por la copia de lectura y conservando el
+  rect sucio: cada lote con mascara resolvia otra vez todo lo pintado en el
+  frame; MGS y Bloody Roar 2 se hundian.)  La salida (hasta 1280x1024) va
+  encima de la VRAM en la EDRAM (m_out_alias) y Bind la repinta despues.
+- No portado: muestreo de las texturas directas (15 bits) a subpixel (el
+  render a textura se lee a resolucion nativa), ni "scaled dithering" como
+  opcion (el patron es siempre el nativo).
+- Tope de imagen en Xbox (2026-11-03): x2 solo si la imagen nativa cabe
+  en 1280x512 a esa escala.  Los modos de 480 lineas (Bloody Roar 2,
+  512x480 -> 1024x960: 4 veces los pixeles de 640x480) bajan a x1.  Present
+  decide (m_want_scale, 20 imagenes seguidas) y FrameBegin aplica
+  (ChangeScale): VRAM a psxVuw nativa, recursos de la escala nueva
+  (CreateScaledResources), shaders recompilados y psxVuw de vuelta.  Un
+  tiron al cambiar de modo.  La textura de salida no se toca (la tiene el
+  frontend).  En PC no hay tope.
+- Repintado parcial de la EDRAM en Xbox (2026-11-03, NFS3 a x2;
+  DUCK_HW_PARTIAL_RESTORE).  Antes se repintaba la VRAM entera (2048x1024
+  a x2) en cada Bind y otra vez tras cada Present (la salida iba en la base
+  0, encima de la VRAM): dos pasadas de 2 Mpx por frame.  Ahora:
+  * A x2 la VRAM va al FINAL de la EDRAM (base 2048 - 1664 = 384) y la
+    salida al principio, del tamano de la imagen (EnsureOutRT).
+  * Unbind marca solo los tiles del back buffer del frontend (0..720 a
+    720p) y Present los de la salida (MarkEdramStale): las bandas de 16
+    filas de la VRAM que caen ahi.  Bind repinta solo esas filas
+    (RestoreEDRAMRows).  720p: 208 filas de 1024 por frame; la salida de
+    640x480 (240 tiles) no pisa nada, 1024x480 una banda, 1280x512 cinco.
+  * A x1 con 720p la VRAM va detras del frontend y no hay nada que
+    repintar.  Con profundidad (x1) cualquier repintado sigue siendo
+    entero (pone la profundidad desde el bit de mascara y reinicia el
+    contador para toda la VRAM).
+  * Red de seguridad: entera cada 300 frames y siempre que la EDRAM no vale
+    (creacion, cambio de escala).  Contadores: "repintados enteros=N
+    filas=M" en las estadisticas.

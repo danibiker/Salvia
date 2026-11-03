@@ -150,7 +150,13 @@ private:
   float NextMaskedDepth(bool check_mask);
 
   /* --- utilidades -------------------------------------------------- */
-  void DrawUtilRect(float x0, float y0, float x1, float y1, float rt_w, float rt_h);
+  /* px_per_unit: pixeles del render target por unidad de las coordenadas
+   * (la escala de resolucion para la VRAM, 1 para la salida): el medio
+   * pixel de D3D9 es de pixeles del destino, no de la VRAM. */
+  void DrawUtilRect(float x0, float y0, float x1, float y1, float rt_w, float rt_h, float px_per_unit = 1.0f);
+  /* [escala] PC: copia de la VRAM (render target o copia de lectura) a
+   * m_sys_surf a resolucion NATIVA (a escala > 1 pasando por m_down_surf). */
+  bool ReadNativeToSys(IDirect3DSurface9* src);
   void UploadRegion(u32 x, u32 y, u32 w, u32 h, bool set_mask, bool check_mask, float depth);
   static u16 ArgbTo1555(D3DCOLOR p);
 
@@ -159,6 +165,12 @@ private:
   bool CreateResourcesXbox();
   void RotateVB();
   void RestoreEDRAM();
+  /* [2026-11-03] repintado parcial: solo las filas de la VRAM que otro ha
+   * pisado (el back buffer del frontend, la salida) */
+  void RestoreEDRAMRows(u32 r0, u32 r1);
+  void RestoreStaleEDRAM();
+  void MarkEdramStale(u32 t0, u32 t1);
+  bool EnsureOutRT(u32 w, u32 h);
   void RestoreFrontendStates();
 #endif
 
@@ -172,6 +184,17 @@ private:
   IDirect3DTexture9* m_upload_tex;   /* A1R5G5B5 dinamica: psxVuw tal cual */
   IDirect3DTexture9* m_dither_tex;   /* 4x4, desplazamiento de la matriz + 4 */
   IDirect3DSurface9* m_sys_surf;     /* SYSTEMMEM para leer la VRAM */
+  IDirect3DSurface9* m_down_surf;    /* [escala] PC: render target nativo para bajar la VRAM a x1 */
+
+  /* --- [2026-11-03] escala de resolucion interna --------------------- */
+  u32  m_scale;        /* 1 = nativa; la VRAM se dibuja a (1024 x 512) * m_scale */
+  bool m_has_depth;    /* hay profundidad para la mascara (Xbox a x2: no cabe en la EDRAM) */
+  bool m_out_alias;    /* [Xbox] la salida usa la EDRAM de la VRAM: repintarla despues */
+  u32  m_req_scale;    /* la pedida por la opcion (ya limitada a la plataforma) */
+  u32  m_want_scale, m_want_count, m_pending_scale;   /* [Xbox] tope de imagen: ver Present */
+  bool CreateScaledResources();
+  void DestroyScaledResources();
+  void ChangeScale(u32 s);
 
   IDirect3DTexture9* m_out_tex;      /* la que ve Salvia (env 30003) */
   u32 m_out_w, m_out_h;
@@ -241,6 +264,14 @@ private:
   HWVertex*               m_vb_data;     /* el del anillo, bloqueado */
   u32                     m_vb_idx, m_vb_used, m_vb_start;
   bool                    m_edram_valid; /* la EDRAM tiene la VRAM (desde Bind) */
+  /* [2026-11-03] Xbox: donde esta cada cosa en la EDRAM (tiles de 80x16) y
+   * las filas de la VRAM (en pixeles de la EDRAM, x m_scale) que estan
+   * pisadas y hay que repintar desde la copia antes de seguir dibujando. */
+  u32                     m_fb_tiles, m_vram_base, m_vram_tiles, m_band_tiles;
+  u32                     m_stale_r0, m_stale_r1;
+  u32                     m_out_rt_w, m_out_rt_h, m_out_base, m_out_tiles;
+  u32                     m_binds_since_full;
+  u32                     m_st_restore_full, m_st_restore_rows;
 
   /* --- medidor de tiempos [DUCK-HW/PERF] (DUCK_HW_PERF) --------------- */
   enum { PF_RUN, PF_GAP, PF_FLUSH, PF_VBLOCK, PF_UPLOAD, PF_UPLOCK, PF_RESOLVE, PF_PRESENT, PF_RESTORE,
@@ -253,9 +284,10 @@ private:
   bool                    m_pipe_valid;   /* decl/VS/texturas/blend fijos puestos */
   IDirect3DPixelShader9*  m_cur_ps;
   IDirect3DVertexBuffer9* m_cur_vb;
-  float                   m_cur_psc[20];
+  float                   m_cur_psc[24];
   bool                    m_cur_psc_valid;
   u32                     m_cur_blend, m_cur_bf, m_cur_bop, m_cur_zfunc;
+  u32                     m_cur_bmode;    /* [escala] factores de mezcla: 0 normal, 1/2 mascara por la mezcla */
 
   /* --- [traza] por que se corta cada lote ----------------------------- */
   enum { BRK_TEX, BRK_TRANSP, BRK_BF, BRK_DITH, BRK_MASK, BRK_ILACE, BRK_WIN, BRK_OP, BRK_SCISSOR, BRK_PAGE,

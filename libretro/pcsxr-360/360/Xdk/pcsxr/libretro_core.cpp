@@ -152,6 +152,9 @@ extern "C" int  duck_hw_enabled;
  * (pcsxr360_hw_texture_filter: 0 nearest, 1 bilineal, 2 JINC2, 3 xBR). */
 extern "C" int  g_duck_hw_true_color;
 extern "C" int  g_duck_hw_texture_filter;
+/* [2026-11-03] Escala de resolucion interna (pcsxr360_hw_resolution_scale), al
+ * cargar el juego: se lee antes de crear el backend. */
+extern "C" int  g_duck_hw_resolution_scale;
 extern "C" int  duck_hw_available(void);
 extern "C" void duck_hw_set_logger(void (*fn)(int level, const char* msg));
 extern "C" void duck_hw_set_device(void* device);
@@ -428,6 +431,27 @@ void retro_set_environment(retro_environment_t cb) {
             { { "Nearest", "Nearest (off)" }, { "Bilinear", NULL }, { "JINC2", NULL }, { "xBR", NULL },
               { NULL, NULL } },
             "Nearest"
+        },
+        /* [2026-11-03] Resolucion interna de SwanStation HW: la VRAM se
+         * dibuja a N veces su tamano (poligonos y texturas renderizadas mas
+         * finas; las texturas del juego siguen siendo las suyas).  Restart:
+         * los recursos de la GPU se crean al cargar el juego.  Xbox: hasta x2
+         * (la EDRAM); PC: hasta x8 si la tarjeta lo admite. */
+        {
+            "pcsxr360_hw_resolution_scale",
+            "Internal Resolution (SwanStation HW only, restart core to apply)",
+            "Internal Resolution (SwanStation HW, restart to apply)",
+            "Escala de la resolucion de render de la GPU, solo con el renderizador SwanStation HW. "
+            "1x = nativa (como la PSX). 2x = el doble en cada eje (la imagen sale el doble de grande "
+            "y mas definida). En Xbox el maximo es 2x.",
+            NULL, "video",
+#if defined(_XBOX)
+            { { "1x", "1x (native)" }, { "2x", NULL }, { NULL, NULL } },
+#else
+            { { "1x", "1x (native)" }, { "2x", NULL }, { "3x", NULL }, { "4x", NULL }, { "5x", NULL },
+              { "6x", NULL }, { "8x", NULL }, { NULL, NULL } },
+#endif
+            "1x"
         },
         /* [PGXP] Geometria con decimales y texturas con perspectiva (solo
          * SwanStation HW).  Restart: el dynarec decide al recompilar si las
@@ -1256,6 +1280,17 @@ static void check_gpu_renderer_initial_only(void) {
                 if (environ_cb(RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE, &dev) && dev) {
                     duck_hw_set_device(dev);
                     duck_hw_enabled = 1;
+                    /* [2026-11-03] Escala de resolucion interna: antes de
+                     * duck_init (el backend la lee al crear sus recursos). */
+                    {
+                        struct retro_variable var_rs = { "pcsxr360_hw_resolution_scale", NULL };
+                        int s = 1;
+                        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_rs) && var_rs.value)
+                            s = atoi(var_rs.value);   /* "2x" -> 2 */
+                        if (s < 1) s = 1;
+                        g_duck_hw_resolution_scale = s;
+                        pcsxr_log(RETRO_LOG_INFO, "[DUCK-HW] escala pedida x%d\n", s);
+                    }
                 } else {
                     pcsxr_log(RETRO_LOG_WARN, "[DUCK-HW] el frontend no da device D3D9 (env %d): SwanStation software\n",
                               RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE);

@@ -75,6 +75,10 @@ extern "C" int g_pcsxr_dithering;
  * Se aplican al empezar el frame siguiente (ApplyRenderOptions). */
 extern "C" int g_duck_hw_true_color = 1;
 extern "C" int g_duck_hw_texture_filter = 0;
+/* [2026-11-03] pcsxr360_hw_resolution_scale (al cargar el juego, no en
+ * caliente): la VRAM se dibuja a 1024x512 por esto.  Xbox hasta 2 (EDRAM),
+ * PC hasta 8 (y lo que admita la tarjeta). */
+extern "C" int g_duck_hw_resolution_scale = 1;
 
 /* [PGXP] libpcsxcore/pgxp.c: motor activo (limitar u/v al poligono). */
 extern "C" int g_pgxp_enabled;
@@ -234,6 +238,14 @@ static const float HALF_PIXEL = -0.5f;
 
 /* [traza] 1 = contadores cada 600 frames ([DUCK-HW] N fr / cortes / prims)
  * aunque DUCK_HW_PERF este apagado.  Con DUCK_HW_PERF salen siempre. */
+/* [2026-11-03] Xbox: 1 = al ligar solo se repintan las filas de la VRAM que
+ * comparten EDRAM con el back buffer del frontend o con la salida (y entera
+ * cada 300 frames, por si acaso).  0 = entera en cada Bind y tras cada
+ * Present (lo de antes). */
+#ifndef DUCK_HW_PARTIAL_RESTORE
+#define DUCK_HW_PARTIAL_RESTORE 1
+#endif
+
 #ifndef DUCK_HW_STATS
 #define DUCK_HW_STATS 0
 #endif
@@ -322,6 +334,16 @@ static const char* s_vs_util_src =
   "  return q.r + q.g * 32.0 + q.b * 1024.0 + q.a * 32768.0;\n" \
   "}\n" \
   "float2 pixpos(float2 vpos) { return floor(vpos + 0.25); }\n" \
+  /* [escala] SCALE (macro de CompilePS) = escala de resolucion interna.  La \
+   * VRAM se dibuja a SCALE x; VPOS va en pixeles del destino.  natpix: el \
+   * pixel NATIVO de la VRAM (dithering, entrelazado, subidas); rtuv: la \
+   * coordenada de la copia de lectura de un pixel del destino. */ \
+  "#ifndef SCALE\n" \
+  "#define SCALE 1\n" \
+  "#endif\n" \
+  "static const float2 INV_RT = INV_VRAM / SCALE;\n" \
+  "float2 natpix(float2 vpos) { float2 p = pixpos(vpos); return float2(idiv(p.x, SCALE), idiv(p.y, SCALE)); }\n" \
+  "float2 rtuv(float2 p) { return (p + 0.5) * INV_RT; }\n" \
   /* roundEven de upstream (FloatToIntegerCoords a x1): al par en el empate. \
    * floor(x + 0.5) subia SIEMPRE en .5, y en sprites escalados (u avanza \
    * medio texel por pixel) cogia el texel de al lado en columnas alternas. */ \
@@ -361,8 +383,11 @@ static const char* s_ps_batch_src =
   "float4 c_winx : register(c2);\n"   /* bits 0..3 de la mascara de ventana en X (bits 3..6 de u) */
   "float4 c_winy : register(c3);\n"
   "float4 c_win4 : register(c4);\n"   /* x = bit 4 X, y = bit 4 Y, z = OR X, w = OR Y */
+  "float4 c_p5   : register(c5);\n"   /* x = [escala, Xbox sin profundidad] mascara mirando la copia de lectura */
   PS_COMMON
-  "float4 vram(float2 p) { return tex2Dlod(s_vram, float4((p + 0.5) * INV_VRAM, 0.0, 0.0)); }\n"
+  /* [escala] El texel NATIVO p de la VRAM: el primer subpixel de su bloque de
+   * SCALE x SCALE (a x1, el centro de siempre). */
+  "float4 vram(float2 p) { return tex2Dlod(s_vram, float4((p + 0.5 / SCALE) * INV_VRAM, 0.0, 0.0)); }\n"
   /* Ventana de textura: c = (c & and) | or, con la mascara en los bits 3..7.
    * Sin ventana todas las constantes son 0 y queda c tal cual. */
   "static const float4 SH = float4(0.125, 0.0625, 0.03125, 0.015625);\n"
@@ -387,7 +412,14 @@ static const char* s_ps_batch_src =
   "#if TEXMODE != 0\n"
   "float4 sampleTex(float2 uv, float4 tp)\n"
   "{\n"
+  /* [escala] upstream FloatToIntegerCoords: a x1 redondear (el vertice cae en
+   * el centro del texel), a mas escala floor (los subpixeles avanzan 1/SCALE
+   * de texel y redondear cogeria el de al lado en la mitad de ellos). */
+  "#if SCALE == 1\n"
   "  float2 ic = roundeven2(uv);\n"
+  "#else\n"
+  "  float2 ic = floor(uv);\n"
+  "#endif\n"
   "  ic.x = imod(ic.x, 256.0);\n"
   "  ic.y = imod(ic.y, 256.0);\n"
   "  ic = win2(ic);\n"
@@ -657,7 +689,12 @@ static const char* s_ps_batch_src =
   "{\n"
   "  PSO o;\n"
   "  float descarta = 0.0;\n"   /* <0 = descartar: clip() al final (ver arriba) */
-  "  float2 pix = pixpos(i.vpos);\n"
+  "  float2 pix = natpix(i.vpos);\n"   /* [escala] pixel nativo: entrelazado y dithering */
+  /* [escala, Xbox] Sin profundidad no hay prueba de mascara por Z: se mira el
+   * bit de mascara del destino en la copia de lectura (puesta al dia antes
+   * del lote, ver FlushRender). */
+  "  if (c_p5.x > 0.5 && tex2Dlod(s_vram, float4(rtuv(pixpos(i.vpos)), 0.0, 0.0)).a > 0.5)\n"
+  "    descarta = -1.0;\n"
   "  if (c_p1.x > 0.5 && abs(imod(pix.y, 2.0) - c_p1.y) < 0.5)\n"
   "    descarta = -1.0;\n"
   "  float3 vc = floor(i.col.rgb / i.col.a * 255.0 + 0.5);\n"
@@ -767,7 +804,7 @@ static const char* s_ps_upload_src =
   "PSO main(float2 vpos : VPOS)\n"
   "{\n"
   "  PSO o;\n"
-  "  float2 p = pixpos(vpos);\n"
+  "  float2 p = natpix(vpos);\n"   /* [escala] la textura de subida es nativa */
   "  float4 t = tex2Dlod(s_up, float4((p + 0.5) * INV_VRAM, 0.0, 0.0));\n"
   "  float a = max(floor(t.a + 0.5), c_u0.x);\n"
   "  o.col = float4(t.b, t.g, t.r, a);\n"
@@ -779,17 +816,20 @@ static const char* s_ps_upload_src =
  * origen y destino no importa. */
 static const char* s_ps_copy_src =
   "sampler2D s_vram : register(s0);\n"
-  "float4 c_c0 : register(c0);\n"   /* xy = origen - destino, z = poner mascara, w = profundidad */
+  "float4 c_c0 : register(c0);\n"   /* xy = origen - destino (pixeles del destino), z = poner mascara, w = profundidad */
+  "float4 c_c1 : register(c1);\n"   /* x = [escala, Xbox sin profundidad] mascara mirando la copia */
   PS_COMMON
   "struct PSO { float4 col : COLOR0; float depth : DEPTH; };\n"
   "PSO main(float2 vpos : VPOS)\n"
   "{\n"
   "  PSO o;\n"
-  "  float2 p = pixpos(vpos) + c_c0.xy;\n"
-  "  float4 t = tex2Dlod(s_vram, float4((p + 0.5) * INV_VRAM, 0.0, 0.0));\n"
+  "  float2 d = pixpos(vpos);\n"
+  "  float2 p = d + c_c0.xy;\n"
+  "  float4 t = tex2Dlod(s_vram, float4(rtuv(p), 0.0, 0.0));\n"
   "  float a = max(floor(t.a + 0.5), c_c0.z);\n"
   "  o.col = float4(t.rgb, a);\n"
   "  o.depth = (c_c0.z > 0.5) ? 1.0 : ((a > 0.5) ? c_c0.w : 0.0);\n"
+  "  clip((c_c1.x > 0.5 && tex2Dlod(s_vram, float4(rtuv(d), 0.0, 0.0)).a > 0.5) ? -1.0 : 0.0);\n"
   "  return o;\n"
   "}\n";
 
@@ -815,7 +855,7 @@ static const char* s_ps_depth_src =
   "{\n"
   "  PSO o;\n"
   "  float2 p = pixpos(vpos);\n"
-  "  float4 t = tex2Dlod(s_vram, float4((p + 0.5) * INV_VRAM, 0.0, 0.0));\n"
+  "  float4 t = tex2Dlod(s_vram, float4(rtuv(p), 0.0, 0.0));\n"
   "  o.col = t;\n"
   "  o.depth = floor(t.a + 0.5);\n"
   "  return o;\n"
@@ -824,6 +864,7 @@ static const char* s_ps_depth_src =
 /* Salida de 15 bits: el texel ya esta en 8 bits por canal. */
 static const char* s_ps_disp15_src =
   "sampler2D s_vram : register(s0);\n"
+  /* [escala] las cuatro constantes van en pixeles del destino (x SCALE) */
   "float4 c_d0 : register(c0);\n"   /* xy = origen en la VRAM, zw = esquina en la imagen */
   "float4 c_d1 : register(c1);\n"   /* xy = tamano del contenido */
   PS_COMMON
@@ -833,7 +874,7 @@ static const char* s_ps_disp15_src =
   "  if (q.x < 0.0 || q.y < 0.0 || q.x >= c_d1.x || q.y >= c_d1.y)\n"
   "    return float4(0.0, 0.0, 0.0, 1.0);\n"   /* margenes: negro */
   "  float2 p = c_d0.xy + q;\n"
-  "  float4 t = tex2Dlod(s_vram, float4((p + 0.5) * INV_VRAM, 0.0, 0.0));\n"
+  "  float4 t = tex2Dlod(s_vram, float4(rtuv(p), 0.0, 0.0));\n"
   "  return float4(t.rgb, 1.0);\n"
   "}\n";
 
@@ -845,14 +886,19 @@ static const char* s_ps_disp24_src =
   "float4 c_d0 : register(c0);\n"
   "float4 c_d1 : register(c1);\n"   /* xy = tamano del contenido */
   PS_COMMON
-  "float4 vram(float2 p) { return tex2Dlod(s_vram, float4((p + 0.5) * INV_VRAM, 0.0, 0.0)); }\n"
+  /* [escala] Los bytes de 24 bits estan en palabras NATIVAS: se trabaja en
+   * pixeles nativos (las constantes llegan x SCALE, como en disp15) y cada uno
+   * se repite en su bloque de SCALE x SCALE. */
+  "float4 vram(float2 p) { return tex2Dlod(s_vram, float4((p + 0.5 / SCALE) * INV_VRAM, 0.0, 0.0)); }\n"
   "float4 main(float2 vpos : VPOS) : COLOR0\n"
   "{\n"
-  "  float2 q = pixpos(vpos) - c_d0.zw;\n"
-  "  if (q.x < 0.0 || q.y < 0.0 || q.x >= c_d1.x || q.y >= c_d1.y)\n"
+  "  float2 qs = pixpos(vpos) - c_d0.zw;\n"
+  "  if (qs.x < 0.0 || qs.y < 0.0 || qs.x >= c_d1.x || qs.y >= c_d1.y)\n"
   "    return float4(0.0, 0.0, 0.0, 1.0);\n"
+  "  float2 q = float2(idiv(qs.x, SCALE), idiv(qs.y, SCALE));\n"
+  "  float2 org = float2(idiv(c_d0.x, SCALE), idiv(c_d0.y, SCALE));\n"
   "  float bx = idiv(q.x * 3.0, 2.0);\n"
-  "  float2 base = float2(c_d0.x + bx, c_d0.y + q.y);\n"
+  "  float2 base = float2(org.x + bx, org.y + q.y);\n"
   "  float s0 = dec16(vram(base));\n"
   "  float s1 = dec16(vram(base + float2(1.0, 0.0)));\n"
   "  float lo0 = imod(s0, 256.0);\n"
@@ -911,10 +957,16 @@ GPU_HW_D3D9_Backend::GPU_HW_D3D9_Backend(u16* psx_vram)
     m_out_rt(0), m_sys_tex(0), m_upload_idx(0), m_vb_data(0), m_vb_idx(0), m_vb_used(0), m_vb_start(0),
     m_edram_valid(false), m_pf_frame_begin(0), m_pf_frame_end(0),
     m_pipe_valid(false), m_cur_ps(0), m_cur_vb(0), m_cur_psc_valid(false), m_cur_blend(0xFFFFFFFFu),
-    m_cur_bf(HW_BF_NONE), m_cur_bop(0xFFFFFFFFu), m_cur_zfunc(0xFFFFFFFFu), m_flush_reason(BRK_OTHER),
+    m_cur_bf(HW_BF_NONE), m_cur_bop(0xFFFFFFFFu), m_cur_zfunc(0xFFFFFFFFu), m_cur_bmode(0xFFFFFFFFu),
+    m_flush_reason(BRK_OTHER),
     m_st_upload_waits(0), m_log_copies(0), m_log_readbacks(0),
     m_tp_mode(0), m_tp_x(0), m_tp_y(0), m_clut_x(0), m_clut_y(0),
-    m_dump_armed(false), m_dump_active(false), m_dump_lines(0), m_dump_seq(0), m_dump_left(0)
+    m_dump_armed(false), m_dump_active(false), m_dump_lines(0), m_dump_seq(0), m_dump_left(0),
+    m_down_surf(0), m_scale(1), m_has_depth(true), m_out_alias(false), m_req_scale(1), m_want_scale(0),
+    m_want_count(0), m_pending_scale(0),
+    m_fb_tiles(0), m_vram_base(0), m_vram_tiles(0), m_band_tiles(1), m_stale_r0(0), m_stale_r1(0),
+    m_out_rt_w(0), m_out_rt_h(0), m_out_base(0), m_out_tiles(0), m_binds_since_full(0),
+    m_st_restore_full(0), m_st_restore_rows(0)
 {
   m_vram_ptr = psx_vram;
   std::memset(m_ps_batch, 0, sizeof(m_ps_batch));
@@ -958,6 +1010,34 @@ bool GPU_HW_D3D9_Backend::Initialize(bool force_thread)
   m_dev->AddRef();
   m_owner_thread = GetCurrentThreadId();
 
+  /* [2026-11-03] Escala de resolucion interna.  Xbox: hasta x2 (y a x2 sin
+   * profundidad: no cabe en la EDRAM, ver CreateResourcesXbox).  PC: hasta x8
+   * y lo que deje la tarjeta (la VRAM es una textura de 1024*N x 512*N). */
+  {
+    int s = g_duck_hw_resolution_scale;
+#if defined(_XBOX)
+    const int smax = 2;
+#else
+    int smax = 8;
+    D3DCAPS9 caps;
+    if (SUCCEEDED(m_dev->GetDeviceCaps(&caps)))
+    {
+      while (smax > 1 && (static_cast<DWORD>(VRAM_WIDTH * smax) > caps.MaxTextureWidth ||
+                          static_cast<DWORD>(VRAM_HEIGHT * smax) > caps.MaxTextureHeight))
+        smax--;
+    }
+#endif
+    if (s < 1) s = 1;
+    if (s > smax) s = smax;
+    m_scale = static_cast<u32>(s);
+    m_req_scale = m_scale;
+#if defined(_XBOX)
+    m_has_depth = (m_scale == 1);
+#else
+    m_has_depth = true;
+#endif
+  }
+
   m_verts = static_cast<HWVertex*>(std::malloc(sizeof(HWVertex) * MAX_BATCH_VERTICES));
   {
     /* [traza] Que paso falla: si no, el driver vuelve al software en
@@ -982,9 +1062,11 @@ bool GPU_HW_D3D9_Backend::Initialize(bool force_thread)
   EndOutsideFrame();
 
 #if defined(_XBOX)
-  hw_log(1, "[DUCK-HW] renderizador D3D9 listo (Xbox 360, EDRAM, x1)\n");
+  hw_log(1, "[DUCK-HW] renderizador D3D9 listo (Xbox 360, EDRAM, x%u%s%s)\n", m_scale,
+         m_has_depth ? "" : ", mascara sin profundidad", m_out_alias ? ", salida en la EDRAM de la VRAM" : "");
 #else
-  hw_log(1, "[DUCK-HW] renderizador D3D9 listo (VRAM 1024x512, x1)\n");
+  hw_log(1, "[DUCK-HW] renderizador D3D9 listo (VRAM %ux%u, x%u)\n", VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale,
+         m_scale);
 #endif
   return true;
 }
@@ -1019,19 +1101,8 @@ bool GPU_HW_D3D9_Backend::CreateResources()
   if (!CreateResourcesXbox())
     return false;
 #else
-  hr = m_dev->CreateTexture(VRAM_WIDTH, VRAM_HEIGHT, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
-                            D3DPOOL_DEFAULT, &m_vram_tex, NULL);
-  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] VRAM: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
-  m_vram_tex->GetSurfaceLevel(0, &m_vram_surf);
-
-  hr = m_dev->CreateTexture(VRAM_WIDTH, VRAM_HEIGHT, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
-                            D3DPOOL_DEFAULT, &m_read_tex, NULL);
-  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] lectura: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
-  m_read_tex->GetSurfaceLevel(0, &m_read_surf);
-
-  hr = m_dev->CreateDepthStencilSurface(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_D24S8, D3DMULTISAMPLE_NONE, 0, FALSE,
-                                        &m_depth, NULL);
-  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] profundidad: 0x%08X\n", (unsigned)hr); return false; }
+  if (!CreateScaledResources())
+    return false;
 
   hr = m_dev->CreateTexture(VRAM_WIDTH, VRAM_HEIGHT, 1, D3DUSAGE_DYNAMIC, D3DFMT_A1R5G5B5,
                             D3DPOOL_DEFAULT, &m_upload_tex, NULL);
@@ -1111,6 +1182,7 @@ void GPU_HW_D3D9_Backend::DestroyResources()
   SAFE_RELEASE(m_decl_batch);
   SAFE_RELEASE(m_decl_util);
   SAFE_RELEASE(m_sys_surf);
+  SAFE_RELEASE(m_down_surf);
   SAFE_RELEASE(m_dither_tex);
   SAFE_RELEASE(m_upload_tex);
   SAFE_RELEASE(m_depth);
@@ -1120,15 +1192,16 @@ void GPU_HW_D3D9_Backend::DestroyResources()
   SAFE_RELEASE(m_vram_tex);
 }
 
-#if defined(_XBOX)
-/* Las superficies de la EDRAM (VRAM, su profundidad, la salida) y lo que en
- * PC hacia la textura render target. */
-bool GPU_HW_D3D9_Backend::CreateResourcesXbox()
+/* [2026-11-03] Lo que depende de la escala: la VRAM (render target o EDRAM),
+ * su copia de lectura, la profundidad, la VRAM nativa para leer (PC) y la
+ * salida en la EDRAM (Xbox).  Aparte para poder cambiar de escala en marcha
+ * (ChangeScale) sin tocar la textura de salida que tiene el frontend. */
+bool GPU_HW_D3D9_Backend::CreateScaledResources()
 {
   HRESULT hr;
+#if defined(_XBOX)
   D3DSURFACE_PARAMETERS sp;
   UINT fb_tiles = 0, color_tiles, z_tiles, out_tiles, base;
-  int i;
 
   /* Detras del back buffer del frontend, con su tamano CONSULTADO (el
    * usuario puede cambiar la resolucion).  Ver la nota de xbox64 en
@@ -1144,39 +1217,186 @@ bool GPU_HW_D3D9_Backend::CreateResourcesXbox()
       bb->Release();
     }
   }
-  color_tiles = XGSurfaceSize(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
-  z_tiles = XGSurfaceSize(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_D24S8, D3DMULTISAMPLE_NONE);
-  out_tiles = XGSurfaceSize(HW_OUT_MAX_W, HW_OUT_MAX_H, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+  /* [escala] A x2 la VRAM son 2048x1024: 1664 tiles de color, y otros tantos
+   * de profundidad no caben en los 2048 de la EDRAM.  Asi que a x2 no hay
+   * profundidad: la prueba de mascara mira el bit de mascara en la copia de
+   * lectura (m_has_depth = false; ver el batch shader y FlushRender).  Y la
+   * salida (x2 = hasta 1280x1024) tampoco cabe al lado: va ENCIMA de la VRAM
+   * (m_out_alias) y la EDRAM se repinta desde la copia despues de cada
+   * Present (Bind, perezoso). */
+  color_tiles = XGSurfaceSize(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+  z_tiles = m_has_depth ? XGSurfaceSize(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, D3DFMT_D24S8, D3DMULTISAMPLE_NONE)
+                        : 0u;
+  out_tiles = XGSurfaceSize(HW_OUT_MAX_W * m_scale, HW_OUT_MAX_H * m_scale, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+  m_out_alias = (color_tiles + z_tiles + out_tiles > 2048u);
 
   /* 2048 tiles de EDRAM.  Si no cabe detras (1080p), base 0: como la EDRAM
    * se repinta desde m_read_tex en cada Bind, solo hace falta que el
    * frontend no dibuje DURANTE retro_run. */
-  base = (fb_tiles + color_tiles + z_tiles + out_tiles <= 2048u) ? fb_tiles : 0u;
-  hw_log(1, "[DUCK-HW] EDRAM: frontend=%u tiles, VRAM base=%u (+%u color, +%u Z, +%u salida)\n", fb_tiles, base,
-         color_tiles, z_tiles, out_tiles);
+  base = (fb_tiles + color_tiles + z_tiles + (m_out_alias ? 0u : out_tiles) <= 2048u) ? fb_tiles : 0u;
+#if DUCK_HW_PARTIAL_RESTORE
+  /* [2026-11-03] x2: la VRAM al FINAL de la EDRAM (2048 - 1664 = 384) y la
+   * salida al principio (EnsureOutRT).  Asi el back buffer del frontend (720
+   * tiles a 720p) solo pisa las primeras 208 filas de 1024 y la salida de
+   * 640x480 (240 tiles) ninguna: es lo que hay que repintar en cada frame. */
+  if (m_out_alias && color_tiles + z_tiles <= 2048u)
+    base = 2048u - color_tiles - z_tiles;
+#endif
+  hw_log(1, "[DUCK-HW] EDRAM: frontend=%u tiles, VRAM base=%u (+%u color, +%u Z, +%u salida%s), x%u\n", fb_tiles, base,
+         color_tiles, z_tiles, out_tiles, m_out_alias ? " encima de la VRAM" : "", m_scale);
+  /* [2026-11-03] Para el repintado parcial: una banda de 16 filas de la VRAM
+   * son m_band_tiles tiles seguidos (26 a x2: 2048 -> 2080 / 80). */
+  m_fb_tiles = fb_tiles;
+  m_vram_base = base;
+  m_vram_tiles = color_tiles;
+  m_band_tiles = color_tiles / ((VRAM_HEIGHT * m_scale + 15u) / 16u);
+  if (m_band_tiles == 0)
+    m_band_tiles = 1;
+  m_stale_r0 = m_stale_r1 = 0;
+  m_binds_since_full = 0;
 
   std::memset(&sp, 0, sizeof(sp));
   sp.Base = base;
-  hr = m_dev->CreateRenderTarget(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE,
-                                 &m_vram_surf, &sp);
+  hr = m_dev->CreateRenderTarget(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0,
+                                 FALSE, &m_vram_surf, &sp);
   if (FAILED(hr)) { hw_log(3, "[DUCK-HW] VRAM (EDRAM): 0x%08X\n", (unsigned)hr); return false; }
 
-  std::memset(&sp, 0, sizeof(sp));
-  sp.Base = base + color_tiles;
-  hr = m_dev->CreateDepthStencilSurface(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_D24S8, D3DMULTISAMPLE_NONE, 0, FALSE,
-                                        &m_depth, &sp);
-  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] profundidad (EDRAM): 0x%08X\n", (unsigned)hr); return false; }
+  if (m_has_depth)
+  {
+    std::memset(&sp, 0, sizeof(sp));
+    sp.Base = base + color_tiles;
+    hr = m_dev->CreateDepthStencilSurface(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, D3DFMT_D24S8,
+                                          D3DMULTISAMPLE_NONE, 0, FALSE, &m_depth, &sp);
+    if (FAILED(hr)) { hw_log(3, "[DUCK-HW] profundidad (EDRAM): 0x%08X\n", (unsigned)hr); return false; }
+  }
 
-  std::memset(&sp, 0, sizeof(sp));
-  sp.Base = base + color_tiles + z_tiles;
-  hr = m_dev->CreateRenderTarget(HW_OUT_MAX_W, HW_OUT_MAX_H, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE,
-                                 &m_out_rt, &sp);
-  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] salida (EDRAM): 0x%08X\n", (unsigned)hr); return false; }
+  /* [2026-11-03] Encima de la VRAM (x2) la salida se crea en Present, del
+   * tamano de la imagen y al principio de la EDRAM (EnsureOutRT): asi pisa
+   * solo las primeras filas de la VRAM (640x480: ninguna). */
+  m_out_rt_w = m_out_rt_h = 0;
+  if (!m_out_alias)
+  {
+    std::memset(&sp, 0, sizeof(sp));
+    sp.Base = base + color_tiles + z_tiles;
+    hr = m_dev->CreateRenderTarget(HW_OUT_MAX_W * m_scale, HW_OUT_MAX_H * m_scale, D3DFMT_A8R8G8B8,
+                                   D3DMULTISAMPLE_NONE, 0, FALSE, &m_out_rt, &sp);
+    if (FAILED(hr)) { hw_log(3, "[DUCK-HW] salida (EDRAM): 0x%08X\n", (unsigned)hr); return false; }
+    m_out_base = sp.Base;
+    m_out_tiles = out_tiles;
+  }
 
   /* Destino de Resolve: TILEADA (Resolve escribe siempre tileado). */
-  hr = m_dev->CreateTexture(VRAM_WIDTH, VRAM_HEIGHT, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &m_read_tex, NULL);
+  hr = m_dev->CreateTexture(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT,
+                            &m_read_tex, NULL);
   if (FAILED(hr)) { hw_log(3, "[DUCK-HW] lectura: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
   m_read_tex->GetSurfaceLevel(0, &m_read_surf);
+
+  m_edram_valid = false;
+#else
+  /* [escala] VRAM, su copia de lectura y la profundidad a (1024 x 512) * N;
+   * la subida y la lectura a CPU siguen nativas (m_down_surf baja la VRAM a
+   * x1 para leerla). */
+  hr = m_dev->CreateTexture(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
+                            D3DPOOL_DEFAULT, &m_vram_tex, NULL);
+  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] VRAM: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
+  m_vram_tex->GetSurfaceLevel(0, &m_vram_surf);
+
+  hr = m_dev->CreateTexture(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
+                            D3DPOOL_DEFAULT, &m_read_tex, NULL);
+  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] lectura: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
+  m_read_tex->GetSurfaceLevel(0, &m_read_surf);
+
+  hr = m_dev->CreateDepthStencilSurface(VRAM_WIDTH * m_scale, VRAM_HEIGHT * m_scale, D3DFMT_D24S8, D3DMULTISAMPLE_NONE,
+                                        0, FALSE, &m_depth, NULL);
+  if (FAILED(hr)) { hw_log(3, "[DUCK-HW] profundidad: 0x%08X\n", (unsigned)hr); return false; }
+
+  if (m_scale > 1)
+  {
+    hr = m_dev->CreateRenderTarget(VRAM_WIDTH, VRAM_HEIGHT, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE,
+                                   &m_down_surf, NULL);
+    if (FAILED(hr)) { hw_log(3, "[DUCK-HW] VRAM nativa: 0x%08X\n", (unsigned)hr); return false; }
+  }
+
+#endif
+  return true;
+}
+
+void GPU_HW_D3D9_Backend::DestroyScaledResources()
+{
+#if defined(_XBOX)
+  if (m_dev)
+    m_dev->BlockUntilIdle();   /* la GPU puede seguir leyendo la copia */
+  SAFE_RELEASE(m_out_rt);
+  m_out_rt_w = m_out_rt_h = 0;
+  m_edram_valid = false;
+#endif
+  SAFE_RELEASE(m_down_surf);
+  SAFE_RELEASE(m_depth);
+  SAFE_RELEASE(m_read_surf);
+  SAFE_RELEASE(m_read_tex);
+  SAFE_RELEASE(m_vram_surf);
+  SAFE_RELEASE(m_vram_tex);
+}
+
+/* [2026-11-03] Cambio de escala en marcha (Xbox: tope de imagen, ver Present).
+ * La VRAM pasa por psxVuw a resolucion nativa: se pierde el detalle escalado
+ * y el color de 24 bits de lo que hubiera, solo en ese momento.  Recompila
+ * los shaders (macro SCALE): un tiron al cambiar de modo, no por frame. */
+void GPU_HW_D3D9_Backend::ChangeScale(u32 s)
+{
+  const u32 old = m_scale;
+  if (s == old || s == 0)
+    return;
+  Bind();
+  FlushRender();
+  ReadbackToCPU(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+  Unbind();
+
+  DestroyShaders();
+  DestroyScaledResources();
+  m_scale = s;
+#if defined(_XBOX)
+  m_has_depth = (m_scale == 1);
+#endif
+  if (!CreateScaledResources() || !CompileShaders())
+  {
+    hw_log(3, "[DUCK-HW] no se pudo pasar a x%u: se vuelve a x%u\n", s, old);
+    DestroyShaders();
+    DestroyScaledResources();
+    m_scale = old;
+#if defined(_XBOX)
+    m_has_depth = (m_scale == 1);
+#endif
+    if (!CreateScaledResources() || !CompileShaders())
+      hw_log(3, "[DUCK-HW] ERROR: tampoco a x%u\n", old);
+  }
+
+  m_pipe_valid = false;
+  m_batch_valid = false;
+  m_scissor_valid = false;
+  m_tp_key_valid = false;
+  m_cur_psc_valid = false;
+  m_dirty.valid = false;
+  m_depth_counter = 1;
+  Bind();
+  UploadFromCPU(0, 0, VRAM_WIDTH, VRAM_HEIGHT, false);
+  if (m_has_depth)
+    ResetDepthCounter();   /* copia de lectura al dia y profundidad desde la mascara */
+  else
+    RefreshReadTexture();
+  hw_log(1, "[DUCK-HW] escala x%u -> x%u\n", old, m_scale);
+}
+
+#if defined(_XBOX)
+/* Las superficies de la EDRAM (VRAM, su profundidad, la salida) y lo que en
+ * PC hacia la textura render target. */
+bool GPU_HW_D3D9_Backend::CreateResourcesXbox()
+{
+  HRESULT hr;
+  int i;
+
+  if (!CreateScaledResources())
+    return false;
 
   /* Para leer la VRAM por CPU: LINEAL (D3DX la destila desde la tileada). */
   hr = m_dev->CreateTexture(VRAM_WIDTH, VRAM_HEIGHT, 1, 0, D3DFMT_LIN_A8R8G8B8, D3DPOOL_DEFAULT, &m_sys_tex, NULL);
@@ -1236,6 +1456,16 @@ void GPU_HW_D3D9_Backend::RotateVB()
  * upstream con las escrituras de color encendidas. */
 void GPU_HW_D3D9_Backend::RestoreEDRAM()
 {
+  RestoreEDRAMRows(0u, VRAM_HEIGHT * m_scale);
+  m_depth_counter = 1;
+  m_edram_valid = true;
+  m_binds_since_full = 0;
+  m_st_restore_full++;
+}
+
+/* [2026-11-03] Las filas [r0, r1) de la VRAM, en pixeles de la EDRAM. */
+void GPU_HW_D3D9_Backend::RestoreEDRAMRows(u32 r0, u32 r1)
+{
   HW_PF_BEGIN(rst);
   m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
   m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
@@ -1243,15 +1473,102 @@ void GPU_HW_D3D9_Backend::RestoreEDRAM()
   m_dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
   m_dev->SetTexture(0, m_read_tex);
   m_dev->SetPixelShader(m_ps_depth);
-  DrawUtilRect(0.0f, 0.0f, (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+  DrawUtilRect(0.0f, static_cast<float>(r0) / static_cast<float>(m_scale), (float)VRAM_WIDTH,
+               static_cast<float>(r1) / static_cast<float>(m_scale), (float)VRAM_WIDTH, (float)VRAM_HEIGHT,
+               (float)m_scale);
   m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
-  m_depth_counter = 1;
   m_batch_valid = false;
   m_pipe_valid = false;
   m_scissor_valid = false;
   m_tp_key_valid = false;
-  m_edram_valid = true;
+  m_stale_r0 = m_stale_r1 = 0;
+  m_st_restore_rows += r1 - r0;
   HW_PF_END(rst, PF_RESTORE);
+}
+
+/* [2026-11-03] Tiles [t0, t1) de la EDRAM pisados por otro (el back buffer
+ * del frontend entre dos retro_run, o la salida en Present): las bandas de
+ * 16 filas de la VRAM que caen ahi quedan por repintar.  La EDRAM es lineal
+ * por bandas: tile = base + banda * m_band_tiles + columna. */
+void GPU_HW_D3D9_Backend::MarkEdramStale(u32 t0, u32 t1)
+{
+  const u32 v0 = m_vram_base, v1 = m_vram_base + m_vram_tiles;
+  const u32 rows = VRAM_HEIGHT * m_scale;
+  u32 r0, r1;
+  if (t0 < v0) t0 = v0;
+  if (t1 > v1) t1 = v1;
+  if (t0 >= t1)
+    return;
+  r0 = ((t0 - v0) / m_band_tiles) * 16u;
+  r1 = ((t1 - v0 + m_band_tiles - 1u) / m_band_tiles) * 16u;
+  if (r1 > rows) r1 = rows;
+  if (m_stale_r0 >= m_stale_r1)
+  {
+    m_stale_r0 = r0;
+    m_stale_r1 = r1;
+  }
+  else
+  {
+    if (r0 < m_stale_r0) m_stale_r0 = r0;
+    if (r1 > m_stale_r1) m_stale_r1 = r1;
+  }
+}
+
+/* [2026-11-03] Antes de dibujar: la EDRAM entera si no vale (recien creada,
+ * cambio de escala, la red de seguridad de Unbind) y si no, solo las filas
+ * pisadas.  Con profundidad (x1) va entera: el repintado pone la profundidad
+ * desde el bit de mascara y reinicia el contador, y eso es para toda la VRAM. */
+void GPU_HW_D3D9_Backend::RestoreStaleEDRAM()
+{
+  if (!m_edram_valid)
+  {
+    RestoreEDRAM();
+    return;
+  }
+  if (m_stale_r0 >= m_stale_r1)
+    return;
+  if (!DUCK_HW_PARTIAL_RESTORE || m_has_depth || (m_stale_r0 == 0 && m_stale_r1 >= VRAM_HEIGHT * m_scale))
+  {
+    RestoreEDRAM();
+    return;
+  }
+  RestoreEDRAMRows(m_stale_r0, m_stale_r1);
+}
+
+/* [2026-11-03] La salida encima de la VRAM (x2): del tamano de la imagen y
+ * al principio de la EDRAM (la VRAM esta al final, desde el tile 384).
+ * 640x480 son 240 tiles y no la pisa; 1024x480 (390) pisa su primera banda;
+ * 1280x512 (512), sus primeras 80 filas de 1024.  Solo se rehace al cambiar
+ * de tamano. */
+bool GPU_HW_D3D9_Backend::EnsureOutRT(u32 w, u32 h)
+{
+  D3DSURFACE_PARAMETERS sp;
+  u32 tiles;
+  HRESULT hr;
+  if (m_out_rt && m_out_rt_w == w && m_out_rt_h == h)
+    return true;
+  if (m_out_rt)
+  {
+    m_dev->BlockUntilIdle();
+    SAFE_RELEASE(m_out_rt);
+  }
+  m_out_rt_w = m_out_rt_h = 0;
+  tiles = XGSurfaceSize(w, h, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+  std::memset(&sp, 0, sizeof(sp));
+  sp.Base = 0;
+  hr = m_dev->CreateRenderTarget(w, h, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &m_out_rt, &sp);
+  if (FAILED(hr))
+  {
+    hw_log(3, "[DUCK-HW] salida %ux%u (EDRAM): 0x%08X\n", w, h, (unsigned)hr);
+    return false;
+  }
+  m_out_rt_w = w;
+  m_out_rt_h = h;
+  m_out_base = sp.Base;
+  m_out_tiles = tiles;
+  hw_log(1, "[DUCK-HW] salida en la EDRAM: %ux%u, tiles %u..%u (VRAM %u..%u)\n", w, h, m_out_base,
+         m_out_base + tiles, m_vram_base, m_vram_base + m_vram_tiles);
+  return true;
 }
 #endif /* _XBOX */
 
@@ -1280,7 +1597,8 @@ IDirect3DPixelShader9* GPU_HW_D3D9_Backend::CompilePS(const char* src, const cha
                                                      int true_color, int filter)
 {
   static const char* digits[4] = { "0", "1", "2", "3" };
-  D3DXMACRO macros[5];
+  static const char* scales[9] = { "1", "1", "2", "3", "4", "5", "6", "7", "8" };
+  D3DXMACRO macros[6];
   ID3DXBuffer* code = 0;
   ID3DXBuffer* err = 0;
   IDirect3DPixelShader9* ps = 0;
@@ -1290,7 +1608,8 @@ IDirect3DPixelShader9* GPU_HW_D3D9_Backend::CompilePS(const char* src, const cha
   macros[1].Name = "RAW";     macros[1].Definition = raw ? raw : "0";
   macros[2].Name = "TRUECOLOR"; macros[2].Definition = true_color ? "1" : "0";
   macros[3].Name = "FILTER";  macros[3].Definition = digits[(filter >= 0 && filter <= 3) ? filter : 0];
-  macros[4].Name = NULL;      macros[4].Definition = NULL;
+  macros[4].Name = "SCALE";   macros[4].Definition = scales[(m_scale <= 8u) ? m_scale : 1u];   /* [escala] */
+  macros[5].Name = NULL;      macros[5].Definition = NULL;
 
   hr = D3DXCompileShader(src, (UINT)std::strlen(src), macros, NULL, "main", "ps_3_0", 0, &code, &err, NULL);
   if (FAILED(hr))
@@ -1452,8 +1771,17 @@ void GPU_HW_D3D9_Backend::DestroyShaders()
 void GPU_HW_D3D9_Backend::Bind()
 {
   int i;
-  if (m_bound || !m_dev)
+  if (!m_dev)
     return;
+  if (m_bound)
+  {
+#if defined(_XBOX)
+    /* [escala] La salida ha pintado encima de la VRAM (m_out_alias): repintar
+     * la EDRAM antes de seguir dibujando en ella. */
+    RestoreStaleEDRAM();
+#endif
+    return;
+  }
 
   /* [traza] Todo el trabajo D3D9 tiene que ir en el hilo de retro_run.  Si
    * llega desde otro (el hilo de GPU de libpcsxcore/gpu.c), se cruza con el
@@ -1507,9 +1835,9 @@ void GPU_HW_D3D9_Backend::Bind()
   SetVRAMTarget();
   ApplyFixedStates();
 #if defined(_XBOX)
-  /* Lo que haya en la EDRAM no es nuestro: repintarla desde la copia. */
-  if (!m_edram_valid)
-    RestoreEDRAM();
+  /* Lo que el frontend haya pintado encima de la VRAM: repintarlo desde la
+   * copia (entera si no vale; ver RestoreStaleEDRAM). */
+  RestoreStaleEDRAM();
 #endif
 }
 
@@ -1525,7 +1853,16 @@ void GPU_HW_D3D9_Backend::Unbind()
   /* La copia de lectura pasa a ser la unica verdad: lo pendiente de la EDRAM
    * se resuelve ya, y el proximo Bind la repinta. */
   RefreshReadTexture();
+#if DUCK_HW_PARTIAL_RESTORE
+  /* [2026-11-03] Hasta el proximo Bind el frontend pinta su back buffer
+   * (tiles 0..m_fb_tiles): solo eso pisa la VRAM.  A x1 con 720p va detras y
+   * no pisa nada.  Cada 300 frames, entera por si algo mas usa la EDRAM. */
+  MarkEdramStale(0u, m_fb_tiles);
+  if (++m_binds_since_full >= 300u)
+    m_edram_valid = false;
+#else
   m_edram_valid = false;
+#endif
   RestoreFrontendStates();
   if (m_saved_rt)
     m_dev->SetRenderTarget(0, m_saved_rt);
@@ -1597,6 +1934,13 @@ void GPU_HW_D3D9_Backend::FrameBegin()
   m_in_frame = true;
   m_frame_ready = false;
   ApplyRenderOptions();
+  if (m_pending_scale != 0)
+  {
+    const u32 s = m_pending_scale;
+    m_pending_scale = 0;
+    m_want_count = 0;
+    ChangeScale(s);
+  }
 
   /* [traza] Volcado de UN frame (L3+R3, libretro_core.cpp): VRAM antes, cada
    * comando de GPU al log ([DUCK-DUMP]) y VRAM despues (en FrameEnd). */
@@ -1834,7 +2178,8 @@ void GPU_HW_D3D9_Backend::DumpVRAM(const char* when)
     IDirect3DSurface9* dst = 0;
     if (SUCCEEDED(m_sys_tex->GetSurfaceLevel(0, &dst)) && dst)
     {
-      if (SUCCEEDED(D3DXLoadSurfaceFromSurface(dst, NULL, NULL, m_read_surf, NULL, NULL, D3DX_FILTER_NONE, 0)) &&
+      if (SUCCEEDED(D3DXLoadSurfaceFromSurface(dst, NULL, NULL, m_read_surf, NULL, NULL,
+                                               (m_scale > 1) ? D3DX_FILTER_POINT : D3DX_FILTER_NONE, 0)) &&
           SUCCEEDED(dst->LockRect(&lr, NULL, D3DLOCK_READONLY)))
       {
         for (y = 0; y < VRAM_HEIGHT; y++)
@@ -1847,8 +2192,7 @@ void GPU_HW_D3D9_Backend::DumpVRAM(const char* when)
     }
   }
 #else
-  if (SUCCEEDED(m_dev->GetRenderTargetData(m_vram_surf, m_sys_surf)) &&
-      SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
+  if (ReadNativeToSys(m_vram_surf) && SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
   {
     for (y = 0; y < VRAM_HEIGHT; y++)
       std::memcpy(&buf[y * VRAM_WIDTH], static_cast<const u8*>(lr.pBits) + y * lr.Pitch,
@@ -1874,8 +2218,7 @@ void GPU_HW_D3D9_Backend::DumpVRAM(const char* when)
    * lotes.  Si difiere de la VRAM en una pagina o una CLUT en uso, el
    * texturizado lee datos viejos.  (En la Xbox la copia ya es lo que se
    * vuelca arriba.) */
-  if (SUCCEEDED(m_dev->GetRenderTargetData(m_read_surf, m_sys_surf)) &&
-      SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
+  if (ReadNativeToSys(m_read_surf) && SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
   {
     for (y = 0; y < VRAM_HEIGHT; y++)
       std::memcpy(&buf[y * VRAM_WIDTH], static_cast<const u8*>(lr.pBits) + y * lr.Pitch,
@@ -1905,6 +2248,11 @@ void GPU_HW_D3D9_Backend::LogStats()
            m_st_verts, m_st_draws, m_st_presents, m_out_w, m_out_h);
     hw_log(1, "[DUCK-HW] %u fr: fills=%u copies=%u uploads=%u (esperas %u) readbacks=%u refresh=%u\n", m_st_frames,
            m_st_fills, m_st_copies, m_st_uploads, m_st_upload_waits, m_st_readbacks, m_st_refresh);
+#if defined(_XBOX)
+    /* [2026-11-03] repintados de la EDRAM: enteros y filas (a escala) en total */
+    hw_log(1, "[DUCK-HW] %u fr: repintados enteros=%u filas=%u (de %u por frame)\n", m_st_frames, m_st_restore_full,
+           m_st_restore_rows, VRAM_HEIGHT * m_scale);
+#endif
     m_st_upload_waits = 0;
     /* Por que se corto cada lote (solo los que tenian vertices). */
     hw_log(1, "[DUCK-HW] cortes: tex=%u tr=%u bf=%u dith=%u mask=%u ilace=%u win=%u op=%u\n", m_brk[BRK_TEX],
@@ -1925,6 +2273,7 @@ void GPU_HW_D3D9_Backend::LogStats()
   std::memset(m_ct, 0, sizeof(m_ct));
   m_st_frames = m_st_prims = m_st_verts = m_st_draws = m_st_presents = 0;
   m_st_uploads = m_st_readbacks = m_st_refresh = m_st_fills = m_st_copies = 0;
+  m_st_restore_full = m_st_restore_rows = 0;
 }
 
 void GPU_HW_D3D9_Backend::SetVRAMTarget()
@@ -1932,7 +2281,8 @@ void GPU_HW_D3D9_Backend::SetVRAMTarget()
   D3DVIEWPORT9 vp;
   m_dev->SetRenderTarget(0, m_vram_surf);
   m_dev->SetDepthStencilSurface(m_depth);
-  vp.X = 0; vp.Y = 0; vp.Width = VRAM_WIDTH; vp.Height = VRAM_HEIGHT; vp.MinZ = 0.0f; vp.MaxZ = 1.0f;
+  vp.X = 0; vp.Y = 0; vp.Width = VRAM_WIDTH * m_scale; vp.Height = VRAM_HEIGHT * m_scale;
+  vp.MinZ = 0.0f; vp.MaxZ = 1.0f;
   m_dev->SetViewport(&vp);
   m_scissor_valid = false;
 }
@@ -1944,8 +2294,9 @@ void GPU_HW_D3D9_Backend::ApplyFixedStates()
 #if !defined(_XBOX)
   m_dev->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 #endif
-  m_dev->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
-  m_dev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+  /* [escala] Sin profundidad (Xbox a x2) Z apagado: no hay superficie ligada. */
+  m_dev->SetRenderState(D3DRS_ZENABLE, m_has_depth ? D3DZB_TRUE : D3DZB_FALSE);
+  m_dev->SetRenderState(D3DRS_ZWRITEENABLE, m_has_depth ? TRUE : FALSE);
   m_dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
   m_dev->SetRenderState(D3DRS_STENCILENABLE, FALSE);
   m_dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
@@ -2034,10 +2385,11 @@ void GPU_HW_D3D9_Backend::RefreshReadTexture()
     D3DRECT r;
     D3DPOINT pt;
     HRESULT hr;
-    r.x1 = (LONG)(m_dirty.left & ~7u);
-    r.y1 = (LONG)(m_dirty.top & ~7u);
-    r.x2 = (LONG)hw_min((m_dirty.right + 7u) & ~7u, static_cast<u32>(VRAM_WIDTH));
-    r.y2 = (LONG)hw_min((m_dirty.bottom + 7u) & ~7u, static_cast<u32>(VRAM_HEIGHT));
+    /* [escala] en pixeles de la EDRAM (x m_scale) */
+    r.x1 = (LONG)((m_dirty.left * m_scale) & ~7u);
+    r.y1 = (LONG)((m_dirty.top * m_scale) & ~7u);
+    r.x2 = (LONG)hw_min((m_dirty.right * m_scale + 7u) & ~7u, static_cast<u32>(VRAM_WIDTH * m_scale));
+    r.y2 = (LONG)hw_min((m_dirty.bottom * m_scale + 7u) & ~7u, static_cast<u32>(VRAM_HEIGHT * m_scale));
     pt.x = r.x1;
     pt.y = r.y1;
     HW_PF_BEGIN(res);
@@ -2053,8 +2405,8 @@ void GPU_HW_D3D9_Backend::RefreshReadTexture()
   {
     RECT r;
     HRESULT hr;
-    r.left = (LONG)m_dirty.left; r.top = (LONG)m_dirty.top;
-    r.right = (LONG)m_dirty.right; r.bottom = (LONG)m_dirty.bottom;
+    r.left = (LONG)(m_dirty.left * m_scale); r.top = (LONG)(m_dirty.top * m_scale);
+    r.right = (LONG)(m_dirty.right * m_scale); r.bottom = (LONG)(m_dirty.bottom * m_scale);
     HW_PF_BEGIN(res);
     hr = m_dev->StretchRect(m_vram_surf, &r, m_read_surf, &r, D3DTEXF_NONE);
     HW_PF_END(res, PF_RESOLVE);
@@ -2150,6 +2502,11 @@ void GPU_HW_D3D9_Backend::ResetDepthCounter()
 {
   /* gpu_hw.cpp:1201 + gpu_hw_d3d11.cpp:2126: reconstruir la profundidad desde
    * el alfa de la VRAM y empezar de nuevo. */
+  if (!m_has_depth)
+  {
+    m_depth_counter = 1;   /* [escala] sin profundidad no hay nada que rehacer */
+    return;
+  }
   FlushRender();
   m_dirty.valid = true;
   m_dirty.left = 0; m_dirty.top = 0; m_dirty.right = VRAM_WIDTH; m_dirty.bottom = VRAM_HEIGHT;
@@ -2162,7 +2519,7 @@ void GPU_HW_D3D9_Backend::ResetDepthCounter()
   m_dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
   m_dev->SetTexture(0, m_read_tex);
   m_dev->SetPixelShader(m_ps_depth);
-  DrawUtilRect(0.0f, 0.0f, (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+  DrawUtilRect(0.0f, 0.0f, (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
   m_dev->SetRenderState(D3DRS_COLORWRITEENABLE, 0xF);
   m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
   m_batch_valid = false;
@@ -2180,10 +2537,10 @@ void GPU_HW_D3D9_Backend::UpdateScissor()
 {
   RECT r;
   const Common::Rectangle<u32>& a = m_drawing_area;
-  r.left = (LONG)a.left;
-  r.top = (LONG)a.top;
-  r.right = (LONG)a.right + 1;
-  r.bottom = (LONG)a.bottom + 1;
+  r.left = (LONG)(a.left * m_scale);
+  r.top = (LONG)(a.top * m_scale);
+  r.right = (LONG)((a.right + 1) * m_scale);
+  r.bottom = (LONG)((a.bottom + 1) * m_scale);
   if (m_scissor_valid && r.left == m_scissor.left && r.top == m_scissor.top && r.right == m_scissor.right &&
       r.bottom == m_scissor.bottom)
     return;
@@ -2243,7 +2600,12 @@ float GPU_HW_D3D9_Backend::BeginPrimitive(const GPUBackendDrawCommand* cmd, bool
 
   /* gpu_hw.cpp:1375 -- cambio de estado que exige un lote nuevo.  B-F
    * siempre vacia (upstream lo hace igual: el orden importa). */
-  if (!m_batch_valid || std::memcmp(&k, &m_batch, sizeof(k)) != 0 || transparency == 2)
+  /* [escala, Xbox sin profundidad] Poner Y comprobar mascara a la vez (p. ej.
+   * sombras que no se oscurecen dos veces): la prueba mira la copia de
+   * lectura, que solo se pone al dia entre lotes, asi que cada primitivo va
+   * en su lote para ver lo que pinto el anterior. */
+  const bool mask_alone = !m_has_depth && k.set_mask && k.check_mask && k.transparency == 0 && m_nverts > 0;
+  if (!m_batch_valid || std::memcmp(&k, &m_batch, sizeof(k)) != 0 || transparency == 2 || mask_alone)
   {
     if (!m_batch_valid)                                   m_flush_reason = BRK_OP;
     else if (k.texmode != m_batch.texmode || k.raw != m_batch.raw) m_flush_reason = BRK_TEX;
@@ -2257,6 +2619,13 @@ float GPU_HW_D3D9_Backend::BeginPrimitive(const GPUBackendDrawCommand* cmd, bool
     m_batch = k;
     m_batch_valid = true;
   }
+
+  /* [escala, Xbox sin profundidad] B/2+F/2 con prueba de mascara mira el bit
+   * de mascara en la copia de lectura: al EMPEZAR el lote (antes de que este
+   * primitivo entre en el rectangulo sucio) se resuelve lo pintado hasta
+   * ahora.  Una sola vez por lote y solo lo nuevo: el rectangulo se vacia. */
+  if (!m_has_depth && k.check_mask && k.transparency == 0 && m_nverts == 0 && m_dirty.valid)
+    RefreshReadTexture();
 
   UpdateScissor();
 
@@ -2659,7 +3028,7 @@ void GPU_HW_D3D9_Backend::DrawBatch(int render_mode)
   static const float factors[4][2] = { { 0.5f, 0.5f }, { 1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.25f, 1.0f } };
   const BatchKey& k = m_batch;
   const bool blend = (render_mode == 1 || render_mode == 3);
-  float c[5][4];
+  float c[6][4];
 
   std::memset(c, 0, sizeof(c));
   if (k.transparency < 4)
@@ -2670,6 +3039,9 @@ void GPU_HW_D3D9_Backend::DrawBatch(int render_mode)
   c[1][0] = k.interlaced ? 1.0f : 0.0f;
   c[1][1] = static_cast<float>(k.field);
   c[1][3] = g_pgxp_enabled ? 1.0f : 0.0f;   /* limitar u/v al poligono */
+  /* [escala] mascara por la copia de lectura: solo B/2+F/2 (el resto, por la
+   * mezcla: ver abajo) */
+  c[5][0] = (!m_has_depth && k.check_mask && k.transparency == 0) ? 1.0f : 0.0f;
 
   if (m_batch_tex && (k.win_and_x != 0xFF || k.win_and_y != 0xFF || k.win_or_x != 0 || k.win_or_y != 0))
   {
@@ -2691,33 +3063,71 @@ void GPU_HW_D3D9_Backend::DrawBatch(int render_mode)
 
 #if !DUCK_HW_STATE_CACHE
   m_cur_psc_valid = false;
-  m_cur_blend = m_cur_bop = m_cur_zfunc = 0xFFFFFFFFu;
+  m_cur_blend = m_cur_bop = m_cur_zfunc = m_cur_bmode = 0xFFFFFFFFu;
   m_cur_bf = HW_BF_NONE;
 #endif
   if (!m_cur_psc_valid || std::memcmp(m_cur_psc, c, sizeof(c)) != 0)
   {
-    m_dev->SetPixelShaderConstantF(0, &c[0][0], 5);
+    m_dev->SetPixelShaderConstantF(0, &c[0][0], 6);
     std::memcpy(m_cur_psc, c, sizeof(c));
     m_cur_psc_valid = true;
   }
 
+  /* [escala, Xbox sin profundidad] Prueba de mascara CON LA MEZCLA: el bit de
+   * mascara esta en el alfa del destino (0 o 1), asi que
+   *   opaco:  color = F * (1 - Ad) + B * Ad
+   *   B+F, B+F/4 (F ya por 1/4 en la shader):  color = B + F * (1 - Ad)
+   *   B-F:    color = B - F * (1 - Ad)
+   *   alfa:   A = As * (1 - Ad) + Ad * Ad   (=1 si ya tenia mascara)
+   * deja intactos los pixeles con mascara, en el mismo orden que la GPU pinta
+   * (tambien entre primitivos del mismo lote) y sin leer la copia.  B/2+F/2
+   * no se puede escribir asi (el factor del destino tendria que ser
+   * 0,5 + 0,5 * Ad): ese modo mira la copia de lectura (c_p5, BeginPrimitive). */
+  const bool mblend = !m_has_depth && k.check_mask && k.transparency != 0;
+  const bool semi_pass = (render_mode == 1 || render_mode == 3);
   {
-    const u32 want_blend = blend ? 1u : 0u;
+    const u32 want_blend = (blend || mblend) ? 1u : 0u;
     if (m_cur_blend != want_blend)
     {
-      m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, blend ? TRUE : FALSE);
+      m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, want_blend ? TRUE : FALSE);
       m_cur_blend = want_blend;
     }
   }
-  if (blend)
   {
-    const u32 f = (factors[k.transparency][1] >= 1.0f) ? 255u : 128u;
-    const u32 bf = D3DCOLOR_ARGB(f, f, f, f);
-    const u32 bop = (k.transparency == 2) ? static_cast<u32>(D3DBLENDOP_REVSUBTRACT) : static_cast<u32>(D3DBLENDOP_ADD);
-    if (m_cur_bf != bf)
+    const u32 bmode = mblend ? (semi_pass ? 2u : 1u) : 0u;
+    if (m_cur_bmode != bmode)
     {
-      m_dev->SetRenderState(D3DRS_BLENDFACTOR, bf);
-      m_cur_bf = bf;
+      if (bmode == 0)
+      {
+        m_dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+        m_dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_BLENDFACTOR);
+        m_dev->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_ONE);
+        m_dev->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_ZERO);
+      }
+      else
+      {
+        m_dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_INVDESTALPHA);
+        m_dev->SetRenderState(D3DRS_DESTBLEND, (bmode == 1) ? D3DBLEND_DESTALPHA : D3DBLEND_ONE);
+        m_dev->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_INVDESTALPHA);
+        m_dev->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_DESTALPHA);
+      }
+      m_dev->SetRenderState(D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD);
+      m_cur_bmode = bmode;
+    }
+  }
+  if (blend || mblend)
+  {
+    const u32 bop = (semi_pass && k.transparency == 2) ? static_cast<u32>(D3DBLENDOP_REVSUBTRACT)
+                                                       : static_cast<u32>(D3DBLENDOP_ADD);
+    if (blend && !mblend)
+    {
+      const u32 f = (factors[k.transparency][1] >= 1.0f) ? 255u : 128u;
+      const u32 bf = D3DCOLOR_ARGB(f, f, f, f);
+      if (m_cur_bf != bf)
+      {
+        m_dev->SetRenderState(D3DRS_BLENDFACTOR, bf);
+        m_cur_bf = bf;
+      }
     }
     if (m_cur_bop != bop)
     {
@@ -2802,6 +3212,10 @@ void GPU_HW_D3D9_Backend::FlushRender()
     m_dev->SetTexture(1, m_dither_tex);
     m_dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
     m_dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_BLENDFACTOR);
+    m_dev->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_ONE);
+    m_dev->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_ZERO);
+    m_dev->SetRenderState(D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD);
+    m_cur_bmode = 0;
     m_cur_ps = 0;
     m_cur_vb = 0;
     m_cur_psc_valid = false;
@@ -2846,10 +3260,12 @@ void GPU_HW_D3D9_Backend::FlushRender()
  * Operaciones de VRAM
  * ==================================================================== */
 
-void GPU_HW_D3D9_Backend::DrawUtilRect(float x0, float y0, float x1, float y1, float rt_w, float rt_h)
+void GPU_HW_D3D9_Backend::DrawUtilRect(float x0, float y0, float x1, float y1, float rt_w, float rt_h,
+                                       float px_per_unit)
 {
   float v[4][4];
-  const float vsc[4] = { 2.0f / rt_w, 2.0f / rt_h, HALF_PIXEL, 0.0f };
+  /* El medio pixel es de pixeles del destino: a escala N, 1/N de la VRAM. */
+  const float vsc[4] = { 2.0f / rt_w, 2.0f / rt_h, HALF_PIXEL / px_per_unit, 0.0f };
   v[0][0] = x0; v[0][1] = y0; v[1][0] = x1; v[1][1] = y0;
   v[2][0] = x0; v[2][1] = y1; v[3][0] = x1; v[3][1] = y1;
   for (int i = 0; i < 4; i++) { v[i][2] = 0.0f; v[i][3] = 1.0f; }
@@ -2886,7 +3302,7 @@ void GPU_HW_D3D9_Backend::DiagDump(IDirect3DSurface9* out_surf, s32 vram_x, s32 
   const u32 aw = (cw > 0) ? (u32)cw : 0, ah = (ch > 0) ? (u32)ch : 0;
 
   std::memset(cells, 0, sizeof(cells));
-  hr = m_dev->GetRenderTargetData(m_vram_surf, m_sys_surf);
+  hr = ReadNativeToSys(m_vram_surf) ? S_OK : E_FAIL;
   if (FAILED(hr))
     hw_log(3, "[DUCK-HW] diag: GetRenderTargetData(VRAM) 0x%08X\n", (unsigned)hr);
   else if (SUCCEEDED(hr = m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
@@ -3029,10 +3445,20 @@ void GPU_HW_D3D9_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 colo
     m_dev->SetPixelShaderConstantF(0, fc, 1);
     for (i = 0; i < n; i++)
       DrawUtilRect((float)rects[i].x1, (float)rects[i].y1, (float)rects[i].x2, (float)rects[i].y2, (float)VRAM_WIDTH,
-                   (float)VRAM_HEIGHT);
+                   (float)VRAM_HEIGHT, (float)m_scale);
   }
 #else
-  m_dev->Clear(n, rects, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, c, 0.0f, 0);
+  {
+    /* [escala] Clear va en pixeles del render target */
+    D3DRECT sr[4];
+    DWORD i;
+    for (i = 0; i < n; i++)
+    {
+      sr[i].x1 = rects[i].x1 * (LONG)m_scale; sr[i].y1 = rects[i].y1 * (LONG)m_scale;
+      sr[i].x2 = rects[i].x2 * (LONG)m_scale; sr[i].y2 = rects[i].y2 * (LONG)m_scale;
+    }
+    m_dev->Clear(n, sr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, c, 0.0f, 0);
+  }
 #endif
   m_pipe_valid = false;   /* mezcla, shader y constantes: los lotes los vuelven a poner */
   m_st_fills++;
@@ -3073,7 +3499,7 @@ void GPU_HW_D3D9_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u
                                    GPUBackendCommandParameters params)
 {
   u32 w1, h1;
-  float c[4];
+  float c[8];
   float depth;
 
   if (width == 0 || height == 0)
@@ -3102,13 +3528,31 @@ void GPU_HW_D3D9_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u
            (int)params.set_mask_while_drawing, (int)params.check_mask_before_draw);
   }
 
-  c[0] = static_cast<float>(static_cast<s32>(src_x) - static_cast<s32>(dst_x));
-  c[1] = static_cast<float>(static_cast<s32>(src_y) - static_cast<s32>(dst_y));
+  /* [escala] el desplazamiento en pixeles del destino: se copian los
+   * subpixeles, no solo el nativo */
+  c[0] = static_cast<float>((static_cast<s32>(src_x) - static_cast<s32>(dst_x)) * static_cast<s32>(m_scale));
+  c[1] = static_cast<float>((static_cast<s32>(src_y) - static_cast<s32>(dst_y)) * static_cast<s32>(m_scale));
   c[2] = params.set_mask_while_drawing ? 1.0f : 0.0f;
   c[3] = depth;
+  c[4] = 0.0f;   /* [escala] la prueba de mascara sin profundidad va por la mezcla (abajo) */
+  c[5] = c[6] = c[7] = 0.0f;
 
   m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-  m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+  if (!m_has_depth && params.check_mask_before_draw)
+  {
+    /* [escala, Xbox sin profundidad] mascara por la mezcla, como los lotes
+     * opacos: color = F * (1 - Ad) + B * Ad (el pipeline de los lotes lo
+     * vuelve a poner: m_pipe_valid = false abajo). */
+    m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    m_dev->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
+    m_dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_INVDESTALPHA);
+    m_dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_DESTALPHA);
+    m_dev->SetRenderState(D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD);
+    m_dev->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_INVDESTALPHA);
+    m_dev->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_DESTALPHA);
+  }
+  else
+    m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
   m_dev->SetRenderState(D3DRS_ZFUNC, params.check_mask_before_draw ? D3DCMP_GREATEREQUAL : D3DCMP_ALWAYS);
   m_dev->SetTexture(0, m_read_tex);
   m_dev->SetPixelShader(m_ps_copy);
@@ -3116,25 +3560,25 @@ void GPU_HW_D3D9_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u
   /* El desplazamiento (origen - destino) vale para todos los trozos: cuando
    * el destino da la vuelta, el origen correspondiente esta 1024 (o 512) mas
    * alla, y el muestreador en WRAP lo devuelve al mismo sitio. */
-  m_dev->SetPixelShaderConstantF(0, c, 1);
+  m_dev->SetPixelShaderConstantF(0, c, 2);
   w1 = hw_min(width, static_cast<u32>(VRAM_WIDTH) - dst_x);
   h1 = hw_min(height, static_cast<u32>(VRAM_HEIGHT) - dst_y);
   DrawUtilRect((float)dst_x, (float)dst_y, (float)(dst_x + w1), (float)(dst_y + h1), (float)VRAM_WIDTH,
-               (float)VRAM_HEIGHT);
+               (float)VRAM_HEIGHT, (float)m_scale);
   IncludeDirty(dst_x, dst_y, dst_x + w1, dst_y + h1);
   if (w1 < width)
   {
-    DrawUtilRect(0.0f, (float)dst_y, (float)(width - w1), (float)(dst_y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect(0.0f, (float)dst_y, (float)(width - w1), (float)(dst_y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(0, dst_y, width - w1, dst_y + h1);
   }
   if (h1 < height)
   {
-    DrawUtilRect((float)dst_x, 0.0f, (float)(dst_x + w1), (float)(height - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect((float)dst_x, 0.0f, (float)(dst_x + w1), (float)(height - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(dst_x, 0, dst_x + w1, height - h1);
   }
   if (w1 < width && h1 < height)
   {
-    DrawUtilRect(0.0f, 0.0f, (float)(width - w1), (float)(height - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect(0.0f, 0.0f, (float)(width - w1), (float)(height - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(0, 0, width - w1, height - h1);
   }
 
@@ -3216,21 +3660,21 @@ void GPU_HW_D3D9_Backend::UploadRegion(u32 x, u32 y, u32 w, u32 h, bool set_mask
 
   w1 = hw_min(w, static_cast<u32>(VRAM_WIDTH) - x);
   h1 = hw_min(h, static_cast<u32>(VRAM_HEIGHT) - y);
-  DrawUtilRect((float)x, (float)y, (float)(x + w1), (float)(y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+  DrawUtilRect((float)x, (float)y, (float)(x + w1), (float)(y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
   IncludeDirty(x, y, x + w1, y + h1);
   if (w1 < w)
   {
-    DrawUtilRect(0.0f, (float)y, (float)(w - w1), (float)(y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect(0.0f, (float)y, (float)(w - w1), (float)(y + h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(0, y, w - w1, y + h1);
   }
   if (h1 < h)
   {
-    DrawUtilRect((float)x, 0.0f, (float)(x + w1), (float)(h - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect((float)x, 0.0f, (float)(x + w1), (float)(h - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(x, 0, x + w1, h - h1);
   }
   if (w1 < w && h1 < h)
   {
-    DrawUtilRect(0.0f, 0.0f, (float)(w - w1), (float)(h - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT);
+    DrawUtilRect(0.0f, 0.0f, (float)(w - w1), (float)(h - h1), (float)VRAM_WIDTH, (float)VRAM_HEIGHT, (float)m_scale);
     IncludeDirty(0, 0, w - w1, h - h1);
   }
 
@@ -3330,6 +3774,7 @@ void GPU_HW_D3D9_Backend::ReadbackToCPU(u32 x, u32 y, u32 w, u32 h)
   {
     IDirect3DSurface9* dst = 0;
     RECT rc;
+    RECT src;
     if (x + w <= VRAM_WIDTH && y + h <= VRAM_HEIGHT)
     {
       rc.left = (LONG)x; rc.top = (LONG)y; rc.right = (LONG)(x + w); rc.bottom = (LONG)(y + h);
@@ -3338,9 +3783,14 @@ void GPU_HW_D3D9_Backend::ReadbackToCPU(u32 x, u32 y, u32 w, u32 h)
     {
       rc.left = 0; rc.top = 0; rc.right = VRAM_WIDTH; rc.bottom = VRAM_HEIGHT;
     }
+    /* [escala] el origen en la copia (x m_scale) y POINT para quedarse con un
+     * subpixel de cada bloque */
+    src.left = rc.left * (LONG)m_scale; src.top = rc.top * (LONG)m_scale;
+    src.right = rc.right * (LONG)m_scale; src.bottom = rc.bottom * (LONG)m_scale;
     if (SUCCEEDED(m_sys_tex->GetSurfaceLevel(0, &dst)) && dst)
     {
-      if (SUCCEEDED(D3DXLoadSurfaceFromSurface(dst, NULL, &rc, m_read_surf, NULL, &rc, D3DX_FILTER_NONE, 0)) &&
+      if (SUCCEEDED(D3DXLoadSurfaceFromSurface(dst, NULL, &rc, m_read_surf, NULL, &src,
+                                               (m_scale > 1) ? D3DX_FILTER_POINT : D3DX_FILTER_NONE, 0)) &&
           SUCCEEDED(dst->LockRect(&lr, NULL, D3DLOCK_READONLY)))
       {
         ok = true;
@@ -3360,8 +3810,7 @@ void GPU_HW_D3D9_Backend::ReadbackToCPU(u32 x, u32 y, u32 w, u32 h)
     }
   }
 #else
-  if (SUCCEEDED(m_dev->GetRenderTargetData(m_vram_surf, m_sys_surf)) &&
-      SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
+  if (ReadNativeToSys(m_vram_surf) && SUCCEEDED(m_sys_surf->LockRect(&lr, NULL, D3DLOCK_READONLY)))
   {
     ok = true;
     for (r = 0; r < h; r++)
@@ -3383,6 +3832,25 @@ void GPU_HW_D3D9_Backend::ReadbackToCPU(u32 x, u32 y, u32 w, u32 h)
 
   if (!m_in_frame)
     EndOutsideFrame();
+}
+
+/* [escala] PC: la VRAM (o su copia de lectura) a m_sys_surf a x1.  A mas
+ * escala, StretchRect POINT al render target nativo y de ahi a la CPU
+ * (GetRenderTargetData exige el mismo tamano). */
+bool GPU_HW_D3D9_Backend::ReadNativeToSys(IDirect3DSurface9* src)
+{
+#if defined(_XBOX)
+  UNREFERENCED_VARIABLE(src);
+  return false;
+#else
+  if (!src || !m_sys_surf)
+    return false;
+  if (m_scale <= 1 || !m_down_surf)
+    return SUCCEEDED(m_dev->GetRenderTargetData(src, m_sys_surf));
+  if (FAILED(m_dev->StretchRect(src, NULL, m_down_surf, NULL, D3DTEXF_POINT)))
+    return false;
+  return SUCCEEDED(m_dev->GetRenderTargetData(m_down_surf, m_sys_surf));
+#endif
 }
 
 /* Inversa exacta de c5 -> round(c5 * 255 / 31); el alfa es el bit 15. */
@@ -3415,6 +3883,32 @@ void GPU_HW_D3D9_Backend::Present(s32 vram_x, s32 vram_y, s32 cw, s32 ch, s32 le
   if (out_w > 1024) out_w = 1024;
   if (out_h > 1024) out_h = 1024;
 #endif
+#if defined(_XBOX)
+  /* [2026-11-03] Tope de la imagen en la Xbox: 1280x512.  Los modos de 480
+   * lineas (Bloody Roar 2: 512x480 -> 1024x960) a x2 cuadruplican los
+   * pixeles de 640x480 y la consola no llega; ahi se baja a x1.  Se decide
+   * aqui (tamano nativo de la imagen) y se aplica en FrameBegin, tras 20
+   * imagenes seguidas en el modo nuevo (los cambios de un frame no cuentan). */
+  {
+    u32 want = m_req_scale;
+    while (want > 1 && (static_cast<u32>(out_h) * want > 512u || static_cast<u32>(out_w) * want > 1280u))
+      want--;
+    if (want == m_scale)
+      m_want_count = 0;
+    else
+    {
+      if (want != m_want_scale)
+        m_want_count = 0;
+      m_want_scale = want;
+      if (++m_want_count >= 20)
+        m_pending_scale = want;
+    }
+  }
+#endif
+  /* [escala] La imagen sale a N veces el tamano: el frontend la muestrea
+   * entera, asi que la proporcion no cambia. */
+  out_w *= static_cast<s32>(m_scale);
+  out_h *= static_cast<s32>(m_scale);
 
   HW_PF_BEGIN(pres);
   if (Dumping())
@@ -3472,6 +3966,12 @@ void GPU_HW_D3D9_Backend::Present(s32 vram_x, s32 vram_y, s32 cw, s32 ch, s32 le
 #if defined(_XBOX)
   /* Se pinta en la superficie de salida de la EDRAM y se resuelve a la
    * textura (abajo). */
+  if (m_out_alias && !EnsureOutRT(m_out_w, m_out_h))
+  {
+    if (!m_in_frame)
+      EndOutsideFrame();
+    return;
+  }
   out_surf = m_out_rt;
   out_surf->AddRef();
 #else
@@ -3492,14 +3992,19 @@ void GPU_HW_D3D9_Backend::Present(s32 vram_x, s32 vram_y, s32 cw, s32 ch, s32 le
    * shader.  Con el Clear, en la Xbox se veia en el margen lo que otro habia
    * dejado en esa EDRAM (barra verde a la derecha del menu de GT2, otra que
    * parpadeaba a la izquierda). */
+  /* [escala] el contenido y su sitio en la imagen, en pixeles de la salida */
+  cw *= static_cast<s32>(m_scale);
+  ch *= static_cast<s32>(m_scale);
+  left *= static_cast<s32>(m_scale);
+  top *= static_cast<s32>(m_scale);
   if (cw > out_w - left) cw = out_w - left;
   if (ch > out_h - top)  ch = out_h - top;
   if (cw < 0) cw = 0;
   if (ch < 0) ch = 0;
   {
     float d1[4];
-    c[0] = static_cast<float>(vram_x & VRAM_WIDTH_MASK);
-    c[1] = static_cast<float>(vram_y & VRAM_HEIGHT_MASK);
+    c[0] = static_cast<float>((vram_x & VRAM_WIDTH_MASK) * static_cast<s32>(m_scale));
+    c[1] = static_cast<float>((vram_y & VRAM_HEIGHT_MASK) * static_cast<s32>(m_scale));
     c[2] = static_cast<float>(left);
     c[3] = static_cast<float>(top);
     d1[0] = static_cast<float>(cw);
@@ -3538,10 +4043,22 @@ void GPU_HW_D3D9_Backend::Present(s32 vram_x, s32 vram_y, s32 cw, s32 ch, s32 le
     DiagDump(out_surf, vram_x, vram_y, cw, ch);
 
   SAFE_RELEASE(out_surf);
-  m_dev->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+  m_dev->SetRenderState(D3DRS_ZENABLE, m_has_depth ? D3DZB_TRUE : D3DZB_FALSE);
   m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
   m_dev->SetTexture(0, m_read_tex);
   SetVRAMTarget();
+#if defined(_XBOX)
+  /* [escala] La salida ha pisado la EDRAM de la VRAM: la copia de lectura
+   * esta al dia (RefreshReadTexture de arriba) y el siguiente Bind la repinta. */
+  if (m_out_alias)
+  {
+#if DUCK_HW_PARTIAL_RESTORE
+    MarkEdramStale(m_out_base, m_out_base + m_out_tiles);
+#else
+    m_edram_valid = false;
+#endif
+  }
+#endif
   m_batch_valid = false;
   m_pipe_valid = false;
   m_frame_ready = true;
@@ -3590,7 +4107,7 @@ void GPU_HW_D3D9_Backend::Reset(bool clear_vram)
   if (clear_vram)
   {
     m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-    m_dev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 0, 0, 0), 0.0f, 0);
+    m_dev->Clear(0, NULL, D3DCLEAR_TARGET | (m_has_depth ? D3DCLEAR_ZBUFFER : 0), D3DCOLOR_ARGB(0, 0, 0, 0), 0.0f, 0);
     m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
     m_dirty.valid = true;
     m_dirty.left = 0; m_dirty.top = 0; m_dirty.right = VRAM_WIDTH; m_dirty.bottom = VRAM_HEIGHT;

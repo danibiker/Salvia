@@ -218,9 +218,7 @@
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_hw_d3d9.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.cpp" />
-    <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c" />
     <ClCompile Include="..\..\..\plugins\xbox_soft\zn.c" />
   </ItemGroup>
   <ItemGroup>
