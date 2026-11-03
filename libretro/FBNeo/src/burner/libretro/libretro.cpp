@@ -975,6 +975,15 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 	}
 }
 
+#ifdef SALVIA_GUI
+static void sendLoadProgress(int index, char *real_rom_name){
+	if (index >= 0 && real_rom_name != NULL)
+		HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] Opening ROM file: %s\n", real_rom_name);
+	else 
+		HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] realname not found\n");
+}
+#endif
+
 // This code is very confusing. The original code is even more confusing :(
 static bool open_archive()
 {
@@ -1048,6 +1057,10 @@ static bool open_archive()
 					char *real_rom_name;
 					uint32_t real_rom_crc;
 					int index = find_rom_by_crc(ri.nCrc, list, count, &real_rom_name);
+
+					#ifdef SALVIA_GUI
+					sendLoadProgress(index, real_rom_name);
+					#endif
 
 					BurnDrvGetRomName(&rom_name, i, 0);
 
