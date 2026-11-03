@@ -373,14 +373,14 @@ void retro_set_environment(retro_environment_t cb) {
             NULL, NULL, "video",
             { { "Unai", NULL }, { "Peops", NULL }, { "SwanStation", NULL },
               { "SwanStation HW", "SwanStation HW (Direct3D 9)" }, { NULL, NULL } },
-            "Unai"
+            "SwanStation HW"
         },
         {
             "pcsxr360_pixel_format",
             "Pixel Format", "Pixel Format",
             NULL, NULL, "video",
             { { "RGB565", NULL }, { "XRGB8888", NULL }, { NULL, NULL } },
-            "RGB565"
+            "XRGB8888"
         },
         /* Dithering: respeta el bit de dither que el juego setea en GP1.
          * Cuando ON, las primitivas de Gouraud/lighting/blending pasan por el

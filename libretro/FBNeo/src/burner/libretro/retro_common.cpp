@@ -247,7 +247,7 @@ static struct retro_core_option_v2_definition var_fbneo_diagnostic_input = {
 		{ "Hold Select + L + R", NULL },
 		{ NULL,                  NULL },
 	},
-	"Hold Start"
+	"Hold Select"
 };
 static struct retro_core_option_v2_definition var_fbneo_hiscores = {
 	"fbneo-hiscores",
@@ -967,7 +967,7 @@ void set_environment()
 		var_fbneo_diagnostic_input.values[ 6].value = RETRO_DIAGNOSTIC_VALUE_6;
 		var_fbneo_diagnostic_input.values[ 8].value = RETRO_DIAGNOSTIC_VALUE_8;
 		var_fbneo_diagnostic_input.values[10].value = RETRO_DIAGNOSTIC_VALUE_10;
-		var_fbneo_diagnostic_input.default_value    = RETRO_DIAGNOSTIC_VALUE_1;
+		var_fbneo_diagnostic_input.default_value    = RETRO_DIAGNOSTIC_VALUE_6;
 		vars_systems.push_back(&var_fbneo_diagnostic_input);
 	}
 
