@@ -1,5 +1,7 @@
 #include "v60.h"
 
+// Opt in only when this mapped RAM has no concurrent writer during v60Run().
+void v60SetIdleLoopRAM(UINT32 start, UINT32 end);
 void v60Init();
 void v70Init();
 

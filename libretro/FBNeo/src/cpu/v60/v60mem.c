@@ -350,7 +350,46 @@ static struct cpu_info v70_i =
 #define PortRead32  v60.info.pr32
 #define PortWrite32 v60.info.pw32
 
-#if defined(LSB_FIRST) && !defined(ALIGN_INTS)
+// The Xbox build previously fetched instruction operands through mr16/mr32.
+// Those bus helpers split odd-address reads and perform repeated page lookups.
+// Preserve that build's READ map and bus/handler semantics on the slow path.
+#if defined(_XBOX) || defined(FBNEO_V60_MAPPED_FETCH_TEST)
+static inline UINT8 MappedOpRead8(UINT32 a)
+{
+	UINT32 mapped = a & address_mask;
+	const UINT8 *p = mem[0][mapped / page_size];
+	if (p) return p[mapped & page_mask];
+	return v60.info.mr8(a);
+}
+
+static inline UINT16 MappedOpRead16(UINT32 a)
+{
+	UINT32 mapped = a & address_mask;
+	UINT32 offset = mapped & page_mask;
+	const UINT8 *p = mem[0][mapped / page_size];
+	if (p && offset < page_mask && (address_mask & page_mask) == page_mask) {
+		p += offset;
+		return p[0] | ((UINT16)p[1] << 8);
+	}
+	return v60.info.mr16(a);
+}
+
+static inline UINT32 MappedOpRead32(UINT32 a)
+{
+	UINT32 mapped = a & address_mask;
+	UINT32 offset = mapped & page_mask;
+	const UINT8 *p = mem[0][mapped / page_size];
+	if (p && offset <= page_mask - 3 && (address_mask & page_mask) == page_mask) {
+		p += offset;
+		return p[0] | ((UINT32)p[1] << 8) | ((UINT32)p[2] << 16) | ((UINT32)p[3] << 24);
+	}
+	return v60.info.mr32(a);
+}
+
+#define OpRead8(a)  MappedOpRead8(a)
+#define OpRead16(a) MappedOpRead16(a)
+#define OpRead32(a) MappedOpRead32(a)
+#elif defined(LSB_FIRST) && !defined(ALIGN_INTS)
 #define OpRead8(a)	(cpu_readop(a))
 #define OpRead16(a)	(cpu_readop16(a))
 #define OpRead32(a)	(cpu_readop32(a))

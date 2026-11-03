@@ -215,7 +215,26 @@
 #include "e132xs.h"
 #include "e132xs_intf.h"
 
-static UINT8 *mem[2][0x100000];
+// Two page tables of 0x100000 pointers each. They used to be inline arrays, so
+// every build paid 8 MiB of .bss for a CPU that only a handful of drivers use.
+#define E132XS_PAGE_COUNT 0x100000
+#define E132XS_MAP_BYTES (sizeof(UINT8*) * E132XS_PAGE_COUNT)
+
+static UINT8 **mem[2];
+
+// Allocate both page tables on first use and clear them, so a build that never
+// starts a Hyperstone keeps the memory for the rest of the title.
+static void e132xs_ensure_map()
+{
+	for (INT32 i = 0; i < 2; i++) {
+		if (mem[i] == NULL) {
+			mem[i] = (UINT8**)BurnMalloc(E132XS_MAP_BYTES);
+			if (mem[i]) {
+				memset(mem[i], 0, E132XS_MAP_BYTES);
+			}
+		}
+	}
+}
 
 static void (*write_byte_handler)(UINT32,UINT8);
 static void (*write_word_handler)(UINT32,UINT16);
@@ -269,6 +288,8 @@ void E132XSSetIOReadHandler(UINT32 (*handler)(UINT32))
 
 void E132XSMapMemory(UINT8 *ptr, UINT32 start, UINT32 end, INT32 flags)
 {
+	e132xs_ensure_map();
+
 	start >>= 12;
 	end >>= 12;
 
@@ -4690,7 +4711,9 @@ static void core_init(int scale_mask)
 
 void E132XSInit(INT32 , INT32 type, INT32 )
 {
-	memset (mem, 0, sizeof(mem));
+	e132xs_ensure_map();
+	if (mem[0]) memset(mem[0], 0, E132XS_MAP_BYTES);
+	if (mem[1]) memset(mem[1], 0, E132XS_MAP_BYTES);
 
 	write_byte_handler = NULL;
 	write_word_handler = NULL;
@@ -4829,7 +4852,12 @@ void E132XSClose()
 
 void E132XSExit()
 {
-
+	for (INT32 i = 0; i < 2; i++) {
+		if (mem[i]) {
+			BurnFree(mem[i]);
+			mem[i] = NULL;
+		}
+	}
 }
 
 INT64 E132XSTotalCycles()
@@ -5261,5 +5289,3 @@ INT32 E132XSBurnCycles(INT32 cycles)
 	m_icount -= cycles;
 	return cycles;
 }
-
-

@@ -23,6 +23,7 @@ struct ZetExt {
 	
 	UINT32 BusReq;
 	UINT32 ResetLine;
+	Z80StableStatusPoll status_poll;
 };
  
 static INT32 nZetCyclesDone[MAX_Z80];
@@ -296,6 +297,24 @@ void ZetWriteRom(UINT16 address, UINT8 data)
 	ZetWriteProg(address, data);
 }
 
+// The opted-in port must have no read side effects once it returns 0 or 2,
+// and that value must remain stable throughout one timer-bounded ZetRun.
+void ZetSetStableStatusPoll(UINT32 first, UINT32 last, UINT16 port)
+{
+	if (nOpenedCPU < 0) return;
+	ZetExt *cpu = ZetCPUContext[nOpenedCPU];
+	Z80StableStatusPoll &cfg = cpu->status_poll;
+	memset(&cfg, 0, sizeof(cfg));
+	if (first <= last && last <= 0xffff) {
+		cfg.op_map = cpu->pZetMemMap + 0x200;
+		cfg.arg_map = cpu->pZetMemMap + 0x300;
+		cfg.first = first;
+		cfg.last = last;
+		cfg.port = port;
+	}
+	Z80SetStableStatusPoll(cfg.op_map ? &cfg : NULL);
+}
+
 void ZetClose()
 {
 #if defined FBNEO_DEBUG
@@ -306,6 +325,7 @@ void ZetClose()
 	Z80GetContext(&ZetCPUContext[nOpenedCPU]->reg);
 	nZetCyclesDone[nOpenedCPU] = nZetCyclesTotal;
 
+	Z80SetStableStatusPoll(NULL);
 	nOpenedCPU = -1;
 }
 
@@ -319,6 +339,8 @@ void ZetOpen(INT32 nCPU)
 #endif
 
 	Z80SetContext(&ZetCPUContext[nCPU]->reg);
+	Z80StableStatusPoll &cfg = ZetCPUContext[nCPU]->status_poll;
+	Z80SetStableStatusPoll(cfg.op_map ? &cfg : NULL);
 	nZetCyclesTotal = nZetCyclesDone[nCPU];
 
 	nOpenedCPU = nCPU;

@@ -36,6 +36,7 @@ void v25_new_frame();
 INT32 v25GetPC(INT32 n);
 void v25Scan(INT32 cpu, INT32 nAction);
 void v25RunEnd();
+void v25_set_idle_loop_range(UINT32 start, UINT32 end);
 void v25Idle(INT32 cycles);
 
 //----------------------------------------------------------------------------------
@@ -346,6 +347,13 @@ void VezSetWritePort(void (__fastcall *pHandler)(UINT32, UINT8))
 #endif
 
 	VezCurrentCPU->WritePort = pHandler;
+}
+
+// The caller guarantees direct, immutable instruction memory in this range.
+void VezSetV25IdleLoopRange(UINT32 start, UINT32 end)
+{
+	if (VezCurrentCPU && VezCurrentCPU->cpu_execute == v25_execute)
+		v25_set_idle_loop_range(start, end);
 }
 
 void VezSetDecode(UINT8 *table)

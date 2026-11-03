@@ -1,5 +1,6 @@
 // Psikyo hardware sprites
 #include "psikyo.h"
+#include "render_worker.h"
 
 UINT8* PsikyoSpriteROM = NULL;
 UINT8* PsikyoSpriteRAM = NULL;
@@ -19,6 +20,7 @@ static INT32 nFrame;
 
 static INT8* PsikyoSpriteAttrib = NULL;
 static INT32 nSpriteAddressMask;
+static UINT16 *spriteRowMasks = NULL;
 
 static PsikyoSprite* pSpriteLists = NULL;
 static PsikyoSprite* pSpriteList = NULL;
@@ -26,28 +28,49 @@ static PsikyoSprite* pSpriteList = NULL;
 static INT32* PsikyoZoomXTable = NULL;
 static INT32* PsikyoZoomYTable = NULL;
 
-static UINT8* pTile;
-static UINT8* pTileData8;
-static UINT32 pTilePalette;
-
 static UINT16* pZBuffer = NULL;
-static UINT16* pZTile;
-
-static INT32 *pXZoomInfo, *pYZoomInfo;
-
-static INT32 nTileXPos, nTileYPos, nZPos, nTileXSize, nTileYSize;
-static INT32 nXSize, nYSize;
 
 static INT32 nFirstSprites[8], nLastSprites[8];
 static INT32 *nFirstSprite, *nLastSprite;
 
-static INT32 nTopSprite;
-static INT32 nZOffset;
-
-typedef void (*RenderSpriteFunction)();
+struct BURN_RENDER_ALIGN PsikyoSpriteContext {
+	UINT8 *pTile, *pTileData8;
+	UINT32 pTilePalette;
+	UINT16 *pZTile, nTileRowMask;
+	INT32 *pXZoomInfo, *pYZoomInfo;
+	INT32 nTileXPos, nTileYPos, nZPos, nTileXSize, nTileYSize;
+	INT32 nXSize, nYSize, nTopSprite, nZOffset;
+	INT32 nMaskLeft, nMaskRight, nMaskTop, nMaskBottom;
+	INT32 clipTop, clipBottom;
+};
+static PsikyoSpriteContext spriteContexts[3];
+typedef void (*RenderSpriteFunction)(PsikyoSpriteContext &);
+#define PSIKYO_RENDER_CONTEXT PsikyoSpriteContext
+#define pTile ctx.pTile
+#define pTileData8 ctx.pTileData8
+#define pTilePalette ctx.pTilePalette
+#define pZTile ctx.pZTile
+#define pXZoomInfo ctx.pXZoomInfo
+#define pYZoomInfo ctx.pYZoomInfo
+#define nTileXPos ctx.nTileXPos
+#define nTileYPos ctx.nTileYPos
+#define nZPos ctx.nZPos
+#define nTileXSize ctx.nTileXSize
+#define nTileYSize ctx.nTileYSize
+#define nXSize ctx.nXSize
+#define nYSize ctx.nYSize
+#define nTopSprite ctx.nTopSprite
+#define nZOffset ctx.nZOffset
+#define nTileRowMask ctx.nTileRowMask
+#define nMaskLeft ctx.nMaskLeft
+#define nMaskRight ctx.nMaskRight
+#define nMaskTop ctx.nMaskTop
+#define nMaskBottom ctx.nMaskBottom
 
 // Include the tile rendering functions
+#define PSIKYO_SPRITE_ROWS
 #include "psikyo_sprite_func.h"
+#undef PSIKYO_SPRITE_ROWS
 
 static void GetBuffers(INT32 nBuffer)
 {
@@ -56,9 +79,13 @@ static void GetBuffers(INT32 nBuffer)
 	nLastSprite = nLastSprites + (nBuffer << 2);
 }
 
-INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
+INT32 PsikyoSpriteRenderBand(INT32 nLowPriority, INT32 nHighPriority, INT32 top, INT32 bottom, INT32 index)
 {
-	static INT32 nMaskLeft, nMaskRight, nMaskTop, nMaskBottom;
+	PsikyoSpriteContext &ctx = spriteContexts[index];
+	ctx.clipTop = top; ctx.clipBottom = bottom;
+	PsikyoSprite *renderList = pSpriteLists + ((nFrame ^ 1) << 10);
+	INT32 *firstSprite = nFirstSprites + ((nFrame ^ 1) << 2);
+	INT32 *lastSprite = nLastSprites + ((nFrame ^ 1) << 2);
 	PsikyoSprite* pBuffer;
 	INT32 nRenderFunction;
 
@@ -83,13 +110,12 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 		nMaskLeft = nMaskTop = 9999;
 		nMaskRight = nMaskBottom = -1;
 
-		GetBuffers(nFrame ^ 1);
 	}
 
 	if (nHighPriority < 3) {
 		for (INT32 i = nHighPriority + 1; i < 4; i++) {
-			if (nUseBuffer > nFirstSprite[i]) {
-				nUseBuffer = nFirstSprite[i];
+			if (nUseBuffer > firstSprite[i]) {
+				nUseBuffer = firstSprite[i];
 			}
 		}
 	}
@@ -98,11 +124,11 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 	nTransColour = (nRenderFunction & 64) ? 0 : 15;
 
 	for (INT32 i = nLowPriority; i <= nHighPriority; i++) {
-		if (nMinZPos > nFirstSprite[i]) {
-			nMinZPos = nFirstSprite[i];
+		if (nMinZPos > firstSprite[i]) {
+			nMinZPos = firstSprite[i];
 		}
-		if (nMaxZPos < nLastSprite[i]) {
-			nMaxZPos = nLastSprite[i];
+		if (nMaxZPos < lastSprite[i]) {
+			nMaxZPos = lastSprite[i];
 		}
 		nPriorityMask |= 1 << i;
 	}
@@ -114,7 +140,7 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 		return 0;
 	}
 
-	for (pBuffer = pSpriteList + nCurrentZPos; nCurrentZPos <= nMaxZPos; pBuffer++, nCurrentZPos++) {
+	for (pBuffer = renderList + nCurrentZPos; nCurrentZPos <= nMaxZPos; pBuffer++, nCurrentZPos++) {
 
 		if ((pBuffer->priority & nPriorityMask) == 0) {
 			continue;
@@ -202,12 +228,13 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 					}
 
 					pTileData8 = PsikyoSpriteROM + ((BURN_ENDIAN_SWAP_INT16(((UINT16*)PsikyoSpriteLUT)[nAddress]) << 8) & nSpriteAddressMask);
+					nTileRowMask = spriteRowMasks[((pTileData8 - PsikyoSpriteROM) >> 8) * 2 + (nTransColour == 15)];
 					if (nTileYPos < 0 || nTileYPos > 208 || nTileXPos < 0 || nTileXPos > 304) {
 						if (nTileYPos > -16 && nTileYPos < 224 && nTileXPos > -16 && nTileXPos < 320) {
-							RenderSprite[nRenderFunction + 1]();
+							RenderSprite[nRenderFunction + 1](ctx);
 						}
 					} else {
-						RenderSprite[nRenderFunction + 0]();
+						RenderSprite[nRenderFunction + 0](ctx);
 					}
 				}
 			}
@@ -276,10 +303,10 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 					pTileData8 = PsikyoSpriteROM + ((BURN_ENDIAN_SWAP_INT16(((UINT16*)PsikyoSpriteLUT)[nAddress]) << 8) & nSpriteAddressMask);
 					if (nTileYPos < 0 || nTileYPos > (224 - nTileYSize) || nTileXPos < 0 || nTileXPos > (320 - nTileXSize)) {
 						if (nTileYPos > -nTileYSize && nTileYPos < 224 && nTileXPos > -nTileXSize && nTileXPos < 320) {
-							RenderSprite[nRenderFunction + 33]();
+							RenderSprite[nRenderFunction + 33](ctx);
 						}
 					} else {
-						RenderSprite[nRenderFunction + 32]();
+						RenderSprite[nRenderFunction + 32](ctx);
 					}
 				}
 			}
@@ -294,13 +321,46 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority)
 		if (nZPos >= 0) {
 			nZOffset += nTopSprite;
 			if (nZOffset > 0xFC00) {
-				memset(pZBuffer, 0, 320 * 224 * sizeof(UINT16));
+				memset(pZBuffer + top * 320, 0, (bottom - top) * 320 * sizeof(UINT16));
 				nZOffset = 0;
 			}
 		}
 	}
 
 	return 0;
+}
+
+#undef pTile
+#undef pTileData8
+#undef pTilePalette
+#undef pZTile
+#undef pXZoomInfo
+#undef pYZoomInfo
+#undef nTileXPos
+#undef nTileYPos
+#undef nZPos
+#undef nTileXSize
+#undef nTileYSize
+#undef nXSize
+#undef nYSize
+#undef nTopSprite
+#undef nZOffset
+#undef nTileRowMask
+#undef nMaskLeft
+#undef nMaskRight
+#undef nMaskTop
+#undef nMaskBottom
+#undef PSIKYO_RENDER_CONTEXT
+
+INT32 PsikyoSpriteRender(INT32 low, INT32 high)
+{
+	return PsikyoSpriteRenderBand(low, high, 0, 224, 0);
+}
+
+void PsikyoSpriteResetRenderContexts()
+{
+	memset(spriteContexts, 0, sizeof(spriteContexts));
+	memset(pZBuffer, 0, 320 * 224 * sizeof(UINT16));
 }
 
 INT32 PsikyoSpriteBuffer()
@@ -407,6 +467,7 @@ void PsikyoSpriteExit()
 	BurnFree(PsikyoZoomXTable);
 	BurnFree(PsikyoZoomYTable);
 	BurnFree(PsikyoSpriteAttrib);
+	BurnFree(spriteRowMasks);
 	BurnFree(pSpriteLists);
 	BurnFree(pZBuffer);
 
@@ -442,7 +503,7 @@ INT32 PsikyoSpriteInit(INT32 nROMSize)
 	}
 
 	memset(pZBuffer, 0, 320 * 224 * sizeof(UINT16));
-	nZOffset = 0;
+	memset(spriteContexts, 0, sizeof(spriteContexts));
 
 	for (nSpriteAddressMask = 1; nSpriteAddressMask < nROMSize; nSpriteAddressMask <<= 1) {}
 	nSpriteAddressMask--;
@@ -453,6 +514,28 @@ INT32 PsikyoSpriteInit(INT32 nROMSize)
 	PsikyoSpriteAttrib = (INT8*)BurnMalloc(nSpriteAddressMask + 1);
 	if (PsikyoSpriteAttrib == NULL) {
 		return 1;
+	}
+
+	BurnFree(spriteRowMasks);
+	spriteRowMasks = (UINT16*)BurnMalloc(((nSpriteAddressMask + 1) / nTileSize) * 2 * sizeof(UINT16));
+	if (spriteRowMasks == NULL) {
+		PsikyoSpriteExit();
+		return 1;
+	}
+	// One bit per source row, for each hardware transparent pen. Sparse
+	// bullet tiles can skip empty rows before doing pixel/Z-buffer tests.
+	memset(spriteRowMasks, 0xff, ((nSpriteAddressMask + 1) / nTileSize) * 2 * sizeof(UINT16));
+	for (INT32 tile = 0; tile < nNumTiles; tile++) {
+		UINT16 rows0 = 0, rows15 = 0;
+		for (INT32 row = 0; row < 16; row++) {
+			for (INT32 x = 0; x < 16; x++) {
+				UINT8 pen = PsikyoSpriteROM[tile * nTileSize + row * 16 + x];
+				if (pen != 0) rows0 |= 1 << row;
+				if (pen != 15) rows15 |= 1 << row;
+			}
+		}
+		spriteRowMasks[tile * 2] = rows0;
+		spriteRowMasks[tile * 2 + 1] = rows15;
 	}
 
 	for (INT32 i = 0; i < nNumTiles; i++) {

@@ -30,7 +30,10 @@ struct TMS34010MemoryMap
 {
 	INT32 CPU_TYPE;
 
-    UINT8 *map[PAGE_COUNT * 2];
+	// PAGE_COUNT * 2 page pointers, allocated the first time this slot is
+	// opened. This was an inline array, so four slots cost 32 MiB of .bss in
+	// every build, including ones that never instantiate a TMS34010 (CV1000).
+	UINT8 **map;
 	UINT8 *context;
 
     pTMS34010ReadHandler read[MAXHANDLER];
@@ -44,6 +47,44 @@ static TMS34010MemoryMap *g_mmap = NULL;
 static INT32 active_cpu = -1;
 static INT32 total_cpus = 0;
 static INT32 context_size = 0;
+
+#define TMS34010_MAP_BYTES (sizeof(UINT8*) * PAGE_COUNT * 2)
+
+// BurnMalloc keeps the page table on the heap the pointers describe, so a
+// driver that never opens a TMS34010 pays nothing for it.
+static bool TMS34010MapStoreAlloc(TMS34010MemoryMap *mmap)
+{
+	if (mmap->map) {
+		return true;
+	}
+
+	mmap->map = (UINT8**)BurnMalloc(TMS34010_MAP_BYTES);
+	if (mmap->map == NULL) {
+		return false;
+	}
+
+	memset(mmap->map, 0, TMS34010_MAP_BYTES);
+	return true;
+}
+
+// Reset one slot without dropping a page table it may already own.
+static void TMS34010MapStoreClear(TMS34010MemoryMap *mmap)
+{
+	UINT8 **map = mmap->map;
+
+	memset(mmap, 0, sizeof(*mmap));
+	mmap->map = map;
+}
+
+static void TMS34010MapStoreRelease()
+{
+	for (INT32 i = 0; i < MAX_CPUS; i++) {
+		if (MapStore[i].map) {
+			BurnFree(MapStore[i].map);
+			MapStore[i].map = NULL;
+		}
+	}
+}
 
 static UINT16 default_read(UINT32 address) { return 0; }
 static void default_write(UINT32 address, UINT16 value) {}
@@ -66,6 +107,10 @@ void TMS34010Open(INT32 nCpu)
 
 	g_mmap = &MapStore[nCpu];
 	active_cpu = nCpu;
+
+	if (!TMS34010MapStoreAlloc(g_mmap)) {
+		bprintf(PRINT_ERROR, _T("TMS34010Open(%d); out of memory for the page table.\n"), nCpu);
+	}
 
 	if (g_mmap->context) {
 		tms34010_set_context(g_mmap->context);
@@ -137,12 +182,21 @@ static void TMS34010Init_Internal(INT32 nCpu, INT32 nType)
 	}
 
 	if (nCpu == 0) {
-		memset(&MapStore, 0, sizeof(MapStore));
+		for (INT32 i = 0; i < MAX_CPUS; i++) {
+			TMS34010MapStoreClear(&MapStore[i]);
+		}
 	}
 
 	total_cpus = nCpu + 1;
 
 	TMS34010Open(nCpu);
+
+	if (g_mmap->map == NULL) {
+		bprintf(PRINT_ERROR, _T("TMS34010Init_Internal: page table allocation failed.\n"));
+		TMS34010Close();
+		total_cpus = nCpu;
+		return;
+	}
 
 	g_mmap->CPU_TYPE = nType;
 
@@ -189,6 +243,8 @@ void TMS34010Exit()
 		BurnFree(g_mmap->context);
 		TMS34010Close();
 	}
+
+	TMS34010MapStoreRelease();
 
 	total_cpus = 0;
 	active_cpu = -1;
@@ -493,4 +549,3 @@ int TMS34010SetHandlers(UINT32 num, pTMS34010ReadHandler rhandler, pTMS34010Writ
     g_mmap->write[num] = whandler;
     return 0;
 }
-

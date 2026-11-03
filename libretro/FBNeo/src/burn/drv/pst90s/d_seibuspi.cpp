@@ -25,6 +25,11 @@
 #include "burn_pal.h"
 #include "bitswap.h"
 
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+static void spi_render_init();
+static void spi_render_exit();
+#endif
+
 static UINT8 *AllMem;
 static UINT8 *AllRam;
 static UINT8 *RamEnd;
@@ -44,8 +49,19 @@ static UINT32 *sprite_ram;
 static UINT8 *DrvCRTCRAM;
 static const UINT8 *DefaultNVRAM = NULL;
 static UINT8 *DrvAlphaTable;
+static UINT8 *DrvSpriteSkip;
+static UINT8 DrvSpriteAlpha[64];
 static UINT32 *bitmap32;
 static UINT16 *tempdraw;
+
+struct SpiSprite {
+	UINT32 attr;
+	UINT32 pos;
+};
+
+// Rebuilt from sprite RAM for each draw; preserve RAM order within each priority.
+static SpiSprite sprite_list[4][0x400];
+static INT32 sprite_count[4];
 
 static UINT32 *DrvPalette;
 static UINT8 DrvRecalc;
@@ -1060,6 +1076,7 @@ static INT32 MemIndex()
 
 	bitmap32			= (UINT32*)Next; Next += 320 * 256 * sizeof(UINT32);
 	DrvAlphaTable       = Next; Next += 0x002000;
+	DrvSpriteSkip       = Next; Next += 0x020000; // one byte per decoded 16x16 sprite tile
 
 	tempdraw            = (UINT16*)Next; Next += 320 * 256 * sizeof(UINT16);
 
@@ -1385,6 +1402,32 @@ static const eeprom_interface seibuspi_eeprom =
 	1				// reset_delay
 };
 
+static void build_sprite_tables()
+{
+	GenericTilesGfx *gfx = &GenericGfxData[0];
+	const INT32 tile_size = gfx->width * gfx->height;
+	const UINT8 trans_pen = (1 << gfx->depth) - 1;
+
+	for (INT32 code = 0; code < gfx->code_mask; code++) {
+		const UINT8 *src = gfx->gfxbase + code * tile_size;
+		DrvSpriteSkip[code] = 1;
+		for (INT32 i = 0; i < tile_size; i++) {
+			if (src[i] != trans_pen) {
+				DrvSpriteSkip[code] = 0;
+				break;
+			}
+		}
+	}
+
+	memset(DrvSpriteAlpha, 0, sizeof(DrvSpriteAlpha));
+	for (INT32 color = 0; color <= gfx->color_mask; color++) {
+		const INT32 base = gfx->color_offset + (color << gfx->depth);
+		for (INT32 pen = 0; pen < trans_pen; pen++) {
+			DrvSpriteAlpha[color] |= DrvAlphaTable[base + pen];
+		}
+	}
+}
+
 static void graphics_init(INT32 decrypt_type, INT32 graphics_len0, INT32 graphics_len1, INT32 graphics_len2)
 {
 	switch (decrypt_type)
@@ -1444,6 +1487,7 @@ static void graphics_init(INT32 decrypt_type, INT32 graphics_len0, INT32 graphic
 	memset(DrvAlphaTable + 0x1400 + 0x1f0, 1, 0x10);
 	memset(DrvAlphaTable + 0x1600 + 0x170, 1, 0x10);
 	memset(DrvAlphaTable + 0x1600 + 0x1f0, 1, 0x10);
+	build_sprite_tables();
 }
 
 static void install_speedhack(UINT32 address, UINT32 pc)
@@ -1683,6 +1727,10 @@ static INT32 CommonInit(INT32 decrypt_type, void (*pCallback)(), UINT32 speedhac
 
 	DrvDoReset(1);
 
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	spi_render_init();
+#endif
+
 	return 0;
 }
 
@@ -1718,6 +1766,7 @@ static INT32 Sys386fInit()
 
 	GenericTilesInit();
 	GenericTilemapSetGfx(0, DrvGfxROM[2], 8, 16, 16, 0x1000000, 0x0000, 0x1f);
+	build_sprite_tables();
 
 //	install_speedhack(0, 0);
 
@@ -1769,6 +1818,9 @@ static INT32 Sys368iCommonInit(INT32 decrypt_type, void (*pCallback)(), UINT32 s
 
 static INT32 DrvExit()
 {
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	spi_render_exit();
+#endif
 	GenericTilesExit();
 
 	i386Exit();
@@ -1833,7 +1885,8 @@ static inline UINT32 alpha_blend(UINT32 d, UINT32 s)
 		((((s & 0x00ff00) * 0x7f) + ((d & 0x00ff00) * 0x81)) & 0x00ff0000)) / 0x100;
 }
 
-static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32 flipx, INT32 flipy, INT32 sx, INT32 sy, UINT8 primask)
+template<bool blend>
+static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32 flipx, INT32 flipy, INT32 sx, INT32 sy, UINT8 primask, INT32 clipTop, INT32 clipBottom)
 {
 	const INT32 width = gfx->width;
 	const INT32 height = gfx->height;
@@ -1847,7 +1900,7 @@ static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32
 		return;
 	}
 
-	if (y1 > (nScreenHeight - 1) || y2 < 0) {
+	if (y1 >= clipBottom || y2 < clipTop) {
 		return;
 	}
 
@@ -1886,26 +1939,16 @@ static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32
 		x2 = (nScreenWidth - 1);
 	}
 
-	if (y1 < 0)
-	{
-		if (flipy)
-		{
-			py = height - (0 - y1) - 1;
-		}
-		else
-		{
-			py = (0 - y1);
-		}
-		y1 = 0;
+	if (y1 < clipTop) {
+		py += (clipTop - y1) * yd;
+		y1 = clipTop;
 	}
+	if (y2 >= clipBottom) y2 = clipBottom - 1;
 
-	if (y2 > (nScreenHeight - 1))
-	{
-		y2 = (nScreenHeight - 1);
-	}
-
+	code %= gfx->code_mask;
+	if (DrvSpriteSkip[code]) return;
 	color = gfx->color_offset + ((color & gfx->color_mask) << gfx->depth);
-	const UINT8 *src = gfx->gfxbase + ((code % gfx->code_mask) * gfx->width * gfx->height);
+	const UINT8 *src = gfx->gfxbase + (code * gfx->width * gfx->height);
 	const UINT8 trans_pen = (1 << gfx->depth) - 1;
 
 	for (int y = y1; y <= y2; y++)
@@ -1923,7 +1966,7 @@ static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32
 			{
 				pri[x] |= primask;
 				const UINT16 global_pen = pen + color;
-				if (DrvAlphaTable[global_pen])
+				if (blend && DrvAlphaTable[global_pen])
 					dest[x] = alpha_blend(dest[x], pal[global_pen]);
 				else
 					dest[x] = pal[global_pen];
@@ -1933,30 +1976,47 @@ static void drawgfx_blend(GenericTilesGfx *gfx, UINT32 code, UINT32 color, INT32
 	}
 }
 
-static void draw_sprites(UINT32 priority)
+static void prepare_sprites()
 {
-	if ((nSpriteEnable & 1) == 0 || (layer_enable & 0x10)) return;
-
 	GenericTilesGfx *gfx = &GenericGfxData[0];
+	memset(sprite_count, 0, sizeof(sprite_count));
+	if ((nSpriteEnable & 1) == 0 || (layer_enable & 0x10)) return;
 
 	for (INT32 a = 0; a < sprite_ram_size / 4; a += 2)
 	{
-		INT32 code = (BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >> 16) | ((BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 1]) & 0x1000) << 4);
+		UINT32 attr = BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]);
+		UINT32 pos = BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 1]);
+		INT32 code = (attr >> 16) | ((pos & 0x1000) << 4);
 		if ((code % gfx->code_mask) == 0) continue; // speed-up
+		INT32 priority = (attr >> 6) & 3;
+		SpiSprite *sprite = &sprite_list[priority][sprite_count[priority]++];
+		sprite->attr = attr;
+		sprite->pos = pos;
+	}
+}
 
-		if (priority != ((BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >> 6) & 0x3))
-			continue;
+static void draw_sprites(UINT32 priority, INT32 clipTop = 0, INT32 clipBottom = -1)
+{
+	if (clipBottom < 0) clipBottom = nScreenHeight;
+	GenericTilesGfx *gfx = &GenericGfxData[0];
+	for (INT32 a = 0; a < sprite_count[priority]; a++)
+	{
+		const UINT32 attr = sprite_list[priority][a].attr;
+		const UINT32 pos = sprite_list[priority][a].pos;
+		INT32 code = (attr >> 16) | ((pos & 0x1000) << 4);
 
-		INT16 xpos  = BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 1]) & 0x3ff;
-		INT16 ypos  = BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 1]) >> 16 & 0x1ff;
-		INT32 color = BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) & 0x3f;
+		INT16 xpos  = pos & 0x3ff;
+		INT16 ypos  = (pos >> 16) & 0x1ff;
+		INT32 color = attr & 0x3f;
+		void (*draw_tile)(GenericTilesGfx*, UINT32, UINT32, INT32, INT32, INT32, INT32, UINT8, INT32, INT32) =
+			DrvSpriteAlpha[color & gfx->color_mask] ? drawgfx_blend<true> : drawgfx_blend<false>;
 		if (xpos & 0x200) xpos |= 0xfc00;
 		if (ypos & 0x100) ypos |= 0xfe00;
 
-		INT32 width  =((BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >>  8) & 7) + 1;
-		INT32 height =((BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >> 12) & 7) + 1;
-		INT32 flip_x = (BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >> 11) & 1;
-		INT32 flip_y = (BURN_ENDIAN_SWAP_INT32(sprite_ram[a + 0]) >> 15) & 1;
+		INT32 width  =((attr >>  8) & 7) + 1;
+		INT32 height =((attr >> 12) & 7) + 1;
+		INT32 flip_x = (attr >> 11) & 1;
+		INT32 flip_y = (attr >> 15) & 1;
 		INT32 x1 = 0;
 		INT32 y1 = 0;
 		INT32 flip_y_pos = 0;
@@ -1987,10 +2047,10 @@ static void draw_sprites(UINT32 priority)
 				if ((xpos + (16 * x) + 16) >= 512)
 						RenderPrioSprite(pTransDraw, gfx->gfxbase, code % gfx->code_mask, ((color & gfx->color_mask) << gfx->depth) + gfx->color_offset, (1 << gfx->depth) - 1, xpos - 512 + ((x ^ (flip_x * 7)) * 16), ypos + ((y ^ (flip_y * 7)) * 16), flip_x, flip_y, gfx->width, gfx->height, 1 << priority);
 #else
-				drawgfx_blend(gfx, code, color, flip_x, flip_y, xpos + ((x * 16) ^ flip_x_pos), ypos + ((y * 16) ^ flip_y_pos), 1 << priority);
+				draw_tile(gfx, code, color, flip_x, flip_y, xpos + ((x * 16) ^ flip_x_pos), ypos + ((y * 16) ^ flip_y_pos), 1 << priority, clipTop, clipBottom);
 
 				if ((xpos + (16 * x) + 16) >= 512)
-					drawgfx_blend(gfx, code, color, flip_x, flip_y, xpos - 512 + ((x * 16) ^ flip_x_pos), ypos + ((y * 16) ^ flip_y_pos), 1 << priority);
+					draw_tile(gfx, code, color, flip_x, flip_y, xpos - 512 + ((x * 16) ^ flip_x_pos), ypos + ((y * 16) ^ flip_y_pos), 1 << priority, clipTop, clipBottom);
 #endif
 			}
 		}
@@ -1999,6 +2059,18 @@ static void draw_sprites(UINT32 priority)
 
 static void DrvTransferBitmap32()
 {
+	// Most console frontends use RGB565. Avoid an indirect color-conversion
+	// call and a pixel-format branch for every pixel in that format.
+	if (nBurnBpp == 2 && BurnHighCol(255, 0, 0, 0) == 0xf800 &&
+		BurnHighCol(0, 255, 0, 0) == 0x07e0 && BurnHighCol(0, 0, 255, 0) == 0x001f) {
+		UINT16 *dest = (UINT16*)pBurnDraw;
+		for (INT32 i = 0; i < nScreenWidth * nScreenHeight; i++) {
+			UINT32 color = bitmap32[i];
+			dest[i] = ((color >> 8) & 0xf800) | ((color >> 5) & 0x07e0) | ((color >> 3) & 0x001f);
+		}
+		return;
+	}
+
 	switch (nBurnBpp) {
 		case 4:
 			memcpy(pBurnDraw, bitmap32, nScreenHeight * nScreenWidth * sizeof(UINT32));
@@ -2041,8 +2113,36 @@ static void mix_in_tmap(INT32 layer, INT32 flags)
 	pBurnDrvPalette = DrvPalette;
 }
 
+static void set_layer_scroll(INT32 layer, INT32 scroll, INT16 *rowscroll)
+{
+	// Games often enable rowscroll while giving every row the same offset.
+	// Use the whole-tile renderer in that case, including the common offset.
+	INT32 first = BURN_ENDIAN_SWAP_INT16(rowscroll[0]);
+	INT32 row;
+	for (row = 1; row < 512; row++) {
+		if (rowscroll[row] != rowscroll[0]) break;
+	}
+
+	if (row == 512 && scroll + first >= 0) {
+		GenericTilemapSetScrollRows(layer, 1);
+		GenericTilemapSetScrollX(layer, (scroll + first) & 0x1ff);
+	} else {
+		GenericTilemapSetScrollRows(layer, 512);
+		for (row = 0; row < 512; row++) {
+			GenericTilemapSetScrollRow(layer, row, scroll + BURN_ENDIAN_SWAP_INT16(rowscroll[(0x19 + row) & 0x1ff]));
+		}
+	}
+}
+
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+#include "seibuspi_render.h"
+#endif
+
 static INT32 DrvDraw()
 {
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	if (spi_render_frame()) return 0;
+#endif
 	if (DrvRecalc) {
 		DrvPaletteUpdate();
 		DrvRecalc = 0;
@@ -2051,6 +2151,7 @@ static INT32 DrvDraw()
 	UINT16 *crtc = (UINT16*)DrvCRTCRAM;
 
 	layer_enable = BURN_ENDIAN_SWAP_INT16(crtc[0x1c/2]);
+	prepare_sprites();
 
 	BurnPrioClear();
 
@@ -2064,15 +2165,9 @@ static INT32 DrvDraw()
 		INT16 *midl_rowscroll = (INT16*)&tilemap_ram[0x600];
 		INT16 *fore_rowscroll = (INT16*)&tilemap_ram[0xa00];
 
-		GenericTilemapSetScrollRows(1, 512);
-		GenericTilemapSetScrollRows(2, 512);
-		GenericTilemapSetScrollRows(3, 512);
-
-		for (INT32 y = 0; y < 512; y++) {
-			GenericTilemapSetScrollRow(1, y, BURN_ENDIAN_SWAP_INT16(crtc[0x20/2]) + BURN_ENDIAN_SWAP_INT16(back_rowscroll[(0x19 + y) & 0x1ff]));
-			GenericTilemapSetScrollRow(2, y, BURN_ENDIAN_SWAP_INT16(crtc[0x24/2]) + BURN_ENDIAN_SWAP_INT16(midl_rowscroll[(0x19 + y) & 0x1ff]));
-			GenericTilemapSetScrollRow(3, y, BURN_ENDIAN_SWAP_INT16(crtc[0x28/2]) + BURN_ENDIAN_SWAP_INT16(fore_rowscroll[(0x19 + y) & 0x1ff]));
-		}
+		set_layer_scroll(1, BURN_ENDIAN_SWAP_INT16(crtc[0x20/2]), back_rowscroll);
+		set_layer_scroll(2, BURN_ENDIAN_SWAP_INT16(crtc[0x24/2]), midl_rowscroll);
+		set_layer_scroll(3, BURN_ENDIAN_SWAP_INT16(crtc[0x28/2]), fore_rowscroll);
 	} else {
 		GenericTilemapSetScrollRows(1, 1);
 		GenericTilemapSetScrollRows(2, 1);
@@ -2127,6 +2222,7 @@ static INT32 Sys386fDraw()
 	UINT16 *crtc = (UINT16*)DrvCRTCRAM;
 
 	layer_enable = BURN_ENDIAN_SWAP_INT16(crtc[0x1c/2]);
+	prepare_sprites();
 
 	BurnPrioClear();
 

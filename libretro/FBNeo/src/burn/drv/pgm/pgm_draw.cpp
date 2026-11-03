@@ -188,7 +188,7 @@ static void pgm_prepare_sprite(INT32 wide, INT32 high, INT32 palt, INT32 boffset
 	}
 }
 
-static inline void draw_sprite_line(INT32 wide, UINT16* dest, UINT8 *pdest, INT32 xzoom, INT32 xgrow, INT32 yoffset, INT32 flip, INT32 xpos, INT32 prio)
+static inline void draw_sprite_line(INT32 wide, UINT16* dest, UINT8 *pdest, INT32 xzoom, INT32 xgrow, INT32 yoffset, INT32 flip, INT32 xpos, INT32 prio, const UINT16 *pixels = pTempDraw)
 {
 	INT32 xzoombit;
 	INT32 xoffset;
@@ -203,7 +203,7 @@ static inline void draw_sprite_line(INT32 wide, UINT16* dest, UINT8 *pdest, INT3
 		if (flip) xoffset = wide - xcnt - 1;
 		else	  xoffset = xcnt;
 
-		UINT32 srcdat = pTempDraw[yoffset + xoffset];
+		UINT32 srcdat = pixels[yoffset + xoffset];
 		xzoombit = (xzoom >> (xcnt & 0x1f)) & 1;
 
 		if (xzoombit == 1 && xgrow == 1)
@@ -847,7 +847,7 @@ static void draw_background()
 	if (t == 0)
 	{
 		yscroll &= 0x1ff;
-		xscroll &= 0x7ff;
+		xscroll = (xscroll + BURN_ENDIAN_SWAP_INT16(rowscroll[0])) & 0x7ff;
 
 		for (INT32 offs = 0; offs < 64 * 16; offs++)
 		{
@@ -1049,6 +1049,8 @@ static void pgmBlendCopy()
 	}
 }
 
+#include "pgm_render.h"
+
 INT32 pgmDraw()
 {
 	if (enable_blending) nPgmPalRecalc = 1; // force recalc.
@@ -1068,17 +1070,21 @@ INT32 pgmDraw()
 		RamCurPal[(nTemp+2)/2]	= BurnHighCol(0xff,0x00,0xff,0);
 	}
 
+	if (pgm_render_frame()) return 0;
+
 	// Fill in background color (0x2000/2)
 	// also, clear buffers
 	{
 		nTemp = (OldCodeMode) ? 0x0900 : 0x1000;
 
-		for (INT32 i = 0; i < nScreenWidth * nScreenHeight; i++) {
-			pTempDraw32[i]	= RamCurPal[nTemp];
-			pTransDraw[i]	= nTemp;
-			pTempScreen[i]	= 0;
-			SpritePrio[i]	= 0xff;
+		INT32 pixels = nScreenWidth * nScreenHeight;
+		if (enable_blending) {
+			for (INT32 i = 0; i < pixels; i++) pTempDraw32[i] = RamCurPal[nTemp];
+		} else {
+			for (INT32 i = 0; i < pixels; i++) pTransDraw[i] = nTemp;
 		}
+		memset(pTempScreen, 0, pixels * sizeof(UINT16));
+		memset(SpritePrio, 0xff, pixels);
 	}
 
 	pgm_drawsprites();
@@ -1258,10 +1264,13 @@ void pgmInitDraw() // preprocess some things...
 			}
 		}
 	}
+
+	pgm_render_init();
 }
 
 void pgmExitDraw()
 {
+	pgm_render_exit();
 	nTileMask = 0;
 
 	BurnFree (pTempDraw32);

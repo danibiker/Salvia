@@ -1640,6 +1640,9 @@
     <ClCompile Include="..\..\src\burner\libretro\retro_cdemu.cpp">
       <Filter>Source Files\burner\libretro</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_core_gpu.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_snprintf.c">
       <Filter>Source Files\burner\libretro</Filter>
     </ClCompile>

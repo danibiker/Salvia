@@ -1,6 +1,11 @@
 // Psikyo hardware tilemaps
 
 #include "psikyo.h"
+#include "render_worker.h"
+
+static BurnRenderPool tileWorkers;
+static bool parallelTiles;
+static INT32 lastRenderCores;
 
 UINT8* PsikyoTileROM;
 UINT8* PsikyoTileRAM[3] = { NULL, };
@@ -16,19 +21,27 @@ static INT32 PsikyoTileMask;
 
 static UINT32 PsikyoTileBank[2];
 
-static UINT8* pTile;
-static UINT8* pTileData8;
-static UINT32 pTilePalette;
-static INT16* pTileRowInfo;
-
-typedef void (*RenderTileFunction)();
-
-static INT32 nTilemapWith, nTileXPos, nTileYPos;
+struct PsikyoTileContext {
+	UINT8 *pTile, *pTileData8;
+	UINT32 pTilePalette;
+	INT16 *pTileRowInfo;
+	INT32 nTilemapWith, nTileXPos, nTileYPos;
+	INT32 clipTop, clipBottom;
+};
+typedef void (*RenderTileFunction)(PsikyoTileContext &);
+#define PSIKYO_RENDER_CONTEXT PsikyoTileContext
+#define pTile ctx.pTile
+#define pTileData8 ctx.pTileData8
+#define pTilePalette ctx.pTilePalette
+#define pTileRowInfo ctx.pTileRowInfo
+#define nTilemapWith ctx.nTilemapWith
+#define nTileXPos ctx.nTileXPos
+#define nTileYPos ctx.nTileYPos
 
 // Include the tile rendering functions
 #include "psikyo_tile_func.h"
 
-static void PsikyoRenderLayer(INT32 nLayer)
+static void PsikyoRenderLayer(INT32 nLayer, PsikyoTileContext &ctx)
 {
 	static INT32 nLayerXSize[] = { 0x0040, 0x0080, 0x0100, 0x0020 };
 //	static INT32 nLayerYSize[] = { 0x0040, 0x0020, 0x0010, 0x0080 };
@@ -75,7 +88,7 @@ static void PsikyoRenderLayer(INT32 nLayer)
 
 	for (nTileYPos = -16 + by, y = -mx; nTileYPos < 224; nTileYPos += 16, y += mx) {
 
-		if (nTileYPos <= -16) {
+		if (nTileYPos + 16 <= ctx.clipTop || nTileYPos >= ctx.clipBottom) {
 			continue;
 		}
 
@@ -135,9 +148,9 @@ static void PsikyoRenderLayer(INT32 nLayer)
 						pTilePalette = LayerPalette + (nTilePalette << 4);
 
 						if (bClip) {
-							RenderTile[nRenderFunction + 3]();
+							RenderTile[nRenderFunction + 3](ctx);
 						} else {
-							RenderTile[nRenderFunction + 2]();
+							RenderTile[nRenderFunction + 2](ctx);
 						}
 					}
 
@@ -172,9 +185,9 @@ static void PsikyoRenderLayer(INT32 nLayer)
 			pTilePalette = LayerPalette + (nTilePalette << 4);
 
 			if (bClip || nTileXPos < 0 || nTileXPos > 304) {
-				RenderTile[nRenderFunction + 1]();
+				RenderTile[nRenderFunction + 1](ctx);
 			} else {
-				RenderTile[nRenderFunction + 0]();
+				RenderTile[nRenderFunction + 0](ctx);
 			}
 		}
 	}
@@ -182,15 +195,49 @@ static void PsikyoRenderLayer(INT32 nLayer)
 	return;
 }
 
+#undef pTile
+#undef pTileData8
+#undef pTilePalette
+#undef pTileRowInfo
+#undef nTilemapWith
+#undef nTileXPos
+#undef nTileYPos
+#undef PSIKYO_RENDER_CONTEXT
+
 void PsikyoSetTileBank(INT32 nLayer, INT32 nBank)
 {
 	PsikyoTileBank[nLayer] = nBank << 13;
 }
 
+static void PsikyoDrawBand(INT32 top, INT32 bottom, INT32 index)
+{
+	PsikyoTileContext ctx;
+	ctx.clipTop = top; ctx.clipBottom = bottom;
+	INT32 nPriority, nLowPriority = 0;
+	UINT16 color = (PsikyoLayerAttrib[0] & 0x08) ? 0x800 : 0x80f;
+	for (INT32 i = top * 320; i < bottom * 320; i++) {
+		pTransDraw[i] = color;
+		pPrioDraw[i] = 0;
+	}
+
+	for (nPriority = 1; nPriority < 4; nPriority++) {
+
+		INT32 nLayer = nPriority - 1;
+
+		if ((PsikyoLayerAttrib[nLayer] & 1) == 0 || nPriority == 3) {
+			PsikyoSpriteRenderBand(nLowPriority, nPriority, top, bottom, index);
+			nLowPriority = nPriority + 1;
+		}
+
+		if (nLayer < 2 && (PsikyoLayerAttrib[nLayer] & 1) == 0 && (PsikyoLayerAttrib[nLayer + 1] & 0x02) == 0 && (nBurnLayer & (4 << nLayer))) {
+			PsikyoRenderLayer(nLayer, ctx);
+		}
+	}
+
+}
+
 INT32 PsikyoTileRender()
 {
-	INT32 nPriority, nLowPriority = 0;
-
 	PsikyoLayerAttrib[0]  = BURN_ENDIAN_SWAP_INT16(*((INT16*)(PsikyoTileRAM[2] + 0x0412)));
 	PsikyoLayerXOffset[0] = BURN_ENDIAN_SWAP_INT16(*((INT16*)(PsikyoTileRAM[2] + 0x0406)));
 	PsikyoLayerYOffset[0] = BURN_ENDIAN_SWAP_INT16(*((INT16*)(PsikyoTileRAM[2] + 0x0402)));
@@ -204,27 +251,18 @@ INT32 PsikyoTileRender()
 		PsikyoTileBank[1] = (PsikyoLayerAttrib[1] & 0x0400) << 3;
 	}
 
-	BurnTransferClear((PsikyoLayerAttrib[0] & 0x08) ? 0x800 : 0x80f);
-
-	for (nPriority = 1; nPriority < 4; nPriority++) {
-
-		INT32 nLayer = nPriority - 1;
-
-		if ((PsikyoLayerAttrib[nLayer] & 1) == 0 || nPriority == 3) {
-			PsikyoSpriteRender(nLowPriority, nPriority);
-			nLowPriority = nPriority + 1;
-		}
-
-		if (nLayer < 2 && (PsikyoLayerAttrib[nLayer] & 1) == 0 && (PsikyoLayerAttrib[nLayer + 1] & 0x02) == 0 && (nBurnLayer & (4 << nLayer))) {
-			PsikyoRenderLayer(nLayer);
-		}
+	if (lastRenderCores != nBurnRenderCores) {
+		PsikyoSpriteResetRenderContexts();
+		lastRenderCores = nBurnRenderCores;
 	}
+	tileWorkers.render(224, parallelTiles);
 
 	return 0;
 }
 
 void PsikyoTileExit()
 {
+	tileWorkers.exit();
 	BurnFree(PsikyoTileAttrib);
 
 	return;
@@ -232,6 +270,10 @@ void PsikyoTileExit()
 
 INT32 PsikyoTileInit(UINT32 nROMSize)
 {
+	tileWorkers.init(PsikyoDrawBand);
+	lastRenderCores = -1;
+	const char *name = BurnDrvGetTextA(DRV_NAME);
+	parallelTiles = !strncmp(name, "s1945", 5) || !strncmp(name, "gunbird", 7) || !strncmp(name, "tengai", 6);
 	const INT32 nTileSize = 256;
 	INT32 nNumTiles = nROMSize / nTileSize;
 

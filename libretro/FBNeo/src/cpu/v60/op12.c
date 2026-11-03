@@ -2199,6 +2199,42 @@ static UINT32 opSUBCW(void)
 	F12END();
 }
 
+#if defined(_XBOX) || defined(FBNEO_V60_WAIT_LOOP_TEST)
+static void v60SkipReadOnlyWaitLoop()
+{
+	if (v60_ICount < 16 || v60.end_run || v60.irq_line != CLEAR_LINE)
+		return;
+	if ((address_mask & page_mask) != page_mask)
+		return;
+
+	UINT32 pc = PC & address_mask;
+	UINT32 offset = pc & page_mask;
+	const UINT8 *code = mem[0][pc / page_size];
+	if (!code || offset > page_mask - 7 || code != mem[2][pc / page_size])
+		return;
+	code += offset;
+
+	// TEST1 #0..15, disp16[register]; BNE8 back to TEST1.
+	// Both instructions are read-only; no auto-increment or handler accesses.
+	if (code[0] != 0x87 || code[1] != 0x80 ||
+		(code[2] & 0xf0) != 0xe0 || (code[3] & 0xe0) != 0x20 ||
+		code[6] != 0x65 || code[7] != 0xfa)
+		return;
+	UINT32 address = (v60.reg[code[3] & 31] +
+		(INT16)(code[4] | ((UINT16)code[5] << 8))) & address_mask;
+	if (address < idle_loop_start || address > idle_loop_end ||
+		idle_loop_end - address < 3 || (address & page_mask) > page_mask - 3 ||
+		!mem[0][address / page_size])
+		return;
+
+	// The current TEST1 has already executed normally, including its flags and
+	// decoder state. Each additional BNE8/TEST1 pair returns to exactly that
+	// state and consumes 16 cycles. Leave partial pairs for the interpreter.
+	// Stop at this slice's boundary so timers, IRQs and other CPUs still run.
+	v60_ICount -= v60_ICount & ~15;
+}
+#endif
+
 static UINT32 opTEST1(void)
 {
 	F12DecodeOperands(ReadAM,2,ReadAM,2);
@@ -2206,6 +2242,10 @@ static UINT32 opTEST1(void)
 	_CY = ((f12Op2 & (1<<f12Op1))!=0);
 	_Z = !(_CY);
 
+#if defined(_XBOX) || defined(FBNEO_V60_WAIT_LOOP_TEST)
+	if (!_Z && idle_loop_start <= idle_loop_end)
+		v60SkipReadOnlyWaitLoop();
+#endif
 	F12END();
 }
 

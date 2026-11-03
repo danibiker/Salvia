@@ -554,6 +554,13 @@ inline void ics2115_voice::update_ramp()
 
 static bool ics2115_fill_output(ics2115_voice& voice, INT32* outputs, INT32 samples)
 {
+#if defined RAMP_DOWN
+	// A fully faded, stopped voice cannot change its envelope, oscillator or
+	// IRQ state until a register write. Avoid visiting every silent sample.
+	if (voice.ramp == 0 && (voice.osc_conf.bitflags.stop || voice.osc.ctl))
+		return false;
+#endif
+
 	bool irq_invalid = false;
 
 #if !defined INTERPOLATE_AS_HARDWARE

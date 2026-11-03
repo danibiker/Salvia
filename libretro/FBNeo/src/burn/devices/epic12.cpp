@@ -9,9 +9,11 @@ Redistributions may not be sold, nor may they be used in a commercial product or
 #include "burnint.h"
 #include "tiles_generic.h"
 #include "sh4_intf.h"
-#include "thready.h"
+#include "epic12_thread.h"
 #include "rectangle.h"
 #include <math.h> // floor()
+
+
 
 static const int EP1C_VRAM_CLK_NANOSEC = 13;
 static const int EP1C_SRAM_CLK_NANOSEC = 20;
@@ -77,6 +79,7 @@ static UINT8 epic12_device_colrtable_rev[0x20][0x40];
 static UINT8 epic12_device_colrtable_add[0x20][0x20];
 
 static UINT16 *pal16 = NULL; // palette lut for 16bpp video emulation
+static bool output_rgb565 = false;
 
 #include "epic12.h"
 
@@ -288,6 +291,14 @@ typedef const void (*epic12_device_blitfunction)(
 #include "epic12_blit7.inc"
 #include "epic12_blit8.inc"
 
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST) || defined(EPIC12_BLIT_TEST)
+#include "epic12_fast_blit.h"
+#endif
+
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+#include "epic12_gpu.h"
+#endif
+
 static UINT8 *dips; // pointer to cv1k's dips
 
 static void blitter_delay_callback(int)
@@ -307,6 +318,12 @@ static void run_blitter_cb()
 void epic12_exit()
 {
 	thready.exit();
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	epic12_gpu_exit();
+#endif
+#ifdef _XBOX
+	RetroCoreGpuSetMessageSource(NULL); // [Salvia]
+#endif
 
 	BurnFree(m_bitmaps);
 	BurnFree(m_ram16_copy);
@@ -329,7 +346,7 @@ void epic12_init(INT32 ram_size, UINT16 *ram, UINT8 *dippy)
 	dips = dippy;
 
 	m_gfx_size = 0x2000 * 0x1000;
-	m_bitmaps = (UINT32*)BurnMalloc (m_gfx_size * 4);
+	m_bitmaps = (UINT32*)BurnMalloc (0x2000 * 4352 * sizeof(UINT32));
 
 	m_clip.set(0, 0x2000-1, 0, 0x1000-1);
 
@@ -353,6 +370,9 @@ void epic12_init(INT32 ram_size, UINT16 *ram, UINT8 *dippy)
 	epic12_set_blitter_sleep_on_busy(1);
 
 	thready.init(run_blitter_cb);
+#ifdef _XBOX
+	RetroCoreGpuSetMessageSource(epic12_gpu_take_message); // [Salvia] ver retro_core_gpu.h
+#endif
 
 	sh4_set_cave_blitter_delay_func(blitter_delay_callback);
 }
@@ -385,6 +405,10 @@ void epic12_set_blitter_sleep_on_busy(INT32 busysleep_on)
 
 void epic12_reset()
 {
+	thready.notify_wait();
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	epic12_gpu_reset();
+#endif
 	// cache table to avoid divides in blit code, also pre-clamped
 	int x,y;
 	for (y=0;y<0x40;y++)
@@ -408,6 +432,13 @@ void epic12_reset()
 			if (epic12_device_colrtable_add[x][y]>0x1f) epic12_device_colrtable_add[x][y] = 0x1f;
 		}
 	}
+
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST) || defined(EPIC12_BLIT_TEST)
+	epic12_init_blend_tables();
+#endif
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	epic12_gpu_init_tint_luts();
+#endif
 
 	m_blitter_busy = 0;
 	m_gfx_addr = 0;
@@ -446,6 +477,25 @@ static inline UINT16 COPY_NEXT_WORD(UINT32 *addr)
 
 static void gfx_upload_shadow_copy(UINT32 *addr)
 {
+	const UINT32 cur_addr = *addr;
+	const UINT32 ram_offset = cur_addr & m_main_rammask;
+	UINT32 dimx, dimy;
+
+	if (ram_offset + 16 <= (UINT32)m_main_rammask + 1)
+	{
+		const UINT16 *src = &m_ram16[ram_offset >> 1];
+		UINT16 *dst = &m_ram16_copy[ram_offset >> 1];
+		dimx = (src[6] & 0x1fff) + 1;
+		dimy = (src[7] & 0x0fff) + 1;
+		const UINT32 total_bytes = (8 + dimx * dimy) * 2;
+		if (ram_offset + total_bytes <= (UINT32)m_main_rammask + 1)
+		{
+			memcpy(dst, src, total_bytes);
+			*addr = cur_addr + total_bytes;
+			goto done_upload_copy;
+		}
+	}
+
 	COPY_NEXT_WORD(addr);
 	COPY_NEXT_WORD(addr);
 	COPY_NEXT_WORD(addr);
@@ -453,8 +503,8 @@ static void gfx_upload_shadow_copy(UINT32 *addr)
 	COPY_NEXT_WORD(addr);
 	COPY_NEXT_WORD(addr);
 
-	const UINT32 dimx = (COPY_NEXT_WORD(addr) & 0x1fff) + 1;
-	const UINT32 dimy = (COPY_NEXT_WORD(addr) & 0x0fff) + 1;
+	dimx = (COPY_NEXT_WORD(addr) & 0x1fff) + 1;
+	dimy = (COPY_NEXT_WORD(addr) & 0x0fff) + 1;
 
 	for (UINT32 y = 0; y < dimy; y++)
 	{
@@ -464,14 +514,12 @@ static void gfx_upload_shadow_copy(UINT32 *addr)
 		}
 	}
 
+done_upload_copy:
 	// Time spent on uploads is mostly due to Main RAM accesses.
 	// The Blitter will send BREQ requests to the SH-3, to access Main RAM
 	// and then write it to VRAM.
 	// The number of bytes to read are the sum of a 16b fixed header and the pixel
 	// data (2 byte per pixel). RAM accesses are 32bit, so divide by four for clocks.
-	//
-	// TODO: There's additional overhead to these request thats are not included. The BREQ
-	// assertion also puts CPU into WAIT, if it needs uncached RAM accesses.
 	int num_sram_clk = (16 + dimx * dimy * 2 ) / 4;
 	m_blit_delay_ns += num_sram_clk * EP1C_SRAM_CLK_NANOSEC;
 	m_blit_idle_op_bytes = 0;
@@ -479,43 +527,68 @@ static void gfx_upload_shadow_copy(UINT32 *addr)
 
 static void gfx_upload(UINT32 *addr)
 {
-	UINT32 x,y, dst_p,dst_x_start,dst_y_start, dimx,dimy;
-	UINT32 *dst;
+	const UINT32 cur_addr = *addr;
+	const UINT32 ram_offset = cur_addr & m_main_rammask;
+	UINT32 dst_x_start, dst_y_start, dimx, dimy;
+	const UINT16 *src_pixels = NULL;
 
-	// 0x20000000
-	READ_NEXT_WORD(addr);
-	READ_NEXT_WORD(addr);
-
-	// 0x99999999
-	READ_NEXT_WORD(addr);
-	READ_NEXT_WORD(addr);
-
-	dst_x_start = READ_NEXT_WORD(addr);
-	dst_y_start = READ_NEXT_WORD(addr);
-
-	dst_p = 0;
-	dst_x_start &= 0x1fff;
-	dst_y_start &= 0x0fff;
-
-	dimx = (READ_NEXT_WORD(addr) & 0x1fff) + 1;
-	dimy = (READ_NEXT_WORD(addr) & 0x0fff) + 1;
-
-	//bprintf(0, _T("GFX COPY: DST %02X,%02X,%03X DIM %02X,%03X\n"), dst_p,dst_x_start,dst_y_start, dimx,dimy);
-
-	for (y = 0; y < dimy; y++)
+	if (ram_offset + 16 <= (UINT32)m_main_rammask + 1)
 	{
-		//dst = &m_bitmaps->pix(dst_y_start + y, 0);
-		dst = m_bitmaps + (dst_y_start + y) * 0x2000;
-
-		dst += dst_x_start;
-
-		for (x = 0; x < dimx; x++)
+		const UINT16 *hdr = &m_ram16_copy[ram_offset >> 1];
+		dst_x_start = hdr[4] & 0x1fff;
+		dst_y_start = hdr[5] & 0x0fff;
+		dimx = (hdr[6] & 0x1fff) + 1;
+		dimy = (hdr[7] & 0x0fff) + 1;
+		const UINT32 total_bytes = (8 + dimx * dimy) * 2;
+		if (ram_offset + total_bytes <= (UINT32)m_main_rammask + 1)
 		{
-			UINT16 pendat = READ_NEXT_WORD(addr);
-			// real hw would upload the gfxword directly, but our VRAM is 32-bit, so convert it.
-			//dst[dst_x_start + x] = pendat;
-			*dst++ = ((pendat&0x8000)<<14) | ((pendat&0x7c00)<<9) | ((pendat&0x03e0)<<6) | ((pendat&0x001f)<<3);  // --t- ---- rrrr r--- gggg g--- bbbb b---  format
-			//dst[dst_x_start + x] = ((pendat&0x8000)<<14) | ((pendat&0x7c00)<<6) | ((pendat&0x03e0)<<3) | ((pendat&0x001f)<<0);  // --t- ---- ---r rrrr ---g gggg ---b bbbb  format
+			src_pixels = &m_ram16_copy[(ram_offset >> 1) + 8];
+			*addr = cur_addr + total_bytes;
+		}
+	}
+
+	if (!src_pixels)
+	{
+		READ_NEXT_WORD(addr);
+		READ_NEXT_WORD(addr);
+		READ_NEXT_WORD(addr);
+		READ_NEXT_WORD(addr);
+		dst_x_start = READ_NEXT_WORD(addr) & 0x1fff;
+		dst_y_start = READ_NEXT_WORD(addr) & 0x0fff;
+		dimx = (READ_NEXT_WORD(addr) & 0x1fff) + 1;
+		dimy = (READ_NEXT_WORD(addr) & 0x0fff) + 1;
+	}
+
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	epic12_gpu_cpu_write(dst_x_start, dst_y_start, dimx, dimy, EPIC12_GPU_FLUSH_CPU_UPLOAD);
+#endif
+
+	UINT32 *dst_row = m_bitmaps + dst_y_start * 0x2000 + dst_x_start;
+
+	if (src_pixels)
+	{
+		for (UINT32 y = 0; y < dimy; y++)
+		{
+			UINT32 *dst = dst_row;
+			for (UINT32 x = 0; x < dimx; x++)
+			{
+				const UINT32 pendat = *src_pixels++;
+				*dst++ = ((pendat & 0x8000) << 14) | ((pendat & 0x7c00) << 9) | ((pendat & 0x03e0) << 6) | ((pendat & 0x001f) << 3);
+			}
+			dst_row += 0x2000;
+		}
+	}
+	else
+	{
+		for (UINT32 y = 0; y < dimy; y++)
+		{
+			UINT32 *dst = dst_row;
+			for (UINT32 x = 0; x < dimx; x++)
+			{
+				const UINT16 pendat = READ_NEXT_WORD(addr);
+				*dst++ = ((pendat & 0x8000) << 14) | ((pendat & 0x7c00) << 9) | ((pendat & 0x03e0) << 6) | ((pendat & 0x001f) << 3);
+			}
+			dst_row += 0x2000;
 		}
 	}
 }
@@ -632,37 +705,57 @@ static epic12_device_blitfunction epic12_device_f1_ti0_tr0_blit_funcs[] =
     but if the destination start coordinate is (x=10, y=10), each of the 32x32px chunks of source data will
     touch 4 rows of destination VRAM, leading to a total of 8 destination VRAM accesses.
 */
+static inline int calculate_vram_1d(UINT16 start, UINT16 dim)
+{
+	const int s = start & 31;
+	const int full_blocks = (dim - 1) >> 5;
+	const int rem = ((dim - 1) & 31) + 1;
+	return full_blocks * (s ? 2 : 1) + 1 + (s + rem > 32 ? 1 : 0);
+}
+
 inline UINT16 calculate_vram_accesses(UINT16 start_x, UINT16 start_y, UINT16 dimx, UINT16 dimy)
 {
-	int x_rows = 0;
-	int num_vram_rows = 0;
-	for (int x_pixels = dimx; x_pixels > 0; x_pixels -= 32)
-	{
-		x_rows++;
-		if (((start_x & 31) + MIN(32, x_pixels)) > 32)
-			x_rows++;  // Drawing across multiple horizontal VRAM row boundaries.
-	}
-	for (int y_pixels = dimy; y_pixels > 0; y_pixels -= 32)
-	{
-		num_vram_rows += x_rows;
-		if (((start_y & 31) + MIN(32, y_pixels)) > 32)
-			num_vram_rows += x_rows;  // Drawing across multiple vertical VRAM row boundaries.	
-	}
-	return num_vram_rows;
+	return (UINT16)(calculate_vram_1d(start_x, dimx) * calculate_vram_1d(start_y, dimy));
 }
 
 static void gfx_draw_shadow_copy(UINT32 *addr)
 {
-	COPY_NEXT_WORD(addr);
-	COPY_NEXT_WORD(addr);
-	UINT16 src_x_start = COPY_NEXT_WORD(addr);
-	UINT16 src_y_start = COPY_NEXT_WORD(addr);
-	UINT16 dst_x_start = COPY_NEXT_WORD(addr);
-	UINT16 dst_y_start = COPY_NEXT_WORD(addr);
-	UINT16 src_dimx = (COPY_NEXT_WORD(addr) & 0x1fff) + 1;
-	UINT16 src_dimy = (COPY_NEXT_WORD(addr) & 0x0fff) + 1;
-	COPY_NEXT_WORD(addr);
-	COPY_NEXT_WORD(addr);
+	const UINT32 cur_addr = *addr;
+	const UINT32 ram_offset = cur_addr & m_main_rammask;
+	UINT16 src_x_start, src_y_start, dst_x_start, dst_y_start;
+	UINT16 src_dimx, src_dimy;
+
+	if (ram_offset + 20 <= (UINT32)m_main_rammask + 1)
+	{
+		const UINT16 *src = &m_ram16[ram_offset >> 1];
+		UINT16 *dst = &m_ram16_copy[ram_offset >> 1];
+		dst[0] = src[0];
+		dst[1] = src[1];
+		dst[2] = src_x_start = src[2];
+		dst[3] = src_y_start = src[3];
+		dst[4] = dst_x_start = src[4];
+		dst[5] = dst_y_start = src[5];
+		dst[6] = src[6];
+		dst[7] = src[7];
+		dst[8] = src[8];
+		dst[9] = src[9];
+		src_dimx = (src[6] & 0x1fff) + 1;
+		src_dimy = (src[7] & 0x0fff) + 1;
+		*addr = cur_addr + 20;
+	}
+	else
+	{
+		COPY_NEXT_WORD(addr);
+		COPY_NEXT_WORD(addr);
+		src_x_start = COPY_NEXT_WORD(addr);
+		src_y_start = COPY_NEXT_WORD(addr);
+		dst_x_start = COPY_NEXT_WORD(addr);
+		dst_y_start = COPY_NEXT_WORD(addr);
+		src_dimx = (COPY_NEXT_WORD(addr) & 0x1fff) + 1;
+		src_dimy = (COPY_NEXT_WORD(addr) & 0x0fff) + 1;
+		COPY_NEXT_WORD(addr);
+		COPY_NEXT_WORD(addr);
+	}
 
 	// Calculate Blitter delay for the Draw operation.
 	// On real hardware, the Blitter will read operations into a FIFO queue
@@ -727,18 +820,39 @@ static void gfx_draw(UINT32 *addr)
 	int x,y, dimx,dimy, flipx,flipy;//, src_p;
 	int trans,blend, s_mode, d_mode;
 	clr_t tint_clr;
-	int tinted = 0;
 
-	UINT16 attr     =   READ_NEXT_WORD(addr);
-	UINT16 alpha    =   READ_NEXT_WORD(addr);
-	UINT16 src_x    =   READ_NEXT_WORD(addr);
-	UINT16 src_y    =   READ_NEXT_WORD(addr);
-	UINT16 dst_x_start  =   READ_NEXT_WORD(addr);
-	UINT16 dst_y_start  =   READ_NEXT_WORD(addr);
-	UINT16 w        =   READ_NEXT_WORD(addr);
-	UINT16 h        =   READ_NEXT_WORD(addr);
-	UINT16 tint_r   =   READ_NEXT_WORD(addr);
-	UINT16 tint_gb  =   READ_NEXT_WORD(addr);
+	UINT16 attr, alpha, src_x, src_y, dst_x_start, dst_y_start, w, h, tint_r, tint_gb;
+	const UINT32 cur_addr = *addr;
+	const UINT32 ram_offset = cur_addr & m_main_rammask;
+
+	if (ram_offset + 20 <= (UINT32)m_main_rammask + 1)
+	{
+		const UINT16 *p = &m_ram16_copy[ram_offset >> 1];
+		attr        = p[0];
+		alpha       = p[1];
+		src_x       = p[2];
+		src_y       = p[3];
+		dst_x_start = p[4];
+		dst_y_start = p[5];
+		w           = p[6];
+		h           = p[7];
+		tint_r      = p[8];
+		tint_gb     = p[9];
+		*addr = cur_addr + 20;
+	}
+	else
+	{
+		attr        = READ_NEXT_WORD(addr);
+		alpha       = READ_NEXT_WORD(addr);
+		src_x       = READ_NEXT_WORD(addr);
+		src_y       = READ_NEXT_WORD(addr);
+		dst_x_start = READ_NEXT_WORD(addr);
+		dst_y_start = READ_NEXT_WORD(addr);
+		w           = READ_NEXT_WORD(addr);
+		h           = READ_NEXT_WORD(addr);
+		tint_r      = READ_NEXT_WORD(addr);
+		tint_gb     = READ_NEXT_WORD(addr);
+	}
 
 	// 0: +alpha
 	// 1: +source
@@ -766,33 +880,63 @@ static void gfx_draw(UINT32 *addr)
 	src_y   =   src_y & 0x0fff;
 
 
-	x       =   (dst_x_start & 0x7fff) - (dst_x_start & 0x8000);
-	y       =   (dst_y_start & 0x7fff) - (dst_y_start & 0x8000);
+	x       =   (INT16)dst_x_start;
+	y       =   (INT16)dst_y_start;
 
 	dimx    =   (w & 0x1fff) + 1;
 	dimy    =   (h & 0x0fff) + 1;
 
+	// Fast clip rejection: if the sprite rectangle is completely outside the active clip bounds, drop it immediately.
+	if (x > m_clip.max_x || y > m_clip.max_y || x + dimx - 1 < m_clip.min_x || y + dimy - 1 < m_clip.min_y) {
+		return;
+	}
+
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	// Direct stream execution for off-screen staging blits (x >= 768, non-blended)
+	if (x >= 768 && !(attr & 0x0200)) {
+		int count = epic12_gpu_staging_stream(cur_addr);
+		if (count > 0) {
+			*addr = cur_addr + count * 20;
+			return;
+		}
+		const int sx = src_x & 0x1fff;
+		const int sy = src_y & 0x0fff;
+		if (sx + dimx <= 8192 && sy + dimy <= 4096 && dimx <= 512 && dimy <= 512) {
+			const int tint_r_idx = (tint_r & 0x00ff) >> 2;
+			const int tint_g_idx = ((tint_gb >> 8) & 0xff) >> 2;
+			const int tint_b_idx = (tint_gb & 0xff) >> 2;
+			if (epic12_gpu_staging_blit(x, y, sx, sy, dimx, dimy, flipx, flipy, trans, tint_r_idx, tint_g_idx, tint_b_idx)) {
+				return;
+			}
+		}
+	}
+#endif
+
 	// convert parameters to clr
 
 
-	tint_to_clr(tint_r & 0x00ff, (tint_gb >>  8) & 0xff, tint_gb & 0xff, &tint_clr);
-
-	/* interestingly this gets set to 0x20 for 'normal' not 0x1f */
-
-	if (tint_clr.r!=0x20)
-		tinted = 1;
-
-	if (tint_clr.g!=0x20)
-		tinted = 1;
-
-	if (tint_clr.b!=0x20)
-		tinted = 1;
-
+	tint_clr.r = (UINT8)((tint_r & 0x00ff) >> 2);
+	tint_clr.g = (UINT8)(((tint_gb >> 8) & 0xff) >> 2);
+	tint_clr.b = (UINT8)((tint_gb & 0xff) >> 2);
+	tint_clr.t = 0;
 
 	// surprisingly frequent, need to verify if it produces a worthwhile speedup tho.
 	if ((s_mode==0 && s_alpha==0x1f) && (d_mode==4 && d_alpha==0x1f))
 		blend = 0;
 
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	if (epic12_gpu_submit(flipx,trans,blend,s_mode,d_mode,draw_params)) return;
+	epic12_gpu_cpu_draw(x,y,dimx,dimy,m_clip);
+#endif
+
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST) || defined(EPIC12_BLIT_TEST)
+	if (blend && s_mode == 0 && d_mode == 0) {
+		epic12_draw_fixed(flipx, trans, draw_params);
+		return;
+	}
+#endif
+
+	const int tinted = (tint_clr.r != 0x20) | (tint_clr.g != 0x20) | (tint_clr.b != 0x20);
 	if (tinted)
 	{
 		if (!flipx)
@@ -981,6 +1125,16 @@ static void gfx_create_shadow_copy()
 
 static void gfx_exec()
 {
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	epic12_gpu_enabled = dips && !(dips[3] & 0x20);
+	// Dip D bit 7 asks for the small-batch split point; raising it routes the
+	// mid-size batches that mmpork flushes to the CPU replay instead.
+	epic12_gpu_threshold = (dips && (dips[3] & 0x80)) ? (1u << 24) : 512;
+	epic12_gpu_force_bringup = dips && (dips[3] & 0x80);
+#ifdef _XBOX
+	if (!epic12_gpu_enabled) epic12_xenos_set_status(2);
+#endif
+#endif
 	UINT32 addr = m_gfx_addr_shadowcopy & 0x1fffffff;
 	m_clip.set(m_gfx_clip_x_shadowcopy - EP1C_CLIP_MARGIN, m_gfx_clip_x_shadowcopy + 320 - 1 + EP1C_CLIP_MARGIN,
 			   m_gfx_clip_y_shadowcopy - EP1C_CLIP_MARGIN, m_gfx_clip_y_shadowcopy + 240 - 1 + EP1C_CLIP_MARGIN);
@@ -995,6 +1149,9 @@ static void gfx_exec()
 		{
 			case 0x0000:
 			case 0xf000:
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+				epic12_gpu_flush(EPIC12_GPU_FLUSH_END_LIST);
+#endif
 				return;
 
 			case 0xc000:
@@ -1017,6 +1174,9 @@ static void gfx_exec()
 
 			default:
 				//popmessage("GFX op = %04X", data);
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+				epic12_gpu_flush(EPIC12_GPU_FLUSH_OTHER);
+#endif
 				return;
 		}
 	}
@@ -1090,8 +1250,16 @@ static void gfx_exec_write(UINT32 data)
 
 static void pal16_check_init()
 {
+	// RGB565 can be packed directly. A full 24-bit lookup table costs 32 MiB
+	// and is unnecessary for the Xbox 360 frontend's normal output format.
+	output_rgb565 = nBurnBpp == 2 && BurnHighCol(255, 0, 0, 0) == 0xf800
+		&& BurnHighCol(0, 255, 0, 0) == 0x07e0 && BurnHighCol(0, 0, 255, 0) == 0x001f
+		&& BurnHighCol(8, 4, 8, 0) == 0x0821;
+	if (output_rgb565) return;
+
 	if (nBurnBpp < 3 && !pal16) {
 		pal16 = (UINT16 *)BurnMalloc((1 << 24) * sizeof (UINT16));
+		if (!pal16) return;
 
 		for (INT32 i = 0; i < (1 << 24); i++) {
 			pal16[i] = BurnHighCol(i / 0x10000, (i / 0x100) & 0xff, i & 0xff, 0);
@@ -1119,7 +1287,12 @@ static void epic12_draw_screen16_24bpp()
 				for (INT32 x = 0; x < nScreenWidth; x++, dst += nBurnBpp)
 				{
 					sx = x - scrollx;
-					PutPix(dst, pal16[s0[sx & widthmask]&((1<<24)-1)]);
+					const UINT32 color = s0[sx & widthmask] & 0xffffff;
+					if (output_rgb565) {
+						PutPix(dst, ((color >> 8) & 0xf800) | ((color >> 5) & 0x07e0) | ((color >> 3) & 0x001f));
+					} else {
+						PutPix(dst, pal16 ? pal16[color] : BurnHighCol(color >> 16, (color >> 8) & 255, color & 255, 0));
+					}
 				}
 				break;
 			case 3: // 24bpp
@@ -1135,6 +1308,10 @@ static void epic12_draw_screen16_24bpp()
 
 void epic12_draw_screen(UINT8 &recalc_palette)
 {
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	// The frame must be complete even with the legacy "Before Exec" DIP.
+	thready.notify_wait();
+#endif
 	INT32 scrollx = -m_gfx_scroll_x;
 	INT32 scrolly = -m_gfx_scroll_y;
 
@@ -1253,6 +1430,7 @@ void epic12_blitter_write(UINT32 offset, UINT32 data)
 
 void epic12_scan(INT32 nAction, INT32 *pnMin)
 {
+	thready.notify_wait();
 	SCAN_VAR(m_gfx_addr);
 //	SCAN_VAR(m_gfx_addr_shadowcopy); // probably not needed!
 	SCAN_VAR(m_gfx_scroll_x);
@@ -1271,5 +1449,7 @@ void epic12_scan(INT32 nAction, INT32 *pnMin)
 		ScanVar(m_bitmaps, m_gfx_size * 4, "epic12 vram");
 	}
 	thready.scan();
+#if defined(_XBOX) || defined(EPIC12_GPU_TEST)
+	if (nAction & ACB_WRITE) epic12_gpu_reset();
+#endif
 }
-

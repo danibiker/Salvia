@@ -43,3 +43,6 @@ INT32 PsikyoSpriteRender(INT32 nLowPriority, INT32 nHighPriority);
 extern UINT8* PsikyoSpriteROM;
 extern UINT8* PsikyoSpriteRAM;
 extern UINT8* PsikyoSpriteLUT;
+
+INT32 PsikyoSpriteRenderBand(INT32 low, INT32 high, INT32 top, INT32 bottom, INT32 index);
+void PsikyoSpriteResetRenderContexts();

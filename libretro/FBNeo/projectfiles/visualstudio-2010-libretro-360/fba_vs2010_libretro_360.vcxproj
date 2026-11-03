@@ -113,6 +113,7 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burner\libretro\libretro.cpp" />
     <ClCompile Include="..\..\src\burner\libretro\retro_cdemu.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_core_gpu.cpp" />
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_cbasebal.cpp" />
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_galgame.cpp" />
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_spbactn.cpp" />

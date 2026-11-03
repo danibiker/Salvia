@@ -18,7 +18,7 @@ INT32  PsikyoshDraw();
 #define PUTPIXEL_CLIP(forloop, splitpixel, putpixel)				\
 	UINT32 *dest;							\
 	for (INT32 y = 0; y < 16; y++, sy++, src+=inc) {				\
-		if (sy < 0 || sy >= nScreenHeight) continue;			\
+		if (sy < ctx.clipTop || sy >= ctx.clipBottom) continue;			\
 										\
 		dest = DrvTmpDraw + sy * nScreenWidth;				\
 										\
@@ -42,7 +42,7 @@ putpixel									\
 	UINT32 *dest;							\
 	UINT16 *pri;							\
 	for (INT32 y = 0; y < 16; y++, sy++, src+=inc) {				\
-		if (sy < 0 || sy >= nScreenHeight) continue;			\
+		if (sy < ctx.clipTop || sy >= ctx.clipBottom) continue;			\
 										\
 		dest = DrvTmpDraw + sy * nScreenWidth;				\
 		pri  = DrvPriBmp + sy * nScreenWidth;				\
@@ -108,7 +108,7 @@ putpixel									\
 #define ZOOMPIXEL_PRIO(putpixel)						\
 	for (INT32 y = sy; y < ey; y++)						\
 	{									\
-		UINT8 *source = DrvZoomBmp + (y_index >> 10) * 256;	\
+		UINT8 *source = ctx.zoom + (y_index >> 10) * 256;	\
 		UINT32  *dest = DrvTmpDraw + y * nScreenWidth;		\
 		UINT16 *pri = DrvPriBmp + y * nScreenWidth;		\
 										\
@@ -134,7 +134,7 @@ putpixel									\
 #define ZOOMPIXEL_NORMAL(putpixel)	\
 	for (INT32  y = sy; y < ey; y++)						\
 	{									\
-		UINT8 *source = DrvZoomBmp + (y_index >> 10) * 256;	\
+		UINT8 *source = ctx.zoom + (y_index >> 10) * 256;	\
 		UINT32  *dest = DrvTmpDraw + y * nScreenWidth;		\
 		INT32 x_index = x_index_base;					\
 										\

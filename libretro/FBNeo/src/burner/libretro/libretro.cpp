@@ -7,6 +7,9 @@
 #include "burner.h"
 #include "burnint.h"
 #include "aud_dsp.h"
+#ifdef _XBOX
+#include "retro_core_gpu.h" // [Salvia/liujiny] device D3D y avisos de la GPU de CV1000
+#endif
 
 #include "retro_common.h"
 #include "retro_input.h"
@@ -1520,6 +1523,14 @@ void retro_run()
 	pBurnSoundOut = bEmulateAudio ? pAudBuffer : NULL; // Set to NULL to skip sound rendering
 
 	ForceFrameStep();
+#ifdef _XBOX
+	// [liujiny] Aviso de estado de la GPU de CV1000 (activa / CPU / fallo).
+	const char *gpu_message = RetroCoreGpuTakeMessage();
+	if (gpu_message) {
+		struct retro_message msg = {gpu_message, 360};
+		environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+	}
+#endif
 
 	if (bPresentAudio)
 	{
@@ -2214,6 +2225,18 @@ static bool retro_load_game_common()
 		// Libretro doesn't want the refresh rate to be limited to 60hz
 		bSpeedLimit60hz = false;
 
+#ifdef _XBOX
+		// [Salvia] Device D3D del frontend por el canal generico 30002 (el mismo
+		// de xbox64/pcsxr-360).  Solo lo usa la GPU de CV1000; si el frontend no
+		// lo da, CV1000 dibuja por CPU.  Ver retro_core_gpu.h.
+		{
+			void *d3dDevice = NULL;
+			if (!environ_cb(30002 /* RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE */, &d3dDevice))
+				d3dDevice = NULL;
+			RetroCoreGpuSetDevice(d3dDevice);
+		}
+#endif
+
 		// Initialize game driver
 		if(BurnDrvInit() == 0)
 			HandleMessage(RETRO_LOG_INFO, "[FBNeo] Initialized driver for %s\n", g_driver_name);
@@ -2304,6 +2327,9 @@ end:
 		BurnDrvExit();
 		nBurnDrvActive = ~0U;
 	}
+#ifdef _XBOX
+	RetroCoreGpuSetDevice(NULL); // [Salvia]
+#endif
 #if defined(BUILD_NEOGEO) || defined(BUILD_PCE)
 	if (bCDEmuStarted) {
 		CDEmuExit();
@@ -2731,6 +2757,9 @@ void retro_unload_game(void)
 		BurnDrvExit();
 		nBurnDrvActive = ~0U;
 	}
+#ifdef _XBOX
+	RetroCoreGpuSetDevice(NULL); // [Salvia] despues de BurnDrvExit: epic12 libera sus recursos D3D ahi
+#endif
 #if defined(BUILD_NEOGEO) || defined(BUILD_PCE)
 	if (bCDEmuStarted) {
 		CDEmuExit();

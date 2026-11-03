@@ -105,22 +105,39 @@ void BurnYMF271Update(INT32 nSegmentEnd)
 	pYMF271Buffer[2] = pBuffer + 2 * 4096 + 4;
 	pYMF271Buffer[3] = pBuffer + 3 * 4096 + 4;
 
+	// SPI routes all four outputs equally to both speakers. Keep this common
+	// case in integer arithmetic (especially useful on PowerPC).
+	bool unitMono = true;
+	for (INT32 route = 0; route < 4; route++) {
+		if (YMF271Volumes[route] != 1.0 || YMF271RouteDirs[route] != BURN_SND_ROUTE_BOTH) unitMono = false;
+	}
+
 	for (INT32 i = (nFractionalPosition & 0xFFFF0000) >> 15; i < nSegmentLength; i += 2, nFractionalPosition += nSampleSize) {
 		INT32 nLeftSample[4] = {0, 0, 0, 0};
 		INT32 nRightSample[4] = {0, 0, 0, 0};
 		INT32 nTotalLeftSample, nTotalRightSample;
 
-		INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_1, 0)
-		INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_1, 0)
-		INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_2, 1)
-		INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_2, 1)
-		INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_3, 2)
-		INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_3, 2)
-		INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_4, 3)
-		INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_4, 3)
+		if (unitMono) {
+			const INT32 pos = (nFractionalPosition >> 16) - 3;
+			for (INT32 tap = 0; tap < 4; tap++) {
+				nLeftSample[tap] = pYMF271Buffer[0][pos + tap] + pYMF271Buffer[1][pos + tap]
+					+ pYMF271Buffer[2][pos + tap] + pYMF271Buffer[3][pos + tap];
+			}
+			nTotalLeftSample = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nLeftSample[0], nLeftSample[1], nLeftSample[2], nLeftSample[3]);
+			nTotalRightSample = nTotalLeftSample;
+		} else {
+			INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_1, 0)
+			INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_1, 0)
+			INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_2, 1)
+			INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_2, 1)
+			INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_3, 2)
+			INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_3, 2)
+			INTERPOLATE_ADD_SOUND_LEFT  (BURN_SND_YMF271_YMF271_ROUTE_4, 3)
+			INTERPOLATE_ADD_SOUND_RIGHT (BURN_SND_YMF271_YMF271_ROUTE_4, 3)
 
-		nTotalLeftSample  = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nLeftSample[0], nLeftSample[1], nLeftSample[2], nLeftSample[3]);
-		nTotalRightSample = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nRightSample[0], nRightSample[1], nRightSample[2], nRightSample[3]);
+			nTotalLeftSample  = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nLeftSample[0], nLeftSample[1], nLeftSample[2], nLeftSample[3]);
+			nTotalRightSample = INTERPOLATE4PS_16BIT((nFractionalPosition >> 4) & 0x0fff, nRightSample[0], nRightSample[1], nRightSample[2], nRightSample[3]);
+		}
 
 		nTotalLeftSample  = BURN_SND_CLIP(nTotalLeftSample);
 		nTotalRightSample = BURN_SND_CLIP(nTotalRightSample);
@@ -208,7 +225,7 @@ void BurnYMF271Exit()
 	BurnTimerExit();
 
 	BurnFree(pBuffer);
-	
+
 	DebugSnd_YMF271Initted = 0;
 }
 

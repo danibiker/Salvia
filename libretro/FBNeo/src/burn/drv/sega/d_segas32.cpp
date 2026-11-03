@@ -15,6 +15,7 @@ slipstrm	- gets hung booting if irq changes during RMW operation (in handler)
 //#define LOG_RW
 
 #include "tiles_generic.h"
+
 #include "v60_intf.h"
 #include "nec_intf.h"
 #include "z80_intf.h"
@@ -26,6 +27,9 @@ slipstrm	- gets hung booting if irq changes during RMW operation (in handler)
 #include "bitswap.h"
 #include "burn_gun.h"
 #include "burn_shift.h"
+#include "render_worker.h"
+
+static BurnRenderPool system32_mix_workers;
 
 static UINT8 *AllMem;
 static UINT8 *AllRam;
@@ -2630,6 +2634,7 @@ static void v25_protection_init(UINT8 *table)
 
 static INT32 DrvExit()
 {
+	system32_mix_workers.exit();
 	GenericTilesExit();
 	if (has_gun) {
 		BurnGunExit();
@@ -3013,6 +3018,49 @@ static void get_tilemaps(INT32 bgnum, INT32 *tilemaps)
 }
 
 
+// Copy a contiguous section of a cached tile row. The direction and
+// transparency mode are fixed for the whole section, not chosen per pixel.
+template<INT32 Step, bool Opaque>
+static INT32 system32_copy_tile_chunk(UINT16 *dst, const UINT16 *src, INT32 count)
+{
+	INT32 transparent = 0;
+	for (INT32 x = 0; x < count; x++) {
+		UINT16 pix = src[x * Step];
+		if (!Opaque && (pix & 0x0f) == 0) {
+			pix = 0;
+			transparent++;
+		}
+		dst[x] = BURN_ENDIAN_SWAP_INT16(pix);
+	}
+	return transparent;
+}
+
+static INT32 system32_copy_tile_span(UINT16 *dst, const UINT16 *const src[2],
+	UINT32 srcx, INT32 step, INT32 count, INT32 opaque)
+{
+	INT32 transparent = 0;
+	while (count > 0) {
+		// Two 512-pixel pages repeat across the source row. Split only at
+		// page boundaries so the inner loop can use consecutive loads.
+		srcx &= 0x3ff;
+		const INT32 offset = srcx & 0x1ff;
+		INT32 pixels = step > 0 ? 512 - offset : offset + 1;
+		if (pixels > count) pixels = count;
+		const UINT16 *page = src[srcx >> 9] + offset;
+		if (step > 0) {
+			if (opaque) transparent += system32_copy_tile_chunk<1, true>(dst, page, pixels);
+			else transparent += system32_copy_tile_chunk<1, false>(dst, page, pixels);
+		} else {
+			if (opaque) transparent += system32_copy_tile_chunk<-1, true>(dst, page, pixels);
+			else transparent += system32_copy_tile_chunk<-1, false>(dst, page, pixels);
+		}
+		dst += pixels;
+		srcx += step * pixels;
+		count -= pixels;
+	}
+	return transparent;
+}
+
 static void update_tilemap_zoom(clip_struct cliprect, UINT16 *ram, INT32 destbmp, INT32 bgnum)
 {
 	INT32 tilemaps[4];
@@ -3102,7 +3150,12 @@ static void update_tilemap_zoom(clip_struct cliprect, UINT16 *ram, INT32 destbmp
 			{
 				if (clipdraw)
 				{
-					for (INT32 x = extents[0]; x < extents[1]; x++)
+					if (srcxstep == 0x100000U || srcxstep == 0xfff00000U) {
+						const INT32 pixels = extents[1] - extents[0];
+						transparent += system32_copy_tile_span(dst + extents[0], src, srcx >> 20,
+							srcxstep == 0x100000U ? 1 : -1, pixels, 0);
+						srcx += srcxstep * pixels;
+					} else for (INT32 x = extents[0]; x < extents[1]; x++)
 					{
 						UINT16 pix = src[(srcx >> 29) & 1][(srcx >> 20) & 0x1ff];
 						srcx += srcxstep;
@@ -3224,13 +3277,9 @@ static void update_tilemap_rowscroll(clip_struct cliprect, UINT16 *m_videoram, I
 				/* if we're drawing on this extent, draw it */
 				if (clipdraw)
 				{
-					for (INT32 x = extents[0]; x < extents[1]; x++, srcx += srcxstep)
-					{
-						UINT16 pix = src[(srcx >> 9) & 1][srcx & 0x1ff];
-						if ((pix & 0x0f) == 0 && !opaque)
-							pix = 0, transparent++;
-						dst[x] = BURN_ENDIAN_SWAP_INT16(pix);
-					}
+					const INT32 pixels = extents[1] - extents[0];
+					transparent += system32_copy_tile_span(dst + extents[0], src, srcx, srcxstep, pixels, opaque);
+					srcx += srcxstep * pixels;
 				}
 
 				/* otherwise, clear to zero */
@@ -3791,46 +3840,78 @@ static INT32 draw_one_sprite(UINT16 const *data, INT32 xoffs, INT32 yoffs, const
 			/* 4bpp case */
 			if (!bpp8)
 			{
-				/* start at the word before because we preincrement below */
-				UINT32 curaddr = addr - 1;
-				for (INT32 x = xpos; x != xtarget; )
-				{
-					UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
+				// A 1:1 horizontal step always consumes exactly one source pixel.
+				// Keep the same clipping, indirect palette, shadow and end markers.
+				if (hzoom == 0x10000) {
+					UINT32 curaddr = addr - 1;
+					for (INT32 x = xpos; x != xtarget; ) {
+						UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
+						pix = (pixels >> 28) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(transp); x += xdelta; }
+						pix = (pixels >> 24) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >> 20) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >> 16) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >> 12) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >>  8) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >>  4) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(0); x += xdelta; }
+						pix = (pixels >>  0) & 0xf; if (x != xtarget) { sprite_draw_pixel_16(transp); x += xdelta; }
+						if (transp != 0 && pix == 0x0f) break;
+					}
+				} else {
+					/* start at the word before because we preincrement below */
+					UINT32 curaddr = addr - 1;
+					for (INT32 x = xpos; x != xtarget; )
+					{
+						UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
 
-					/* draw four pixels */
-					pix = (pixels >> 28) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp)  x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >> 24) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >> 20) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >> 16) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >> 12) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >>  8) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >>  4) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >>  0) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						/* draw four pixels */
+						pix = (pixels >> 28) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp)  x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >> 24) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >> 20) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >> 16) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >> 12) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >>  8) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >>  4) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >>  0) & 0xf; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_16(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
 
-					/* check for end code */
-					if (transp != 0 && pix == 0x0f)
-						break;
+						/* check for end code */
+						if (transp != 0 && pix == 0x0f)
+							break;
+					}
 				}
 			}
 
 			/* 8bpp case */
 			else
 			{
-				/* start at the word before because we preincrement below */
-				UINT32 curaddr = addr - 1;
-				for (INT32 x = xpos; x != xtarget; )
-				{
-					UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
+				// A 1:1 horizontal step always consumes exactly one source pixel.
+				// Keep the same clipping, indirect palette, shadow and end markers.
+				if (hzoom == 0x10000) {
+					UINT32 curaddr = addr - 1;
+					for (INT32 x = xpos; x != xtarget; ) {
+						UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
+						pix = (pixels >> 24) & 0xff; if (x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; }
+						pix = (pixels >> 16) & 0xff; if (x != xtarget) { sprite_draw_pixel_256(0); x += xdelta; }
+						pix = (pixels >>  8) & 0xff; if (x != xtarget) { sprite_draw_pixel_256(0); x += xdelta; }
+						pix = (pixels >>  0) & 0xff; if (x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; }
+						if (transp != 0 && pix == 0xff) break;
+					}
+				} else {
+					/* start at the word before because we preincrement below */
+					UINT32 curaddr = addr - 1;
+					for (INT32 x = xpos; x != xtarget; )
+					{
+						UINT32 pixels = BURN_ENDIAN_SWAP_INT32(spritedata[++curaddr & addrmask]);
 
-					/* draw four pixels */
-					pix = (pixels >> 24) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >> 16) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >>  8) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
-					pix = (pixels >>  0) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						/* draw four pixels */
+						pix = (pixels >> 24) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >> 16) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >>  8) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(0);      x += xdelta; xacc += hzoom; } xacc -= 0x10000;
+						pix = (pixels >>  0) & 0xff; while (xacc < 0x10000 && x != xtarget) { sprite_draw_pixel_256(transp); x += xdelta; xacc += hzoom; } xacc -= 0x10000;
 
-					/* check for end code */
-					if (transp != 0 && pix == 0xff)
-						break;
+						/* check for end code */
+						if (transp != 0 && pix == 0xff)
+							break;
+					}
 				}
 			}
 		}
@@ -3998,12 +4079,7 @@ static inline UINT16 *get_layer_scanline(INT32 layer, INT32 scanline)
 	return BurnBitmapGetPosition(5 + layer, 0, scanline);
 }
 
-static void mix_all_layers(INT32 which, INT32 xoffs, const clip_struct cliprect, UINT8 enablemask)
-{
-	UINT16 *m_paletteram = (UINT16*)DrvPalRAM[which];
-	INT32 blendenable = mixer_control[which][0x4e/2] & 0x0800;
-	INT32 blendfactor = (mixer_control[which][0x4e/2] >> 8) & 7;
-	struct mixer_layer_info
+struct mixer_layer_info
 	{
 		UINT16      palbase;            /* palette base from control reg */
 		UINT16      sprblendmask;       /* mask of sprite priorities this layer blends with */
@@ -4012,8 +4088,237 @@ static void mix_all_layers(INT32 which, INT32 xoffs, const clip_struct cliprect,
 		UINT8       effpri;             /* effective priority = (priority << 3) | layer_priority */
 		UINT8       mixshift;           /* shift from control reg */
 		UINT8       coloroffs;          /* color offset index */
-	} layerorder[16][8], layersort[8];
+		UINT8       blend_no_sprites;   /* possible non-sprite target below this row */
+	};
 
+
+struct System32MixerContext {
+ INT32 which, xoffs, blendfactor;
+ clip_struct cliprect;
+ UINT16 *m_paletteram;
+ mixer_layer_info layerorder[16][8];
+ INT32 rgboffs[3][3];
+ INT32 sprgroup_shift, sprgroup_mask, sprshadowmask, sprpixmask, sprshadow;
+ INT32 sprx_start, sprdx, spry, sprdy;
+};
+static System32MixerContext system32_mixer;
+
+// Remove scanlines already known to be transparent before walking pixels.
+// Keep sprite processing and the opaque background terminator in their order.
+static void system32_compact_layers(mixer_layer_info compact[16][8],
+	const mixer_layer_info source[16][8], UINT32 active, INT32 groupmask)
+{
+	for (INT32 group = 0; group <= groupmask; group++) {
+		INT32 out = 0;
+		for (INT32 i = 0; i < 8; i++) {
+			const mixer_layer_info &layer = source[group][i];
+			if (active & (1U << layer.index)) compact[group][out++] = layer;
+			if (layer.index == MIXER_LAYER_BACKGROUND) break;
+		}
+		// A second-pixel search is unnecessary if none of the remaining
+		// layers can blend, and no lower sprite can change the shadow flag.
+		UINT32 below = 0;
+		for (INT32 i = out - 1; i >= 0; i--) {
+			mixer_layer_info &layer = compact[group][i];
+			layer.blend_no_sprites = (below & layer.blendmask & ~(1U << MIXER_LAYER_SPRITES)) != 0;
+			if (!(below & ((1U << MIXER_LAYER_SPRITES) | layer.blendmask)))
+				layer.blendmask = 0;
+			below |= 1U << layer.index;
+		}
+	}
+}
+
+static void system32_mix_rows(INT32 top, INT32 bottom, INT32)
+{
+ const System32MixerContext &c = system32_mixer;
+ const INT32 which=c.which, xoffs=c.xoffs, blendfactor=c.blendfactor;
+ const clip_struct &cliprect=c.cliprect;
+ UINT16 *m_paletteram=c.m_paletteram;
+ mixer_layer_info compact[16][8];
+ const mixer_layer_info (*layerorder)[8]=compact;
+ UINT32 previous_active = ~0U;
+ const INT32 (*rgboffs)[3]=c.rgboffs;
+ const INT32 sprgroup_shift=c.sprgroup_shift, sprgroup_mask=c.sprgroup_mask;
+ const INT32 sprshadowmask=c.sprshadowmask, sprpixmask=c.sprpixmask, sprshadow=c.sprshadow;
+ const INT32 sprx_start=c.sprx_start, sprdx=c.sprdx, sprdy=c.sprdy;
+ INT32 spry=c.spry+(top-cliprect.nMiny)*sprdy;
+	/* loop over rows */
+	for (INT32 y = top; y < bottom; y++, spry += sprdy)
+	{
+		UINT16 *dest = pTransDraw + (y * nScreenWidth) + xoffs;
+		UINT16 *layerbase[8];
+
+		/* get the starting address for each layer */
+		layerbase[MIXER_LAYER_TEXT] = get_layer_scanline(MIXER_LAYER_TEXT, y);
+		layerbase[MIXER_LAYER_NBG0] = get_layer_scanline(MIXER_LAYER_NBG0, y);
+		layerbase[MIXER_LAYER_NBG1] = get_layer_scanline(MIXER_LAYER_NBG1, y);
+		layerbase[MIXER_LAYER_NBG2] = get_layer_scanline(MIXER_LAYER_NBG2, y);
+		layerbase[MIXER_LAYER_NBG3] = get_layer_scanline(MIXER_LAYER_NBG3, y);
+		layerbase[MIXER_LAYER_BITMAP] = get_layer_scanline(MIXER_LAYER_BITMAP, y);
+		layerbase[MIXER_LAYER_SPRITES] = get_layer_scanline(which ? MIXER_LAYER_MULTISPR : MIXER_LAYER_SPRITES, spry); // works ok instead of swap?
+		layerbase[MIXER_LAYER_BACKGROUND] = get_layer_scanline(MIXER_LAYER_BACKGROUND, y);
+
+		UINT32 active = (1U << MIXER_LAYER_SPRITES) | (1U << MIXER_LAYER_BACKGROUND);
+		for (INT32 layer = MIXER_LAYER_TEXT; layer <= MIXER_LAYER_BITMAP; layer++)
+			if (layerbase[layer] != solid_0000) active |= 1U << layer;
+		if (active != previous_active) {
+			system32_compact_layers(compact, c.layerorder, active, sprgroup_mask);
+			previous_active = active;
+		}
+
+		/* loop over columns */
+		for (INT32 x = cliprect.nMinx, sprx = sprx_start; x <= cliprect.nMaxx; x++, sprx += sprdx)
+		{
+			mixer_layer_info const *first;
+			INT32 laynum, firstpix;
+			INT32 shadow = 0;
+
+			/* first grab the current sprite pixel and determine the group */
+			INT32 sprpix = layerbase[MIXER_LAYER_SPRITES][sprx];
+			INT32 sprgroup = (sprpix >> sprgroup_shift) & sprgroup_mask;
+
+			/* now scan the layers to find the topmost non-transparent pixel */
+			for (first = &layerorder[sprgroup][0]; ; first++)
+			{
+				laynum = first->index;
+
+				/* non-sprite layers are treated similarly */
+				if (laynum != MIXER_LAYER_SPRITES)
+				{
+					firstpix = BURN_ENDIAN_SWAP_INT16(layerbase[laynum][x]) & 0x1fff;
+					if (firstpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
+						break;
+				}
+
+				/* sprite layers are special */
+				else
+				{
+					firstpix = sprpix;
+					shadow = ~firstpix & sprshadowmask;
+					if ((firstpix & 0x7fff) != 0x7fff)
+					{
+						firstpix &= sprpixmask;
+						if ((firstpix & 0x7ffe) != sprshadow)
+							break;
+						shadow = 1;
+					}
+				}
+			}
+
+			/* adjust the first pixel */
+			firstpix = BURN_ENDIAN_SWAP_INT16(m_paletteram[(first->palbase + ((firstpix >> first->mixshift) & 0xfff0) + (firstpix & 0x0f)) & 0x3fff]);
+
+			// 0xffff is an absent sprite with no shadow effect. With no
+			// eligible tile/backdrop below, the second search cannot affect RGB.
+			const INT32 blend = first->blendmask && (first->blend_no_sprites || sprpix != 0xffff);
+
+			/* compute R, G, B */
+			INT32 const *rgbdelta = &rgboffs[first->coloroffs][0];
+			if (!blend && !(rgbdelta[0] | rgbdelta[1] | rgbdelta[2])) {
+				if (shadow) firstpix = (firstpix >> 1) & 0x3def;
+				dest[x] = ((firstpix & 0x001f) << 10) | (firstpix & 0x03e0) | ((firstpix >> 10) & 0x001f);
+				continue;
+			}
+			INT32 r = ((firstpix >>  0) & 0x1f) + rgbdelta[0];
+			INT32 g = ((firstpix >>  5) & 0x1f) + rgbdelta[1];
+			INT32 b = ((firstpix >> 10) & 0x1f) + rgbdelta[2];
+
+			/* if there are potential blends, keep looking */
+			if (blend)
+			{
+				mixer_layer_info const *second;
+				INT32 secondpix;
+
+				/* now scan the layers to find the topmost non-transparent pixel */
+				for (second = first + 1; ; second++)
+				{
+					laynum = second->index;
+
+					/* non-sprite layers are treated similarly */
+					if (laynum != MIXER_LAYER_SPRITES)
+					{
+						secondpix = BURN_ENDIAN_SWAP_INT16(layerbase[laynum][x]) & 0x1fff;
+						if (secondpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
+							break;
+					}
+
+					/* sprite layers are special */
+					else
+					{
+						secondpix = sprpix;
+						shadow = ~secondpix & sprshadowmask;
+						if ((secondpix & 0x7fff) != 0x7fff)
+						{
+							secondpix &= sprpixmask;
+							if ((secondpix & 0x7ffe) != sprshadow)
+								break;
+							shadow = 1;
+						}
+					}
+				}
+
+				/* are we blending with that layer? */
+				if ((first->blendmask & (1 << laynum)) &&
+					(laynum != MIXER_LAYER_SPRITES || (first->sprblendmask & (1 << sprgroup))))
+				{
+					/* adjust the second pixel */
+					secondpix = BURN_ENDIAN_SWAP_INT16(m_paletteram[(second->palbase + ((secondpix >> second->mixshift) & 0xfff0) + (secondpix & 0x0f)) & 0x3fff]);
+
+					/* compute first RGB */
+					r *= 7 - blendfactor;
+					g *= 7 - blendfactor;
+					b *= 7 - blendfactor;
+
+					/* add in second RGB */
+					rgbdelta = &rgboffs[second->coloroffs][0];
+					r += (((secondpix >>  0) & 0x1f) + rgbdelta[0]) * (blendfactor + 1);
+					g += (((secondpix >>  5) & 0x1f) + rgbdelta[1]) * (blendfactor + 1);
+					b += (((secondpix >> 10) & 0x1f) + rgbdelta[2]) * (blendfactor + 1);
+
+					/* shift off the extra bits */
+					r >>= 3;
+					g >>= 3;
+					b >>= 3;
+				}
+			}
+
+			/* apply shadow/hilight */
+			if (shadow)
+			{
+				r >>= 1;
+				g >>= 1;
+				b >>= 1;
+			}
+
+			/* clamp and combine */
+			if (r > 31)
+				firstpix = 31 << 10;
+			else if (r > 0)
+				firstpix = r << 10;
+			else
+				firstpix = 0;
+
+			if (g > 31)
+				firstpix |= 31 << 5;
+			else if (g > 0)
+				firstpix |= g << 5;
+
+			if (b > 31)
+				firstpix |= 31 << 0;
+			else if (b > 0)
+				firstpix |= b << 0;
+			dest[x] = firstpix;
+		}
+	}
+
+}
+
+static void mix_all_layers(INT32 which, INT32 xoffs, const clip_struct cliprect, UINT8 enablemask)
+{
+	UINT16 *m_paletteram = (UINT16*)DrvPalRAM[which];
+	INT32 blendenable = mixer_control[which][0x4e/2] & 0x0800;
+	INT32 blendfactor = (mixer_control[which][0x4e/2] >> 8) & 7;
+	mixer_layer_info layerorder[16][8], layersort[8];
 	/* if we are the second monitor on multi32, swap in the proper sprite bank */
 //	if (which == 1)
 //	{
@@ -4157,157 +4462,17 @@ static void mix_all_layers(INT32 which, INT32 xoffs, const clip_struct cliprect,
 		sprdy = 1;
 	}
 
-	/* loop over rows */
-	for (INT32 y = cliprect.nMiny; y <= cliprect.nMaxy; y++, spry += sprdy)
-	{
-		UINT16 *dest = pTransDraw + (y * nScreenWidth) + xoffs;
-		UINT16 *layerbase[8];
-
-		/* get the starting address for each layer */
-		layerbase[MIXER_LAYER_TEXT] = get_layer_scanline(MIXER_LAYER_TEXT, y);
-		layerbase[MIXER_LAYER_NBG0] = get_layer_scanline(MIXER_LAYER_NBG0, y);
-		layerbase[MIXER_LAYER_NBG1] = get_layer_scanline(MIXER_LAYER_NBG1, y);
-		layerbase[MIXER_LAYER_NBG2] = get_layer_scanline(MIXER_LAYER_NBG2, y);
-		layerbase[MIXER_LAYER_NBG3] = get_layer_scanline(MIXER_LAYER_NBG3, y);
-		layerbase[MIXER_LAYER_BITMAP] = get_layer_scanline(MIXER_LAYER_BITMAP, y);
-		layerbase[MIXER_LAYER_SPRITES] = get_layer_scanline(which ? MIXER_LAYER_MULTISPR : MIXER_LAYER_SPRITES, spry); // works ok instead of swap?
-		layerbase[MIXER_LAYER_BACKGROUND] = get_layer_scanline(MIXER_LAYER_BACKGROUND, y);
-
-		/* loop over columns */
-		for (INT32 x = cliprect.nMinx, sprx = sprx_start; x <= cliprect.nMaxx; x++, sprx += sprdx)
-		{
-			mixer_layer_info const *first;
-			INT32 laynum, firstpix;
-			INT32 shadow = 0;
-
-			/* first grab the current sprite pixel and determine the group */
-			INT32 sprpix = layerbase[MIXER_LAYER_SPRITES][sprx];
-			INT32 sprgroup = (sprpix >> sprgroup_shift) & sprgroup_mask;
-
-			/* now scan the layers to find the topmost non-transparent pixel */
-			for (first = &layerorder[sprgroup][0]; ; first++)
-			{
-				laynum = first->index;
-
-				/* non-sprite layers are treated similarly */
-				if (laynum != MIXER_LAYER_SPRITES)
-				{
-					firstpix = BURN_ENDIAN_SWAP_INT16(layerbase[laynum][x]) & 0x1fff;
-					if (firstpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
-						break;
-				}
-
-				/* sprite layers are special */
-				else
-				{
-					firstpix = sprpix;
-					shadow = ~firstpix & sprshadowmask;
-					if ((firstpix & 0x7fff) != 0x7fff)
-					{
-						firstpix &= sprpixmask;
-						if ((firstpix & 0x7ffe) != sprshadow)
-							break;
-						shadow = 1;
-					}
-				}
-			}
-
-			/* adjust the first pixel */
-			firstpix = BURN_ENDIAN_SWAP_INT16(m_paletteram[(first->palbase + ((firstpix >> first->mixshift) & 0xfff0) + (firstpix & 0x0f)) & 0x3fff]);
-
-			/* compute R, G, B */
-			INT32 const *rgbdelta = &rgboffs[first->coloroffs][0];
-			INT32 r = ((firstpix >>  0) & 0x1f) + rgbdelta[0];
-			INT32 g = ((firstpix >>  5) & 0x1f) + rgbdelta[1];
-			INT32 b = ((firstpix >> 10) & 0x1f) + rgbdelta[2];
-
-			/* if there are potential blends, keep looking */
-			if (first->blendmask != 0)
-			{
-				mixer_layer_info const *second;
-				INT32 secondpix;
-
-				/* now scan the layers to find the topmost non-transparent pixel */
-				for (second = first + 1; ; second++)
-				{
-					laynum = second->index;
-
-					/* non-sprite layers are treated similarly */
-					if (laynum != MIXER_LAYER_SPRITES)
-					{
-						secondpix = BURN_ENDIAN_SWAP_INT16(layerbase[laynum][x]) & 0x1fff;
-						if (secondpix != 0 || laynum == MIXER_LAYER_BACKGROUND)
-							break;
-					}
-
-					/* sprite layers are special */
-					else
-					{
-						secondpix = sprpix;
-						shadow = ~secondpix & sprshadowmask;
-						if ((secondpix & 0x7fff) != 0x7fff)
-						{
-							secondpix &= sprpixmask;
-							if ((secondpix & 0x7ffe) != sprshadow)
-								break;
-							shadow = 1;
-						}
-					}
-				}
-
-				/* are we blending with that layer? */
-				if ((first->blendmask & (1 << laynum)) &&
-					(laynum != MIXER_LAYER_SPRITES || (first->sprblendmask & (1 << sprgroup))))
-				{
-					/* adjust the second pixel */
-					secondpix = BURN_ENDIAN_SWAP_INT16(m_paletteram[(second->palbase + ((secondpix >> second->mixshift) & 0xfff0) + (secondpix & 0x0f)) & 0x3fff]);
-
-					/* compute first RGB */
-					r *= 7 - blendfactor;
-					g *= 7 - blendfactor;
-					b *= 7 - blendfactor;
-
-					/* add in second RGB */
-					rgbdelta = &rgboffs[second->coloroffs][0];
-					r += (((secondpix >>  0) & 0x1f) + rgbdelta[0]) * (blendfactor + 1);
-					g += (((secondpix >>  5) & 0x1f) + rgbdelta[1]) * (blendfactor + 1);
-					b += (((secondpix >> 10) & 0x1f) + rgbdelta[2]) * (blendfactor + 1);
-
-					/* shift off the extra bits */
-					r >>= 3;
-					g >>= 3;
-					b >>= 3;
-				}
-			}
-
-			/* apply shadow/hilight */
-			if (shadow)
-			{
-				r >>= 1;
-				g >>= 1;
-				b >>= 1;
-			}
-
-			/* clamp and combine */
-			if (r > 31)
-				firstpix = 31 << 10;
-			else if (r > 0)
-				firstpix = r << 10;
-			else
-				firstpix = 0;
-
-			if (g > 31)
-				firstpix |= 31 << 5;
-			else if (g > 0)
-				firstpix |= g << 5;
-
-			if (b > 31)
-				firstpix |= 31 << 0;
-			else if (b > 0)
-				firstpix |= b << 0;
-			dest[x] = firstpix;
-		}
-	}
+ System32MixerContext &c=system32_mixer;
+ c.which=which; c.xoffs=xoffs; c.blendfactor=blendfactor;
+ c.cliprect=cliprect; c.m_paletteram=m_paletteram;
+ memcpy(c.layerorder,layerorder,sizeof(layerorder)); memcpy(c.rgboffs,rgboffs,sizeof(rgboffs));
+ c.sprgroup_shift=sprgroup_shift; c.sprgroup_mask=sprgroup_mask;
+ c.sprshadowmask=sprshadowmask; c.sprpixmask=sprpixmask; c.sprshadow=sprshadow;
+ c.sprx_start=sprx_start; c.sprdx=sprdx; c.spry=spry; c.sprdy=sprdy;
+ // All tile and sprite buffers are immutable here. Workers own disjoint
+ // output rows and are joined before palette conversion or CPU execution.
+ system32_mix_workers.init(system32_mix_rows);
+ system32_mix_workers.render(cliprect.nMaxy+1);
 
 	/* if we are the second monitor on multi32, swap back the sprite layer */
 //	if (which == 1)
@@ -5231,10 +5396,29 @@ static INT32 Ga2Init()
 	if (DrvLoadRoms(true)) return 1;
 
 	system32_v60_map();
+#if defined(_XBOX) || defined(FBNEO_V60_WAIT_LOOP_TEST)
+	// Main RAM is updated by this CPU/interrupts; V25 and timers run between
+	// scanline slices, never concurrently inside v60Run().
+	v60SetIdleLoopRAM(0x200000, 0x20ffff);
+#endif
 	system32_sound_init();
 	tilemap_configure_allocate();
 
+#if defined(_XBOX) || defined(FBNEO_Z80_STATUS_POLL_TEST)
+	// YM3438 status reads of 0/2 have cleared any busy flag. Timer A/B
+	// cannot change status inside ZetRun: BurnTimerUpdate stops it at the
+	// next timer event. No other emulated CPU runs inside that segment.
+	ZetOpen(0);
+	ZetSetStableStatusPoll(0x0000, 0x1fff, 0xff80);
+	ZetClose();
+#endif
+
 	v25_protection_init(ga2_opcode_table);
+#if defined(_XBOX) || defined(FBNEO_V25_WAIT_LOOP_TEST)
+	VezOpen(0);
+	VezSetV25IdleLoopRange(0x00000, 0x0ffff);
+	VezClose();
+#endif
 	custom_io_read_0 = extra_custom_io_read;
 
 	clr_opposites = 4;

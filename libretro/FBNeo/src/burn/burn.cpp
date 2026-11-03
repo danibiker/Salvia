@@ -19,6 +19,8 @@ INT32 (__cdecl *bprintf)(INT32 nStatus, TCHAR* szFormat, ...) = BurnbprintfFille
 #endif
 #endif
 
+INT32 nBurnRenderCores = 2; // Xbox software rendering: 1, 2 or 3 physical cores
+
 INT32 nBurnVer = BURN_VERSION;	// Version number of the library
 
 UINT32 nBurnDrvCount     = 0;	// Count of game drivers

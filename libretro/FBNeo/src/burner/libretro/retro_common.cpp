@@ -214,6 +214,24 @@ static struct retro_core_option_v2_definition var_fbneo_frameskip_manual_thresho
 	},
 	"33"
 };
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+extern INT32 nBurnRenderCores;
+static struct retro_core_option_v2_definition var_fbneo_render_cores = {
+	"fbneo-xbox360-render-cores",
+	"Rendering cores (Xbox 360)",
+	NULL,
+	"Software drawing for supported Sega System 32 (GA2), Raiden Fighters, Psikyo, PGM (KOV2, DDP2, DDP3) and CV1000 games. 2 cores balances drawing and audio; 3 may improve demanding scenes but shares a core with audio. CV1000 uses one SH3 core and one blitter core in both 2 and 3 modes; Thread Blitter must be enabled. Applies immediately.",
+	NULL, NULL,
+	{
+		{ "2", "2 cores (default)" },
+		{ "3", "3 cores" },
+		{ "1", "1 core" },
+		{ NULL, NULL },
+	},
+	"2"
+};
+#endif
+
 static struct retro_core_option_v2_definition var_fbneo_cpu_speed_adjust = {
 	"fbneo-cpu-speed-adjust",
 	"CPU clock",
@@ -1026,6 +1044,9 @@ void set_environment()
 	vars_systems.push_back(&var_fbneo_lightgun_crosshair_emulation);
 
 	// Add the video core options
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	vars_systems.push_back(&var_fbneo_render_cores);
+#endif
 	var_fbneo_force_60hz.desc                              = RETRO_FORCE60_CAT_DESC;
 	var_fbneo_force_60hz.info                              = RETRO_FORCE60_CAT_INFO;
 	vars_systems.push_back(&var_fbneo_force_60hz);
@@ -1576,6 +1597,15 @@ static int percent_parser(const char *value)
 void check_variables(void)
 {
 	struct retro_variable var = {0};
+
+#if defined(_XBOX) || defined(FBNEO_RENDER_THREADS_TEST)
+	var.key = var_fbneo_render_cores.key;
+	nBurnRenderCores = 2;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		INT32 cores = atoi(var.value);
+		if (cores >= 1 && cores <= 3) nBurnRenderCores = cores;
+	}
+#endif
 
 	var.key = var_fbneo_cpu_speed_adjust.key;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)

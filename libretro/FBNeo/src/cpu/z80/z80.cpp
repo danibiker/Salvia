@@ -139,6 +139,13 @@ static void make_ula_delay_lut();
 static int  get_memory_access_delay(UINT16 pc_address);
 static int  get_memory_is_contended(UINT16 pc_address);
 static UINT8 store_rwinfo(UINT16 addr, UINT8 val, UINT16 flags, const char *dbg);
+static void raster_dummy_callback(int);
+static const Z80StableStatusPoll *stable_status_poll;
+
+void Z80SetStableStatusPoll(const Z80StableStatusPoll *config)
+{
+	stable_status_poll = config;
+}
 
 static int		m_ula_variant;			// ULA_VARIANT_SINCLAIR  | ULA_VARIANT_AMSTRAD
 static const char*	m_ula_delay_sequence;		// "654321200"           | "10765432"
@@ -3616,7 +3623,48 @@ OP(op,d7) { RST(0x10);											} /* RST  2           */
 OP(op,d8) { RET_COND( F & CF, 0xd8 );							} /* RET  C           */
 OP(op,d9) { EXX;												} /* EXX              */
 OP(op,da) { JP_COND( F & CF );									} /* JP   C,a         */
-OP(op,db) { unsigned n = ARG() | (A << 8); A = IN( n ); WZ = n + 1;			} /* IN   A,(n)       */
+#if defined(_XBOX) || defined(FBNEO_Z80_STATUS_POLL_TEST)
+static void z80_batch_status_poll(UINT16 port)
+{
+	const Z80StableStatusPoll *cfg = stable_status_poll;
+	if (!cfg || !cfg->op_map || !cfg->arg_map || port != cfg->port ||
+		(A & ~2) != 0 || Z80.ICount < 32 || Z80.end_run || HALT ||
+		Z80.irq_state != Z80_CLEAR_LINE || Z80.nmi_pending ||
+		Z80.after_ei || Z80.after_retn || Z80.daisy || Z80.spectrum_mode ||
+		m_ula_variant != ULA_VARIANT_NONE || m_cycles_per_frame != 0 ||
+		m_raster_cb != raster_dummy_callback) return;
+	// Called after a real IN: do not infer a status read from a branch PC.
+	if (PCD < 4 || PRVPC != PCD - 2) return;
+	UINT32 pc = PCD - 4;
+	if (pc < cfg->first || pc > cfg->last || cfg->last - pc < 7 ||
+		(pc & 0xff) > 0xf8) return;
+	const UINT8 *code = cfg->op_map[pc >> 8];
+	if (!code || code != cfg->arg_map[pc >> 8]) return;
+	code += pc & 0xff;
+	// LD A,port_hi; IN A,(port_lo); RRA; JP NC,loop. Read the current
+	// mapped bytes every time; patched code or remapping cannot use a stale match.
+	if (code[0] != 0x3e || code[1] != (port >> 8) || code[2] != 0xdb ||
+		code[3] != (port & 0xff) || code[4] != 0x1f || code[5] != 0xd2 ||
+		code[6] != (pc & 0xff) || code[7] != (pc >> 8)) return;
+	if (cc[Z80_TABLE_op][0x3e] != 7 || cc[Z80_TABLE_op][0xdb] != 11 ||
+		cc[Z80_TABLE_op][0x1f] != 4 || cc[Z80_TABLE_op][0xd2] != 10) return;
+	INT32 loops = Z80.ICount / 32;
+	// Each whole RRA/JP/LD/IN iteration returns to this IN boundary with
+	// A, PC, PRVPC, WZ and lastop unchanged. RRA clears H/N/C/X/Y for 0/2.
+	// Preserve refresh R and all cycle accounting, including a partial tail.
+	F &= SF | ZF | PF;
+	R += loops * 4;
+	eat_cycles(CYCLES_EXEC, loops * 32);
+}
+#endif
+
+OP(op,db) {
+	unsigned n = ARG() | (A << 8);
+	A = IN(n); WZ = n + 1;
+#if defined(_XBOX) || defined(FBNEO_Z80_STATUS_POLL_TEST)
+	if (stable_status_poll) z80_batch_status_poll(n);
+#endif
+} /* IN A,(n) */
 OP(op,dc) { CALL_COND( F & CF, 0xdc );							} /* CALL C,a         */
 OP(op,dd) { R++; EXEC(dd,ROP());								} /* **** DD xx       */
 OP(op,de) { SBC(ARG());											} /* SBC  A,n         */
@@ -3782,6 +3830,7 @@ void z80_set_cycle_tables(const UINT8 *op, const UINT8 *cb, const UINT8 *ed, con
 void Z80Init()
 {
 	int i, p;
+	stable_status_poll = NULL;
 
 	/* setup cycle tables */
 	cc[Z80_TABLE_op] = cc_op;
@@ -4039,6 +4088,7 @@ void Z80Reset()
 
 void Z80Exit()
 {
+	stable_status_poll = NULL;
 	Z80.spectrum_tape_cb = NULL;
 	Z80.spectrum_mode = 0;
 

@@ -120,7 +120,8 @@ static const void FUNCNAME(BLIT_PARAMS)
 		//bmp = &bitmap->pix(dst_y_start + y, dst_x_start+startx);
 		bmp = m_bitmaps + (dst_y_start + y) * 0x2000 + (dst_x_start+startx);
 
-		const int ysrc_index =  ((src_y + yf * y) & 0x0fff) * 0x2000;
+		const int raw_sy = src_y + yf * y;
+		const int ysrc_index =  (src_y >= 4096 ? raw_sy : (raw_sy & 0x0fff)) * 0x2000;
 		gfx2 = gfx + ysrc_index;
 
 		#if FLIPX == 1
@@ -155,6 +156,9 @@ static const void FUNCNAME(BLIT_PARAMS)
 			bigblocks--;
 		}
 #endif
+		// Blit-path census: this row is about to draw (dimx-startx) pixels
+		// with this loop. Charged once per row, before the loop runs, so an
+		// early `continue` inside the pixel body cannot skew the count.
 		while (bmp<end)
 		{
 			#include "epic12pixel.inc"

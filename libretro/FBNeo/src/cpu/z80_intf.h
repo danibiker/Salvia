@@ -20,6 +20,8 @@ void ZetDaisyInit(INT32 dev0, INT32 dev1);
 void ZetExit();
 void ZetNewFrame();
 void ZetOpen(INT32 nCPU);
+// See Z80StableStatusPoll: only opt in to timer-bounded, stable status reads.
+void ZetSetStableStatusPoll(UINT32 first, UINT32 last, UINT16 port);
 void ZetClose();
 INT32 ZetGetActive();
 void ZetSwapActive(INT32 nCPU);

@@ -2,6 +2,9 @@
 
 void epic12_init(INT32 ram_size, UINT16 *ram, UINT8 *dippy);
 void epic12_exit();
+#ifdef _XBOX
+const char *epic12_gpu_take_message(); // polled on the frontend emulation thread
+#endif
 void epic12_reset();
 void epic12_scan(INT32 nAction, INT32 *pnMin);
 void epic12_set_blitterdelay_method(INT32 delay_method); // 0 = accurate, !0 = ancient

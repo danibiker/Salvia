@@ -47,6 +47,15 @@ inline UINT32 f2u(float f)
 
 static UINT8 **mem[3];
 static UINT32 address_mask;
+// Driver configuration: this RAM has no external writer during v60Run().
+// It is not emulated state and is disabled again when changing CPU/game.
+static UINT32 idle_loop_start = ~0U, idle_loop_end = 0;
+
+void v60SetIdleLoopRAM(UINT32 start, UINT32 end)
+{
+	idle_loop_start = start;
+	idle_loop_end = end;
+}
 
 static UINT8  (*v60_read8)(UINT32) = NULL;
 static UINT16 (*v60_read16)(UINT32) = NULL;
@@ -142,7 +151,14 @@ static UINT16 cpu_readop16(UINT32 a)
 #ifdef LOG_MEM
 //		bprintf (0, _T("OP16: %6.6x %4.4x\n"), a, *z);
 #endif
+#if defined(_XBOX) || defined(FBNEO_V60_BYTE_READ_TEST)
+		// V60 instruction parameters need not be naturally aligned. Avoid
+		// unaligned halfword/word accesses on Xbox 360 PowerPC.
+		const UINT8 *zbytes = (const UINT8 *)z;
+		return zbytes[0] | ((UINT16)zbytes[1] << 8);
+#else
 		return BURN_ENDIAN_SWAP_INT16(*z);
+#endif
 	}
 
 	if (v60_read16) {
@@ -169,7 +185,14 @@ static UINT32 cpu_readop32(UINT32 a)
 //		bprintf (0, _T("OP32: %6.6x %8.8x\n"), a, *z);
 #endif
 
+#if defined(_XBOX) || defined(FBNEO_V60_BYTE_READ_TEST)
+		// V60 instruction parameters need not be naturally aligned. Avoid
+		// unaligned halfword/word accesses on Xbox 360 PowerPC.
+		const UINT8 *zbytes = (const UINT8 *)z;
+		return zbytes[0] | ((UINT32)zbytes[1] << 8) | ((UINT32)zbytes[2] << 16) | ((UINT32)zbytes[3] << 24);
+#else
 		return BURN_ENDIAN_SWAP_INT32(*z);
+#endif
 	}
 
 	if (v60_read32) {
@@ -195,7 +218,14 @@ static UINT16 program_read_word_16le(UINT32 a)
 		bprintf (0, _T("PRW: %6.6x %4.4x\n"), a, *z);
 #endif
 
+#if defined(_XBOX) || defined(FBNEO_V60_BYTE_READ_TEST)
+		// V60 instruction parameters need not be naturally aligned. Avoid
+		// unaligned halfword/word accesses on Xbox 360 PowerPC.
+		const UINT8 *zbytes = (const UINT8 *)z;
+		return zbytes[0] | ((UINT16)zbytes[1] << 8);
+#else
 		return BURN_ENDIAN_SWAP_INT16(*z);
+#endif
 	}
 
 	if (v60_read16) {
@@ -880,6 +910,8 @@ static void base_init()
 
 void v60Init()
 {
+	idle_loop_start = ~0U;
+	idle_loop_end = 0;
 	address_mask = 0xffffff;
 
 	for (INT32 i = 0; i < 3; i++) {
@@ -898,6 +930,8 @@ void v60Init()
 
 void v70Init()
 {
+	idle_loop_start = ~0U;
+	idle_loop_end = 0;
 	address_mask = 0xffffffff;
 
 	for (INT32 i = 0; i < 3; i++) {
@@ -971,6 +1005,8 @@ void v60Close()
 
 void v60Exit()
 {
+	idle_loop_start = ~0U;
+	idle_loop_end = 0;
 	for (INT32 i = 0; i < 3; i++) {
 		BurnFree(mem[i]);
 	}

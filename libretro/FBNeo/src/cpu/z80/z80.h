@@ -83,6 +83,15 @@ int Z80Scan(int nAction);
 INT32 z80TotalCycles();
 INT32 z80TstateCounter();
 void Z80StopExecute();
+// Driver opt-in: this port's 0/2 status values must remain stable until the
+// current Z80Execute segment ends. Fetch/argument maps are checked at runtime.
+// Keep this configuration outside Z80_Regs and save states.
+struct Z80StableStatusPoll {
+	UINT8 **op_map, **arg_map;
+	UINT32 first, last;
+	UINT16 port;
+};
+void Z80SetStableStatusPoll(const Z80StableStatusPoll *config);
 void z80_set_spectrum_tape_callback(int (*tape_cb)());
 void z80_set_cycle_tables_msx();
 void z80_set_cycle_tables(const UINT8 *op, const UINT8 *cb, const UINT8 *ed, const UINT8 *xy, const UINT8 *xycb, const UINT8 *ex);

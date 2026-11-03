@@ -26,6 +26,8 @@
  *
  *  Port to Finalburn Alpha by OopsWare
  *  http://oopsware.googlepages.com/
+ *  Salvia: batch suspended CPU cycles up to the next timer event, preserving
+ *  the original timer/IRQ checks and cycle accounting (2026-09-27).
  *
  *****************************************************************************/
 
@@ -3301,6 +3303,29 @@ static UINT32 sh2_internal_r(UINT32 offset, UINT32 /*mem_mask*/)
 
 // -------------------------------------------------------
 
+// A suspended CPU executes no instructions, but the normal (non-speedhack)
+// path must still advance the FRT and both DMA timers. Skip only cycles before
+// the next event; leave its final cycle to the existing checks in Sh2Run.
+SH2_INLINE void sh2_advance_suspended_cycles()
+{
+	INT32 skip = sh2->sh2_icount - 1;
+	const UINT32 now = sh2_GetTotalCycles();
+	for (INT32 timer = 0; timer < 3 && skip > 0; timer++) {
+		const INT32 active = timer < 2 ? sh2->dma_timer_active[timer] : sh2->timer_active;
+		if (!active) continue;
+		const UINT32 base = timer < 2 ? sh2->dma_timer_base[timer] : sh2->timer_base;
+		const UINT32 period = timer < 2 ? sh2->dma_timer_cycles[timer] : sh2->timer_cycles;
+		const UINT32 elapsed = now - base;
+		if (elapsed >= period) {
+			skip = 0; // Already due: the original loop checks it after one cycle.
+		} else if (period - elapsed - 1 < (UINT32)skip) {
+			skip = period - elapsed - 1;
+		}
+	}
+	sh2->sh2_total_cycles += skip;
+	sh2->sh2_icount -= skip;
+}
+
 int Sh2Run(int cycles)
 {
 #if defined FBNEO_DEBUG
@@ -3352,6 +3377,8 @@ int Sh2Run(int cycles)
 				case 14<<12: op1110(opcode); break;
 			default: op1111(opcode); break;
 			}
+		} else if (!sh2->test_irq && sh2->sh2_eat_cycles == 1 && sh2->sh2_icount > 1) {
+			sh2_advance_suspended_cycles();
 		}
 
 		if(sh2->test_irq && !sh2->delay)

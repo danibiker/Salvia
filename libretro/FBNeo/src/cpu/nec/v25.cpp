@@ -79,6 +79,46 @@ static void add_timer(v25_state_t *nec_state, int timer, double tmp, int param, 
 
 static v25_state_t sChips[4]; // 4 cpus should be plenty!
 static v25_state_t *sChipsPtr;
+// Driver configuration, outside serialized CPU state.
+static UINT32 idle_start[4] = {~0U, ~0U, ~0U, ~0U};
+static UINT32 idle_end[4];
+
+void v25_set_idle_loop_range(UINT32 start, UINT32 end)
+{
+	if (!sChipsPtr) return;
+	INT32 cpu = sChipsPtr - sChips;
+	idle_start[cpu] = start;
+	idle_end[cpu] = end;
+}
+
+#if defined(_XBOX) || defined(FBNEO_V25_WAIT_LOOP_TEST)
+static void v25_skip_self_jump(v25_state_t *nec_state, UINT32 pc, UINT8 opcode, INT32 used)
+{
+	if (opcode != 0xeb || used != 12 || PC(nec_state) != pc ||
+		nec_state->icount < 12 || nec_state->stop_run || nec_state->TF ||
+		nec_state->no_interrupt || nec_state->seg_prefix ||
+		(nec_state->pending_irq & nec_state->unmasked_irq)) return;
+	INT32 cpu = nec_state - sChips;
+	if (pc < idle_start[cpu] || pc > idle_end[cpu] || idle_end[cpu] - pc < 1)
+		return;
+	// A short self-jump consumes two prefetch bytes. Only batch once the
+	// prefetch queue is full and the 12 cycles refill both bytes exactly.
+	if (nec_state->prefetch_reset || nec_state->prefetch_count != nec_state->prefetch_size ||
+		nec_state->prefetch_size < 2 || nec_state->prefetch_cycles < 1 ||
+		nec_state->prefetch_cycles > 6) return;
+	INT32 limit = nec_state->icount;
+	for (INT32 i = 0; i < 4; i++) {
+		if (nec_state->timer_enabled[i] && nec_state->timer_cycles_until_trigger[i] <= limit)
+			limit = nec_state->timer_cycles_until_trigger[i] - 1;
+	}
+	if (limit < 12) return;
+	INT32 skipped = (limit / 12) * 12;
+	nec_state->icount -= skipped;
+	for (INT32 i = 0; i < 4; i++)
+		if (nec_state->timer_enabled[i]) nec_state->timer_cycles_until_trigger[i] -= skipped;
+	// No timer expiry is crossed. Its normal instruction and callback run next.
+}
+#endif
 
 static void v25_timer_callback(int param)
 {
@@ -536,7 +576,13 @@ int v25_execute(int cycles)
 			nec_state->no_interrupt--;
 
 		prev_ICount = nec_state->icount;
+#if defined(_XBOX) || defined(FBNEO_V25_WAIT_LOOP_TEST)
+		UINT32 previous_pc = PC(nec_state);
+		UINT8 opcode = fetchop(nec_state);
+		nec_instruction[opcode](nec_state);
+#else
 		nec_instruction[fetchop(nec_state)](nec_state);
+#endif
 		do_prefetch(nec_state, prev_ICount);
 
 		for (int i = 0; i < 4; i++) { // timers!
@@ -554,6 +600,9 @@ int v25_execute(int cycles)
 				}
 			}
 		}
+#if defined(_XBOX) || defined(FBNEO_V25_WAIT_LOOP_TEST)
+		v25_skip_self_jump(nec_state, previous_pc, opcode, prev_ICount - nec_state->icount);
+#endif
 	}
 
 	cycles = cycles - nec_state->icount;
@@ -565,6 +614,8 @@ int v25_execute(int cycles)
 
 void v25Init(int cpu, int type, int clock)
 {
+	idle_start[cpu] = ~0U;
+	idle_end[cpu] = 0;
 	sChipsPtr = &sChips[cpu];
 	v25_state_t *nec_state = sChipsPtr;
 

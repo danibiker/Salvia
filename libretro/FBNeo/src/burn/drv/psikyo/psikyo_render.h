@@ -119,7 +119,11 @@
  #error unsupported rowscroll mode specified.
 #endif
 
-static void FUNCTIONNAME(BPP,TRANSMODE,DOFLIP,ROT,SCROLL,ZOOMMODE,ZBUF,CLIP)()
+static void FUNCTIONNAME(BPP,TRANSMODE,DOFLIP,ROT,SCROLL,ZOOMMODE,ZBUF,CLIP)(
+#ifdef PSIKYO_RENDER_CONTEXT
+	PSIKYO_RENDER_CONTEXT &ctx
+#endif
+)
 {
 // Create an empty function if unsupported features are requested
 #if ROT == 0
@@ -161,6 +165,18 @@ static void FUNCTIONNAME(BPP,TRANSMODE,DOFLIP,ROT,SCROLL,ZOOMMODE,ZBUF,CLIP)()
    #else
   	for (y = 15, pTileRow = pTile + ((BPP >> 3) * 320 * 15), pZTileRow = pZTile + (320 * 15); y >= 0; y--, ADVANCEROW, ADVANCEZROW, pTileData8 += 16) {
    #endif
+  #endif
+ #endif
+
+ #ifdef PSIKYO_RENDER_CONTEXT
+		if (nTileYPos + y < ctx.clipTop || nTileYPos + y >= ctx.clipBottom) continue;
+ #endif
+
+ #if defined(PSIKYO_SPRITE_ROWS) && ZOOM == 0
+  #if FLIPY == 0
+		if (!(nTileRowMask & (1 << y))) continue;
+  #else
+		if (!(nTileRowMask & (1 << (15 - y)))) continue;
   #endif
  #endif
 
