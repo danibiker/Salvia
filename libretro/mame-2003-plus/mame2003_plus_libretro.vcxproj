@@ -257,6 +257,7 @@
     <ClCompile Include="src\palette.c" />
     <ClCompile Include="src\png.c" />
     <ClCompile Include="src\profiler.c" />
+    <ClCompile Include="src\sndhrdw\acclaim_rax.c" />
     <ClCompile Include="src\sndintrf.c" />
     <ClCompile Include="src\state.c" />
     <ClCompile Include="src\tilemap.c" />
@@ -2873,4 +2874,3 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>
-

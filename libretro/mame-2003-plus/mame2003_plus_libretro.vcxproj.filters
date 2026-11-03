@@ -5867,6 +5867,9 @@
     <ClCompile Include="src\lib\libchdr\src\libchdr_flac.c" />
     <ClCompile Include="src\lib\libchdr\src\libchdr_huffman.c" />
     <ClCompile Include="src\lib\sljit\sljit_mame.c" />
+    <ClCompile Include="src\sndhrdw\acclaim_rax.c">
+      <Filter>src\sndhrdw</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\artwork.h">
