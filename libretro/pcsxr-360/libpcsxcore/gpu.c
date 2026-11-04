@@ -1658,6 +1658,29 @@ u32 gpuReadStatus(void)
     if (busy)
         r &= ~(GPUSTATUS_IDLE | GPUSTATUS_READYFORCOMMANDS);
 
+    /* Bit 31 (LCF, linea par/impar).  Port de psxHwReadGpuSR (pcsx_rearmed):
+     * en modo NO entrelazado el hardware lo conmuta en cada scanline durante
+     * la zona visible y vale 0 en VBlank.  Los plugins solo lo cambian una vez
+     * por frame, y el libgpu de algunos juegos (X-Men Mutant Academy JP,
+     * @8006AF20) espera con interrupciones cerradas a que cambie: la espera
+     * duraba ~1 frame, el INT1 del CD no se atendia a tiempo, se perdian
+     * sectores y el juego reintentaba la lectura sin fin.
+     * Igual que rearmed: aproximacion con el bit 11 del ciclo (no hay
+     * hcounter fino).  En modo entrelazado se respeta el campo del plugin. */
+    {
+        extern u32 hSyncCount;
+        const u32 ilace_bits = (1u << 22) | (1u << 19);
+        if ((r & ilace_bits) != ilace_bits) {
+            r &= ~0x80000000u;
+            if (hSyncCount < 240)
+                r |= 0x80000000u & (psxRegs.cycle << 20);
+        } else if (hSyncCount >= (Config.PsxType ? 256u : 243u)) {
+            /* Entrelazado: el campo vale durante la zona visible; en
+             * VBlank LCF lee 0 (rearmed lo limpia en VBlankStart). */
+            r &= ~0x80000000u;
+        }
+    }
+
     return r;
 }
 

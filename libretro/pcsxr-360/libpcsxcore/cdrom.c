@@ -450,6 +450,25 @@ static void setIrq(u8 irq, int log_cmd)
 #endif
 }
 
+#if PCSXR_DIAG_INSTRUMENTATION
+static u32 s_irq1_cyc;
+static void cd_diag_irq1(const char *tag)
+{
+	if (!CD_TRACE_ON())
+		return;
+	pcsxr_log(1, "[CD-IRQ1] %s dt=%u pc=%08X sr=%08X istat=%04X imask=%04X irqstat=%02X\n",
+		tag, (unsigned)(psxRegs.cycle - s_irq1_cyc), (unsigned)psxRegs.pc,
+		(unsigned)psxRegs.CP0.n.Status,
+		(unsigned)SWAP32(psxHu32ref_2(0x1070)), (unsigned)SWAP32(psxHu32ref_2(0x1074)),
+		(unsigned)cdr.IrqStat);
+}
+#define CD_DIAG_IRQ1_SET() (s_irq1_cyc = psxRegs.cycle)
+#define CD_DIAG_IRQ1(t) cd_diag_irq1(t)
+#else
+#define CD_DIAG_IRQ1_SET() ((void)0)
+#define CD_DIAG_IRQ1(t) ((void)0)
+#endif
+
 // timing used in this function was taken from tests on real hardware
 // (yes it's slow, but you probably don't want to modify it)
 void cdrLidSeekInterrupt(void)
@@ -959,6 +978,7 @@ void cdrInterrupt(void) {
 		 * setIrq(), asi que la condicion evaluaba siempre sobre 0 y NUNCA se
 		 * entregaba DiskError (siempre DataReady).  Testear primero. */
 		setIrq((cdr.Irq1Pending & STATUS_ERROR) ? DiskError : DataReady, 0x1003);
+		CD_DIAG_IRQ1_SET();
 		cdr.Irq1Pending = 0;
 		return;
 	}
@@ -1534,6 +1554,7 @@ static void cdrReadInterruptSetResult(unsigned char result)
 		CDR_LOG_I("%d:%02d:%02d irq miss, cmd=%02x irqstat=%02x\n",
 			cdr.SetSectorPlay[0], cdr.SetSectorPlay[1], cdr.SetSectorPlay[2],
 			cdr.CmdInProgress, cdr.IrqStat);
+		CD_DIAG_IRQ1("miss");
 		cdr.Irq1Pending = result;
 		// F1 2000 timing hack :(
 		// compensate for some csum func @80014380 taking too long
@@ -1544,6 +1565,7 @@ static void cdrReadInterruptSetResult(unsigned char result)
 	SetResultSize(1);
 	cdr.Result[0] = result;
 	setIrq((result & STATUS_ERROR) ? DiskError : DataReady, 0x1004);
+	CD_DIAG_IRQ1_SET();
 }
 
 static void cdrUpdateTransferBuf(const u8 *buf)
@@ -1838,6 +1860,8 @@ void cdrWrite3(unsigned char rt) {
 	case 0:
 		break; // transfer
 	case 1:
+		if ((cdr.IrqStat & rt & 7) == DataReady)
+			CD_DIAG_IRQ1("ack");
 		if (cdr.IrqStat & rt) {
 			u32 nextCycle = psxRegs.intCycle[PSXINT_CDR].sCycle
 				+ psxRegs.intCycle[PSXINT_CDR].cycle;

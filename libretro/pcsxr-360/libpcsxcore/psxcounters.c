@@ -314,9 +314,13 @@ __inline void psxRcntUpdate()
         if( hSyncCount == VBlankStart[Config.PsxType] )
         {
             GPU_vBlank( 1 );
-            
-            // For the best times. :D
-            //setIrq( 0x01 );
+
+            /* VBlank IRQ al EMPEZAR el VBlank (linea 243/256), como el
+             * hardware, pcsx_rearmed y SwanStation.  Antes se lanzaba al
+             * final del frame (linea 0), ~20 lineas tarde.  En ese momento
+             * GPUSTAT.LCF ya vale 0 (ver gpuReadStatus), que es lo que
+             * esperan rutinas como la de X-Men Mutant Academy JP. */
+            setIrq( 0x01 );
         }
         
         // Update lace. (with InuYasha fix)
@@ -325,7 +329,9 @@ __inline void psxRcntUpdate()
             hSyncCount = 0;
 
             GPU_vBlank( 0 );
-            setIrq( 0x01 );
+            /* Con VSyncWA el frame acaba antes de VBlankStart: la IRQ va aqui. */
+            if( Config.VSyncWA )
+                setIrq( 0x01 );
 
 			gpuUpdateLace();
             EmuUpdate();
