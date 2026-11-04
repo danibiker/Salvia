@@ -1219,6 +1219,14 @@ uint32_t gpuDmaChain(uint32_t addr)
     short count;
     unsigned int DMACommandCounter = 0;
     uint32_t size = 1;   /* contar el initial linked list ptr word */
+    /* Deteccion de bucles (Brent), como GPUdmaChain de gpulib (pcsx_rearmed):
+     * se guarda el nodo en 32, 64, 128... y si la cadena vuelve a el se corta.
+     * Initial D (Japan), al empezar la carrera: el prim del fundido (un 0x2A a
+     * pantalla completa) queda apuntandose a si mismo y aqui solo paraba el
+     * tope de 2.000.000 de nodos: 2 millones de cuadrilateros semitransparentes
+     * por frame, el juego "congelado". */
+    uint32_t ld_addr = addr & 0x1FFFFC;
+    unsigned int ld_count = 32;
 
     baseAddrL = (u32 *)psxM_2;
     baseAddrB = (unsigned char*) baseAddrL;
@@ -1240,6 +1248,15 @@ uint32_t gpuDmaChain(uint32_t addr)
         size += (uint32_t)(unsigned char)count + 1u;
 
         addr = psxMu32_2(addr & ~0x3) & 0xffffff;
+
+        if (!(addr & 0x800000)) {
+            if ((addr & 0x1FFFFC) == ld_addr)
+                break;
+            if (DMACommandCounter == ld_count) {
+                ld_addr = addr & 0x1FFFFC;
+                ld_count *= 2;
+            }
+        }
     }
     while (!(addr & 0x800000));
 
