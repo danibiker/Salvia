@@ -37,6 +37,19 @@
 #include "ppf.h"
 #include "psxdma.h"
 
+/* [2026-11-04] PaRappa the Rapper (SCPS18002): el video de los creditos no
+ * arranca (el MDEC no recibe nada).  Durante un volcado L3+R3 se registra cada
+ * sector leido y lo que el juego saca por DMA3. */
+#include "gpu.h"   /* PCSXR_DIAG_INSTRUMENTATION */
+#if PCSXR_DIAG_INSTRUMENTATION
+extern volatile int g_duck_dump_active;
+extern void pcsxr_log();
+extern void mdec_diag_snapshot(void);
+/* Ademas del volcado: los 80 sectores que siguen a cada ReadN/ReadS. */
+volatile int g_cd_trace_left = 0;
+#define CD_TRACE_ON() (g_duck_dump_active || g_cd_trace_left > 0)
+#endif
+
 /* logging: desactivado en este port. Ademas evita el ##__VA_ARGS__ (GNU)
  * y define log_unhandled(), que no existe en este fork. */
 #define CDR_LOG(...)
@@ -742,6 +755,20 @@ static int cdrSeekTime(unsigned char *target)
 	if (cdr.DriveState == DRIVESTATE_PAUSED || cyclesSinceRS < cdReadTime *3/2)
 		seekTime += cdReadTime;
 
+	/* [2026-11-04] Con el motor parado (tras CdlStop) hay que arrancarlo
+	 * antes de buscar: ~1 s, como SwanStation (GetTicksForSeek suma
+	 * GetTicksForSpinUp() si !motor_on).  pcsx_rearmed no lo modela.
+	 * PaRappa the Rapper (Japon, SCPS18002): tras el video del logo para el
+	 * CD, arranca el XA+video de los creditos (Setloc/Setfilter/ReadS),
+	 * pone su contador de sectores a -16 y, tras preparar la escena, espera
+	 * (hasta 60 s) a que ese contador este en [0,150): o sea, a que llegue el
+	 * PRIMER sector.  Sin el arranque del motor los sectores llegaban en
+	 * seguida, el contador pasaba de 150 antes de que la escena empezara a
+	 * mirarlo y se quedaba esperando hasta el limite: pantalla en blanco con
+	 * el audio y luego el menu. */
+	if (cdr.DriveState == DRIVESTATE_STOPPED)
+		seekTime += PSXCLK;
+
 	//seekTime = MIN_VALUE(seekTime, PSXCLK * 2 / 3);
 	CDR_LOG("seek: %02d:%02d:%02d %.2f %.2f (%.2f) st %d di %d\n",
 		target[0], target[1], target[2], (float)seekTime / PSXCLK,
@@ -1429,6 +1456,8 @@ void cdrInterrupt(void) {
 				memcpy(cdr.SetSectorPlay, cdr.SetSector, 4);
 				cdr.SetlocPending = 0;
 			}
+			else if (cdr.DriveState == DRIVESTATE_STOPPED)
+				seekTime = PSXCLK;   /* [2026-11-04] arranque del motor: ver cdrSeekTime */
 			cdr.Reading = 1;
 			cdr.FileChannelSelected = 0;
 			cdr.AdpcmActive = 0;
@@ -1630,6 +1659,14 @@ static void cdrReadInterrupt(void)
 	Sim Theme Park - no adpcm at all (zero)
 	*/
 
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (g_cd_trace_left > 0)
+		g_cd_trace_left--;
+	if (CD_TRACE_ON())
+		pcsxr_log(1, "[CD-RD] %02X:%02X:%02X m%u f=%02X c=%02X sm=%02X ci=%02X entrega=%d irq=%02X pend=%02X modo=%02X\n",
+			buf[0], buf[1], buf[2], buf[3], subhdr->file, subhdr->chan, subhdr->mode, subhdr->coding,
+			deliver_data, cdr.IrqStat, cdr.Irq1Pending, cdr.Mode);
+#endif
 	if (deliver_data)
 		cdrReadInterruptSetResult(cdr.StatP);
 
@@ -1707,6 +1744,25 @@ void cdrWrite1(unsigned char rt) {
 		SysPrintf("}");
 	}
 	SysPrintf(" @%08x\n", psxRegs.pc);
+#endif
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	/* [2026-11-04] PaRappa (Japon): cada comando del CD (salvo los de sondeo
+	 * 01/10/11), con sus parametros, el sector por el que va y si el
+	 * controlador estaba ocupado.  Hasta 400. */
+	{
+		static unsigned s_cd_cmd_log = 0;
+		if (rt == 0x06 || rt == 0x1B)
+			g_cd_trace_left = 80;
+		if (rt != 0x01 && rt != 0x10 && rt != 0x11 && s_cd_cmd_log < 400u) {
+			s_cd_cmd_log++;
+			pcsxr_log(1, "[CD-CMD] %02X p%u=%02X %02X %02X %02X en=%02X:%02X:%02X ocupado=%03X modo=%02X estado=%02X cyc=%u pc=%08X\n",
+				rt, (unsigned)cdr.ParamC, cdr.Param[0], cdr.Param[1], cdr.Param[2], cdr.Param[3],
+				cdr.SetSectorPlay[0], cdr.SetSectorPlay[1], cdr.SetSectorPlay[2], (unsigned)cdr.CmdInProgress,
+				cdr.Mode, cdr.StatP, (unsigned)psxRegs.cycle, (unsigned)psxRegs.pc);
+		}
+	}
+
 #endif
 
 	cdr.ResultReady = 0;
@@ -1886,6 +1942,16 @@ void psxDma3(u32 madr, u32 bcr, u32 chcr) {
 			size = DATA_SIZE - cdr.FifoOffset;
 			if (size > (int)cdsize)
 				size = cdsize;
+#if PCSXR_DIAG_INSTRUMENTATION
+			if (CD_TRACE_ON()) {
+				const u8 *t = cdr.Transfer;
+				const u8 *d = cdr.Transfer + cdr.FifoOffset;
+				mdec_diag_snapshot();
+				pcsxr_log(1, "[CD-DMA] %02X:%02X:%02X sm=%02X off=%u n=%u fifo=%u datos=%02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\n",
+					t[0], t[1], t[2], t[6], (unsigned)cdr.FifoOffset, (unsigned)cdsize, (unsigned)cdr.FifoSize,
+					d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11]);
+			}
+#endif
 			if (size > 0)
 			{
 				memcpy(ptr, cdr.Transfer + cdr.FifoOffset, size);
@@ -1898,12 +1964,27 @@ void psxDma3(u32 madr, u32 bcr, u32 chcr) {
 			psxCpu->Clear(madr, cdsize / 4);
 
 			cycles = (cdsize / 4) * 24;
-			set_event(PSXINT_CDRDMA, cycles);
 
 			HW_DMA3_CHCR_2 &= SWAPu32(~0x10000000);
 			if (chcr & 0x100) {
+				set_event(PSXINT_CDRDMA, cycles);
 				HW_DMA3_MADR_2 = SWAPu32(madr + cdsize);
 				HW_DMA3_BCR_2 &= SWAPu32(0xffff0000);
+			}
+			else {
+				/* [2026-11-04] Sin "chopping" la DMA del CD DETIENE la CPU hasta
+				 * terminar: cuando el juego vuelve a ejecutar, ya ha acabado y su
+				 * IRQ esta levantada.  Upstream lo hace saltando el reloj
+				 * (psxRegs.cycle += cycles - 20), que aqui se quito por el ritmo
+				 * de frames (ver abajo).  Sin ese salto, la DMA seguia "en curso"
+				 * (cdsize/4)*24 ciclos con la CPU ya corriendo: PaRappa the
+				 * Rapper (Japon) lee el ultimo bloque de cada frame STR con la IRQ
+				 * del canal 3 activada y la vuelve a apagar enseguida; la IRQ
+				 * llegaba tarde, con el canal ya apagado, el frame no quedaba
+				 * marcado como completo y el video de los creditos no arrancaba
+				 * nunca.  Se termina aqui mismo: lo que ve la CPU es lo de upstream
+				 * y el reloj no salta. */
+				cdrDmaInterrupt();
 			}
 			/* Port 360: el cdrom.c moderno hacia aqui
 			 *     else { psxRegs.cycle += cycles - 20; }

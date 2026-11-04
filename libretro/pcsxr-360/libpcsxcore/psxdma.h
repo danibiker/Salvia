@@ -42,9 +42,13 @@ void psxDma6(u32 madr, u32 bcr, u32 chcr);
 //void gpuotcInterrupt();
 //void cdrDmaInterrupt();
 
+/* [2026-11-04] Solo si sigue en curso (como upstream): la DMA0 de una
+ * decodificacion la puede cerrar antes mdec1Interrupt. */
 #define mdec0Interrupt() \
-HW_DMA0_CHCR_2 &= SWAP32(~0x01000000); \
-DMA_INTERRUPT_2(0);
+if (HW_DMA0_CHCR_2 & SWAP32(0x01000000)) { \
+	HW_DMA0_CHCR_2 &= SWAP32(~0x01000000); \
+	DMA_INTERRUPT_2(0); \
+}
 
 #define gpuotcInterrupt() \
 HW_DMA6_CHCR_2 &= SWAP32(~0x01000000); \

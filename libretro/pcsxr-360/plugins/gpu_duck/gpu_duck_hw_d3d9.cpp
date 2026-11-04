@@ -1929,6 +1929,8 @@ void GPU_HW_D3D9_Backend::EndOutsideFrame()
     Unbind();
 }
 
+static void write_psxram(u32 seq);   /* [2026-11-04] ver abajo */
+
 void GPU_HW_D3D9_Backend::FrameBegin()
 {
 #if DUCK_HW_PERF
@@ -1963,6 +1965,7 @@ void GPU_HW_D3D9_Backend::FrameBegin()
     m_dump_lines = 0;
     m_dump_seq++;
     hw_log(1, "[DUCK-DUMP] inicio del volcado %u\n", m_dump_seq);
+    write_psxram(m_dump_seq);
     Bind();
     DumpVRAM("a");
   }
@@ -1973,6 +1976,7 @@ void GPU_HW_D3D9_Backend::FrameBegin()
     m_dump_lines = 0;
     m_dump_seq++;
     hw_log(1, "[DUCK-DUMP] inicio del volcado %u (seguido)\n", m_dump_seq);
+    write_psxram(m_dump_seq);
   }
 }
 
@@ -2105,6 +2109,31 @@ static const char* dump_dir()
   }
   hw_log(3, "[DUCK-DUMP] ningun directorio escribible para los BMP\n");
   return 0;
+}
+
+/* [2026-11-04] RAM de la PSX (2 MB) y scratchpad (1 KB) al empezar cada
+ * frame volcado: para desensamblar el codigo del juego y ver sus variables
+ * (PaRappa the Rapper, Japon: el video de los creditos no arranca). */
+extern "C" signed char psxM_2[];
+extern "C" signed char* psxH_2;
+static void write_psxram(u32 seq)
+{
+  const char* dir = dump_dir();
+  char path[128];
+  FILE* f;
+  if (!dir)
+    return;
+  _snprintf(path, sizeof(path) - 1, "%spsxram_%u.bin", dir, seq);
+  path[sizeof(path) - 1] = 0;
+  f = std::fopen(path, "wb");
+  if (f)
+  {
+    std::fwrite(psxM_2, 1, 0x200000, f);
+    if (psxH_2)
+      std::fwrite(psxH_2, 1, 0x400, f);
+    std::fclose(f);
+    hw_log(1, "[DUCK-DUMP] %s (RAM 2 MB + scratchpad 1 KB)\n", path);
+  }
 }
 
 static void write_bmp(const char* name, const D3DCOLOR* px, u32 w, u32 h, bool mask)

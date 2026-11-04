@@ -31,7 +31,9 @@
 extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
 /* [2026-11-04] Dragon Quest IV: 1 mientras dura un volcado del renderizador
  * HW (L3+R3).  Registra las DMA de bloque de la GPU (lectura y subida). */
+#if PCSXR_DIAG_INSTRUMENTATION
 extern volatile int g_duck_dump_active;
+#endif
 
 extern unsigned int hSyncCount;
 
@@ -1861,9 +1863,11 @@ void gpuDmaComplete(void)
 	const u32 chcr = SWAPu32(HW_DMA2_CHCR_2);
 	if ((chcr & 0x01000000u) && chcr != s_dma2_chcr_run &&
 	    (SWAPu32(HW_DMA_PCR_2) & (8u << (2 * 4)))) {
+#if PCSXR_DIAG_INSTRUMENTATION
 		if (s_dma2_chained_starts < 4u)
 			pcsxr_log(RETRO_LOG_INFO, "[DMA2] lanzada al acabar la anterior: %08X -> %08X\n",
 				(unsigned)s_dma2_chcr_run, (unsigned)chcr);
+#endif
 		s_dma2_chained_starts++;
 		psxDma2(SWAPu32(HW_DMA2_MADR_2), SWAPu32(HW_DMA2_BCR_2), chcr);
 		return;
@@ -1891,9 +1895,11 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
+#if PCSXR_DIAG_INSTRUMENTATION
 			if (g_duck_dump_active)
 				pcsxr_log(RETRO_LOG_INFO, "[DMA2] vram2mem cyc=%u madr=%08X bcr=%08X words=%u pc=%08X\n",
 					(unsigned)psxRegs.cycle, (unsigned)madr, (unsigned)bcr, (unsigned)size, (unsigned)psxRegs.pc);
+#endif
 			/* Pasamos por el wrapper para que ring_drain garantice que
 			 * el thread ya escribio toda la VRAM antes de leerla.  Antes
 			 * iba direct a GPU_readDataMem, era una race latente. */
@@ -1927,9 +1933,11 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
+#if PCSXR_DIAG_INSTRUMENTATION
 			if (g_duck_dump_active)
 				pcsxr_log(RETRO_LOG_INFO, "[DMA2] mem2vram cyc=%u madr=%08X bcr=%08X words=%u pc=%08X\n",
 					(unsigned)psxRegs.cycle, (unsigned)madr, (unsigned)bcr, (unsigned)size, (unsigned)psxRegs.pc);
+#endif
 			/* Idem: wrapper en lugar de direct.  Drain primero, luego
 			 * GPU_writeDataMem.  Garantiza orden frente a draws encolados. */
 			gpuWriteDataMem(ptr, size);

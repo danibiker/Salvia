@@ -60,10 +60,15 @@ static struct {
 	struct _pending_dma1 pending_dma1;
 } mdec;
 
+/* [2026-11-04] Fin de la decodificacion.  La DMA0 se cierra solo si sigue
+ * en curso: ahora tambien termina por su cuenta (MDECINDMA_INT en psxDma0),
+ * y sin el guard saltaria dos veces su IRQ. */
 #define mdec1func() \
 mdec.reg1 &= ~MDEC1_STP; \
-HW_DMA0_CHCR_2 &= SWAP32(~0x01000000); \
-DMA_INTERRUPT_2(0); \
+if (HW_DMA0_CHCR_2 & SWAP32(0x01000000)) { \
+	HW_DMA0_CHCR_2 &= SWAP32(~0x01000000); \
+	DMA_INTERRUPT_2(0); \
+} \
 mdec.reg1 &= ~MDEC1_BUSY; 
 
 

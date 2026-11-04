@@ -418,7 +418,36 @@ void mdecInit(void) {
 }
 
 // command register
+#include "gpu.h"   /* PCSXR_DIAG_INSTRUMENTATION */
+#if PCSXR_DIAG_INSTRUMENTATION
+/* [2026-11-04] PaRappa the Rapper (SCPS18002): el MDEC no recibe nada en el
+ * video de los creditos.  Primeros accesos al MDEC, para ver si el juego llega
+ * a usarlo y que espera de el. */
+extern void pcsxr_log();
+static unsigned s_mdec_log_w = 0, s_mdec_log_r = 0, s_mdec_log_d = 0;
+/* Tambien sin limite durante un volcado L3+R3 (el atasco). */
+extern volatile int g_duck_dump_active;
+extern volatile int g_cd_trace_left;
+#define MDEC_LOG_ON(cnt, max) ((cnt) < (max) || g_duck_dump_active || g_cd_trace_left > 0)
+
+/* Foto del estado del MDEC y de sus DMA (la pide cdrom.c en el volcado). */
+void mdec_diag_snapshot(void)
+{
+	pcsxr_log(1, "[MDEC] estado reg0=%08X reg1=%08X rl=%d fin=%d pend1=%08X dma0=%08X dma1=%08X dicr=%08X imask=%04X istat=%04X\n",
+		(unsigned)mdec.reg0, (unsigned)mdec.reg1,
+		mdec.rl ? (int)((u8 *)mdec.rl - (u8 *)psxM_2) : -1,
+		mdec.rl_end ? (int)((u8 *)mdec.rl_end - (u8 *)psxM_2) : -1,
+		(unsigned)mdec.pending_dma1.adr,
+		(unsigned)SWAPu32(HW_DMA0_CHCR_2), (unsigned)SWAPu32(HW_DMA1_CHCR_2), (unsigned)SWAPu32(HW_DMA_ICR_2),
+		(unsigned)psxHu16_2(0x1074), (unsigned)psxHu16_2(0x1070));
+}
+
+#endif
+
 void mdecWrite0(u32 data) {
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (MDEC_LOG_ON(s_mdec_log_w, 40u)) { s_mdec_log_w++; pcsxr_log(1, "[MDEC] w0 %08X pc=%08X\n", (unsigned)data, (unsigned)psxRegs.pc); }
+#endif
 	mdec.reg0 = data;
 }
 
@@ -428,6 +457,9 @@ u32 mdecRead0(void) {
 
 // status register
 void mdecWrite1(u32 data) {
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (MDEC_LOG_ON(s_mdec_log_w, 40u)) { s_mdec_log_w++; pcsxr_log(1, "[MDEC] w1 %08X pc=%08X\n", (unsigned)data, (unsigned)psxRegs.pc); }
+#endif
 	if (data & MDEC1_RESET) { // mdec reset
 		mdec.reg0 = 0;
 		mdec.reg1 = 0;
@@ -438,12 +470,19 @@ void mdecWrite1(u32 data) {
 
 u32 mdecRead1(void) {
 	u32 v = mdec.reg1;
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (MDEC_LOG_ON(s_mdec_log_r, 20u)) { s_mdec_log_r++; pcsxr_log(1, "[MDEC] r1 -> %08X pc=%08X\n", (unsigned)v, (unsigned)psxRegs.pc); }
+#endif
 	return v;
 }
 
 void psxDma0(u32 adr, u32 bcr, u32 chcr) {
 	int cmd = mdec.reg0;
 	int size;
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (MDEC_LOG_ON(s_mdec_log_d, 40u)) { s_mdec_log_d++; pcsxr_log(1, "[MDEC] dma0 chcr=%08X bcr=%08X adr=%08X reg0=%08X\n", (unsigned)chcr, (unsigned)bcr, (unsigned)adr, (unsigned)mdec.reg0); }
+#endif
 
 	if (chcr != 0x01000201) {
 		return;
@@ -470,6 +509,19 @@ void psxDma0(u32 adr, u32 bcr, u32 chcr) {
 				MDECINDMA_INT( size / 4 );
 				return;
 			}
+
+			/* [2026-11-04] PaRappa the Rapper (Japon, SCPS18002): el video de
+			 * los creditos se paraba a los ~2 s (con la version USA y en otros
+			 * emuladores va).  Aqui la DMA0 de una decodificacion solo
+			 * terminaba al acabar de decodificar, o sea cuando el juego ya habia
+			 * sacado la imagen por la DMA1.  Un reproductor que espera a que
+			 * termine la entrada antes de pedir la salida (DecDCTinSync) se
+			 * quedaba esperando, reintentaba el comando, reiniciaba el MDEC y
+			 * dejaba de aceptar sectores hasta abortar al menu.  En el hardware
+			 * (y en upstream) la entrada termina en cuanto el MDEC se ha tragado
+			 * los datos: se cierra por tiempo, `size` ciclos, igual que upstream
+			 * (set_event(PSXINT_MDECINDMA, size)). */
+			MDECINDMA_INT(size);
 
 			/* process the pending dma1 */
 			if(mdec.pending_dma1.adr){
@@ -533,6 +585,10 @@ void psxDma1(u32 adr, u32 bcr, u32 chcr) {
 	u8 * image;
 	int size;
 	int dmacnt;
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (MDEC_LOG_ON(s_mdec_log_d, 40u)) { s_mdec_log_d++; pcsxr_log(1, "[MDEC] dma1 chcr=%08X bcr=%08X adr=%08X\n", (unsigned)chcr, (unsigned)bcr, (unsigned)adr); }
+#endif
 
 	if (chcr != 0x01000200) return;
 
