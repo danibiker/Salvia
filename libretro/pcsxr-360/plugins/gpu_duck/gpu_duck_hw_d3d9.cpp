@@ -3838,6 +3838,46 @@ void GPU_HW_D3D9_Backend::ReadbackToCPU(u32 x, u32 y, u32 w, u32 h)
     m_dev->BlockUntilIdle();
     HW_PF_END(idl, PF_IDLE);
   }
+  /* [rendimiento] Camino rapido: desentrelazar con XGUntileSurface SOLO el
+   * rect pedido desde la copia tileada a un bufer en memoria cacheable y
+   * convertir desde ahi.  D3DXLoadSurfaceFromSurface (el camino de abajo)
+   * tardaba ~21 ms por StoreImage: Dragon Quest IV lee 256x225 cada dos
+   * frames para los menus transparentes y bajaba a 40 fps.  Si el rect
+   * envuelve, o no hay memoria, se usa el camino D3DX. */
+  if (x + w <= VRAM_WIDTH && y + h <= VRAM_HEIGHT)
+  {
+    static u32* s_rb_buf = 0;
+    static u32  s_rb_cap = 0;
+    const u32 S = m_scale;
+    const u32 bw = w * S, bh = h * S;
+    const u32 need = bw * bh;
+    if (need > s_rb_cap)
+    {
+      std::free(s_rb_buf);
+      s_rb_buf = static_cast<u32*>(std::malloc(need * sizeof(u32)));
+      s_rb_cap = s_rb_buf ? need : 0;
+    }
+    if (s_rb_buf && SUCCEEDED(m_read_tex->LockRect(0, &lr, NULL, D3DLOCK_READONLY)))
+    {
+      RECT sr;
+      sr.left = (LONG)(x * S); sr.top = (LONG)(y * S);
+      sr.right = (LONG)((x + w) * S); sr.bottom = (LONG)((y + h) * S);
+      XGUntileSurface(s_rb_buf, bw * sizeof(u32), NULL, lr.pBits, VRAM_WIDTH * S, VRAM_HEIGHT * S, &sr,
+                      sizeof(u32));
+      m_read_tex->UnlockRect(0);
+      /* Un subpixel por texel: el primero del bloque, el mismo que muestrea
+       * vram() en los shaders. */
+      for (r = 0; r < h; r++)
+      {
+        const D3DCOLOR* row = reinterpret_cast<const D3DCOLOR*>(s_rb_buf + (r * S) * bw);
+        u16* out = &m_vram_ptr[(y + r) * VRAM_WIDTH + x];
+        for (c = 0; c < w; c++)
+          out[c] = hw_le16(ArgbTo1555(row[c * S]));
+      }
+      ok = true;
+    }
+  }
+  if (!ok)
   {
     IDirect3DSurface9* dst = 0;
     RECT rc;
