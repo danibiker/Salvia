@@ -236,9 +236,11 @@ void gpuSync(void);
 
 	void psxDma2(u32 madr, u32 bcr, u32 chcr);
 
-#define gpuInterrupt() \
-HW_DMA2_CHCR_2 &= SWAP32(~0x01000000); \
-DMA_INTERRUPT_2(2);
+/* [2026-11-04] Fin de la DMA de la GPU.  Si mientras figuraba en curso el
+ * juego lanzo OTRA (CHCR distinto con el bit 24), se arranca ahora en vez de
+ * darla por terminada: ver gpuDmaComplete en gpu.c (Dragon Quest IV). */
+void gpuDmaComplete(void);
+#define gpuInterrupt() gpuDmaComplete()
 
 void CALLBACK GPUbusy( int ticks );
 

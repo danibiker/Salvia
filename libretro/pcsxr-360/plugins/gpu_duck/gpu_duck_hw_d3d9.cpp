@@ -79,6 +79,9 @@ extern "C" int g_duck_hw_texture_filter = 0;
  * caliente): la VRAM se dibuja a 1024x512 por esto.  Xbox hasta 2 (EDRAM),
  * PC hasta 8 (y lo que admita la tarjeta). */
 extern "C" int g_duck_hw_resolution_scale = 1;
+/* [2026-11-04] 1 mientras dura un volcado (L3+R3): el core (psxdma en
+ * libpcsxcore/gpu.c) registra entonces las DMA de bloque de la GPU. */
+extern "C" volatile int g_duck_dump_active = 0;
 
 /* [PGXP] libpcsxcore/pgxp.c: motor activo (limitar u/v al poligono). */
 extern "C" int g_pgxp_enabled;
@@ -1953,6 +1956,7 @@ void GPU_HW_D3D9_Backend::FrameBegin()
     m_dump_armed = false;
     m_dump_left = 4;
     m_dump_active = true;
+    g_duck_dump_active = 1;
     m_dump_lines = 0;
     m_dump_seq++;
     hw_log(1, "[DUCK-DUMP] inicio del volcado %u\n", m_dump_seq);
@@ -1962,6 +1966,7 @@ void GPU_HW_D3D9_Backend::FrameBegin()
   else if (m_dump_left > 0)
   {
     m_dump_active = true;
+    g_duck_dump_active = 1;
     m_dump_lines = 0;
     m_dump_seq++;
     hw_log(1, "[DUCK-DUMP] inicio del volcado %u (seguido)\n", m_dump_seq);
@@ -1985,6 +1990,7 @@ void GPU_HW_D3D9_Backend::FrameEnd()
     Bind();
     DumpVRAM("d");
     m_dump_active = false;
+    g_duck_dump_active = 0;
     if (m_dump_left > 0)
       m_dump_left--;
     hw_log(1, "[DUCK-DUMP] fin del volcado %u (%u lineas)\n", m_dump_seq, m_dump_lines);
@@ -2761,6 +2767,10 @@ void GPU_HW_D3D9_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
            DitherOn(cmd) ? 1 : 0, shaded ? 1 : 0,
            (int)cmd->params.set_mask_while_drawing, (int)cmd->params.check_mask_before_draw, (unsigned)tp[0],
            (unsigned)tp[1], (unsigned)tp[2], (unsigned)tp[3]);
+    /* [Air Grave] area de dibujo, ventana de textura y entrelazado */
+    hw_log(1, "[DUCK-DUMP]   da(%u,%u)-(%u,%u) win(%02X,%02X,%02X,%02X) il%d%d\n", da.left, da.top, da.right,
+           da.bottom, (unsigned)cmd->window.and_x, (unsigned)cmd->window.and_y, (unsigned)cmd->window.or_x,
+           (unsigned)cmd->window.or_y, (int)cmd->params.interlaced_rendering, (int)cmd->params.active_line_lsb);
     for (dv = 0; dv < nv; dv++)
     {
       hw_log(1, "[DUCK-DUMP]   v%u (%d,%d) c%06X uv(%u,%u)\n", dv, cmd->vertices[dv].x, cmd->vertices[dv].y,
@@ -2872,6 +2882,10 @@ void GPU_HW_D3D9_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cm
            (int)cmd->params.set_mask_while_drawing, (int)cmd->params.check_mask_before_draw, (unsigned)tp[0],
            (unsigned)tp[1], (unsigned)tp[2], (unsigned)tp[3], pos_x, pos_y, rw, rh, color, (unsigned)(cmd->texcoord & 0xFF),
            (unsigned)(cmd->texcoord >> 8));
+  if (Dumping())
+    hw_log(1, "[DUCK-DUMP]   da(%u,%u)-(%u,%u) win(%02X,%02X,%02X,%02X) il%d%d\n", da.left, da.top, da.right,
+           da.bottom, (unsigned)cmd->window.and_x, (unsigned)cmd->window.and_y, (unsigned)cmd->window.or_x,
+           (unsigned)cmd->window.or_y, (int)cmd->params.interlaced_rendering, (int)cmd->params.active_line_lsb);
 
   /* gpu_hw.cpp:858: partir en trozos que no crucen la pagina de 256. */
   tex_top = orig_top;
@@ -3238,6 +3252,12 @@ void GPU_HW_D3D9_Backend::FlushRender()
     m_dev->SetPixelShader(m_cur_ps);
   }
 
+  /* [Air Grave] que se dibuja de verdad: vertices, shader, recorte */
+  if (Dumping())
+    hw_log(1, "[DUCK-DUMP] D v=%u tex=%d tr=%u mask=%u%u il=%u%u sc(%ld,%ld)-(%ld,%ld) ps=%p\n", m_nverts,
+           m_batch_tex ? 1 : 0, (unsigned)k.transparency, (unsigned)k.set_mask, (unsigned)k.check_mask,
+           (unsigned)k.interlaced, (unsigned)k.field, (long)m_scissor.left, (long)m_scissor.top,
+           (long)m_scissor.right, (long)m_scissor.bottom, (void*)m_cur_ps);
   if (k.transparency == 4)
     DrawBatch(0);
   else if (m_batch_tex)

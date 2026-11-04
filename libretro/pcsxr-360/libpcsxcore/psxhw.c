@@ -25,6 +25,22 @@
 #include "mdec.h"
 #include "cdrom.h"
 #include "gpu.h"
+#include <libretro.h>
+
+/* [2026-11-04] Dragon Quest IV (el menu del titulo sale un instante cada
+ * varios segundos; con v1.0.7 iba).  Escrituras a CHCR con la DMA todavia en
+ * vuelo: desde el 22-08 (alineado con upstream) NO relanzan la transferencia.
+ * Se registran las primeras 8 (diagnostico).  La DMA 2 lanzada asi se
+ * arranca al terminar la que corria: gpuDmaComplete en gpu.c. */
+extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
+static unsigned s_dma_busy_writes = 0;
+static void dma_note_busy_write(int n, u32 old, u32 value)
+{
+	if (s_dma_busy_writes < 8u)
+		pcsxr_log(RETRO_LOG_INFO, "[DMA%d] CHCR escrito en vuelo: %08X -> %08X cyc=%u pc=%08X (%u)\n", n,
+			(unsigned)old, (unsigned)value, (unsigned)psxRegs.cycle, (unsigned)psxRegs.pc, s_dma_busy_writes);
+	s_dma_busy_writes++;
+}
 
 #define _RF(type, func) \
 	static type _##func##(u32 add) {	\
@@ -67,6 +83,7 @@
 	static void DmaExec_2##n##(u32 add, u32 value) { \
 		u32 old = SWAPu32(HW_DMA##n##_CHCR_2); \
 		value = (value & (msk)) | (orv); \
+		if (old & 0x01000000u) dma_note_busy_write((n), old, value); \
 		if (value == old) return; \
 		HW_DMA##n##_CHCR_2 = SWAPu32(value); \
 		if (((value ^ old) & 0x01000000u) && (value & 0x01000000u) && \

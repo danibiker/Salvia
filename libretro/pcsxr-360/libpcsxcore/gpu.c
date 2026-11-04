@@ -29,6 +29,9 @@
 
 /* libretro_core.cpp.  Se usaba sin prototipo (declaracion implicita). */
 extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
+/* [2026-11-04] Dragon Quest IV: 1 mientras dura un volcado del renderizador
+ * HW (L3+R3).  Registra las DMA de bloque de la GPU (lectura y subida). */
+extern volatile int g_duck_dump_active;
 
 extern unsigned int hSyncCount;
 
@@ -1838,10 +1841,42 @@ void gpuDmaThreadDestroy(void)
 	s_thread_created = 0;
 }
 
+/* [2026-11-04] Dragon Quest IV (SLPM86916): el menu del titulo salia un
+ * instante cada varios segundos (con v1.0.7 iba).  El juego sube una imagen
+ * por DMA (0x01000201, 28672 palabras) y ~1.700 ciclos despues escribe
+ * CHCR = 0x01000401 para lanzar la lista de comandos del frame.  Aqui la
+ * subida ya esta copiada, pero figura "en curso" size/4 ciclos (GPUDMA_INT);
+ * desde el 22-08 una escritura con la DMA en curso no relanza (flanco del
+ * bit 24, como upstream), y al terminar la subida se borraba el bit 24: la
+ * lista NO se ejecutaba nunca y el juego la daba por hecha.  Cuanto mas
+ * rapida la CPU emulada, mas veces caia dentro de la ventana (al 100 %, en
+ * todos los frames).  Upstream lo resuelve en su gpuInterrupt: si al acabar
+ * CHCR es 0x01000401, recorre la lista.  Aqui, en general: si al acabar CHCR
+ * pide OTRA transferencia (bit 24 y distinto de la que corria), se arranca. */
+static u32 s_dma2_chcr_run = 0;
+static unsigned s_dma2_chained_starts = 0;
+
+void gpuDmaComplete(void)
+{
+	const u32 chcr = SWAPu32(HW_DMA2_CHCR_2);
+	if ((chcr & 0x01000000u) && chcr != s_dma2_chcr_run &&
+	    (SWAPu32(HW_DMA_PCR_2) & (8u << (2 * 4)))) {
+		if (s_dma2_chained_starts < 4u)
+			pcsxr_log(RETRO_LOG_INFO, "[DMA2] lanzada al acabar la anterior: %08X -> %08X\n",
+				(unsigned)s_dma2_chcr_run, (unsigned)chcr);
+		s_dma2_chained_starts++;
+		psxDma2(SWAPu32(HW_DMA2_MADR_2), SWAPu32(HW_DMA2_BCR_2), chcr);
+		return;
+	}
+	HW_DMA2_CHCR_2 &= SWAP32(~0x01000000);
+	DMA_INTERRUPT_2(2);
+}
+
 void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 	u32 *ptr;
 	u32 size;
 
+	s_dma2_chcr_run = chcr;
 	switch (chcr) {
 		case 0x01000200: // vram2mem
 #ifdef PSXDMA_LOG
@@ -1856,6 +1891,9 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
+			if (g_duck_dump_active)
+				pcsxr_log(RETRO_LOG_INFO, "[DMA2] vram2mem cyc=%u madr=%08X bcr=%08X words=%u pc=%08X\n",
+					(unsigned)psxRegs.cycle, (unsigned)madr, (unsigned)bcr, (unsigned)size, (unsigned)psxRegs.pc);
 			/* Pasamos por el wrapper para que ring_drain garantice que
 			 * el thread ya escribio toda la VRAM antes de leerla.  Antes
 			 * iba direct a GPU_readDataMem, era una race latente. */
@@ -1889,6 +1927,9 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
+			if (g_duck_dump_active)
+				pcsxr_log(RETRO_LOG_INFO, "[DMA2] mem2vram cyc=%u madr=%08X bcr=%08X words=%u pc=%08X\n",
+					(unsigned)psxRegs.cycle, (unsigned)madr, (unsigned)bcr, (unsigned)size, (unsigned)psxRegs.pc);
 			/* Idem: wrapper en lugar de direct.  Drain primero, luego
 			 * GPU_writeDataMem.  Garantiza orden frente a draws encolados. */
 			gpuWriteDataMem(ptr, size);

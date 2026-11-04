@@ -1922,6 +1922,27 @@ const unsigned char primTableCX[256] =
     0,0,0,0,0,0,0,0
 };
 
+/* [2026-11-04] GP1(10h) 02..05 devuelve el entorno de dibujo (ventana de
+ * textura, area de dibujo y desplazamiento) desde lGPUInfoVals, que solo
+ * rellenan los handlers de PEOPS (prim.c: cmdTextureWindow, cmdDrawAreaStart,
+ * cmdDrawAreaEnd, cmdDrawOffset).  gpu_duck y gpu_unai traen su propia tabla
+ * para E2..E5 y no los tocaban: el juego que guarda el entorno preguntandolo
+ * a la GPU y luego lo repone leia ceros.  Air Grave (pantalla de titulo):
+ * repone un area de dibujo (0,0)-(0,0) y desaparecen las nubes, el letrero y
+ * "Press Start Button" (quedaban los rectangulos planos de debajo).  Mismas
+ * mascaras que prim.c. */
+static void peops_note_draw_env(unsigned long cmd, unsigned long gdata)
+{
+ switch(cmd)
+  {
+   case 0xE2: lGPUInfoVals[INFO_TW]=gdata&0xFFFFF; break;
+   case 0xE3: lGPUInfoVals[INFO_DRAWSTART]=(dwGPUVersion==2)?(gdata&0x3FFFFF):(gdata&0xFFFFF); break;
+   case 0xE4: lGPUInfoVals[INFO_DRAWEND]=(dwGPUVersion==2)?(gdata&0x3FFFFF):(gdata&0xFFFFF); break;
+   case 0xE5: lGPUInfoVals[INFO_DRAWOFF]=(dwGPUVersion==2)?(gdata&0x7FFFFF):(gdata&0x3FFFFF); break;
+   default: break;
+  }
+}
+
 #if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUwriteDataMem(unsigned long * pMem, int iSize)
 #else
@@ -2187,6 +2208,10 @@ ENDVRAM:
 #else
        primFunc[gpuCommand]((unsigned char *)gpuDataM);
 #endif
+       /* [2026-11-04] duck/unai: lo que GP1(10h) tiene que devolver (ver
+        * peops_note_draw_env).  PEOPS ya lo hace en prim.c. */
+       if(primFunc!=primTableJ && gpuCommand>=0xE2 && gpuCommand<=0xE5)
+        peops_note_draw_env(gpuCommand,GETLE32(&gpuDataM[0]));
 
        /* "Se ha dibujado algo" para los renderers ALTERNATIVOS.
         *
