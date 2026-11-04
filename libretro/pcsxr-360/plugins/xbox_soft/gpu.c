@@ -1317,6 +1317,7 @@ void PEOPS_GPUdiagVramStats(unsigned int *nonzero, unsigned int *total)
 extern volatile int g_duck_dump_active;
 extern void pcsxr_log(int level, const char *fmt, ...);
 
+
 void PEOPS_GPUsetDisplayState(unsigned long gdata)
 {
  if (g_duck_dump_active)
@@ -1962,6 +1963,32 @@ static void peops_note_draw_env(unsigned long cmd, unsigned long gdata)
   }
 }
 
+/* [2026-11-04] Tomb Raider 2 (agua y Lara de un azul plano): GPUSTAT bits
+ * 0..10 (pagina de textura, ABR, profundidad, dither, dibujar en display) y
+ * 11..12 (mascara) los mantienen cmdTexturePage / UpdateGlobalTP / cmdSTP de
+ * PEOPS, pero gpu_duck y gpu_unai traen su propia tabla para E1, E6 y los
+ * poligonos texturizados y no los tocaban: GPUSTAT se quedaba con la
+ * pagina 0.  El PutDrawEnv del juego rehace el E1 a partir de GPUSTAT, asi
+ * que machacaba la pagina (960,256)/15 bits que acababa de poner por un
+ * E1 000000, y el sprite que genera las paletas "bajo el agua" leia la
+ * pagina 0 en 4 bits: paletas de un unico azul.  Mismo criterio que gpulib
+ * (pcsx_rearmed): status 0..10 = E1 & 0x7ff, 11..12 = E6 & 3, y la tpage de
+ * un poligono texturizado actualiza los bits 0..8. */
+static void peops_note_status(unsigned long cmd, const unsigned long *d)
+{
+ unsigned long gdata = GETLE32(&d[0]);
+ if (cmd == 0xE1)
+  lGPUstatusRet = (lGPUstatusRet & ~0x7ffL) | (gdata & 0x7ff);
+ else if (cmd == 0xE6)
+  lGPUstatusRet = (lGPUstatusRet & ~0x1800L) | ((gdata & 3) << 11);
+ else if ((cmd >= 0x24 && cmd < 0x28) || (cmd >= 0x2C && cmd < 0x30) ||
+          (cmd >= 0x34 && cmd < 0x38) || (cmd >= 0x3C && cmd < 0x40))
+  {
+   unsigned long tp = GETLE32(&d[(cmd & 0x10) ? 5 : 4]) >> 16;
+   lGPUstatusRet = (lGPUstatusRet & ~0x1ffL) | (tp & 0x1ff);
+  }
+}
+
 #if !defined(_XBOX) && !defined(PCSXR360_WIN32)
 void CALLBACK GPUwriteDataMem(unsigned long * pMem, int iSize)
 #else
@@ -2231,6 +2258,8 @@ ENDVRAM:
         * peops_note_draw_env).  PEOPS ya lo hace en prim.c. */
        if(primFunc!=primTableJ && gpuCommand>=0xE2 && gpuCommand<=0xE5)
         peops_note_draw_env(gpuCommand,GETLE32(&gpuDataM[0]));
+       if(primFunc!=primTableJ && primFunc!=primTableSkip)
+        peops_note_status(gpuCommand,(const unsigned long *)gpuDataM);
 
        /* "Se ha dibujado algo" para los renderers ALTERNATIVOS.
         *

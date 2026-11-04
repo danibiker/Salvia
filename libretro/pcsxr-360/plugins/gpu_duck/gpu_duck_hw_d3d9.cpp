@@ -692,6 +692,21 @@ static const char* s_ps_batch_src =
   "{\n"
   "  PSO o;\n"
   "  float descarta = 0.0;\n"   /* <0 = descartar: clip() al final (ver arriba) */
+  /* [escala] En D3D9 el centro del pixel cae en coordenadas enteras de
+   * pantalla: a SCALE x el primer subpixel de cada texel muestrea la u/v
+   * EXACTA del borde del texel (n, 0/SCALE), y el floor de sampleTex coge el
+   * texel n o el n-1 segun el error de la interpolacion.  Se nota poco en
+   * texturas normales (medio texel), pero cuando lo dibujado es una CLUT
+   * (Tomb Raider 2 genera las paletas "bajo el agua" con un sprite) ese
+   * subpixel -- el que lee vram() -- se queda con la entrada de al lado y
+   * las texturas que la usan salen mal.  Se muestrea en el centro del pixel
+   * del destino: medio pixel en x y en y a lo largo de la u/v (ddx/ddy, fuera
+   * de cualquier [branch]).  A x1 no cambia nada (se redondea). */
+  "#if SCALE > 1 && TEXMODE != 0 && FILTER == 0\n"
+  "  float2 uvc = i.uvz.xy + (ddx(i.uvz.xy) + ddy(i.uvz.xy)) * 0.5;\n"
+  "#else\n"
+  "  float2 uvc = i.uvz.xy;\n"
+  "#endif\n"
   "  float2 pix = natpix(i.vpos);\n"   /* [escala] pixel nativo: entrelazado y dithering */
   /* [escala, Xbox] Sin profundidad no hay prueba de mascara por Z: se mira el
    * bit de mascara del destino en la copia de lectura (puesta al dia antes
@@ -739,7 +754,7 @@ static const char* s_ps_batch_src =
   "#else\n"
   /* [PGXP] con decimales y perspectiva la u/v se puede salir un poco del
    * poligono en los bordes: limitarla como upstream (u_uv_limits) */
-  "  float2 uvs = (c_p1.w > 0.5) ? clamp(i.uvz.xy, i.lim.xy, i.lim.zw) : i.uvz.xy;\n"
+  "  float2 uvs = (c_p1.w > 0.5) ? clamp(uvc, i.lim.xy, i.lim.zw) : uvc;\n"
   "  tc = sampleTex(uvs, tpi);\n"
   "  if (dot(tc, float4(1.0, 1.0, 1.0, 1.0)) < 0.001)\n"
   "    descarta = -1.0;\n"
