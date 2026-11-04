@@ -1226,7 +1226,14 @@ uint32_t gpuDmaChain(uint32_t addr)
      * tope de 2.000.000 de nodos: 2 millones de cuadrilateros semitransparentes
      * por frame, el juego "congelado". */
     uint32_t ld_addr = addr & 0x1FFFFC;
-    unsigned int ld_count = 32;
+    /* rearmed empieza en 32; aqui en 1.  Los nodos que se repiten antes de
+     * detectar el bucle son como mucho ~max(ld_count, 2*longitud del bucle),
+     * y con 32 el fundido de Initial D (un bucle de 1-2 nodos) se dibujaba
+     * ~33 veces por DrawOTag: cuadrilateros semitransparentes a pantalla
+     * completa, ~3 ms cada uno con PEOPS en la Xbox.  Empezar en 1 no da
+     * falsos positivos (volver a un nodo ya visto ES un bucle) y la
+     * comparacion extra por nodo es despreciable. */
+    unsigned int ld_count = 1;
 
     baseAddrL = (u32 *)psxM_2;
     baseAddrB = (unsigned char*) baseAddrL;
