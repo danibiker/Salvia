@@ -319,7 +319,20 @@ __inline void psxRcntUpdate()
              * hardware, pcsx_rearmed y SwanStation.  Antes se lanzaba al
              * final del frame (linea 0), ~20 lineas tarde.  En ese momento
              * GPUSTAT.LCF ya vale 0 (ver gpuReadStatus), que es lo que
-             * esperan rutinas como la de X-Men Mutant Academy JP. */
+             * esperan rutinas como la de X-Men Mutant Academy JP.
+             *
+             * La presentacion (gpuUpdateLace) y el fin del frame del core
+             * (EmuUpdate) van AQUI, antes de la IRQ, como en rearmed
+             * (EmuUpdate en VBlankStart).  Si se quedan al final del frame,
+             * el juego ya ha empezado la lista del frame siguiente tras la
+             * IRQ y el drain de gpuUpdateLace espera a que el hilo de GPU la
+             * rasterice entera: se pierde el solapamiento CPU/GPU (Gran
+             * Turismo 2 con Unai bajaba a ~50 fps). */
+            if( !Config.VSyncWA )
+            {
+                gpuUpdateLace();
+                EmuUpdate();
+            }
             setIrq( 0x01 );
         }
         
@@ -331,10 +344,11 @@ __inline void psxRcntUpdate()
             GPU_vBlank( 0 );
             /* Con VSyncWA el frame acaba antes de VBlankStart: la IRQ va aqui. */
             if( Config.VSyncWA )
+            {
                 setIrq( 0x01 );
-
-			gpuUpdateLace();
-            EmuUpdate();
+                gpuUpdateLace();
+                EmuUpdate();
+            }
         }
     }
 
