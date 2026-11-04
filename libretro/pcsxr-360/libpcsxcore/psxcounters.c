@@ -58,10 +58,36 @@ enum
 static const u32 CountToOverflow  = 0;
 static const u32 CountToTarget    = 1;
 
-static const u32 FrameRate[]      = { 60, 50 };
 //static const u32 VBlankStart[]    = { 240, 256 };
 static const u32 VBlankStart[]    = { 243, 256 };
 static const u32 HSyncTotal[]     = { 263, 313 };
+
+/* [2026-11-04] Frecuencia de cuadro REAL de la PSX, como FPS_FRACTIONAL_* de
+ * pcsx_rearmed (psxcounters.c): reloj de video / (lineas * ciclos de video por
+ * linea).  NTSC ~59,826 Hz, PAL ~49,761 Hz.
+ *
+ * Con 60/50 Hz exactos la VBlank va casi en fase con los temporizadores que los
+ * juegos programan a multiplos de 60 Hz, y la fase deriva MUY despacio.  Zanac
+ * x Zanac: libpad lee el mando colgado de la VBlank, y el dispatcher de libetc
+ * reconoce la VBlank si llega mientras atiende la IRQ del temporizador 2 (240
+ * Hz, su driver de sonido); entonces libpad no la ve.  Con 60 Hz la VBlank caia
+ * dentro de esa IRQ ~70 frames seguidos cada ~26 s: un segundo sin leer el
+ * mando y la nave siguiendo sola con la ultima direccion.  Con la frecuencia
+ * real la deriva es ~20 veces mayor: la coincidencia dura un par de frames,
+ * como en la consola. */
+#define FPS_FRACTIONAL_PAL  (53203425.0 / 314.0 / 3406.0)
+#define FPS_FRACTIONAL_NTSC (53693175.0 / 263.0 / 3413.0)
+
+double psxGetFps(void)
+{
+    return Config.PsxType ? FPS_FRACTIONAL_PAL : FPS_FRACTIONAL_NTSC;
+}
+
+static u32 psxLineCycles(void)
+{
+    return (u32)((double)PSXCLK / psxGetFps() / (double)HSyncTotal[Config.PsxType]);
+}
+
 static const u32 SpuUpdInterval[] = { 23, 22 };
 
 static const s32 VerboseLevel     = 0;
@@ -391,7 +417,7 @@ void psxRcntWmode( u32 index, u32 value )
         case 1:
             if( value & Rc1HSyncClock )
             {
-                rcnts[index].rate = (PSXCLK / (FrameRate[Config.PsxType] * HSyncTotal[Config.PsxType]));
+                rcnts[index].rate = psxLineCycles();
             }
             else
             {
@@ -501,7 +527,7 @@ void psxRcntInit()
     // rcnt base.
     rcnts[3].rate   = 1;
     rcnts[3].mode   = RcCountToTarget;
-    rcnts[3].target = (PSXCLK / (FrameRate[Config.PsxType] * HSyncTotal[Config.PsxType]));
+    rcnts[3].target = psxLineCycles();
 
     for( i = 0; i < CounterQuantity; ++i )
     {

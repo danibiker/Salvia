@@ -49,6 +49,7 @@ extern "C" {
 #include "pgxp.h"   /* [PGXP] g_pgxp_*, PGXP_Init/Shutdown */
 #include "cheat.h"  /* motor de cheats GameShark de PCSX-R (ClearAllCheats/AddCheat/ApplyCheats) */
 #include "sio.h"
+#include "psxcounters.h"   /* psxGetFps */
 #include "spu.h"  /* SPUirq, SPUschedule (cycle-driven SPU event handlers) */
 #include "../../plugins/dfsound/spu_config.h"  /* SPUConfig spu_config */
 #include "../../plugins/xbox_soft/peops_prof.h"
@@ -1408,7 +1409,9 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
     info->geometry.max_height   = 512;
     info->geometry.aspect_ratio = g_pcsxr_widescreen ? (16.0f / 9.0f) : (4.0f / 3.0f);
 
-    info->timing.fps         = (Config.PsxType == PSX_TYPE_PAL) ? 50.0 : 60.0;
+    /* Frecuencia real de la PSX (~59,826 / ~49,761 Hz), la misma con la que
+     * corren los contadores: ver psxGetFps en psxcounters.c. */
+    info->timing.fps         = psxGetFps();
     info->timing.sample_rate = 44100.0;
 }
 

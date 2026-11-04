@@ -351,7 +351,11 @@ void sioWriteMode16(unsigned short value) {
 void sioWriteCtrl16(unsigned short value) {
 	CtrlReg = value & ~RESET_ERR;
 	if (value & RESET_ERR) StatReg &= ~IRQ;
-	if ((CtrlReg & SIO_RESET) || (!CtrlReg)) {
+	/* Como pcsx_rearmed (sioWriteCtrl16): el intercambio se reinicia tambien
+	 * al quitar DTR (deseleccionar el mando), no solo con CtrlReg == 0.  Si se
+	 * deseleccionaba a mitad de un intercambio dejando otros bits puestos,
+	 * padst seguia en 2 y el 0x01 del siguiente se tomaba como un dato. */
+	if ((CtrlReg & SIO_RESET) || !(CtrlReg & DTR)) {
 		padst = 0; mcdst = 0; parp = 0;
 		StatReg = TX_RDY | TX_EMPTY;
 		psxRegs.interrupt &= ~(1 << PSXINT_SIO);
@@ -444,6 +448,10 @@ void sioInterrupt() {
 	PAD_LOG("Sio Interrupt (CP0.Status = %x)\n", psxRegs.CP0.n.Status);
 #endif
 //	SysPrintf("Sio Interrupt\n");
+	/* Como rearmed: la IRQ del SIO se activa en el flanco, no se vuelve a
+	 * poner en I_STAT si la anterior sigue sin reconocer. */
+	if (StatReg & IRQ)
+		return;
 	StatReg |= IRQ;
 //if(use_vm)
 //	psxHu32ref(0x1070) |= SWAPu32(0x80);

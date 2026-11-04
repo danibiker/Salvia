@@ -31,6 +31,7 @@ extern "C" {
 
 extern u32 psxNextCounter, psxNextsCounter;
 
+double psxGetFps(void);
 void psxRcntInit();
 __inline void psxRcntUpdate();
 
