@@ -202,7 +202,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
 	{
 		for (column = 0; column < dy; column++)
 		{
-			startxy = ((1024) * (column + y)) + x;
+			startxy = ((1024) * ((column + y) & 511)) + x;   /* [2026-11-04] vuelta vertical */
 			pD = (unsigned char *)&psxVuw[startxy];
 			destpix = (uint32_t *)(surf + (column * lPitch));
 			
@@ -239,7 +239,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
 		 * de la rama de resync no merece la complejidad. */
 		for (column = 0; column < dy; column++)
 		{
-			startxy = (1024 * (column + y)) + x;
+			startxy = (1024 * ((column + y) & 511)) + x;   /* [2026-11-04] vuelta vertical */
 			destpix = (uint32_t *)(surf + (column * lPitch));
 
 			for (row = 0; row < dx; row++)
@@ -305,7 +305,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
 	{
 		for (column = 0;column<dy;column++)
 		{
-			startxy = (1024 * (column + y)) + x;
+			startxy = (1024 * ((column + y) & 511)) + x;   /* [2026-11-04] vuelta vertical */
 			destpix = (uint32_t *)(surf + (column * lPitch));			
 
 			for (row = 0; row < dx; row+=8)
@@ -411,7 +411,7 @@ void BlitScreen16(unsigned char * surf, long x, long y,
 
    for(column=0;column<dy;column++)
     {
-     startxy=((1024)*(column+y))+x;
+     startxy=((1024)*((column+y)&511))+x;   /* [2026-11-04] vuelta vertical */
 
      pD=(unsigned char *)&psxVuw[startxy];
 
@@ -451,6 +451,8 @@ void BlitScreen16(unsigned char * surf, long x, long y,
 
    for(column=0;column<dy;column++)
     {
+     /* [2026-11-04] vuelta vertical: cada fila desde su sitio en la VRAM */
+     SRCPtr = (unsigned long *)(psxVuw + (((y + column) & 511) << 10) + x);
      for(row=0;row<dx;row++)
       {
 		 lu=GETLE16D(SRCPtr++);
@@ -466,6 +468,9 @@ void BlitScreen16(unsigned char * surf, long x, long y,
  }
  
 extern time_t tStart;
+/* [2026-11-04] trazas de geometria de salida durante un volcado L3+R3 */
+extern volatile int g_duck_dump_active;
+extern void pcsxr_log(int level, const char *fmt, ...);
 
 void DoBufferSwap(void)
 {
@@ -493,6 +498,11 @@ void DoBufferSwap(void)
 			top = prv->Range.y0 >> 1;
 			ch -= prv->Range.y0;
 		}
+		if (g_duck_dump_active)
+			pcsxr_log(1, "[DISP] present pos=(%d,%d) modo=%dx%d rango y=%d..%d x=%d..%d prev y0=%d top=%d ch=%d double=%d\n",
+			          PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y, PSXDisplay.DisplayMode.x,
+			          PSXDisplay.DisplayMode.y, PSXDisplay.Range.y0, PSXDisplay.Range.y1, PSXDisplay.Range.x0,
+			          PSXDisplay.Range.x1, prv->Range.y0, top, ch, PSXDisplay.Double);
 		duck_hw_present(PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y,
 		                prv->Range.x1, ch, prv->Range.x0, top,
 		                PSXDisplay.DisplayMode.x, PSXDisplay.DisplayMode.y, PSXDisplay.RGB24);

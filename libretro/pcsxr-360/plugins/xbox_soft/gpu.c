@@ -912,6 +912,9 @@ void ChangeDispOffsetsY(void)                          // Y CENTER
 
 // new
 
+ /* [2026-11-04] Con la VRAM de 512 la salida da la vuelta: ver GP1(05). */
+ if(iGPUHeight==512) PreviousPSXDisplay.DisplayModeNew.y=0;
+ else
  if((PreviousPSXDisplay.DisplayModeNew.x+PSXDisplay.DisplayModeNew.y)>iGPUHeight)
   {
    int dy1=iGPUHeight-PreviousPSXDisplay.DisplayModeNew.x;
@@ -1309,8 +1312,15 @@ void PEOPS_GPUdiagVramStats(unsigned int *nonzero, unsigned int *total)
 
 /* Mitad de GEOMETRIA.  La ejecuta el CONSUMIDOR cuando el ring llega a la
  * posicion en la que el juego escribio el registro. */
+/* [2026-11-04] Street Fighter: Real Battle on Film (la imagen tiembla):
+ * durante un volcado L3+R3 se registran los GP1 de geometria (05..08). */
+extern volatile int g_duck_dump_active;
+extern void pcsxr_log(int level, const char *fmt, ...);
+
 void PEOPS_GPUsetDisplayState(unsigned long gdata)
 {
+ if (g_duck_dump_active)
+  pcsxr_log(1, "[DISP] GP1 %02lX %06lX\n", (gdata >> 24) & 0xff, gdata & 0xffffff);
  switch((gdata>>24)&0xff)
   {
    //--------------------------------------------------//
@@ -1345,6 +1355,15 @@ void PEOPS_GPUsetDisplayState(unsigned long gdata)
      // store the same val in some helper var, we need it on later compares
      PreviousPSXDisplay.DisplayModeNew.x=PSXDisplay.DisplayPosition.y;
 
+     /* [2026-11-04] Street Fighter: Real Battle on Film alterna el inicio de
+      * la imagen entre y=232 e y=504 (504..511 y luego 0..: la imagen de y=0
+      * sale 8 lineas mas abajo, igual que la de y=240 mostrada desde 232).
+      * PEOPS no daba la vuelta: con y=504 mostraba desde y=0 y recortaba la
+      * altura, y la imagen saltaba 8 lineas en cada frame.  Las salidas (los
+      * BlitScreen de draw_ok.c y el renderizador HW) leen ahora con la vuelta
+      * vertical, asi que con la VRAM de 512 se deja tal cual. */
+     if(iGPUHeight==512) PreviousPSXDisplay.DisplayModeNew.y=0;
+     else
      if((PSXDisplay.DisplayPosition.y+PSXDisplay.DisplayMode.y)>iGPUHeight)
       {
        int dy1=iGPUHeight-PSXDisplay.DisplayPosition.y;

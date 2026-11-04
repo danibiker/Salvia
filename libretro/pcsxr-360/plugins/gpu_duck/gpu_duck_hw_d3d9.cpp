@@ -877,6 +877,9 @@ static const char* s_ps_disp15_src =
   "  if (q.x < 0.0 || q.y < 0.0 || q.x >= c_d1.x || q.y >= c_d1.y)\n"
   "    return float4(0.0, 0.0, 0.0, 1.0);\n"   /* margenes: negro */
   "  float2 p = c_d0.xy + q;\n"
+  /* [2026-11-04] La zona visible da la vuelta a la VRAM (Street Fighter: Real
+   * Battle on Film muestra desde y=504: filas 504..511 y luego 0..) */
+  "  p = float2(imod(p.x, 1024.0 * SCALE), imod(p.y, 512.0 * SCALE));\n"
   "  float4 t = tex2Dlod(s_vram, float4(rtuv(p), 0.0, 0.0));\n"
   "  return float4(t.rgb, 1.0);\n"
   "}\n";
@@ -901,7 +904,7 @@ static const char* s_ps_disp24_src =
   "  float2 q = float2(idiv(qs.x, SCALE), idiv(qs.y, SCALE));\n"
   "  float2 org = float2(idiv(c_d0.x, SCALE), idiv(c_d0.y, SCALE));\n"
   "  float bx = idiv(q.x * 3.0, 2.0);\n"
-  "  float2 base = float2(org.x + bx, org.y + q.y);\n"
+  "  float2 base = float2(org.x + bx, imod(org.y + q.y, 512.0));\n"   /* [2026-11-04] vuelta vertical */
   "  float s0 = dec16(vram(base));\n"
   "  float s1 = dec16(vram(base + float2(1.0, 0.0)));\n"
   "  float lo0 = imod(s0, 256.0);\n"
