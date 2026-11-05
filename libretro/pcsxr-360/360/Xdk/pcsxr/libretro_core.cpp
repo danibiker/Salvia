@@ -153,6 +153,7 @@ extern "C" int  duck_hw_enabled;
  * (pcsxr360_hw_texture_filter: 0 nearest, 1 bilineal, 2 JINC2, 3 xBR). */
 extern "C" int  g_duck_hw_true_color;
 extern "C" int  g_duck_hw_texture_filter;
+extern "C" int  g_duck_hw_texture_cache;   /* [2026-11-04] pcsxr360_hw_texture_cache */
 /* [2026-11-03] Escala de resolucion interna (pcsxr360_hw_resolution_scale), al
  * cargar el juego: se lee antes de crear el backend. */
 extern "C" int  g_duck_hw_resolution_scale;
@@ -429,9 +430,23 @@ void retro_set_environment(retro_environment_t cb) {
             "Nearest = sin filtro (como la PSX). Bilinear = suavizado. "
             "JINC2 = suavizado mas nitido. xBR = reescalado de bordes (el mas caro).",
             NULL, "video",
-            { { "Nearest", "Nearest (off)" }, { "Bilinear", NULL }, { "JINC2", NULL }, { "xBR", NULL },
+            { { "Nearest", "Nearest (off)" }, { "Bilinear", NULL }, 
+#ifndef _XBOX
+			  { "JINC2", NULL }, { "xBR", NULL },
+#endif
               { NULL, NULL } },
             "Nearest"
+        },
+        /* [2026-11-04] Cache de paginas decodificadas de SwanStation HW (en
+         * caliente).  Windows y Xbox. */
+        {
+            "pcsxr360_hw_texture_cache",
+            "Texture Cache (SwanStation HW only)", "Texture Cache (SwanStation HW)",
+            "Decodifica cada pagina de textura de 4/8 bits con su paleta una sola vez en la GPU "
+            "y la reutiliza: menos lecturas por pixel (nearest y bilineal). Experimental.",
+            NULL, "video",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "enabled"
         },
         /* [2026-11-03] Resolucion interna de SwanStation HW: la VRAM se
          * dibuja a N veces su tamano (poligonos y texturas renderizadas mas
@@ -1225,6 +1240,13 @@ static void check_game_fixes(void) {
             else if (strcmp(var_tf.value, "xBR") == 0)   f = 3;
         }
         g_duck_hw_texture_filter = f;
+    }
+
+    /* [2026-11-04] Cache de paginas de SwanStation HW (en caliente). */
+    {
+        struct retro_variable var_txc = { "pcsxr360_hw_texture_cache", NULL };
+        g_duck_hw_texture_cache = (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_txc) &&
+                                   var_txc.value && strcmp(var_txc.value, "enabled") == 0) ? 1 : 0;
     }
 
     /* [PGXP] Culling y correccion de texturas: en caliente.  El motor

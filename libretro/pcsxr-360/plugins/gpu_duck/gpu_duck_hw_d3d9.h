@@ -318,6 +318,41 @@ private:
   u32  m_dump_lines, m_dump_seq, m_dump_left;
   bool Dumping();
   void DumpVRAM(const char* when);
+
+  /* --- [2026-11-04] cache de paginas decodificadas (PC, fase 1) --------
+   * Cada pagina de 4/8 bits con su CLUT se decodifica en la GPU a una celda
+   * RGBA de 256x256 de un atlas; los lotes la leen con una sola lectura (y
+   * con el bilineal del hardware) en vez de indice + CLUT por texel.  Las
+   * escrituras de VRAM invalidan las celdas que pisan (IncludeDirty).  Ver
+   * TexCacheLookup en el .cpp. */
+  enum { TXC_ATLAS = 2048, TXC_CELL = 256, TXC_PER_ROW = TXC_ATLAS / TXC_CELL,
+         TXC_ENTRIES = TXC_PER_ROW * TXC_PER_ROW, TXC_GHOST = 256 };
+  struct TexCacheEntry
+  {
+    u32  key;
+    u32  lru;
+    bool valid;
+    u32  pl, pt, pr, pb;   /* pagina en la VRAM (derecha/abajo exclusivos) */
+    u32  cl, ct, cr;       /* fila de la CLUT */
+  };
+  bool TexCacheLookup(int texmode, u32 tpx, u32 tpy, u32 clutx, u32 cluty);
+  void TexCacheDecode(u32 slot, int texmode, u32 tpx, u32 tpy, u32 clutx, u32 cluty);
+  void TexCacheInvalidate(u32 left, u32 top, u32 right, u32 bottom);
+  void TexCacheClear();
+  IDirect3DTexture9*     m_txc_tex;    /* atlas TXC_ATLAS x TXC_ATLAS (PC: render target; Xbox: destino de Resolve) */
+  IDirect3DSurface9*     m_txc_surf;   /* PC: el atlas como render target */
+  IDirect3DSurface9*     m_txc_rt;     /* Xbox: una celda en la EDRAM, se resuelve al atlas */
+  u32                    m_txc_base;   /* Xbox: su base en la EDRAM (tiles) */
+  IDirect3DPixelShader9* m_ps_decode;
+  TexCacheEntry          m_txc[TXC_ENTRIES];
+  u32                    m_txc_clock;
+  u32                    m_txc_live;   /* celdas validas (para no recorrer nada si no hay) */
+  int                    m_txc_last;   /* la ultima celda usada (atajo) */
+  float                  m_txc_ox, m_txc_oy;   /* celda del primitivo en curso (AddVertex) */
+  u32                    m_txc_budget; /* decodificaciones que quedan en este frame */
+  u32                    m_txc_ghost[TXC_GHOST];   /* claves vistas una vez (key + 1), sin celda */
+  u32                    m_txc_bl, m_txc_bt, m_txc_br, m_txc_bb;   /* union de paginas y CLUTs vivas */
+  u32                    m_st_txc_hit, m_st_txc_miss, m_st_txc_inval, m_st_txc_skip;
 };
 
 #endif /* DUCK_HW_D3D9 */

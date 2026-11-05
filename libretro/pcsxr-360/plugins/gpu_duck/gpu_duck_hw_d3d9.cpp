@@ -75,6 +75,9 @@ extern "C" int g_pcsxr_dithering;
  * Se aplican al empezar el frame siguiente (ApplyRenderOptions). */
 extern "C" int g_duck_hw_true_color = 1;
 extern "C" int g_duck_hw_texture_filter = 0;
+/* [2026-11-04] pcsxr360_hw_texture_cache (en caliente): cache de paginas
+ * decodificadas (TexCacheLookup).  PC y Xbox. */
+extern "C" int g_duck_hw_texture_cache = 0;
 /* [2026-11-03] pcsxr360_hw_resolution_scale (al cargar el juego, no en
  * caliente): la VRAM se dibuja a 1024x512 por esto.  Xbox hasta 2 (EDRAM),
  * PC hasta 8 (y lo que admita la tarjeta). */
@@ -253,6 +256,18 @@ static const float HALF_PIXEL = -0.5f;
 #define DUCK_HW_STATS 0
 #endif
 
+/* [2026-11-05] Cache de paginas: maximo de paginas decodificadas por frame.
+ * Cada una corta el lote y, en la Xbox, cambia de render target y hace un
+ * Resolve (un punto de sincronizacion de la GPU).  Pasado el cupo, el
+ * primitivo va por el camino de siempre. */
+#ifndef DUCK_HW_TXC_BUDGET
+#if defined(_XBOX)
+#define DUCK_HW_TXC_BUDGET 6
+#else
+#define DUCK_HW_TXC_BUDGET 24
+#endif
+#endif
+
 
 static inline u64 hw_now()
 {
@@ -381,6 +396,13 @@ static const char* s_vs_util_src =
 static const char* s_ps_batch_src =
   "sampler2D s_vram   : register(s0);\n"
   "sampler2D s_dither : register(s1);\n"
+  /* [2026-11-04] cache de paginas: el mismo atlas con dos muestreadores,
+   * puntual (s2) y bilineal (s3), los dos en CLAMP. */
+  "#if TXCACHE\n"
+  "sampler2D s_txc    : register(s2);\n"
+  "sampler2D s_txcl   : register(s3);\n"
+  "static const float TXC_INV = 1.0 / 2048.0;\n"
+  "#endif\n"
   "float4 c_p0   : register(c0);\n"   /* x = factor origen, y = modo (0..3), z = poner mascara, w = dithering */
   "float4 c_p1   : register(c1);\n"   /* x = entrelazado, y = campo activo */
   "float4 c_winx : register(c2);\n"   /* bits 0..3 de la mascara de ventana en X (bits 3..6 de u) */
@@ -406,7 +428,8 @@ static const char* s_ps_batch_src =
   "  return c - a + c_win4.zw;\n"
   "}\n"
   "#if TEXMODE == 4\n"
-  "static float s_mode;\n"   /* modo del primitivo: 0 sin textura, 1..3 (main, desde el vertice) */
+  "static float s_mode;\n"
+  "static float s_cache;\n"   /* el primitivo lee de la cache de paginas (modo + 8 en el vertice) */   /* modo del primitivo: 0 sin textura, 1..3 (main, desde el vertice) */
   "static float s_raw;\n"    /* textura "raw" (sin modular por el color) */
   "#define ISRAW (s_raw > 0.5)\n"
   "#else\n"
@@ -468,6 +491,38 @@ static const char* s_ps_batch_src =
   /* Texel ENTERO n (ya en la convencion de esta shader), limitado al rango
    * de u/v del poligono (ComputePolygonUVLimits). */
   "float4 T(float4 tp, float2 n, float4 lim) { return sampleTex(clamp(n, lim.xy, lim.zw), tp); }\n"
+  "#endif\n"
+  /* [2026-11-04] Cache de paginas: tp.xy es la esquina de la celda en el
+   * atlas.  La celda guarda el color del texel tal cual (rgb de la VRAM) y en
+   * el alfa 0 = transparente (0x0000), 1 = opaco, 254/255 = opaco con el bit
+   * de semitransparencia.  sampleCache devuelve lo mismo que sampleTex. */
+  "#if TXCACHE\n"
+  "float4 sampleCache(float2 uv, float4 tp)\n"
+  "{\n"
+  "#if SCALE == 1\n"
+  "  float2 ic = roundeven2(uv);\n"
+  "#else\n"
+  "  float2 ic = floor(uv);\n"
+  "#endif\n"
+  "  ic.x = imod(ic.x, 256.0);\n"
+  "  ic.y = imod(ic.y, 256.0);\n"
+  "  float4 c = tex2Dlod(s_txc, float4((tp.xy + ic + 0.5) * TXC_INV, 0.0, 0.0));\n"
+  "  return (c.a < 0.5) ? float4(0.0, 0.0, 0.0, 0.0) : float4(c.rgb, (c.a < 0.999) ? 1.0 : 0.0);\n"
+  "}\n"
+  "#if FILTER == 1\n"
+  /* Bilineal del hardware: una lectura.  Los texels transparentes valen 0 en
+   * todo, asi que el alfa filtrado es la cobertura (ialpha) y el color sale
+   * ya multiplicado por ella, igual que en filtered().  El bit de
+   * semitransparencia, del texel mas cercano. */
+  "void filteredCache(float4 tp, float2 coords, float4 lim, out float4 texcol, out float ialpha)\n"
+  "{\n"
+  "  float2 c = clamp(coords, lim.xy, lim.zw);\n"
+  "  float4 f = tex2Dlod(s_txcl, float4((tp.xy + c + 0.5) * TXC_INV, 0.0, 0.0));\n"
+  "  float4 n = tex2Dlod(s_txc, float4((tp.xy + floor(c + 0.5) + 0.5) * TXC_INV, 0.0, 0.0));\n"
+  "  texcol = float4(f.rgb, (n.a > 0.5 && n.a < 0.999) ? 1.0 : 0.0);\n"
+  "  ialpha = f.a;\n"
+  "}\n"
+  "#endif\n"
   "#endif\n"
   "#if FILTER == 1\n"
   "void filtered(float4 tp, float2 coords, float4 lim, out float4 texcol, out float ialpha)\n"
@@ -726,6 +781,8 @@ static const char* s_ps_batch_src =
    * textura, los tres modos y "raw" vienen en el vertice (modo + 4 * raw). */
   "#if TEXMODE == 4\n"
   "  float vm = floor(i.mode + 0.5);\n"
+  "  s_cache = (vm > 7.5) ? 1.0 : 0.0;\n"
+  "  vm -= 8.0 * s_cache;\n"
   "  s_raw = (vm > 3.5) ? 1.0 : 0.0;\n"
   "  s_mode = vm - 4.0 * s_raw;\n"
   "  semi = 1.0;\n"
@@ -746,6 +803,11 @@ static const char* s_ps_batch_src =
   "  float4 tc;\n"
   "#if FILTER != 0\n"
   "  float ialpha;\n"
+  "#if TXCACHE && FILTER == 1 && TEXMODE == 4\n"
+  "  [branch] if (s_cache > 0.5)\n"
+  "    filteredCache(tpi, i.uvz.xy, i.lim, tc, ialpha);\n"
+  "  else\n"
+  "#endif\n"
   "  filtered(tpi, i.uvz.xy, i.lim, tc, ialpha);\n"
   "  if (ialpha > 0.0)\n"
   "    tc.rgb /= ialpha;\n"       /* compensar los texels transparentes */
@@ -755,6 +817,11 @@ static const char* s_ps_batch_src =
   /* [PGXP] con decimales y perspectiva la u/v se puede salir un poco del
    * poligono en los bordes: limitarla como upstream (u_uv_limits) */
   "  float2 uvs = (c_p1.w > 0.5) ? clamp(uvc, i.lim.xy, i.lim.zw) : uvc;\n"
+  "#if TXCACHE && TEXMODE == 4\n"
+  "  [branch] if (s_cache > 0.5)\n"
+  "    tc = sampleCache(uvs, tpi);\n"
+  "  else\n"
+  "#endif\n"
   "  tc = sampleTex(uvs, tpi);\n"
   "  if (dot(tc, float4(1.0, 1.0, 1.0, 1.0)) < 0.001)\n"
   "    descarta = -1.0;\n"
@@ -828,6 +895,32 @@ static const char* s_ps_upload_src =
   "  o.col = float4(t.b, t.g, t.r, a);\n"
   "  o.depth = (a > 0.5) ? c_u0.y : 0.0;\n"
   "  return o;\n"
+  "}\n";
+
+/* [2026-11-04] Cache de paginas: decodifica una pagina de 4/8 bits con su
+ * CLUT a una celda de 256x256 del atlas (render target).  Mismo calculo que
+ * sampleTex de los lotes; ver el formato de la celda en sampleCache. */
+static const char* s_ps_decode_src =
+  "sampler2D s_vram : register(s0);\n"
+  "float4 c_d0 : register(c0);\n"   /* xy = pagina, zw = CLUT */
+  "float4 c_d1 : register(c1);\n"   /* x = modo (1 = 4 bits, 2 = 8 bits), yz = esquina de la celda */
+  PS_COMMON
+  "float4 vram(float2 p) { return tex2Dlod(s_vram, float4((p + 0.5 / SCALE) * INV_VRAM, 0.0, 0.0)); }\n"
+  "float4 main(float2 vpos : VPOS) : COLOR0\n"
+  "{\n"
+  "  float2 ic = pixpos(vpos) - c_d1.yz;\n"
+  "  float four = (c_d1.x < 1.5) ? 1.0 : 0.0;\n"
+  "  float per = 2.0 + 2.0 * four;\n"
+  "  float ix  = idiv(ic.x, per);\n"
+  "  float sub = ic.x - ix * per;\n"
+  "  float v   = dec16(vram(float2(c_d0.x + ix, c_d0.y + ic.y)));\n"
+  "  float d   = four > 0.5 ? (1.0 + 15.0 * step(0.5, sub) + 240.0 * step(1.5, sub) + 3840.0 * step(2.5, sub))\n"
+  "                         : (1.0 + 255.0 * step(0.5, sub));\n"
+  "  float idx = imod(idiv(v, d), four > 0.5 ? 16.0 : 256.0);\n"
+  "  float4 t  = vram(float2(c_d0.z + idx, c_d0.w));\n"
+  "  if (dot(t, float4(1.0, 1.0, 1.0, 1.0)) < 0.001)\n"
+  "    return float4(0.0, 0.0, 0.0, 0.0);\n"
+  "  return float4(t.rgb, (t.a >= 0.5) ? (254.0 / 255.0) : 1.0);\n"
   "}\n";
 
 /* Copia VRAM -> VRAM.  Lee de la copia de lectura, asi que el solape entre
@@ -1011,6 +1104,20 @@ GPU_HW_D3D9_Backend::GPU_HW_D3D9_Backend(u16* psx_vram)
   m_dirty.valid = false;
   m_dirty.left = m_dirty.top = m_dirty.right = m_dirty.bottom = 0;
   m_last_params.bits = 0;
+  m_txc_tex = 0;
+  m_txc_surf = 0;
+  m_txc_rt = 0;
+  m_txc_base = 0;
+  m_ps_decode = 0;
+  std::memset(m_txc, 0, sizeof(m_txc));
+  m_txc_clock = 0;
+  m_txc_live = 0;
+  m_txc_last = -1;
+  m_txc_ox = m_txc_oy = 0.0f;
+  m_txc_budget = DUCK_HW_TXC_BUDGET;
+  std::memset(m_txc_ghost, 0, sizeof(m_txc_ghost));
+  m_txc_bl = m_txc_bt = m_txc_br = m_txc_bb = 0;
+  m_st_txc_hit = m_st_txc_miss = m_st_txc_inval = m_st_txc_skip = 0;
 }
 
 GPU_HW_D3D9_Backend::~GPU_HW_D3D9_Backend()
@@ -1134,6 +1241,25 @@ bool GPU_HW_D3D9_Backend::CreateResources()
   if (FAILED(hr)) { hw_log(3, "[DUCK-HW] lectura a CPU: 0x%08X\n", (unsigned)hr); return false; }
 #endif
 
+  /* [2026-11-04] Atlas de la cache de paginas.  PC: render target, se
+   * decodifica directamente en la celda.  Xbox: textura TILEADA, destino de
+   * Resolve (la celda se dibuja en la EDRAM, m_txc_rt, y se resuelve aqui).
+   * Si no se puede crear se sigue sin cache. */
+#if defined(_XBOX)
+  hr = m_dev->CreateTexture(TXC_ATLAS, TXC_ATLAS, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &m_txc_tex, NULL);
+  if (FAILED(hr) || !m_txc_tex)
+#else
+  hr = m_dev->CreateTexture(TXC_ATLAS, TXC_ATLAS, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT,
+                            &m_txc_tex, NULL);
+  if (FAILED(hr) || !m_txc_tex || FAILED(m_txc_tex->GetSurfaceLevel(0, &m_txc_surf)))
+#endif
+  {
+    hw_log(2, "[DUCK-HW] cache de paginas: no se pudo crear el atlas (0x%08X), sin cache\n", (unsigned)hr);
+    SAFE_RELEASE(m_txc_surf);
+    SAFE_RELEASE(m_txc_tex);
+  }
+  TexCacheClear();
+
   /* La matriz de dithering de la PSX (DITHER_MATRIX), +4 para que quepa en
    * un byte sin signo. */
   hr = m_dev->CreateTexture(4, 4, 1, HW_USAGE_CPU, HW_FMT_CPU_ARGB, D3DPOOL_DEFAULT, &m_dither_tex, NULL);
@@ -1202,6 +1328,9 @@ void GPU_HW_D3D9_Backend::DestroyResources()
     SAFE_RELEASE(m_out_graveyard[i]);
   SAFE_RELEASE(m_decl_batch);
   SAFE_RELEASE(m_decl_util);
+  SAFE_RELEASE(m_txc_surf);
+  SAFE_RELEASE(m_txc_tex);
+  m_txc_live = 0;
   SAFE_RELEASE(m_sys_surf);
   SAFE_RELEASE(m_down_surf);
   SAFE_RELEASE(m_dither_tex);
@@ -1312,6 +1441,38 @@ bool GPU_HW_D3D9_Backend::CreateScaledResources()
   if (FAILED(hr)) { hw_log(3, "[DUCK-HW] lectura: CreateTexture 0x%08X\n", (unsigned)hr); return false; }
   m_read_tex->GetSurfaceLevel(0, &m_read_surf);
 
+  /* [2026-11-04] Cache de paginas: una celda de 256x256 (4 x 16 = 64 tiles)
+   * en la EDRAM para decodificar, FUERA de la VRAM (y de su profundidad).
+   * Primero detras de todo lo nuestro; si no cabe (x2: la VRAM acaba en
+   * 2048), justo delante de la VRAM, encima del back buffer del frontend o
+   * de la salida, que solo se usan fuera de la emulacion (como la salida en
+   * base 0).  Sin sitio, sin cache. */
+  {
+    const u32 cell_tiles = XGSurfaceSize(256, 256, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+    const u32 end = base + color_tiles + z_tiles + (m_out_alias ? 0u : out_tiles);
+    u32 tb = 0xFFFFFFFFu;
+    if (end + cell_tiles <= 2048u)
+      tb = end;
+    else if (base >= cell_tiles)
+      tb = base - cell_tiles;
+    m_txc_rt = 0;
+    if (tb != 0xFFFFFFFFu)
+    {
+      std::memset(&sp, 0, sizeof(sp));
+      sp.Base = tb;
+      hr = m_dev->CreateRenderTarget(256, 256, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &m_txc_rt, &sp);
+      if (FAILED(hr))
+      {
+        hw_log(2, "[DUCK-HW] cache de paginas: celda en la EDRAM 0x%08X, sin cache\n", (unsigned)hr);
+        m_txc_rt = 0;
+      }
+      else
+        m_txc_base = tb;
+    }
+    else
+      hw_log(2, "[DUCK-HW] cache de paginas: no cabe en la EDRAM a x%u, sin cache\n", m_scale);
+  }
+
   m_edram_valid = false;
 #else
   /* [escala] VRAM, su copia de lectura y la profundidad a (1024 x 512) * N;
@@ -1348,6 +1509,7 @@ void GPU_HW_D3D9_Backend::DestroyScaledResources()
   if (m_dev)
     m_dev->BlockUntilIdle();   /* la GPU puede seguir leyendo la copia */
   SAFE_RELEASE(m_out_rt);
+  SAFE_RELEASE(m_txc_rt);
   m_out_rt_w = m_out_rt_h = 0;
   m_edram_valid = false;
 #endif
@@ -1619,7 +1781,7 @@ IDirect3DPixelShader9* GPU_HW_D3D9_Backend::CompilePS(const char* src, const cha
 {
   static const char* digits[4] = { "0", "1", "2", "3" };
   static const char* scales[9] = { "1", "1", "2", "3", "4", "5", "6", "7", "8" };
-  D3DXMACRO macros[6];
+  D3DXMACRO macros[7];
   ID3DXBuffer* code = 0;
   ID3DXBuffer* err = 0;
   IDirect3DPixelShader9* ps = 0;
@@ -1630,7 +1792,8 @@ IDirect3DPixelShader9* GPU_HW_D3D9_Backend::CompilePS(const char* src, const cha
   macros[2].Name = "TRUECOLOR"; macros[2].Definition = true_color ? "1" : "0";
   macros[3].Name = "FILTER";  macros[3].Definition = digits[(filter >= 0 && filter <= 3) ? filter : 0];
   macros[4].Name = "SCALE";   macros[4].Definition = scales[(m_scale <= 8u) ? m_scale : 1u];   /* [escala] */
-  macros[5].Name = NULL;      macros[5].Definition = NULL;
+  macros[5].Name = "TXCACHE"; macros[5].Definition = m_txc_tex ? "1" : "0";   /* [2026-11-04] cache de paginas */
+  macros[6].Name = NULL;      macros[6].Definition = NULL;
 
   hr = D3DXCompileShader(src, (UINT)std::strlen(src), macros, NULL, "main", "ps_3_0", 0, &code, &err, NULL);
   if (FAILED(hr))
@@ -1671,6 +1834,18 @@ bool GPU_HW_D3D9_Backend::CompileShaders()
   m_ps_disp15 = CompilePS(s_ps_disp15_src, 0, 0);
   m_ps_disp24 = CompilePS(s_ps_disp24_src, 0, 0);
   m_ps_fill   = CompilePS(s_ps_fill_src, 0, 0);
+  /* [2026-11-04] Cache de paginas: sin su shader no se usa (el atlas se
+   * suelta y los lotes no entran nunca por ese camino). */
+  if (m_txc_tex)
+  {
+    m_ps_decode = CompilePS(s_ps_decode_src, 0, 0);
+    if (!m_ps_decode)
+    {
+      hw_log(3, "[DUCK-HW] la cache de paginas no compila: desactivada\n");
+      SAFE_RELEASE(m_txc_surf);
+      SAFE_RELEASE(m_txc_tex);
+    }
+  }
   if (!(m_ps_upload && m_ps_copy && m_ps_depth && m_ps_disp15 && m_ps_disp24 && m_ps_fill))
   {
     hw_log(3, "[DUCK-HW] shaders de utilidad: upload=%d copy=%d depth=%d disp15=%d disp24=%d (1 = bien)\n",
@@ -1781,6 +1956,7 @@ void GPU_HW_D3D9_Backend::DestroyShaders()
   SAFE_RELEASE(m_ps_disp15);
   SAFE_RELEASE(m_ps_disp24);
   SAFE_RELEASE(m_ps_fill);
+  SAFE_RELEASE(m_ps_decode);
   SAFE_RELEASE(m_vs_batch);
   SAFE_RELEASE(m_vs_util);
 }
@@ -2019,6 +2195,7 @@ void GPU_HW_D3D9_Backend::FrameEnd()
   }
   Unbind();
   m_in_frame = false;
+  m_txc_budget = DUCK_HW_TXC_BUDGET;
   ++m_st_frames;
 #if DUCK_HW_PERF
   m_pf_frame_end = hw_now();
@@ -2314,6 +2491,9 @@ void GPU_HW_D3D9_Backend::LogStats()
     hw_log(1, "[DUCK-HW] cortes: scissor=%u pagina=%u lleno=%u fin=%u otro=%u\n", m_brk[BRK_SCISSOR],
            m_brk[BRK_PAGE], m_brk[BRK_FULL], m_brk[BRK_END], m_brk[BRK_OTHER]);
     std::memset(m_brk, 0, sizeof(m_brk));
+    if (m_txc_tex)
+      hw_log(1, "[DUCK-HW] cache de paginas: aciertos=%u fallos=%u invalidadas=%u saltadas=%u vivas=%u\n",
+             m_st_txc_hit, m_st_txc_miss, m_st_txc_inval, m_st_txc_skip, m_txc_live);
     hw_log(1, "[DUCK-HW] prims: sintex=%u t4=%u t8=%u t15=%u | semi m0=%u m1=%u m2=%u m3=%u | raw=%u dith=%u\n",
            m_ct[CT_TEX0], m_ct[CT_TEX0 + 1], m_ct[CT_TEX0 + 2], m_ct[CT_TEX0 + 3], m_ct[CT_SEMI0], m_ct[CT_SEMI0 + 1],
            m_ct[CT_SEMI0 + 2], m_ct[CT_SEMI0 + 3], m_ct[CT_RAW], m_ct[CT_DITH]);
@@ -2327,6 +2507,7 @@ void GPU_HW_D3D9_Backend::LogStats()
   m_st_frames = m_st_prims = m_st_verts = m_st_draws = m_st_presents = 0;
   m_st_uploads = m_st_readbacks = m_st_refresh = m_st_fills = m_st_copies = 0;
   m_st_restore_full = m_st_restore_rows = 0;
+  m_st_txc_hit = m_st_txc_miss = m_st_txc_inval = m_st_txc_skip = 0;
 }
 
 void GPU_HW_D3D9_Backend::SetVRAMTarget()
@@ -2409,6 +2590,8 @@ void GPU_HW_D3D9_Backend::IncludeDirty(u32 left, u32 top, u32 right, u32 bottom)
    * CLUT vigentes, el siguiente texturizado tiene que volver a mirar. */
   if (m_tp_key_valid && TouchesTexturePage(left, top, right, bottom))
     m_tp_key_valid = false;
+  if (m_txc_live)
+    TexCacheInvalidate(left, top, right, bottom);
   if (!m_dirty.valid)
   {
     m_dirty.left = left; m_dirty.top = top; m_dirty.right = right; m_dirty.bottom = bottom;
@@ -2533,6 +2716,249 @@ void GPU_HW_D3D9_Backend::CheckTexturePage(int texmode, u32 tpx, u32 tpy, u32 cl
     FlushRender();
     RefreshReadTexture();
   }
+}
+
+/* ======================================================================
+ * [2026-11-04] Cache de paginas decodificadas (fase 1: PC)
+ *
+ * Una pagina de 4/8 bits se muestrea leyendo el indice y luego la CLUT: dos
+ * lecturas por texel, y el bilineal lo hace en la shader (4 texels = 8
+ * lecturas).  Aqui cada pagina+CLUT que se usa se decodifica una vez a una
+ * celda RGBA de 256x256 de un atlas, y los lotes la leen con una lectura
+ * (nearest) o con el bilineal del hardware.  Es lo que hace la cache de
+ * texturas de DuckStation moderno.
+ *
+ *   - Formato de la celda: rgb = el texel de la VRAM tal cual; alfa 0 =
+ *     transparente (0x0000), 1 = opaco, 254/255 = opaco con el bit de
+ *     semitransparencia (ver sampleCache en la shader de los lotes).
+ *   - Invalidacion: cualquier escritura de VRAM que pise la pagina o la fila
+ *     de la CLUT (IncludeDirty, que ya llaman dibujos, rellenos, copias y
+ *     subidas) invalida la celda; el siguiente uso la vuelve a decodificar.
+ *   - Fuera de la cache, por el camino de siempre: 15 bits (ya es una
+ *     lectura), ventana de textura, JINC2/xBR y paginas o CLUTs que dan la
+ *     vuelta al borde de la VRAM.
+ *   - Reemplazo LRU entre las TXC_ENTRIES celdas.
+ * ==================================================================== */
+
+void GPU_HW_D3D9_Backend::TexCacheClear()
+{
+  std::memset(m_txc, 0, sizeof(m_txc));
+  std::memset(m_txc_ghost, 0, sizeof(m_txc_ghost));
+  m_txc_live = 0;
+  m_txc_last = -1;
+  m_txc_bl = m_txc_bt = m_txc_br = m_txc_bb = 0;
+}
+
+void GPU_HW_D3D9_Backend::TexCacheInvalidate(u32 left, u32 top, u32 right, u32 bottom)
+{
+  u32 i;
+  /* Se llama en cada primitivo dibujado: casi siempre en el framebuffer,
+   * lejos de las texturas.  Fuera de la union de lo cacheado, nada. */
+  if (!rects_intersect(m_txc_bl, m_txc_bt, m_txc_br, m_txc_bb, left, top, right, bottom))
+    return;
+  for (i = 0; i < TXC_ENTRIES; i++)
+  {
+    TexCacheEntry& e = m_txc[i];
+    if (!e.valid)
+      continue;
+    if (rects_intersect(e.pl, e.pt, e.pr, e.pb, left, top, right, bottom) ||
+        rects_intersect(e.cl, e.ct, e.cr, e.ct + 1, left, top, right, bottom))
+    {
+      e.valid = false;
+      if (m_txc_live)
+        m_txc_live--;
+      m_st_txc_inval++;
+    }
+  }
+  if (!m_txc_live)
+    m_txc_bl = m_txc_bt = m_txc_br = m_txc_bb = 0;
+}
+
+bool GPU_HW_D3D9_Backend::TexCacheLookup(int texmode, u32 tpx, u32 tpy, u32 clutx, u32 cluty)
+{
+  const u32 pw = (texmode == 1) ? 64u : 128u;
+  const u32 cw = (texmode == 1) ? 16u : 256u;
+  const u32 key = (tpx >> 6) | ((tpy >> 8) << 4) | (static_cast<u32>(texmode) << 5) | ((clutx >> 4) << 8) |
+                  (cluty << 14);
+  int slot = -1;
+  u32 i;
+
+  if (!m_ps_decode || tpx + pw > VRAM_WIDTH || tpy + 256 > VRAM_HEIGHT || clutx + cw > VRAM_WIDTH)
+    return false;   /* dan la vuelta al borde: camino de siempre */
+#if defined(_XBOX)
+  if (!m_txc_rt)
+    return false;   /* no cupo la celda en la EDRAM */
+#endif
+
+  if (m_txc_last >= 0 && m_txc[m_txc_last].valid && m_txc[m_txc_last].key == key)
+    slot = m_txc_last;
+  else
+  {
+    for (i = 0; i < TXC_ENTRIES; i++)
+    {
+      if (m_txc[i].valid && m_txc[i].key == key)
+      {
+        slot = static_cast<int>(i);
+        break;
+      }
+    }
+  }
+
+  if (slot >= 0)
+    m_st_txc_hit++;
+  else
+  {
+    /* Fallo.  Solo se decodifica lo que se repite (la segunda vez que se
+     * ve: lo de un solo uso no paga la decodificacion) y hasta el cupo del
+     * frame; si no, el camino de siempre. */
+    u32 oldest = 0xFFFFFFFFu;
+    {
+      const u32 h = (key ^ (key >> 8) ^ (key >> 16)) & (TXC_GHOST - 1);
+      if (m_txc_budget == 0 || m_txc_ghost[h] != key + 1)
+      {
+        m_txc_ghost[h] = key + 1;
+        m_st_txc_skip++;
+        return false;
+      }
+      m_txc_ghost[h] = 0;
+      m_txc_budget--;
+    }
+    for (i = 0; i < TXC_ENTRIES; i++)
+    {
+      if (!m_txc[i].valid)
+      {
+        slot = static_cast<int>(i);
+        break;
+      }
+      if (m_txc[i].lru < oldest)
+      {
+        oldest = m_txc[i].lru;
+        slot = static_cast<int>(i);
+      }
+    }
+    {
+      TexCacheEntry& e = m_txc[slot];
+      if (!e.valid)
+        m_txc_live++;
+      e.valid = true;
+      e.key = key;
+      e.pl = tpx; e.pt = tpy; e.pr = tpx + pw; e.pb = tpy + 256;
+      e.cl = clutx; e.ct = cluty; e.cr = clutx + cw;
+      /* la union solo crece (se recalcula al vaciarse con TexCacheClear) */
+      if (m_txc_br <= m_txc_bl)
+      {
+        m_txc_bl = e.pl; m_txc_bt = e.pt; m_txc_br = e.pr; m_txc_bb = e.pb;
+      }
+      if (e.pl < m_txc_bl) m_txc_bl = e.pl;
+      if (e.pt < m_txc_bt) m_txc_bt = e.pt;
+      if (e.pr > m_txc_br) m_txc_br = e.pr;
+      if (e.pb > m_txc_bb) m_txc_bb = e.pb;
+      if (e.cl < m_txc_bl) m_txc_bl = e.cl;
+      if (e.ct < m_txc_bt) m_txc_bt = e.ct;
+      if (e.cr > m_txc_br) m_txc_br = e.cr;
+      if (e.ct + 1 > m_txc_bb) m_txc_bb = e.ct + 1;
+    }
+    m_st_txc_miss++;
+    TexCacheDecode(static_cast<u32>(slot), texmode, tpx, tpy, clutx, cluty);
+  }
+
+  m_txc[slot].lru = ++m_txc_clock;
+  m_txc_last = slot;
+  m_txc_ox = static_cast<float>((static_cast<u32>(slot) % TXC_PER_ROW) * TXC_CELL);
+  m_txc_oy = static_cast<float>((static_cast<u32>(slot) / TXC_PER_ROW) * TXC_CELL);
+  return true;
+}
+
+void GPU_HW_D3D9_Backend::TexCacheDecode(u32 slot, int texmode, u32 tpx, u32 tpy, u32 clutx, u32 cluty)
+{
+  const u32 ox = (slot % TXC_PER_ROW) * TXC_CELL;
+  const u32 oy = (slot / TXC_PER_ROW) * TXC_CELL;
+  D3DVIEWPORT9 vp;
+  float c[8];
+
+  /* Lo pendiente al render target de la VRAM y, si escribe en la pagina o
+   * la CLUT (m_tp_*, recien puestas por CheckTexturePage), a la copia de
+   * lectura, que es de donde se decodifica. */
+  FlushRender();
+  if (m_dirty.valid && TouchesTexturePage(m_dirty.left, m_dirty.top, m_dirty.right, m_dirty.bottom))
+    RefreshReadTexture();
+
+  /* PC: al atlas, sin profundidad ni recorte.  El viewport es el atlas
+   * entero y el rectangulo va en la celda: asi VPOS son coordenadas del
+   * atlas sea cual sea la convencion del viewport.
+   * Xbox: a la celda de la EDRAM (m_txc_rt, 256x256, VPOS ya es la
+   * coordenada dentro de la celda) y luego Resolve a su sitio en el atlas. */
+  m_dev->SetTexture(2, NULL);
+  m_dev->SetTexture(3, NULL);
+#if defined(_XBOX)
+  m_dev->SetRenderTarget(0, m_txc_rt);
+  m_dev->SetDepthStencilSurface(NULL);
+  vp.X = 0; vp.Y = 0; vp.Width = TXC_CELL; vp.Height = TXC_CELL; vp.MinZ = 0.0f; vp.MaxZ = 1.0f;
+#else
+  m_dev->SetRenderTarget(0, m_txc_surf);
+  m_dev->SetDepthStencilSurface(NULL);
+  vp.X = 0; vp.Y = 0; vp.Width = TXC_ATLAS; vp.Height = TXC_ATLAS; vp.MinZ = 0.0f; vp.MaxZ = 1.0f;
+#endif
+  m_dev->SetViewport(&vp);
+  m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+  m_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+  m_dev->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+  m_dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+  m_dev->SetRenderState(D3DRS_COLORWRITEENABLE, 0xF);
+  m_dev->SetTexture(0, m_read_tex);
+  m_dev->SetPixelShader(m_ps_decode);
+  c[0] = static_cast<float>(tpx);
+  c[1] = static_cast<float>(tpy);
+  c[2] = static_cast<float>(clutx);
+  c[3] = static_cast<float>(cluty);
+  c[4] = static_cast<float>(texmode);
+#if defined(_XBOX)
+  c[5] = 0.0f;   /* la celda de la EDRAM empieza en 0,0 */
+  c[6] = 0.0f;
+#else
+  c[5] = static_cast<float>(ox);
+  c[6] = static_cast<float>(oy);
+#endif
+  c[7] = 0.0f;
+  m_dev->SetPixelShaderConstantF(0, c, 2);
+#if defined(_XBOX)
+  DrawUtilRect(0.0f, 0.0f, static_cast<float>(TXC_CELL), static_cast<float>(TXC_CELL), static_cast<float>(TXC_CELL),
+               static_cast<float>(TXC_CELL), 1.0f);
+  {
+    D3DRECT r;
+    D3DPOINT pt;
+    HRESULT hr;
+    r.x1 = 0; r.y1 = 0; r.x2 = TXC_CELL; r.y2 = TXC_CELL;
+    pt.x = static_cast<LONG>(ox);
+    pt.y = static_cast<LONG>(oy);
+    HW_PF_BEGIN(res);
+    hr = m_dev->Resolve(D3DRESOLVE_RENDERTARGET0, &r, m_txc_tex, &pt, 0, 0, NULL, 0.0f, 0, NULL);
+    HW_PF_END(res, PF_RESOLVE);
+    if (FAILED(hr) && !m_warned_draw)
+    {
+      m_warned_draw = true;
+      hw_log(3, "[DUCK-HW] Resolve (cache de paginas) fallo 0x%08X\n", (unsigned)hr);
+    }
+  }
+#else
+  DrawUtilRect(static_cast<float>(ox), static_cast<float>(oy), static_cast<float>(ox + TXC_CELL),
+               static_cast<float>(oy + TXC_CELL), static_cast<float>(TXC_ATLAS), static_cast<float>(TXC_ATLAS), 1.0f);
+#endif
+
+  /* De vuelta a la VRAM con el estado de los lotes. */
+  SetVRAMTarget();
+  m_dev->SetRenderState(D3DRS_ZENABLE, m_has_depth ? D3DZB_TRUE : D3DZB_FALSE);
+  m_dev->SetRenderState(D3DRS_ZWRITEENABLE, m_has_depth ? TRUE : FALSE);
+  m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+  if (m_scissor.right > m_scissor.left && m_scissor.bottom > m_scissor.top)
+  {
+    m_dev->SetScissorRect(&m_scissor);
+    m_scissor_valid = true;
+  }
+  m_pipe_valid = false;
+  if (Dumping())
+    hw_log(1, "[DUCK-DUMP] cache: celda %u <- pagina(%u,%u) m%d clut(%u,%u)\n", slot, tpx, tpy, texmode, clutx,
+           cluty);
 }
 
 /* ======================================================================
@@ -2686,6 +3112,14 @@ float GPU_HW_D3D9_Backend::BeginPrimitive(const GPUBackendDrawCommand* cmd, bool
   {
     CheckTexturePage(texmode, cmd->draw_mode.GetTexturePageBaseX(), cmd->draw_mode.GetTexturePageBaseY(),
                      cmd->palette.GetXBase(), cmd->palette.GetYBase());
+
+    /* [2026-11-04] Cache de paginas: solo 4/8 bits, sin ventana de textura,
+     * con nearest o bilineal (JINC2/xBR siguen por el camino de siempre). */
+    if (m_txc_tex && g_duck_hw_texture_cache && (texmode == 1 || texmode == 2) && m_filter <= 1 &&
+        k.win_and_x == 0xFF && k.win_and_y == 0xFF && k.win_or_x == 0 && k.win_or_y == 0 &&
+        TexCacheLookup(texmode, cmd->draw_mode.GetTexturePageBaseX(), cmd->draw_mode.GetTexturePageBaseY(),
+                       cmd->palette.GetXBase(), cmd->palette.GetYBase()))
+      m_vmode += 8.0f;
   }
 
   return NextMaskedDepth(cmd->params.check_mask_before_draw);
@@ -2711,8 +3145,17 @@ void GPU_HW_D3D9_Backend::AddVertex(float x, float y, float z, u32 color, float 
   o->color = D3DCOLOR_ARGB(0, color & 0xFF, (color >> 8) & 0xFF, (color >> 16) & 0xFF);
   o->u = u;
   o->v = v;
-  o->tp_x = tp[0];
-  o->tp_y = tp[1];
+  if (m_vmode >= 8.0f)
+  {
+    /* [2026-11-04] cache de paginas: la celda del atlas en vez de la pagina */
+    o->tp_x = m_txc_ox;
+    o->tp_y = m_txc_oy;
+  }
+  else
+  {
+    o->tp_x = tp[0];
+    o->tp_y = tp[1];
+  }
   o->clut_x = tp[2];
   o->clut_y = tp[3];
   o->lim_u0 = m_uvlim[0];
@@ -3271,6 +3714,25 @@ void GPU_HW_D3D9_Backend::FlushRender()
     m_dev->SetVertexShaderConstantF(0, vsc, 1);
     m_dev->SetTexture(0, m_read_tex);
     m_dev->SetTexture(1, m_dither_tex);
+    if (m_txc_tex)
+    {
+      /* [2026-11-04] cache de paginas: el atlas, puntual (s2) y bilineal (s3) */
+      int ts;
+      m_dev->SetTexture(2, m_txc_tex);
+      m_dev->SetTexture(3, m_txc_tex);
+      for (ts = 2; ts < 4; ts++)
+      {
+        const DWORD f = (ts == 3) ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+        m_dev->SetSamplerState(ts, D3DSAMP_MINFILTER, f);
+        m_dev->SetSamplerState(ts, D3DSAMP_MAGFILTER, f);
+        m_dev->SetSamplerState(ts, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+        m_dev->SetSamplerState(ts, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+        m_dev->SetSamplerState(ts, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+#if !defined(_XBOX)
+        m_dev->SetSamplerState(ts, D3DSAMP_SRGBTEXTURE, FALSE);
+#endif
+      }
+    }
     m_dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
     m_dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_BLENDFACTOR);
     m_dev->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_ONE);
@@ -4211,6 +4673,7 @@ void GPU_HW_D3D9_Backend::Reset(bool clear_vram)
   m_pipe_valid = false;
   m_tp_key_valid = false;
   m_depth_counter = 1;
+  TexCacheClear();
   if (clear_vram)
   {
     m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
