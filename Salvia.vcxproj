@@ -7368,6 +7368,8 @@
     <ClInclude Include="src\menus\gestormenus.h" />
     <ClInclude Include="src\salvia.h" />
     <ClInclude Include="src\so\launcher.h" />
+    <ClInclude Include="src\so\returnapp.h" />
+    <ClInclude Include="src\io\rawsave.h" />
     <ClInclude Include="src\so\soutils.h" />
     <ClInclude Include="src\statesram.h" />
     <ClInclude Include="src\uiobjects\image.h" />

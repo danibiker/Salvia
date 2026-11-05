@@ -104,6 +104,45 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 
 <img width="694" height="527" alt="image" src="https://github.com/user-attachments/assets/2e667993-959c-4f28-8117-97db79dd522b" />
 
+### Return to another application (Xbox 360)
+
+To return directly to an installed frontend such as EmulationStation, add this
+optional setting to `salvia.cfg` in Salvia's application directory:
+
+```ini
+return_app=Hdd:\Apps\EmulationStation\emulationstation.xex
+```
+
+Replace the example with your own absolute path to an installed `.xex`. Salvia
+mounts `Hdd:`, `Usb0:`, `Usb1:` and `Usb2:`; `game:` refers to Salvia's own directory.
+Use a mounted drive alias and an unquoted path, with no command-line arguments.
+Spaces and either slash style are supported. Relative paths, parent traversal,
+wildcards, control characters and paths of 260 bytes or more are rejected.
+Restart Salvia after editing the configuration.
+
+When configured, the **exit-game hotkey** (Back + Start by default; hold Back
+first) returns to that application. The options menu also gains **Return to
+application**, accessible via Back + Y while playing or from Salvia's Options.
+The existing Return to game and Exit Salvia actions and achievements hotkey guard
+keep their behavior. Leave
+`return_app` empty or remove it to retain the usual hotkey return to Salvia's menu.
+The setting has no effect on Windows and does not alter Xbox dashboard settings.
+
+Salvia validates the target, waits up to five seconds for queued saves, writes and
+flushes the final SRAM, then unloads/deinitializes the core before launching the
+application with empty launch data. This saves battery-backed data; it does not
+create a savestate. Cores managing their own saves retain their existing teardown
+behavior. A missing/invalid target or save failure displays an error in Salvia
+and keeps the game loaded. If the handoff itself returns, Salvia reports the
+failure and stays in its menu with the core unloaded.
+
+This is an explicit opt-in for every Salvia session, including when Salvia is
+launched directly. Remove the setting to disable it. The return application must
+be installed separately. Each Salvia XEX embeds its frontend, so rebuild every
+core executable that should support this setting; editing the config alone does
+not add this feature to older XEX files. See [COMPILING.md](COMPILING.md) and the
+[host tests and console validation checklist](tests/README.md).
+
 ### Bios
 The only thing needed for the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from the RetroPie zip of [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases) .
 The system directory should have the following files:

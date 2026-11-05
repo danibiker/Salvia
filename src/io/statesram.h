@@ -6,6 +6,7 @@
 #include <SDL_image.h>
 #include <SDL_thread.h>
 #include "image/lodepng.h"
+#include "io/rawsave.h"
 #include <utils/langmanager.h>
 
 #if defined(_XBOX) || defined(_XBOX360)
@@ -477,18 +478,34 @@ void loadState(){
 }
 
 bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {
-    FILE* fp = fopen(path, "wb");
-    if (fp) {
-        fwrite(buffer, 1, size, fp);
-		fflush(fp);
-        #ifdef _XBOX
-            _commit(_fileno(fp)); 
-        #endif
-        fclose(fp);
-        return true;
-    } else {
-        return false;
+    return writeRawSave(path, buffer, size);
+}
+
+// Called with emulation stopped on the frontend thread. Drain the worker before
+// reading final SRAM: its older snapshot must never overwrite the final save.
+bool saveSramForExit(const char* path, bool romLoaded) {
+    if (!g_saveQueue.saveMutex) return false;
+    const Uint32 started = SDL_GetTicks();
+    for (;;) {
+        if (SDL_mutexP(g_saveQueue.saveMutex) != 0) return false;
+        const bool busy = g_saveQueue.buffer != NULL;
+        if (SDL_mutexV(g_saveQueue.saveMutex) != 0) return false;
+        if (!busy) break;
+        if (SDL_GetTicks() - started >= 5000) return false;
+        SDL_Delay(1);
     }
+#ifndef NO_SRAM
+    if (romLoaded) {
+        const std::size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        void* data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+        if (size > 0 && (!data || !writeRawSave(Constant::checkPath(path).c_str(), data, size)))
+            return false;
+    }
+#else
+    (void)path;
+    (void)romLoaded;
+#endif
+    return true;
 }
 
 // Funciion que ejecuta el hilo

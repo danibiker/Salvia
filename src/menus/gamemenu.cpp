@@ -31,6 +31,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 		crosshairRect[i].w = crosshairRect[i].h = 0;
 	}
 	romLoaded = false;
+	returnAppRequested = false;
 	gameTicks.ticks = 0;
 
 	this->cfgLoader = cfgLoader;
@@ -1739,6 +1740,12 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				showLangSystemMessage(LanguageManager::instance()->get("msg.error.hardcore.pause"), 3000);
 				break;
 			} 
+			#ifdef _XBOX
+			if (!cfgLoader->configMain[cfg::returnApp].valueStr.empty()) {
+				returnAppRequested = true;
+				break;
+			}
+			#endif
 
 			if (bg_screenshot){
 				SDL_FreeSurface(bg_screenshot);

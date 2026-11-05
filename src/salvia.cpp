@@ -11,6 +11,7 @@
 #include <http/picojson.h>
 #include <io/filelist.h>
 #include <cheats/cheatlocator.h>
+#include <so/returnapp.h>
 
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
@@ -1837,7 +1838,10 @@ std::string initPathAndLog(char** argv){
 	return Constant::getAppDir();
 }
 
-void closeGame(){
+void closeGame(bool sramAlreadySaved){
+#ifdef NO_SRAM
+	(void)sramAlreadySaved;
+#endif
 	if (gameMenu->romLoaded){
 		/* IMPORTANTE: NO cerrar el dispositivo de audio entre cargas.
 		 *
@@ -1875,7 +1879,7 @@ void closeGame(){
 		gameMenu->g_midi.panic();
 		g_midiFastForwardCut = false;
 #ifndef NO_SRAM
-		saveSram(romPaths.sram.c_str());
+		if (!sramAlreadySaved) saveSram(romPaths.sram.c_str());
 #endif
 
 		// Multi-disc: persistir indice del disco actual para la proxima carga
@@ -2362,7 +2366,53 @@ static void __declspec(noinline) printAndDelay(){
 	}
 }
 
-/*  runGameLoop — extracted into its own function so __try does not
+#ifdef _XBOX
+struct ReturnAppHost {
+	bool isFile(const std::string& path) {
+		const DWORD attributes = GetFileAttributes(path.c_str());
+		return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+	}
+	bool save() { return saveSramForExit(romPaths.sram.c_str(), gameMenu->romLoaded); }
+	void close() {
+		action_postponed.cycles = -1;
+		action_postponed.action = SAVE_NONE;
+		closeGame(true);
+		gameMenu->configMenus->setGameLoaded("");
+		// Both the current and resume states must be a menu once the core is gone.
+		gameMenu->setEmuStatus(EMU_MENU);
+	}
+	void launch(const std::string& path) {
+		Launcher launcher;
+		launcher.launchReturnApp(path);
+	}
+};
+
+static void returnToConfiguredApp() {
+	gameMenu->setEmuStatus(EMU_MENU);
+	gameMenu->clearOverlay();
+	ReturnAppHost host;
+	const ReturnApp::Result result = ReturnApp::run(cfgLoader->configMain[cfg::returnApp].valueStr, host);
+	const char* message = NULL;
+	switch (result) {
+		case ReturnApp::INVALID_TARGET:
+			message = "Return application is missing or invalid. Check return_app in salvia.cfg.";
+			break;
+		case ReturnApp::SAVE_FAILED:
+			message = "Could not finish saving. Return cancelled; the game is still loaded.";
+			break;
+		case ReturnApp::LAUNCH_FAILED:
+			message = "Could not launch return application. Returned to the Salvia menu.";
+			break;
+		default: break;
+	}
+	if (message) {
+		LOG_ERROR("%s", message);
+		gameMenu->showSystemMessage(message, 5000);
+	}
+}
+#endif
+
+/*  runGameLoop - extracted into its own function so __try does not
  *  share a stack frame with C++ objects that have destructors.
  *  MSVC error C2712 forbids SEH __try in any function that requires
  *  C++ object unwinding. */
@@ -2370,6 +2420,12 @@ static void __declspec(noinline) runGameLoop() {
 	//__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
+			#ifdef _XBOX
+			if (gameMenu->returnAppRequested && gameMenu->running) {
+				gameMenu->returnAppRequested = false;
+				returnToConfiguredApp();
+			}
+			#endif
 
 			/* Musica de menu: aqui SOLO se abre o cierra el grifo.  El
 			 * decodificado corre en su propio hilo (IO_THREAD), porque cuando

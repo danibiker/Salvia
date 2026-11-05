@@ -56,7 +56,7 @@ const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_
 
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-void closeGame();
+void closeGame(bool sramAlreadySaved = false);
 void init_sdl_audio(double sample_rate);
 
 //Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga

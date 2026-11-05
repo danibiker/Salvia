@@ -67,6 +67,9 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 		gameMenu->startScrapping();
 	} else if (gameMenu->configMenus->getStatus() == EXIT_EMULATION){
 		gameMenu->running = false;
+	} else if (gameMenu->configMenus->getStatus() == RETURN_TO_APP){
+		gameMenu->configMenus->resetStatus();
+		gameMenu->returnAppRequested = true;
 	} 
 
 	gameMenu->joystick->inputs.clearAll();
