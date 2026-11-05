@@ -91,6 +91,40 @@ static u32 s_recmem_size = RECMEM_SIZE_BASE;
 #define RECMEM_SIZE		(s_recmem_size)
 
 /* ===========================================================================
+ * [2026-11-05] Bloques que se recompilan sin parar (codigo automodificable).
+ *
+ * La cache de codigo es un puntero que solo avanza: un bloque invalidado
+ * deja su codigo muerto ahi hasta que se llena y se tira todo (recReset).
+ * Un juego que reescribe su propio codigo con valores DISTINTOS (Colin McRae
+ * 2.0: dos instrucciones en 80018C4C y 80016B10, parcheadas sin parar desde
+ * 80010980) recompila los mismos bloques cada pocos frames y llena los 12 MB
+ * cada ~36 s.  (Colin McRae 1 reescribia valores IGUALES: eso ya no invalida,
+ * ver psxMemWrite*_2.)
+ *
+ * Criterio de SwanStation (cpu_code_cache.cpp, RECOMPILE_COUNT/FRAMES_TO_
+ * FALL_BACK_TO_INTERPRETER): un bloque recompilado 20 veces sin pasar 100
+ * frames entre una y otra es automodificable.  Upstream lo pasa al
+ * interprete; aqui se sigue compilando, pero en un HUECO FIJO al final de la
+ * cache (SMC_SLOTS de SMC_SLOT_SIZE) que se reutiliza en cada recompilacion:
+ * no crece.  Es seguro porque solo se compila desde el dispatcher (ningun
+ * bloque se esta ejecutando) y nadie guarda la direccion de un bloque salvo
+ * su entrada de la LUT (el encadenamiento la LEE en cada salto, iJump).  Al
+ * echar a otro bloque de su hueco se borra su entrada si aun apunta ahi.
+ * =========================================================================== */
+#define SMC_SLOTS		8
+#define SMC_SLOT_SIZE		(128*1024)
+#define SMC_SLOT_POOL		(SMC_SLOTS * SMC_SLOT_SIZE)
+#define SMC_SLOT_MAX_INSTRS	200	/* bloque acotado: cabe de sobra en el hueco */
+#define SMC_HOT_COUNT		20
+#define SMC_HOT_GAP		(100u * 564480u)	/* ~100 frames en ciclos (33868800 / 60) */
+#define SMC_HOT_TAB		1024
+typedef struct { u32 pc; u32 last; u32 count; } SmcHot;
+static SmcHot s_smc_hot[SMC_HOT_TAB];
+static u32 s_smc_slot_pc[SMC_SLOTS];
+static u32 s_smc_slot_next = 0;
+static void smcSlotsReset(void);
+
+/* ===========================================================================
  * [FIX SMC] Invalidacion consciente del bloque CONTENEDOR.
  *
  * recClear(addr) solo ponia a 0 el slot EXACTO escrito, pero el puntero de un
@@ -1308,6 +1342,7 @@ static void recReset() {
 
 	ppcInit();
 	ppcSetPtr((u32 *)recMem);
+	smcSlotsReset();
 
 	branch = 0;
 	memset(iRegs, 0, sizeof(iRegs));
@@ -2829,11 +2864,53 @@ static void (*recCP2BSC[32])() = {
 void psxREGIMM();
 void execI();
 
+static void smcSlotsReset(void) {
+	u32 i;
+	for (i = 0; i < SMC_SLOTS; i++) s_smc_slot_pc[i] = 0xFFFFFFFFu;
+	s_smc_slot_next = 0;
+}
+
+/* [2026-11-05] Hueco fijo para `pc` si se recompila sin parar; NULL si no. */
+static u32 *smcHotSlot(u32 pc) {
+	SmcHot *e;
+	u32 lb = psxRecLUT[pc >> 16], i, v, old;
+	u8 *base;
+
+	if (lb < (u32)recRAM || lb >= (u32)recRAM + 0x200000)
+		return NULL;   /* solo RAM: la BIOS no se reescribe */
+	e = &s_smc_hot[((pc >> 2) ^ (pc >> 12)) & (SMC_HOT_TAB - 1)];
+	if (e->pc != pc || (u32)(psxRegs.cycle - e->last) > SMC_HOT_GAP) {
+		e->pc = pc;
+		e->count = 1;
+		e->last = psxRegs.cycle;
+		return NULL;
+	}
+	e->last = psxRegs.cycle;
+	if (++e->count < SMC_HOT_COUNT)
+		return NULL;
+
+	base = (u8 *)recMem + RECMEM_SIZE - SMC_SLOT_POOL;
+	for (i = 0; i < SMC_SLOTS; i++)
+		if (s_smc_slot_pc[i] == pc)
+			return (u32 *)(base + i * SMC_SLOT_SIZE);
+
+	v = s_smc_slot_next++ % SMC_SLOTS;
+	old = s_smc_slot_pc[v];
+	if (old != 0xFFFFFFFFu && psxRecLUT[old >> 16] && PC_REC32(old) == (u32)(base + v * SMC_SLOT_SIZE))
+		PC_REC32(old) = 0;   /* el inquilino anterior se recompilara cuando haga falta */
+	s_smc_slot_pc[v] = pc;
+	pcsxr_log(2, "[DYNAREC] %08X se recompila sin parar (codigo automodificable): hueco fijo %u\n",
+		(unsigned)pc, (unsigned)v);
+	return (u32 *)(base + v * SMC_SLOT_SIZE);
+}
+
 static void recRecompile() {
 	//static int recCount = 0;
 	u32 *ptr;
 	u32 a;
 	int i;
+	u32 *slot, *saved_ptr = NULL;
+	int max_instrs = 500;
 	
 	cop2readypc = 0;
 	idlecyclecount = 0;
@@ -2862,8 +2939,9 @@ static void recRecompile() {
 	iRegs[0].k = 0;
 	iRegs[0].state = ST_CONST;
 	
-	/* if ppcPtr reached the mem limit reset whole mem */
-	if (((u32)ppcPtr - (u32)recMem) >= (RECMEM_SIZE - 0x10000)) {
+	/* if ppcPtr reached the mem limit reset whole mem (los huecos fijos van
+	 * al final, fuera de esta zona) */
+	if (((u32)ppcPtr - (u32)recMem) >= (RECMEM_SIZE - SMC_SLOT_POOL - 0x10000)) {
 		/* [traza] Cada vaciado = recompilar todo = tiron: que se vea. */
 		static u32 s_recmem_resets = 0;
 		s_recmem_resets++;
@@ -2875,6 +2953,14 @@ static void recRecompile() {
 		recReset();
 	}
 
+	/* [2026-11-05] Automodificable: a su hueco fijo, reutilizado. */
+	slot = smcHotSlot(psxRegs.pc);
+	if (slot) {
+		saved_ptr = ppcPtr;
+		ppcSetPtr(slot);
+		max_instrs = SMC_SLOT_MAX_INSTRS;
+	}
+
 	ppcAlign(/*32*/4);
 	ptr = ppcPtr;
 	
@@ -2883,7 +2969,7 @@ static void recRecompile() {
 
 	pcold = pc = psxRegs.pc;
 
-	for (count=0; count<500;) {
+	for (count=0; count<max_instrs;) {
 
 		u32 adr = pc & 0x1fffff;
 		u32 op;
@@ -2940,7 +3026,8 @@ done:;
 
 #if PCSXR_DYNAREC_STATS
 	s_drs_blocks++;
-	s_drs_bytes += (u32)((u8 *)ppcPtr - (u8 *)ptr);
+	if (!slot)   /* lo de los huecos fijos no llena la cache */
+		s_drs_bytes += (u32)((u8 *)ppcPtr - (u8 *)ptr);
 	drs_add(s_drs_bpc, s_drs_bcnt, NULL, pcold, 0);
 	if (s_drs_bytes >= (4u << 20))
 		drs_dump("4 MB emitidos");
@@ -2958,6 +3045,12 @@ done:;
 	sprintf((char *)ppcPtr, "PC=%08x", pcold);
 	ppcPtr += strlen((char *)ppcPtr);
 
+	if (slot) {
+		if ((u32)((u8 *)ppcPtr - (u8 *)slot) > SMC_SLOT_SIZE)
+			pcsxr_log(1, "[DYNAREC] el bloque %08X se sale de su hueco fijo (%u bytes)\n",
+				(unsigned)pcold, (unsigned)((u8 *)ppcPtr - (u8 *)slot));
+		ppcSetPtr(saved_ptr);   /* la zona normal sigue donde estaba */
+	}
 }
 
 
