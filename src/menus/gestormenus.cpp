@@ -204,6 +204,11 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Acciones del menu principal para guardar las opciones, volver al juego y salir de Salvia
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_resume, this));
+	#ifdef _XBOX
+	if (!refConfig->configMain[cfg::returnApp].valueStr.empty()) {
+		menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(trOrDefault("menu.main.returnapp", "Return to application"), &GestorMenus::volverAplicacion, &status, ico_resume, this));
+	}
+	#endif
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
 	
 	// Establecer estado inicial
@@ -3098,6 +3103,11 @@ std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
 
 std::string GestorMenus::salirEmulacion(CONFIG_STATUS *st){
 	*st = EXIT_EMULATION;
+	return std::string("");
+}
+
+std::string GestorMenus::volverAplicacion(CONFIG_STATUS *st){
+	*st = RETURN_TO_APP;
 	return std::string("");
 }
 

@@ -17,6 +17,7 @@ class Launcher{
 
         bool launch(std::vector<std::string> &commands);
 		int launchXboxWin(const std::string& rutaCompletaExe, const std::string& parametros);
+		void launchReturnApp(const std::string& path);
 		static void initDrives();
 		static void unmountAll();
     private:

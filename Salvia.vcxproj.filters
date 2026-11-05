@@ -289,6 +289,12 @@
     <ClInclude Include="src\so\launcher.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\so\returnapp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\rawsave.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\const\cfgconst.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -20,6 +20,19 @@
 
 vector<string> Launcher::mountedDrives;
 
+void Launcher::launchReturnApp(const std::string& path) {
+#ifdef _XBOX
+	// Do not pass the previous title's ROM launch data to the return application.
+	if (XSetLaunchData(NULL, 0) != ERROR_SUCCESS) {
+		LOG_ERROR("Could not clear launch data for return application");
+		return;
+	}
+	XLaunchNewImage(path.c_str(), 0);
+	// Success replaces the process. A returned launch must leave Salvia usable.
+	LOG_ERROR("Return application launch returned: %s", path.c_str());
+#endif
+}
+
 bool Launcher::launch(std::vector<std::string> &commands){
    	return launchXboxWin(commands[0], commands[1]) == 0;
 }

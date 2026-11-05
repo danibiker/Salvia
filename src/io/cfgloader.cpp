@@ -74,6 +74,11 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::path_prefix].desc = "#Path where the .xex or exe files for each core are stored."
 										"\n#if empty, it will be set to the executable's path";
 
+	configMain[cfg::returnApp] = cfg::t_cfg_props("return_app", std::string(""));
+	configMain[cfg::returnApp].desc = "#Xbox 360 only: absolute path to an .xex to launch with the exit-game hotkey"
+		"\n#or Return to application in the menu. Empty keeps the normal Salvia menu behavior."
+		"\n#Use an unquoted mounted path, e.g. Hdd:\\Apps\\EmulationStation\\emulationstation.xex";
+
 	configMain[cfg::aspectRatio] = cfg::t_cfg_props("aspectRatio", (int)RATIO_CORE);
 	configMain[cfg::aspectRatio].desc = "#The screen aspect ratio"
 										"\n#RATIO_CORE     0"

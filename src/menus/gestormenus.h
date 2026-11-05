@@ -22,7 +22,7 @@ enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, 
  * boton digital. Se lee de mapperCore.analogDst, no de las tres tablas normales. */
 enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_ANALOG, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
-enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, EXIT_EMULATION, START_SCRAPPING, MAX_CONFIG_STATUS};
+enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, EXIT_EMULATION, START_SCRAPPING, RETURN_TO_APP, MAX_CONFIG_STATUS};
 
 const uint8_t BOOT_NO_DISK = 0x01;
 const uint8_t BOOT_WITH_DISK = 0x02;
@@ -538,6 +538,7 @@ private:
 	std::string descargarCheats(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
+	std::string volverAplicacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);	
 	void addCoreOptionsByCategory(Menu *parent, const std::vector<std::pair<std::string, std::string> > &categories, const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
 
