@@ -3979,8 +3979,29 @@ struct VFSIO
 retro_vfs_interface* VFSIO::vfsi;
 #endif
 
+#ifdef _XBOX
+// Xbox 360: CreateFile/fopen do not accept '/' as a path separator, but DBP builds many
+// paths with '/' (e.g. DBP_ScanSystem: system_dir + "/" + name). Convert to '\\' and
+// collapse repeated separators (same as Salvia's VFS limpiarRutaWindows).
+static const char* DBP_XboxFixPath(const char* path, std::string& buf)
+{
+	if (!strchr(path, '/')) return path;
+	buf.clear();
+	for (const char* p = path; *p; p++)
+	{
+		char c = (*p == '/' ? '\\' : *p);
+		if (c == '\\' && !buf.empty() && buf[buf.size()-1] == '\\') continue;
+		buf += c;
+	}
+	return buf.c_str();
+}
+#endif
+
 FILE* fopen_wrap(const char* path, const char* mode)
 {
+	#ifdef _XBOX
+	std::string xbox_path_buf; path = DBP_XboxFixPath(path, xbox_path_buf);
+	#endif
 	#ifdef DBP_USE_VFSIO
 	if (VFSIO::Use(path)) return VFSIO::Open(path, mode);
 	#endif
@@ -4002,6 +4023,9 @@ FILE* fopen_wrap(const char* path, const char* mode)
 
 static bool exists_utf8(const char* path, bool* out_is_dir)
 {
+	#ifdef _XBOX
+	std::string xbox_path_buf; path = DBP_XboxFixPath(path, xbox_path_buf);
+	#endif
 	#ifdef DBP_USE_VFSIO
 	if (VFSIO::Use(path)) return VFSIO::Exists(path, out_is_dir); // handle Android storage access framework
 	#endif

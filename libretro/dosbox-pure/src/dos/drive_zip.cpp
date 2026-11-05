@@ -1135,21 +1135,23 @@ struct Zip_File : Zip_Entry
 	Bit32u decomp_size, comp_size, crc;
 	Bit32u refs;
 	Bit16u ofs_past_header;
-	Bit8u bit_flags, method, have_pic;
+	Bit8u bit_flags, method, have_pic, have_skc_flush;
 	Bit64u data_ofs;
 	ZIP_Unpacker* unpacker;
 
 	Zip_File(Bit16u _attr, const char* filename, Bit16u _date, Bit16u _time, bool _haslfn, Bit64u _data_ofs, Bit32u _decomp_size, Bit32u _comp_size, Bit32u _crc, Bit8u _bit_flags, Bit8u _method)
-		: Zip_Entry(_attr, filename, _date, _time, _haslfn), decomp_size(_decomp_size), comp_size(_comp_size), crc(_crc), refs(0), ofs_past_header(0), bit_flags(_bit_flags), method(_method), have_pic(0), data_ofs(_data_ofs), unpacker(NULL) {}
+		: Zip_Entry(_attr, filename, _date, _time, _haslfn), decomp_size(_decomp_size), comp_size(_comp_size), crc(_crc), refs(0), ofs_past_header(0), bit_flags(_bit_flags), method(_method), have_pic(0), have_skc_flush(0), data_ofs(_data_ofs), unpacker(NULL) {}
 
 	~Zip_File()
 	{
 		DBP_ASSERT(!refs);
 		if (have_pic) { PICHandler((Bitu)this); PIC_RemoveSpecificEvents(PICHandler, (Bitu)this); }
-		delete unpacker;
+		if (have_skc_flush) { have_skc_flush = 0; PIC_RemoveSpecificEvents(SKCFlushHandler, (Bitu)this); }
+		delete unpacker; // ~Zip_DeflateUnpacker waits for a pending seek cache job and writes it
 	}
 
 	static void PICHandler(Bitu implPtr);
+	static void SKCFlushHandler(Bitu implPtr);
 };
 
 struct Zip_StoredUnpacker : ZIP_Unpacker
@@ -1306,17 +1308,22 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 	enum { SEEK_CURSOR_MAX_DEFL = 128 + (sizeof(SeekCursor) + 9) / 10 * 11, SEEK_CACHE_CURSOR_NEED = 50, SEEK_CACHE_CURSOR_STEPS = 20 };
 	struct SeekCache { zipDrive* drv; std::string path; Bit32u count; } * seek_cache;
 
-	// --- Async seek cache writer state (Step 1): WriteSeekCache used to run inline
-	// on the emu thread, holding it during the I/O + compression of the .SKC file.
-	// Now we snapshot cursors[] on the emu thread (cheap) and dispatch the heavy
-	// work to a detached thread on core 1.
+	// --- Async seek cache writer state: WriteSeekCache used to run inline on the
+	// emu thread, holding it during the compression + I/O of the .SKC file.
+	// Now the emu thread snapshots cursors[] (cheap), a detached worker thread
+	// compresses them into a memory buffer (expensive), and the emu thread writes
+	// that buffer to the DOS drive from a PIC event (SKCFlushHandler).
+	// The worker must never touch DOS drives or the PIC: neither is thread safe.
+	struct SeekCacheJob;
 	Mutex          cursors_mtx;        // protects writes to cursors[] (vs async seek cache reader)
-	Mutex          skc_mtx;            // protects skc_writing
-	Semaphore      skc_sem_exited;     // worker -> destructor : writer has returned
-	bool           skc_writing;        // a writer is in flight
+	Mutex          skc_mtx;            // protects skc_job, skc_ready, skc_waiting
+	Semaphore      skc_sem_ready;      // worker -> waiting emu thread : buffer is ready
+	SeekCacheJob*  skc_job;            // job in flight or waiting to be written (NULL if none)
+	bool           skc_ready;          // worker finished compressing skc_job
+	bool           skc_waiting;        // emu thread is blocked in FlushSeekCache(true)
 
 	Zip_DeflateUnpacker(Zip_Archive& _archive, const Zip_File& f, zipDrive* drv, const char* path) : archive(_archive), crc_run(0), crc_ofs((Bit32u)-1), crc_failed(0), seek_cache(NULL),
-		skc_writing(false)
+		skc_job(NULL), skc_ready(false), skc_waiting(false)
 	{
 		//printf("[%s] OPENED FILE!\n", f.name);
 		DBP_ASSERT(f.ofs_past_header);
@@ -1374,7 +1381,7 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 
 	~Zip_DeflateUnpacker()
 	{
-		WaitForSeekCacheWriter();
+		FlushSeekCache(true); // wait for the worker and write its result (emu thread)
 		if (seek_cache) delete seek_cache;
 		free(cursors);
 	}
@@ -1556,29 +1563,27 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 		Zip_DeflateUnpacker* unp;
 		SeekCursor* cursors_snapshot;
 		Bit32u cursor_count;
-		Bit32u cursor_block_local;
-		Bit32u decomp_size;
 		Bit32u comp_size;
 		Bit64u data_ofs;
 		zipDrive* drv;
 		std::string path;
+		std::vector<Bit8u> out; // complete .SKC file contents, filled by the worker
 	};
 
-	void StartAsyncSeekCacheWrite(const Zip_File& f)
+	// Emu thread: snapshot the cursors and start the compression worker.
+	// Returns true if a job was started (caller then schedules SKCFlushHandler).
+	bool StartAsyncSeekCacheWrite(const Zip_File& f)
 	{
-		if (!seek_cache) return;
+		if (!seek_cache) return false;
 		skc_mtx.Lock();
-		bool busy = skc_writing;
-		if (!busy) skc_writing = true;
+		bool busy = (skc_job != NULL);
 		skc_mtx.Unlock();
-		if (busy) return; // a writer is already in flight; this trigger is dropped (next PIC event will retry with fresher cursors)
+		if (busy) return false; // a job is still in flight; this trigger is dropped (next PIC event will retry with fresher cursors)
 
 		Bit32u cursor_count_local = (f.decomp_size + (cursor_block - 1)) / cursor_block;
 		SeekCacheJob* job = new SeekCacheJob;
 		job->unp = this;
 		job->cursor_count = cursor_count_local;
-		job->cursor_block_local = cursor_block;
-		job->decomp_size = f.decomp_size;
 		job->comp_size = f.comp_size;
 		job->data_ofs = f.data_ofs;
 		job->drv = seek_cache->drv;
@@ -1590,47 +1595,66 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 		memcpy(job->cursors_snapshot, cursors, (size_t)cursor_count_local * sizeof(SeekCursor));
 		cursors_mtx.Unlock();
 
+		skc_mtx.Lock();
+		skc_job = job;
+		skc_ready = false;
+		skc_mtx.Unlock();
+
 		// Off-emu-core. Default is core 2 which is the emu core; use core 4 to actually parallelize.
 		Thread::StartDetached(SeekCacheThreadEntry, job, 4);
+		return true;
 	}
 
-	void WaitForSeekCacheWriter()
+	// Emu thread only: write the finished job to the DOS drive.
+	// With wait == false returns false if the worker has not finished yet.
+	// Returns true when there is nothing left pending.
+	bool FlushSeekCache(bool wait)
 	{
-		for (;;)
+		skc_mtx.Lock();
+		while (skc_job && !skc_ready)
 		{
-			skc_mtx.Lock();
-			bool busy = skc_writing;
+			if (!wait) { skc_mtx.Unlock(); return false; }
+			skc_waiting = true;
 			skc_mtx.Unlock();
-			if (!busy) break;
-			skc_sem_exited.Wait();
+			skc_sem_ready.Wait();
+			skc_mtx.Lock();
+			skc_waiting = false;
 		}
+		SeekCacheJob* job = skc_job;
+		skc_job = NULL;
+		skc_ready = false;
+		skc_mtx.Unlock();
+		if (!job) return true;
+		WriteSeekCacheBuffer(*job);
+		delete job;
+		return true;
 	}
 
 	static Thread::RET_t THREAD_CC SeekCacheThreadEntry(void* arg)
 	{
+		// Worker thread: CPU work on private memory only, no DOS drive or PIC access.
 		SeekCacheJob* job = (SeekCacheJob*)arg;
-		DoWriteSeekCacheFromSnapshot(*job);
+		BuildSeekCacheBuffer(*job);
 		free(job->cursors_snapshot);
+		job->cursors_snapshot = NULL;
 		Zip_DeflateUnpacker* unp = job->unp;
-		delete job;
-		// Signal completion AFTER all resources owned by the job are freed,
-		// because the destructor of Zip_DeflateUnpacker is allowed to return
-		// as soon as it sees skc_writing==false.
 		unp->skc_mtx.Lock();
-		unp->skc_writing = false;
+		unp->skc_ready = true;
+		bool post = unp->skc_waiting; // only post when someone waits (Windows semaphore has max count 1)
 		unp->skc_mtx.Unlock();
-		unp->skc_sem_exited.Post();
+		if (post) unp->skc_sem_ready.Post();
 		return 0;
 	}
 
-	static void DoWriteSeekCacheFromSnapshot(const SeekCacheJob& job)
+	static void AppendBytes(std::vector<Bit8u>& out, const void* p, size_t n)
 	{
-		DOS_File* df;
-		Bit8u drive_idx = DriveGetIndex(job.drv);
-		if (drive_idx == DOS_DRIVES || !Drives[drive_idx]->FileCreate(&df, (char*)job.path.c_str(), DOS_ATTR_ARCHIVE)) return;
-		df->AddRef();
-		Bit16u hdr[7] = { (Bit16u)0x5345, (Bit16u)sizeof(SeekCursor), (Bit16u)(job.comp_size>>16), (Bit16u)job.comp_size, (Bit16u)(job.data_ofs>>32), (Bit16u)(job.data_ofs>>16), (Bit16u)job.data_ofs }, idx_complen[2], sz;
-		df->Write((Bit8u*)hdr, &(sz = (Bit16u)sizeof(hdr)));
+		out.insert(out.end(), (const Bit8u*)p, (const Bit8u*)p + n);
+	}
+
+	static void BuildSeekCacheBuffer(SeekCacheJob& job)
+	{
+		Bit16u hdr[7] = { (Bit16u)0x5345, (Bit16u)sizeof(SeekCursor), (Bit16u)(job.comp_size>>16), (Bit16u)job.comp_size, (Bit16u)(job.data_ofs>>32), (Bit16u)(job.data_ofs>>16), (Bit16u)job.data_ofs }, idx_complen[2];
+		AppendBytes(job.out, hdr, sizeof(hdr));
 		struct scomp { sdefl defl; Bit8u buf[SEEK_CURSOR_MAX_DEFL]; } *comp = new scomp;
 		for (Bit32u ii = (SEEK_CACHE_CURSOR_STEPS / 2); ii < job.cursor_count; ii++)
 		{
@@ -1640,13 +1664,27 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 			Bit32u complen = comp->defl.Run(comp->buf, (const unsigned char*)&job.cursors_snapshot[idx_complen[0]], sizeof(SeekCursor));
 			DBP_ASSERT(complen < SEEK_CURSOR_MAX_DEFL);
 			idx_complen[1] = (complen < (sizeof(SeekCursor)-10) ? (Bit16u)complen : (Bit16u)0);
-			df->Write((Bit8u*)idx_complen, &(sz = (Bit16u)sizeof(idx_complen)));
-			if (idx_complen[1]) df->Write((Bit8u*)comp->buf, &idx_complen[1]);
-			else df->Write((Bit8u*)&job.cursors_snapshot[idx_complen[0]], &(sz = (Bit16u)sizeof(SeekCursor)));
+			AppendBytes(job.out, idx_complen, sizeof(idx_complen));
+			if (idx_complen[1]) AppendBytes(job.out, comp->buf, idx_complen[1]);
+			else AppendBytes(job.out, &job.cursors_snapshot[idx_complen[0]], sizeof(SeekCursor));
+		}
+		delete comp;
+	}
+
+	static void WriteSeekCacheBuffer(SeekCacheJob& job)
+	{
+		DOS_File* df;
+		Bit8u drive_idx = DriveGetIndex(job.drv);
+		if (job.out.empty() || drive_idx == DOS_DRIVES || !Drives[drive_idx]->FileCreate(&df, (char*)job.path.c_str(), DOS_ATTR_ARCHIVE)) return;
+		df->AddRef();
+		for (size_t pos = 0, total = job.out.size(); pos < total;)
+		{
+			Bit16u sz = (Bit16u)((total - pos) > 0x8000 ? 0x8000 : (total - pos));
+			if (!df->Write(&job.out[pos], &sz) || !sz) break;
+			pos += sz;
 		}
 		df->Close();
 		delete df;
-		delete comp;
 	}
 
 };
@@ -1656,8 +1694,23 @@ void Zip_File::PICHandler(Bitu implPtr)
 	Zip_File& f = *(Zip_File*)implPtr;
 	f.have_pic = 0;
 	// The .SKC writer used to run synchronously here, stalling the emu thread for
-	// hundreds of ms during the deflate + DOS_File writes. Dispatch it to core 1.
-	((Zip_DeflateUnpacker*)f.unpacker)->StartAsyncSeekCacheWrite(f);
+	// hundreds of ms during the deflate. The compression now runs on another core
+	// and SKCFlushHandler writes the result to the drive back on the emu thread.
+	if (((Zip_DeflateUnpacker*)f.unpacker)->StartAsyncSeekCacheWrite(f) && !f.have_skc_flush)
+	{
+		f.have_skc_flush = 1;
+		PIC_AddEvent(Zip_File::SKCFlushHandler, 10.0f, implPtr);
+	}
+}
+
+void Zip_File::SKCFlushHandler(Bitu implPtr)
+{
+	// Emu thread: write the .SKC once the worker has finished compressing it
+	Zip_File& f = *(Zip_File*)implPtr;
+	f.have_skc_flush = 0;
+	if (!f.unpacker || ((Zip_DeflateUnpacker*)f.unpacker)->FlushSeekCache(false)) return;
+	f.have_skc_flush = 1;
+	PIC_AddEvent(Zip_File::SKCFlushHandler, 10.0f, implPtr); // not ready yet, check again later
 }
 
 struct Zip_Handle : public DOS_File
@@ -2322,4 +2375,4 @@ void zipDrive::Uncompress(const Bit8u* src, Bit32u src_len, Bit8u* trg, Bit32u t
 }
 
 #include <dbp_serialize.h>
-DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, zipDrive, Zip_File::PICHandler);
+DBP_SERIALIZE_SET_POINTER_LIST(PIC_EventHandler, zipDrive, Zip_File::PICHandler, Zip_File::SKCFlushHandler);
