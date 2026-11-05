@@ -96,6 +96,24 @@ bool Scrapper::archivoExiste(const std::string& rutaBase, const std::string& suf
 	return dir.fileExists(rutaCompleta.c_str());
 };
 
+bool Scrapper::userAuthenticated(){
+	//https://api.screenscraper.fr/api2/ssuserInfos.php?devid=xxx&devpassword=yyy&softname=zzz&output=xml&ssid=retretete&sspassword=123456Asd
+	
+	CurlClient downloader;
+	const std::string user = CfgLoader::configMain[cfg::scrapUser].valueStr;
+	const std::string pass = CfgLoader::configMain[cfg::scrapPass].valueStr;
+	const std::string urlBase = "https://api.screenscraper.fr/api2/ssuserInfos.php";
+	const std::string fullUrl = urlBase + "?devid=" + DEV_ID_SCREENSCRAPPER +"&devpassword=" + DEV_PASS_SCREENSCRAPPER 
+		+ "&softname=salvia&output=xml&ssid=" + downloader.escape(user) + "&sspassword=" + downloader.escape(pass);
+	std::string response;
+	float downloadProgress = 0.0f;
+
+	if (downloader.fetchUrl(fullUrl, response, &downloadProgress)) {
+		return downloader.getLastHttpCode() == 200;
+	}
+	return false;
+}
+
 /**
 *
 */
@@ -214,7 +232,9 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 			urlBase += "&name=";
 			fullUrl = urlBase + peticion.romname;
 		}
-		//LOG_DEBUG("Buscando datos para: %s en url: %s\n", file->filename.c_str(), fullUrl.c_str());
+		#ifdef NET_DEBUG
+		LOG_DEBUG("Buscando datos para: %s en url: %s\n", file->filename.c_str(), fullUrl.c_str());
+		#endif
 
 		if (downloader.fetchUrl(fullUrl, response, &downloadProgress)) {
 			if (scrapperConfig.origin == SC_SCREENCSRAPER){

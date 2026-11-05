@@ -309,7 +309,9 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	// un argumento inexistente: excepcion en el kernel (0x8010DF28) y reinicio de la consola.
 	LOG_DEBUG("romNoExt: %s", romNoExt.c_str());
 	const std::string chtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(romNoExt) + ".cht";
+	#ifdef NET_DEBUG
 	LOG_DEBUG("Downloading cht: %s", chtUrl.c_str());
+	#endif
 
 	// 1) Intento directo por nombre de ROM (funciona si ya tiene nombre canonico).
 	//    fetchFile devuelve true solo en 2xx; en 404 borra el fichero parcial y da false.
@@ -349,7 +351,9 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	// 3) Descargar el elegido -> nombre de hash (cheatHashedPath), que es lo primero que busca
 	//    resolveCheatPath en la siguiente carga.
 	std::string chosenChtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(best);
+	#ifdef NET_DEBUG
 	LOG_DEBUG("downloading cht: %s -> %s", chosenChtUrl.c_str(), destino.c_str());
+	#endif
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_CHEAT);
 	if (fetchToFileSafe(dl, chosenChtUrl, destino, progressOut)){
 		setCheatSourceName(best);   // nombre real del .cht en GitHub (p.ej. "Foo (World) (GameShark).cht")

@@ -11,6 +11,7 @@ CurlClient::CurlClient(){
 	httpVersion = CURL_HTTP_VERSION_NONE;
 	lastHttpCode = 0;
 	m_curl = NULL;
+	netStat = NET_OK;
 }
 
 CurlClient::~CurlClient(){
@@ -20,8 +21,9 @@ CurlClient::~CurlClient(){
 	}
 }
 
-void CurlClient::init(){
+NETWORK_STATUS CurlClient::init(){
 	int err = 0;
+	netStat = NET_OK;
 
 	#ifdef _XBOX
 		XNADDR xnAddr;
@@ -37,7 +39,8 @@ void CurlClient::init(){
 			// Si da NONE de inmediato, no hay inicialización o hardware básico
 			if (dwStatus == XNET_GET_XNADDR_NONE) {
 				LOG_DEBUG("Error: Red no inicializada o sin conexion (NONE).\n");
-				return;
+				netStat = NET_NONE;
+				return netStat;
 			}
 
 			// Si sigue pendiente (0x00000000), esperamos
@@ -55,7 +58,8 @@ void CurlClient::init(){
 		DWORD maskIP = XNET_GET_XNADDR_STATIC | XNET_GET_XNADDR_DHCP | XNET_GET_XNADDR_PPPOE;
 		if ((dwStatus & maskIP) == 0) {
 			LOG_DEBUG("Timeout o Error: La Xbox no obtuvo una IP valida.\n");
-			return;
+			netStat = NET_ERROR_IP;
+			return netStat;
 		}
 	#endif
 
@@ -65,18 +69,20 @@ void CurlClient::init(){
 		err = WSAStartup( wVersionRequested, &wsaData );
 		if ( err != 0 ){
 			LOG_DEBUG("WSAStartup fallo.\n");
-			return;
+			netStat = NET_ERROR_WSA;
+			return netStat;
 		}
  
 		if (LOBYTE( wsaData.wVersion ) != 1 || HIBYTE( wsaData.wVersion ) != 1 ){
 			WSACleanup( );
 			LOG_DEBUG("Version de Winsock no soportada.\n");
-			return; 
+			netStat = NET_ERROR_WINSOCK;
+			return netStat; 
 		}
 
 	#ifdef _XBOX
 		// Llegar aqui significa que dwStatus == XNET_GET_XNADDR_VALID y la IP es 100% real
-		char ipStr[64];
+		
 		// Usamos sprintf_s en VS2010 por seguridad contra desbordamientos
 		sprintf_s(ipStr, sizeof(ipStr), "IP de mi Xbox: %d.%d.%d.%d\n", 
 				xnAddr.ina.S_un.S_un_b.s_b1, xnAddr.ina.S_un.S_un_b.s_b2, 
@@ -97,6 +103,7 @@ void CurlClient::init(){
 				(vinfo->features & CURL_VERSION_LIBZ)   ? "SI" : "NO");
 		}
 	}
+	return netStat;
 }
 
 void CurlClient::close(){

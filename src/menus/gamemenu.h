@@ -175,6 +175,7 @@ class GameMenu : public Engine{
 		void showLangSystemMessage(std::string, uint32_t);
 		void showProgressMessage(std::string, float, uint32_t);
 		void startScrapping();
+		void showScrapProcess(ListMenu &listMenu);
 		void loadGameAchievements(unzippedFileInfo& unzipped);
 		void showAchievementMessage(const std::string &line1Str, const std::string &line2Str, const std::string &line3Str, SDL_Surface *badge);
 		void clearOverlay();
@@ -250,7 +251,6 @@ class GameMenu : public Engine{
 		void selectScalerMode(int);
 		void processKeyUp();
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
-		void showScrapProcess(ListMenu &listMenu);
 		void initAchievements();
         std::string encloseWithCharIfSpaces(std::string, std::string);
 		inline void updateAchievementsState(uint32_t currentTicks);

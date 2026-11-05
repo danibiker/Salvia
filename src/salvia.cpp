@@ -2439,6 +2439,16 @@ int main(int argc, char *argv[]) {
 	CurlClient curlClient;
 	curlClient.init();
 
+	if (curlClient.getNetInitStat() == NET_NONE){
+		gameMenu->showLangSystemMessage("msg.network.none", 3000);
+	} else if (curlClient.getNetInitStat() == NET_ERROR_IP){
+		gameMenu->showLangSystemMessage("msg.network.noip", 3000);
+	} else if (curlClient.getNetInitStat() == NET_ERROR_WSA){
+		gameMenu->showLangSystemMessage("msg.network.wsa", 3000);
+	} else if (curlClient.getNetInitStat() == NET_ERROR_WINSOCK){
+		gameMenu->showLangSystemMessage("msg.network.winsock", 3000);
+	}
+
 	nextFrameTime = Constant::getTicks();
 	//Estado inicial del fondo HLSL: el constructor fija EMU_MENU directo,
 	//saltandose setEmuStatus, asi que lo sincronizamos aqui una vez.

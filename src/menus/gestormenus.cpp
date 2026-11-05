@@ -18,6 +18,7 @@
 #include <so/soutils.h>
 #include <cheats/cheatmanager.h>
 #include <video/HLSLBackground.h>
+#include <http/scrapper.h>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -3107,6 +3108,27 @@ std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
 		someSelected = scrapSelection[i].selected;
 	}
 
+	SCRAP_FROM origin = static_cast<SCRAP_FROM>(CfgLoader::configMain[cfg::scrapOrigin].valueInt);
+
+	if (origin == SC_SCREENCSRAPER){
+		if (Scrapper::isScrapping())
+			return LanguageManager::instance()->get("msg.scrapinprogress");
+		
+		InterlockedExchange(&CurlClient::g_abortScrapping, 0);
+
+		if (CfgLoader::configMain[cfg::scrapUser].valueStr.empty() || CfgLoader::configMain[cfg::scrapPass].valueStr.empty()){
+			return LanguageManager::instance()->get("msg.scrap.error.credentials.empty");
+		}
+
+		if (!Scrapper::userAuthenticated()){
+			return LanguageManager::instance()->get("msg.scrap.error.credentials.wrong");
+		}
+	} else if (origin == SC_THEGAMESDB){
+		if (CfgLoader::configMain[cfg::apikeytgdb].valueStr.empty()){
+			return LanguageManager::instance()->get("msg.scrap.error.api.empty");
+		}
+	}
+
 	if (someSelected){
 		*st = START_SCRAPPING;
 		if (menuScrapper->opciones.size() > 0) {
@@ -3134,7 +3156,8 @@ std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
 		auto* baseOpt = menuScrapper->opciones.back();
 		OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
 		if (opcion != nullptr) {
-			InterlockedExchange(&CurlClient::g_abortScrapping, 1);
+			if (Scrapper::isScrapping())
+				InterlockedExchange(&CurlClient::g_abortScrapping, 1);
 			opcion->titulo = LanguageManager::instance()->get("menu.scrap.start");
 			opcion->execfunc = &GestorMenus::startScrapping;
 		}

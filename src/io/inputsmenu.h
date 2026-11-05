@@ -607,6 +607,7 @@ void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
 			SDL_BlitSurface(gameMenu->bg_screenshot, NULL, gameMenu->overlay, NULL);
 		} 
 		gameMenu->configMenus->draw(gameMenu->overlay);
+		gameMenu->showScrapProcess(listMenu);
 	}
 }	
 
