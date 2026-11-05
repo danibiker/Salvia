@@ -7,6 +7,10 @@
 #include <iterator>
 #include <vector>
 
+#ifdef NDEBUG
+#error Host tests require assertions
+#endif
+
 struct Host {
     bool exists, saved;
     std::string events, target;
@@ -78,6 +82,49 @@ static void handoffTests() {
     assert(launchFailure.events.find("launch") == launchFailure.events.rfind("launch"));
 }
 
+static void boundaryTests() {
+    std::string normalized;
+    for (unsigned mask = 0; mask < 8; ++mask) {
+        std::string target = "Hdd:/Apps/default.xex";
+        for (unsigned bit = 0; bit < 3; ++bit)
+            if (mask & (1u << bit)) target[target.size() - 3 + bit] -= 'a' - 'A';
+        assert(ReturnApp::normalizePath(target, normalized));
+    }
+    for (unsigned c = 0; c <= 127; ++c) {
+        if (c >= 32 && c != 127) continue;
+        const std::string target = "Hdd:/Apps/" + std::string(1, static_cast<char>(c)) + "default.xex";
+        assert(!ReturnApp::normalizePath(target, normalized) && normalized.empty());
+    }
+    for (std::size_t nameLength = 0; nameLength <= 300; ++nameLength) {
+        const std::string target = "Hdd:/" + std::string(nameLength, 'a') + ".xex";
+        assert(ReturnApp::normalizePath(target, normalized) == (target.size() < 260));
+    }
+    std::string utf8 = "Hdd:/";
+    for (int i = 0; i < 125; ++i) utf8 += "\xc3\xa9";
+    utf8 += ".xex";
+    assert(utf8.size() == 259 && ReturnApp::normalizePath(utf8, normalized));
+    utf8.insert(5, "a");
+    assert(utf8.size() == 260 && !ReturnApp::normalizePath(utf8, normalized));
+
+    // Sweep every possible byte at every position, including embedded NUL and
+    // non-ASCII bytes. Accepted paths must normalize idempotently; failures must
+    // never leave a prior target in the output. Sanitizers check these bounds.
+    const std::string base = "Usb0:/Front End/default.xex";
+    for (std::size_t i = 0; i < base.size(); ++i) {
+        for (unsigned c = 0; c < 256; ++c) {
+            std::string target = base;
+            target[i] = static_cast<char>(c);
+            normalized = "stale";
+            if (ReturnApp::normalizePath(target, normalized)) {
+                std::string twice;
+                assert(ReturnApp::normalizePath(normalized, twice) && twice == normalized);
+            } else {
+                assert(normalized.empty());
+            }
+        }
+    }
+}
+
 static void rawSaveTests(const std::string& directory) {
     const std::string path = directory + "/returnapp-test.srm";
     const unsigned char bytes[] = { 0, 0xff, 1, 2, 3, 0x80 };
@@ -102,7 +149,8 @@ static void rawSaveTests(const std::string& directory) {
 int main(int argc, char** argv) {
     assert(argc == 2); // An existing scratch directory for the raw SRAM test.
     pathTests();
+    boundaryTests();
     handoffTests();
     rawSaveTests(argv[1]);
-    std::cout << "returnapp: path, handoff ordering/failures and raw SRAM tests passed\n";
+    std::cout << "portable path/boundary sweeps, handoff and raw SRAM groups passed\n";
 }

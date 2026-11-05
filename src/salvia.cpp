@@ -1839,6 +1839,9 @@ std::string initPathAndLog(char** argv){
 }
 
 void closeGame(bool sramAlreadySaved){
+#ifdef NO_SRAM
+	(void)sramAlreadySaved;
+#endif
 	if (gameMenu->romLoaded){
 		/* IMPORTANTE: NO cerrar el dispositivo de audio entre cargas.
 		 *

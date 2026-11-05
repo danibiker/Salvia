@@ -30,6 +30,8 @@ void Launcher::launchReturnApp(const std::string& path) {
 	XLaunchNewImage(path.c_str(), 0);
 	// Success replaces the process. A returned launch must leave Salvia usable.
 	LOG_ERROR("Return application launch returned: %s", path.c_str());
+#else
+	(void)path;
 #endif
 }
 

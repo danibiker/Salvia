@@ -487,9 +487,9 @@ bool saveSramForExit(const char* path, bool romLoaded) {
     if (!g_saveQueue.saveMutex) return false;
     const Uint32 started = SDL_GetTicks();
     for (;;) {
-        SDL_mutexP(g_saveQueue.saveMutex);
+        if (SDL_mutexP(g_saveQueue.saveMutex) != 0) return false;
         const bool busy = g_saveQueue.buffer != NULL;
-        SDL_mutexV(g_saveQueue.saveMutex);
+        if (SDL_mutexV(g_saveQueue.saveMutex) != 0) return false;
         if (!busy) break;
         if (SDL_GetTicks() - started >= 5000) return false;
         SDL_Delay(1);
@@ -501,6 +501,9 @@ bool saveSramForExit(const char* path, bool romLoaded) {
         if (size > 0 && (!data || !writeRawSave(Constant::checkPath(path).c_str(), data, size)))
             return false;
     }
+#else
+    (void)path;
+    (void)romLoaded;
 #endif
     return true;
 }
