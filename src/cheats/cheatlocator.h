@@ -303,12 +303,13 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	dirutil dir;
 	const std::string romNoExt = dir.getFileNameNoExt(romPaths.rompath);
 	const std::string sysEnc   = dl.escape(sys);
-	// ★ Nada escapado para URL en el log: en la Xbox 360 OutputDebugStringA acaba en la
+	// Nada escapado para URL en el log: en la Xbox 360 OutputDebugStringA acaba en la
 	// salida de depuracion del kernel, que vuelve a interpretar el texto como formato de
 	// printf. "Sega%20-%20Master%20System" lleva un "%20S" (cadena ancha, ancho 20) que lee
 	// un argumento inexistente: excepcion en el kernel (0x8010DF28) y reinicio de la consola.
 	LOG_DEBUG("romNoExt: %s", romNoExt.c_str());
 	const std::string chtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(romNoExt) + ".cht";
+	LOG_DEBUG("Downloading cht: %s", chtUrl.c_str());
 
 	// 1) Intento directo por nombre de ROM (funciona si ya tiene nombre canonico).
 	//    fetchFile devuelve true solo en 2xx; en 404 borra el fichero parcial y da false.
@@ -347,10 +348,14 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 
 	// 3) Descargar el elegido -> nombre de hash (cheatHashedPath), que es lo primero que busca
 	//    resolveCheatPath en la siguiente carga.
+	std::string chosenChtUrl = RAW + "cht/" + sysEnc + "/" + dl.escape(best);
+	LOG_DEBUG("downloading cht: %s -> %s", chosenChtUrl.c_str(), destino.c_str());
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_CHEAT);
-	if (fetchToFileSafe(dl, RAW + "cht/" + dl.escape(sysEnc) + "/" + dl.escape(best), destino, progressOut)){
+	if (fetchToFileSafe(dl, chosenChtUrl, destino, progressOut)){
 		setCheatSourceName(best);   // nombre real del .cht en GitHub (p.ej. "Foo (World) (GameShark).cht")
 		return destino;
+	} else {
+		LOG_DEBUG("error downloading cht");
 	}
 
 	return "";
