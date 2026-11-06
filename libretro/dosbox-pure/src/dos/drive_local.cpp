@@ -34,6 +34,227 @@
 #include "support.h"
 #include "cross.h"
 #include "inout.h"
+#include <string>
+#include <typeinfo>
+
+// Salvia: RAM cache for host files of a localDrive (folder content).
+//
+// On the Xbox 360 the first access to the USB drive after ~15-20 seconds
+// without I/O takes ~330 ms (the device/cache goes idle). Games like Duke
+// Nukem 3D read their data file (DUKE3D.GRP) on demand while playing, so
+// every such read froze the whole emulation for a third of a second.
+// Files opened read-only or read/write that are not bigger than
+// DBP_LOCALCACHE_MAX_FILE are read completely into memory the first time and
+// served from there: later opens, reads and seeks never touch the host again
+// (see localCachedFile for writes). Entries are kept after the file is closed
+// (least recently used are freed when the total would exceed
+// DBP_LOCALCACHE_MAX_TOTAL) and are invalidated when the file is created,
+// opened write-only, written, deleted or renamed through this drive.
+// Duke Nukem 3D Atomic Edition: DUKE3D.GRP is ~44 MB
+#ifndef DBP_LOCALCACHE_MAX_FILE
+#define DBP_LOCALCACHE_MAX_FILE  (64u*1024u*1024u)
+#endif
+#ifndef DBP_LOCALCACHE_MAX_TOTAL
+#define DBP_LOCALCACHE_MAX_TOTAL (96u*1024u*1024u)
+#endif
+
+struct localCacheEntry
+{
+	std::string path;
+	Bit8u* data;
+	Bit32u size, refs, last_use;
+	Bit16u date, time;
+	bool stale;
+	localCacheEntry* next;
+};
+static localCacheEntry* localcache_list;
+static Bit32u localcache_total, localcache_tick;
+
+static void localCache_Free(localCacheEntry* e)
+{
+	for (localCacheEntry** pp = &localcache_list; *pp; pp = &(*pp)->next)
+		if (*pp == e) { *pp = e->next; break; }
+	localcache_total -= e->size;
+	free(e->data);
+	delete e;
+}
+
+static localCacheEntry* localCache_Find(const char* path)
+{
+	for (localCacheEntry* e = localcache_list; e; e = e->next)
+		if (!e->stale && !strcasecmp(e->path.c_str(), path)) return e;
+	return NULL;
+}
+
+static void localCache_Invalidate(const char* path)
+{
+	for (localCacheEntry *e = localcache_list, *next; e; e = next)
+	{
+		next = e->next;
+		if (e->stale || strcasecmp(e->path.c_str(), path)) continue;
+		if (e->refs) e->stale = true; // still open, freed when the last handle is closed
+		else localCache_Free(e);
+	}
+}
+
+static void localCache_Release(localCacheEntry* e)
+{
+	if (--e->refs == 0 && e->stale) localCache_Free(e);
+}
+
+static bool localCache_MakeRoom(Bit32u need)
+{
+	while (localcache_total + need > DBP_LOCALCACHE_MAX_TOTAL)
+	{
+		localCacheEntry* lru = NULL;
+		for (localCacheEntry* e = localcache_list; e; e = e->next)
+			if (!e->refs && (!lru || e->last_use < lru->last_use)) lru = e;
+		if (!lru) return false; // everything in use
+		localCache_Free(lru);
+	}
+	return true;
+}
+
+// Reads the whole file into a new cache entry, NULL if it can't be cached
+static localCacheEntry* localCache_Load(const char* path, FILE* hand)
+{
+	if (fseek(hand, 0, SEEK_END)) return NULL;
+	long fsize = ftell(hand);
+	if (fsize < 0 || (unsigned long)fsize > DBP_LOCALCACHE_MAX_FILE || fseek(hand, 0, SEEK_SET)) { fseek(hand, 0, SEEK_SET); return NULL; }
+	if (!localCache_MakeRoom((Bit32u)fsize)) return NULL;
+	Bit8u* data = (Bit8u*)malloc(fsize ? (size_t)fsize : 1);
+	if (!data) return NULL;
+	if (fsize && fread(data, 1, (size_t)fsize, hand) != (size_t)fsize) { free(data); fseek(hand, 0, SEEK_SET); return NULL; }
+
+	localCacheEntry* e = new localCacheEntry;
+	e->path = path;
+	e->data = data;
+	e->size = (Bit32u)fsize;
+	e->refs = 0;
+	e->last_use = 0;
+	e->stale = false;
+	e->time = 1; e->date = 1;
+	struct stat temp_stat;
+	struct tm * ltime;
+	if (!fstat(fileno(hand), &temp_stat) && (ltime = localtime(&temp_stat.st_mtime)) != 0)
+	{
+		e->time = DOS_PackTime((Bit16u)ltime->tm_hour, (Bit16u)ltime->tm_min, (Bit16u)ltime->tm_sec);
+		e->date = DOS_PackDate((Bit16u)(ltime->tm_year+1900), (Bit16u)(ltime->tm_mon+1), (Bit16u)ltime->tm_mday);
+	}
+	e->next = localcache_list;
+	localcache_list = e;
+	localcache_total += e->size;
+	return e;
+}
+
+// Read-only opens: served from the cache entry only (no host handle).
+// Read/write opens (Duke Nukem 3D opens DUKE3D.GRP read/write but never
+// writes): reads/seeks are served from the cache entry and the host handle
+// is kept open; the first write switches the handle to direct host I/O at the
+// current position and invalidates the cache entry.
+class localCachedFile : public DOS_File {
+public:
+	localCachedFile(const char* _name, localCacheEntry* _e, FILE* _fh) : e(_e), fh(_fh), pos(0), direct(false), last_action(NONE)
+	{
+		e->refs++;
+		e->last_use = ++localcache_tick;
+		open = true;
+		attr = DOS_ATTR_ARCHIVE;
+		time = e->time;
+		date = e->date;
+		name = 0;
+		SetName(_name);
+	}
+	~localCachedFile()
+	{
+		if (fh) fclose(fh);
+		localCache_Release(e);
+	}
+	bool Read(Bit8u * data, Bit16u * size)
+	{
+		if (!OPEN_IS_READING(flags)) { DOS_SetError(DOSERR_ACCESS_DENIED); return false; }
+		if (direct)
+		{
+			if (last_action == WRITE) fseek(fh, ftell(fh), SEEK_SET);
+			last_action = READ;
+			*size = (Bit16u)fread(data, 1, *size, fh);
+		}
+		else
+		{
+			Bit32u n = (pos >= e->size ? 0 : (e->size - pos < *size ? e->size - pos : (Bit32u)*size));
+			if (n) memcpy(data, e->data + pos, n);
+			pos += n;
+			*size = (Bit16u)n;
+		}
+		// Fake harddrive motion like localFile::Read (Inspector Gadget, Igor)
+		Bit8u mask = IO_Read(0x21);
+		if (mask & 0x4) IO_Write(0x21, mask&0xfb);
+		return true;
+	}
+	bool Write(Bit8u * data, Bit16u * size)
+	{
+		if (!OPEN_IS_WRITING(flags) || !fh) { DOS_SetError(DOSERR_ACCESS_DENIED); return false; }
+		if (!direct)
+		{
+			// First write: from now on this handle works on the host file
+			direct = true;
+			fseek(fh, (long)pos, SEEK_SET);
+			last_action = NONE;
+			localCache_Invalidate(e->path.c_str()); // other handles/opens must not see the old data
+		}
+		if (last_action == READ) fseek(fh, ftell(fh), SEEK_SET);
+		last_action = WRITE;
+		if (*size == 0) return (!ftruncate(fileno(fh), ftell(fh)));
+		*size = (Bit16u)fwrite(data, 1, *size, fh);
+		fflush(fh); // a new open of this file reads the host file again
+		return true;
+	}
+	bool Seek(Bit32u * p, Bit32u type)
+	{
+		if (direct)
+		{
+			int seektype;
+			switch (type) {
+				case DOS_SEEK_SET: seektype = SEEK_SET; break;
+				case DOS_SEEK_CUR: seektype = SEEK_CUR; break;
+				case DOS_SEEK_END: seektype = SEEK_END; break;
+				default: return false;
+			}
+			if (fseek(fh, *reinterpret_cast<Bit32s*>(p), seektype) != 0) fseek(fh, 0, SEEK_END); // same as localFile
+			*p = (Bit32u)ftell(fh);
+			last_action = NONE;
+			return true;
+		}
+		Bit64s base;
+		switch (type) {
+			case DOS_SEEK_SET: base = 0; break;
+			case DOS_SEEK_CUR: base = pos; break;
+			case DOS_SEEK_END: base = e->size; break;
+			default: return false;
+		}
+		Bit64s target = base + *reinterpret_cast<Bit32s*>(p);
+		// same as localFile: seeking past the end is allowed, before the start moves to the end
+		pos = (target < 0 ? e->size : (target > 0xFFFFFFFFLL ? 0xFFFFFFFFu : (Bit32u)target));
+		*p = pos;
+		return true;
+	}
+	bool Close()
+	{
+		if (refCtr == 1)
+		{
+			if (fh) { fclose(fh); fh = NULL; }
+			open = false;
+		}
+		return true;
+	}
+	Bit16u GetInformation(void) { return 0; }
+private:
+	localCacheEntry* e;
+	FILE* fh;
+	Bit32u pos;
+	bool direct;
+	enum { NONE, READ, WRITE } last_action;
+};
 
 
 bool localDrive::FileCreate(DOS_File * * file,char * name,Bit16u /*attributes*/) {
@@ -43,6 +264,7 @@ bool localDrive::FileCreate(DOS_File * * file,char * name,Bit16u /*attributes*/)
 	strcat(newname,name);
 	CROSS_FILENAME(newname);
 	char* temp_name = dirCache.GetExpandName(newname); //Can only be used in till a new drive_cache action is preformed */
+	localCache_Invalidate(temp_name);
 	/* Test if file exists (so we need to truncate it). don't add to dirCache then */
 	bool existing_file = false;
 	
@@ -84,6 +306,22 @@ bool localDrive::FileOpen(DOS_File * * file,char * name,Bit32u flags) {
 	CROSS_FILENAME(newname);
 	dirCache.ExpandName(newname);
 
+	// Only plain localDrive (not cdromDrive/Overlay_Drive which expect a localFile)
+	// Write-only opens are not cached (and drop the cache entry), read/write
+	// opens are cached until the first write (see localCachedFile)
+	const bool read_only_open = ((flags&0xf) == OPEN_READ || (flags&0xf) == OPEN_READ_NO_MOD);
+	const bool use_cache = ((read_only_open || (flags&0xf) == OPEN_READWRITE) && typeid(*this) == typeid(localDrive));
+	if ((flags&0xf) == OPEN_WRITE) localCache_Invalidate(newname);
+	if (use_cache && read_only_open)
+	{
+		if (localCacheEntry* e = localCache_Find(newname))
+		{
+			*file=new localCachedFile(name,e,NULL);
+			(*file)->flags=flags;
+			return true;
+		}
+	}
+
 	//Flush the buffer of handles for the same file. (Betrayal in Antara)
 	Bit8u i,drive=DOS_DRIVES;
 	localFile *lfp;
@@ -111,6 +349,20 @@ bool localDrive::FileOpen(DOS_File * * file,char * name,Bit32u flags) {
 			}
 		}
 		return false;
+	}
+
+	if (use_cache)
+	{
+		localCacheEntry* e = (read_only_open ? NULL : localCache_Find(newname));
+		if (!e && (e = localCache_Load(newname,hand)) != NULL && !read_only_open)
+			fseek(hand, 0, SEEK_SET); // the host handle stays open for a possible write
+		if (e)
+		{
+			if (read_only_open) { fclose(hand); hand = NULL; }
+			*file=new localCachedFile(name,e,hand);
+			(*file)->flags=flags;
+			return true;
+		}
 	}
 
 	*file=new localFile(name,hand);
@@ -145,6 +397,7 @@ bool localDrive::FileUnlink(char * name) {
 	strcat(newname,name);
 	CROSS_FILENAME(newname);
 	char *fullname = dirCache.GetExpandName(newname);
+	localCache_Invalidate(fullname);
 	if (unlink(fullname)) {
 		//Unlink failed for some reason try finding it.
 		struct stat buffer;
@@ -368,6 +621,8 @@ bool localDrive::Rename(char * oldname,char * newname) {
 	strcpy(newnew,basedir);
 	strcat(newnew,newname);
 	CROSS_FILENAME(newnew);
+	localCache_Invalidate(newold);
+	localCache_Invalidate(dirCache.GetExpandName(newnew));
 	int temp=rename(newold,dirCache.GetExpandName(newnew));
 	if (temp==0) dirCache.CacheOut(newnew);
 	return (temp==0);

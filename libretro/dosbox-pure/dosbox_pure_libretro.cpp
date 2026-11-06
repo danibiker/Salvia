@@ -2180,7 +2180,18 @@ static void set_variables(bool force_midi_scan = false)
 	def.values[i].value = "disabled"; def.values[i].label = "Disabled"; i++;
 	#endif
 	def.values[i].value = 0; def.values[i].label = 0;
-	def.default_value = def.values[0].value;
+
+	//setting the default value of the driver
+	int posDriver = 0;
+	while (posDriver < i && strcmp(def.values[posDriver].value, def.default_value) != 0){
+		posDriver++;
+	}
+
+	if (posDriver < i && strcmp("disabled", def.default_value) != 0){
+		def.default_value = def.values[posDriver].value;
+	} else {
+		def.default_value = def.values[0].value;
+	}
 
 	unsigned options_ver = 0;
 	if (environ_cb) environ_cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &options_ver);

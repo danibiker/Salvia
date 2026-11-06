@@ -520,7 +520,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "500000",  "Pentium III, 600 MHz from 1999 (500000 cps)" },
 			{ "1000000", "AMD Athlon, 1.2 GHz from 2000 (1000000 cps)" },
 		},
-		"max"
+		"auto"
 	},
 	{
 		"dosbox_pure_cycles_max",
@@ -1052,7 +1052,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 		{
 			// dynamically filled in retro_init
 		},
-		"disabled"
+		"frontend"
 	},
 	{
 		"dosbox_pure_volume_sb",
