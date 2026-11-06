@@ -701,6 +701,10 @@ void DBPSerialize_PIC(DBPArchive& ar)
 		ar.SerializeBytes(dummy, (16 - pic_count) * (sizeof(*pic_indices)+sizeof(*pic_values)+1));
 	}
 
+	extern bool doTick;
+	if (ar.version >= 9)
+		ar.Serialize(doTick);
+
 	if (ar.mode == DBPArchive::MODE_LOAD)
 	{
 		for (Bit16u i = 0; i != PIC_QUEUESIZE-1; i++) pic_queue.entries[i].next = &pic_queue.entries[i+1];

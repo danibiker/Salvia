@@ -765,7 +765,7 @@ private:
 
 class zipDrive : public DOS_Drive {
 public:
-	static DOS_Drive* MountWithDependencies(const char* path, std::string*& error_msg, bool enable_crc_check = false, bool enter_solo_root_dir = false, const char* dosc_path = NULL);
+	static DOS_Drive* MountWithDependencies(const char* path, std::string*& error_msg, bool enable_crc_check = false, bool enter_solo_root_dir = false);
 	zipDrive(DOS_File* zip, bool enable_crc_check = false);
 	virtual ~zipDrive();
 	virtual bool FileOpen(DOS_File * * file, char * name,Bit32u flags);
@@ -824,7 +824,8 @@ private:
 class patchDrive : public DOS_Drive {
 public:
 	patchDrive();
-	void AddLayer(DOS_Drive& under, bool autodelete_under, DOS_File* patchzip = NULL, bool enable_crc_check = false, bool is_final = false);
+	void AddLayer(DOS_Drive& under, bool autodelete_under, DOS_File* patchzip = NULL, bool enable_crc_check = false, bool is_final = false, const char* name = NULL);
+	const char* GetLayerName(int layer) const;
 	virtual ~patchDrive();
 	virtual bool FileOpen(DOS_File * * file, char * name,Bit32u flags);
 	virtual bool FileCreate(DOS_File * * file, char * name,Bit16u attributes);

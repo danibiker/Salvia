@@ -662,7 +662,8 @@ void CDROM_Interface_Image::CDAudioCallBack(Bitu len)
 		player.channel->AddSilence();
 		return;
 	}
-	
+	if (len + RAW_SECTOR_SIZE > sizeof(player.buffer))
+		len = sizeof(player.buffer) - RAW_SECTOR_SIZE;
 #ifdef C_DBP_USE_SDL
 	SDL_mutexP(player.mutex);
 #endif

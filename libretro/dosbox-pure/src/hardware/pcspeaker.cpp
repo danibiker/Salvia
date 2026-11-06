@@ -389,4 +389,12 @@ void DBPSerialize_PCSPEAKER(DBPArchive& ar_outer)
 		.Serialize(spkr.last_index)
 		.Serialize(spkr.used);
 	ar.SerializeBytes(spkr.entries, sizeof(spkr.entries[0]) * (ar.mode == DBPArchive::MODE_MAXSIZE ? SPKR_ENTRIES : spkr.used));
+
+	if (ar.IsReset())
+	{
+		spkr.pit_max=(1000.0f/PIT_TICK_RATE)*1320;
+		spkr.pit_half=spkr.pit_max/2;
+		spkr.pit_new_max=spkr.pit_max;
+		spkr.pit_new_half=spkr.pit_half;
+	}
 }

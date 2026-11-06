@@ -139,6 +139,8 @@ Bit32s ticksDone;
 Bit32u ticksScheduled;
 bool ticksLocked;
 void increaseticks();
+#else
+bool doTick;
 #endif
 
 #include "shell.h"
@@ -225,7 +227,6 @@ static Bitu Normal_Loop(void) {
 #endif
 		} else {
 #ifdef C_DBP_CUSTOMTIMING
-			static bool doTick;
 			if (doTick) {doTick=false;TIMER_AddTick();}
 			else {doTick=true;GFX_Events();return 0;}
 #else

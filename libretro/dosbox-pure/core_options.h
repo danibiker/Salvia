@@ -409,12 +409,13 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 	{
 		"dosbox_pure_mouse_speed_factor_x",
 		"Advanced > Horizontal Mouse Sensitivity", NULL,
-		"Experiment with this value if the mouse is too fast/slow when moving left/right.", NULL,
+		"Experiment with this value if the mouse is too fast/slow when moving left/right. Also allows disabling one axis.", NULL,
 		DBP_OptionCat::Input,
 		{
 			{ "0.2",  "20%" }, { "0.25",  "25%" }, { "0.3",  "30%" }, { "0.35",  "35%" }, { "0.4",  "40%" }, { "0.45",  "45%" },
 			{ "0.5",  "50%" }, { "0.55",  "55%" }, { "0.6",  "60%" }, { "0.65",  "65%" }, { "0.7",  "70%" }, { "0.75",  "75%" },
-			{ "0.8",  "80%" }, { "0.85",  "85%" }, { "0.9",  "90%" }, { "0.95",  "95%" }, { "1.0", "100%" }, { "1.1" , "110%" },
+			{ "0.8",  "80%" }, { "0.85",  "85%" }, { "0.9",  "90%" }, { "0.95",  "95%" }, { "1.0", "100%" }, 
+			{ "0", "Disable Horizontal Movement" }, { "only", "Disable Vertical Movement" }, { "1.1" , "110%" },
 			{ "1.2", "120%" }, { "1.3" , "130%" }, { "1.4", "140%" }, { "1.5" , "150%" }, { "1.6", "160%" }, { "1.7" , "170%" },
 			{ "1.8", "180%" }, { "1.9" , "190%" }, { "2.0", "200%" }, { "2.2" , "220%" }, { "2.4", "240%" }, { "2.6" , "260%" },
 			{ "2.8", "280%" }, { "3.0" , "300%" }, { "3.2", "320%" }, { "3.4" , "340%" }, { "3.6", "360%" }, { "3.8" , "380%" },

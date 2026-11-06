@@ -1769,9 +1769,9 @@ public:
 			OPL_ShutDown(m_configuration);
 			break;
 		}
-		if (sb.type==SBT_NONE || sb.type==SBT_GB) return;
-		DSP_Reset(); // Stop everything
 		//DBP: Added cleanup for restart support
+		if (sb.type!=SBT_NONE && sb.type!=SBT_GB)
+			DSP_Reset(); // Stop everything
 		sb.chan=0;
 	}
 }; //End of SBLASTER class
@@ -1802,13 +1802,36 @@ void DBPSerialize_SBLASTER(DBPArchive& ar_outer)
 			if (sb.dma.chan == GetDMAChannel(dma_num))
 				break;
 
+	if (ar.IsReset())
+	{
+		// Repeat parts of SBLASTER::SBLASTER()
+		sb.mixer.stereo = false;
+		if (sb.type != SBT_NONE && sb.type != SBT_GB)
+		{
+			sb.dsp.state=DSP_S_NORMAL;
+			sb.dsp.out.lastval=0xaa;
+			sb.dma.chan=NULL;
+			ASP_init_in_progress = 0;
+			memset(ASP_regs, 0, sizeof(ASP_regs));
+			ASP_regs[5] = 0x01;
+			ASP_regs[9] = 0xf8;
+			DSP_Reset();
+			CTMIXER_Reset();
+			sb.speaker=false;
+			if (sb.type == SBT_16) sb.chan->Enable(true);
+			else sb.chan->Enable(false);
+			sb.midi = MIDI_Available();
+		}
+		return;
+	}
+
 	ar
 		.SerializeExcept(sb, sb.dma.chan, sb.chan)
 		.Serialize(dma_num)
 		.SerializeArray(ASP_regs)
 		.Serialize(ASP_init_in_progress)
 		.Serialize(last_dma_callback);
-	
+
 	if (ar.mode == DBPArchive::MODE_LOAD)
 	{
 		sb.dma.chan = GetDMAChannel(dma_num);
