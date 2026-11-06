@@ -517,7 +517,7 @@ struct DBP_MenuState
 #ifdef DBP_STANDALONE
 struct DBP_SettingsMenuState final : DBP_MenuState
 {
-	enum ItemType : Bit8u { IT_CANCEL = _IT_CUSTOM, IT_CATEGORIES, IT_CATEGORY, IT_OPTION, IT_TOGGLE, IT_VALUE, IT_OVERRIDE };
+	enum ItemType : Bit8u { IT_CANCEL = _IT_CUSTOM, IT_CATEGORIES, IT_CATEGORY, IT_OPTION, IT_VALUE, IT_OVERRIDE };
 	Bit8u curmenu;
 	DBP_SettingsMenuState() { menu(IT_CATEGORIES); }
 
@@ -549,7 +549,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 				if (od.category_key != oc.key || DBP_Option::GetHidden(od)) continue;
 				if ((Bit16s)(&od - option_defs) == (curmenu == IT_CATEGORIES ? 0 : secondinfo)) setsel = (int)(list.size() + 1);
 				list.emplace_back(IT_NONE);
-				list.emplace_back((od.values[2].value ? IT_OPTION : IT_TOGGLE), (Bit16s)(&od - option_defs), (DBPS_IsConfigOverride(od.key) ? "\x6 " : "  "));
+				list.emplace_back(IT_OPTION, (Bit16s)(&od - option_defs), (DBPS_IsConfigOverride(od.key) ? "\x6 " : "  "));
 				list.back().str.append(od.desc);
 				if (od.info) AddWrappedText(66, "  ", od.info);
 			}
@@ -581,9 +581,8 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		if (res == RES_CANCEL) ok_type = IT_CANCEL;
 		if      (ok_type == IT_CATEGORY) menu(IT_CATEGORY);
 		else if (ok_type == IT_OPTION) menu(IT_OPTION);
-		else if ((ok_type == IT_NONE && curmenu == IT_CATEGORY && x_change && (list[sel].type == IT_OPTION || list[sel].type == IT_TOGGLE)) || ok_type == IT_TOGGLE)
+		else if (ok_type == IT_NONE && curmenu == IT_CATEGORY && x_change && list[sel].type == IT_OPTION)
 		{
-			if (ok_type == IT_TOGGLE) x_change = 1;
 			const retro_core_option_v2_definition& od = option_defs[list[sel].info];
 			const char* var_value = retro_get_variable(od.key, od.default_value);
 			for (const retro_core_option_value& ov : od.values)
@@ -599,6 +598,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		else if (ok_type == IT_VALUE)
 		{
 			Item& itsel = list[sel];
+			if (itsel.str[1] == '\x7') { menu(IT_CATEGORY); return; }
 			const retro_core_option_v2_definition& od = option_defs[list[1].info];
 			retro_variable var = { od.key, od.values[itsel.info].value };
 			if (!strcmp(var.value, od.default_value)) var.value = NULL;
@@ -656,7 +656,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			for (const retro_core_option_v2_definition& od : option_defs)
 			{
 				if (od.category_key && (od.category_key != oc.key || DBP_Option::GetHidden(od))) continue;
-				while (plist != plistend && (plist->type != IT_OPTION && plist->type != IT_TOGGLE)) plist++;
+				while (plist != plistend && plist->type != IT_OPTION) plist++;
 				if (od.category_key ? (plist != plistend && plist->info == (Bit16s)(&od - option_defs)) : plist == plistend) { plist++; continue; }
 				menu(IT_CATEGORY); // visibility changed, refresh
 				break;
@@ -672,7 +672,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		for (int i = scroll, maxw = r-l-27; i != count && i != (scroll + rows); i++)
 		{
 			Bit8u itype = list[i].type;
-			if (itype == IT_OPTION || itype == IT_TOGGLE)
+			if (itype == IT_OPTION)
 			{
 				const retro_core_option_v2_definition& od = option_defs[list[i].info];
 				const char* var_value = retro_get_variable(od.key, od.default_value);
@@ -1357,7 +1357,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			else { DBP_ASSERT(false); }
 			if (DBP_Run::autoboot.startup.mode == DBP_Run::RUN_VARIANT) DBP_Run::autoboot.use = false; // DBP_Run::WriteAutoBoot force enables auto boot for RUN_VARIANT
 		}
-		else if (patchDrive::variants.Len()) RefreshList(IT_VARIANTLIST);
+		else if (DBP_Run::patch.show_variants) RefreshList(IT_VARIANTLIST);
 		open_ticks = DBP_GetTicks(); // avoid very slow RefreshList causing this to be too long ago already
 	}
 
@@ -1544,7 +1544,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			if (dbp_game_running) AddFSRow(IT_SAVELOAD,  0, "[ Saving & Loading ]", (!boot_rows++)); // todo
 			#endif
 
-			if (patchDrive::variants.Len())
+			if (DBP_Run::patch.show_variants)
 			{
 				AddFSRow(IT_NONE, INFO_WARN, "Active Configuration: ", true);
 				list.back().str.append(!DBP_Run::patch.enabled_variant ? "Default" : patchDrive::variants.GetStorage()[DBP_Run::patch.enabled_variant - 1].c_str());
@@ -1566,7 +1566,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			}
 			if (exe_count) list.emplace_back(IT_NONE);
 
-			if (DBP_FullscreenOSD || (cd_count + hd_count) <= 1) setsel = (patchDrive::variants.Len() ? (fs_rows - 2) : (exe_count ? fs_rows : (int)dbp_images.size()));
+			if (DBP_FullscreenOSD || (cd_count + hd_count) <= 1) setsel = (DBP_Run::patch.show_variants ? (fs_rows - 2) : (exe_count ? fs_rows : (int)dbp_images.size()));
 			if (!exe_count) { list.emplace_back(IT_NONE, INFO_DIM, "No executable file found"); list.emplace_back(IT_NONE); }
 
 			if (!dbp_strict_mode) list.emplace_back(IT_COMMANDLINE, 0, "Go to Command Line");
@@ -1733,15 +1733,23 @@ struct DBP_PureMenuState final : DBP_MenuState
 			}
 			else if (DBP_Run::patch.show_default)
 			{
-				list.emplace(list.begin() + secbegin, IT_VARIANTRUN, 0, "Default"); // no sections, add default start
+				list.emplace(list.begin() + secbegin, IT_VARIANTRUN, 0, (patchDrive::variants.Len() ? "Default" : "Run Game")); // no sections, add default start
 				setsel = (setsel ? (setsel + 1) : secbegin); // fix for added row
+			}
+			if (patchDrive::variants.Len())
+			{
+				list.emplace_back(IT_NONE);
+				list.emplace_back(IT_NONE, INFO_DIM, "The configuration can be switched with the On-Screen Menu");
+				#ifndef DBP_STANDALONE
+				list.emplace_back(IT_NONE, INFO_DIM, "or by holding shift or L2/R2 when restarting the core");
+				#endif
 			}
 			list.emplace_back(IT_NONE);
 			list.emplace_back(IT_MAINMENU, 0, "Run Other Program");
+			if (!DBP_FullscreenOSD) list.emplace_back(IT_CLOSEOSD, 0, "Close Menu");
+			#ifdef DBP_STANDALONE
 			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, INFO_DIM, "The configuration can be switched with the On-Screen Menu");
-			#ifndef DBP_STANDALONE
-			list.emplace_back(IT_NONE, INFO_DIM, "or by holding shift or L2/R2 when restarting the core");
+			list.emplace_back(IT_EXITDBPS, 0, "Exit DOSBox Pure");
 			#endif
 		}
 		#ifdef DBP_STANDALONE
@@ -2332,7 +2340,7 @@ static void DBP_PureMenuProgram(Program** make)
 
 			DBP_FullscreenOSD = true;
 			DBP_PureMenuState* ms = new DBP_PureMenuState();
-			bool runsoloexe = (ms->exe_count == 1 && ms->fs_rows <= (int)(dbp_images.size() + 1) && !patchDrive::variants.Len());
+			bool runsoloexe = (ms->exe_count == 1 && ms->fs_rows <= (int)(dbp_images.size() + 1) && !DBP_Run::patch.show_variants);
 
 			#ifndef STATIC_LINKING
 			if (m == M_FINISH && dbp_menu_time >= 0 && dbp_menu_time < 99 && (runsoloexe || DBP_Run::autoboot.use) && (DBP_GetTicks() - dbp_lastmenuticks) >= 500)
@@ -2355,7 +2363,7 @@ static void DBP_PureMenuProgram(Program** make)
 				ms->DoInput(DBP_MenuState::RES_OK, ms->list[ms->sel].type, 0);
 				delete ms;
 			}
-			else if (m != M_BOOT || ms->exe_count != 0 || ms->fs_rows != 0 || patchDrive::variants.Len() || Drives['C'-'A'] || Drives['A'-'A'] || Drives['D'-'A'])
+			else if (m != M_BOOT || ms->exe_count != 0 || ms->fs_rows != 0 || DBP_Run::patch.show_variants || Drives['C'-'A'] || Drives['A'-'A'] || Drives['D'-'A'])
 				DBP_StartOSD(DBPOSD_MAIN, ms);
 			else
 				delete ms;
@@ -2514,8 +2522,7 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 			if (mx || my)
 			{
 				UseMouse = true;
-				int nx = PosX + mx*(int)(dbp_mouse_speed*350);
-				int ny = PosY + my*(int)(dbp_mouse_speed*350);
+				int xyfac = ((int)(dbp_mouse_speed_x > dbp_mouse_speed_y ? dbp_mouse_speed_x : dbp_mouse_speed_y)*350), nx = (PosX + mx*xyfac), ny = (PosY + my*xyfac);
 				PosX = (Bit16s)(nx > 0x7FFF ? 0x7FFF : (nx < -0x7FFF ? -0x7FFF : nx));
 				PosY = (Bit16s)(ny > 0x7FFF ? 0x7FFF : (ny < -0x7FFF ? -0x7FFF : ny));
 			}
@@ -2672,15 +2679,10 @@ void DBPS_ToggleOSD()
 	DBP_QueueEvent(DBPET_TOGGLEOSDUP, 0);
 }
 
-bool DBPS_IsGameRunning()
-{
-	return (dbp_game_running || (first_shell && first_shell->bf && !first_shell->bf->IsAutoexec()));
-}
-
-bool DBPS_IsShowingOSD()
-{
-	return (dbp_intercept && dbp_intercept->usegfx());
-}
+bool DBPS_IsGameRunning() { return (dbp_game_running || (first_shell && first_shell->bf && !first_shell->bf->IsAutoexec())); }
+bool DBPS_IsShowingOSD() { return (dbp_intercept && dbp_intercept->usegfx()); }
+const std::string& DBPS_GetContentName() { return dbp_content_name; }
+const std::string& DBPS_GetContentPath() { return dbp_content_path; }
 
 void DBPS_OpenContent(const char* path)
 {
@@ -2704,11 +2706,6 @@ void DBPS_OpenContent(const char* path)
 void DBPS_AddDisc(const char* path)
 {
 	DBP_Mount(DBP_AppendImage(path, false), false);
-}
-
-const std::string& DBPS_GetContentName()
-{
-	return dbp_content_name;
 }
 
 void DBPS_InitLEDs(uint16_t key_modifiers)

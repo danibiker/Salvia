@@ -1,1 +1,1 @@
-#define DOSBOX_PURE_VERSION_STR "1.0-preview7"
+#define DOSBOX_PURE_VERSION_STR "1.0-preview8"

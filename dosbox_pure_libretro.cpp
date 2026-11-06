@@ -60,7 +60,7 @@ static retro_system_av_info av_info;
 static enum DBP_State : Bit8u { DBPSTATE_BOOT, DBPSTATE_EXITED, DBPSTATE_SHUTDOWN, DBPSTATE_REBOOT, DBPSTATE_FIRST_FRAME, DBPSTATE_RUNNING } dbp_state;
 static enum DBP_SerializeMode : Bit8u { DBPSERIALIZE_STATES, DBPSERIALIZE_REWIND, DBPSERIALIZE_DISABLED } dbp_serializemode;
 static bool dbp_game_running, dbp_pause_events, dbp_paused_midframe, dbp_frame_pending, dbp_biosreboot, dbp_biospoweroff, dbp_system_cached, dbp_system_scannable, dbp_refresh_memmaps;
-static bool dbp_optionsupdatecallback, dbp_reboot_set64mem, dbp_use_network, dbp_had_game_running, dbp_strict_mode, dbp_legacy_save, dbp_wasloaded, dbp_skip_c_mount;
+static bool dbp_optionsupdatecallback, dbp_reboot_set64mem, dbp_use_network, dbp_had_game_running, dbp_strict_mode, dbp_legacy_save, dbp_save_name, dbp_wasloaded, dbp_skip_c_mount;
 static signed char dbp_menu_time, dbp_conf_loading, dbp_reboot_machine;
 static Bit8u dbp_alphablend_base;
 static float dbp_auto_target, dbp_last_fastforward;
@@ -827,7 +827,7 @@ static std::string DBP_GetSaveFile(DBP_SaveFileType type, const char** out_filen
 			{
 				char dta_name[DOS_NAMELENGTH_ASCII]; Bit32u dta_size; Bit16u dta_date, dta_time; Bit8u dta_attr;
 				dta.GetResult(dta_name, dta_size, dta_date, dta_time, dta_attr);
-				if (drv->GetLongFileName(dta_name, savename) && (savenamelen = strlen(savename)) > 9 && !strncasecmp(savename + savenamelen - 9, ".SAVENAME", 9)) break;
+				if (drv->GetLongFileName(dta_name, savename) && (savenamelen = strlen(savename)) > 9 && !strncasecmp(savename + savenamelen - 9, ".SAVENAME", 9)) { dbp_save_name = true; break; }
 				savenamelen = 0;
 			}
 			dos.dta(save_dta);
@@ -981,13 +981,7 @@ static DOS_Drive* DBP_Mount(unsigned image_index = 0, bool unmount_existing = tr
 			// When loading a DOSC file, load the corresponding DOSZ file, but strip out a [VARIANT] specifier at the end.
 			std::string dosz_path(path);
 			dosz_path.back() = (ext[3] == 'c' ? 'z' : 'Z'); // swap dosc -> dosz with same capitalization
-			if (const char* dosc_variant = (ext[-2] == ']' ? strrchr(path_file, '[') : NULL))
-			{
-				while (dosc_variant > path_file && dosc_variant[-1] == ' ') dosc_variant--;
-				size_t dosc_variant_len = (ext - 1 - dosc_variant);
-				dosz_path.erase(dosc_variant - path, dosc_variant_len);
-			}
-			drive = zipDrive::MountWithDependencies(dosz_path.c_str(), ziperr, dbp_strict_mode, dbp_legacy_save, path);
+			drive = zipDrive::MountWithDependencies(dosz_path.c_str(), ziperr, dbp_strict_mode, dbp_legacy_save);
 		}
 		if (!drive)
 		{
@@ -1420,6 +1414,7 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 			{
 				dbp_shellzips.emplace_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
 			}
+			#ifndef DBP_STANDALONE
 			else if (ln == 23 && !subdir.length() && !force_midi_scan && !strcasecmp(entry_name, "DOSBoxPureMidiCache.txt"))
 			{
 				std::string content;
@@ -1442,10 +1437,12 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 				subdirs.clear();
 				break;
 			}
+			#endif
 		}
 		vfs.iface->closedir(dir);
 	}
 
+	#ifndef DBP_STANDALONE
 	retro_time_t system_scan_time = (time_cb() - scan_start);
 	if (force_midi_scan || (system_scan_time > 2000000 && !dbp_system_cached))
 	{
@@ -1464,6 +1461,8 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 		}
 		if (force_midi_scan) DBP_QueueEvent(DBPET_REFRESHSYSTEM, DBP_NO_PORT);
 	}
+	#endif
+
 	return dynstr;
 }
 
@@ -1855,7 +1854,7 @@ void GFX_Events()
 				#ifdef DBP_STANDALONE
 				if (dbp_mouse_input != 'p') DBPS_GetMouse(dbp_mouse_x, dbp_mouse_y, false);
 				#endif
-				float mx = e.val*dbp_mouse_speed*dbp_mouse_speed_x, my = e.val2*dbp_mouse_speed; // good for 320x200?
+				float mx = e.val*dbp_mouse_speed_x, my = e.val2*dbp_mouse_speed_y;
 				Mouse_CursorMoved(mx, my, (dbp_mouse_x+0x7fff)/(float)0xFFFE, (dbp_mouse_y+0x7fff)/(float)0xFFFE, (dbp_mouse_input != 'd'));
 				break;
 			}
@@ -1904,8 +1903,8 @@ void GFX_Events()
 			else if (mouse_speed_up) mx *= 2, my *= 2;
 			else if (mouse_speed_down) mx *= .5f, my *= .5f;
 
-			mx *= dbp_mouse_speed * dbp_mouse_speed_x;
-			my *= dbp_mouse_speed;
+			mx *= dbp_mouse_speed_x;
+			my *= dbp_mouse_speed_y;
 			Mouse_CursorMoved(mx, my, 0, 0, true);
 		}
 		#ifdef DBP_STANDALONE
@@ -1926,7 +1925,7 @@ void GFX_SetTitle(Bit32s cycles, int frameskip, bool paused)
 	bool was_game_running = dbp_game_running;
 	dbp_had_game_running |= (dbp_game_running = (strcmp(RunningProgram, "DOSBOX") && strcmp(RunningProgram, "PUREMENU")));
 	log_cb(RETRO_LOG_INFO, "[DOSBOX STATUS] Program: %s - Cycles: %d - Frameskip: %d - Paused: %d\n", RunningProgram, cycles, frameskip, paused);
-	if (was_game_running != dbp_game_running && DOSBox_Boot) dbp_refresh_memmaps = true;
+	if (was_game_running != dbp_game_running && (DOSBox_Boot || !strcmp(RunningProgram, "BOOT"))) dbp_refresh_memmaps = true;
 	if (cpu.pmode && CPU_CycleAutoAdjust && CPU_OldCycleMax == 3000 && CPU_CycleMax == 3000)
 	{
 		// Choose a reasonable base rate when switching to protected mode
@@ -2137,12 +2136,13 @@ static void set_variables(bool force_midi_scan = false)
 			def.values[i++] = { dynstr[f].c_str(), dynstr[f+1].c_str() };
 	#ifndef DBP_STANDALONE
 	def.values[i++] = { "frontend", "Frontend MIDI driver" };
-	#else
-	def.values[i++] = { "system", "System MIDI driver" };
-	#endif
 	def.values[i++] = { "disabled", "Disabled" };
 	if (dbp_system_cached)
 		def.values[i++] = { "scan", (!strcmp(DBP_Option::Get(DBP_Option::midi), "scan") ? "System directory scan finished" : "Scan System directory for soundfonts (open this menu again after)") };
+	#else
+	def.values[i++] = { "system", "System MIDI driver" };
+	def.values[i++] = { "disabled", "Disabled" };
+	#endif
 	def.values[i] = { 0, 0 };
 	def.default_value = def.values[0].value;
 
@@ -2281,6 +2281,7 @@ static bool check_variables()
 	// Depending on this we call set_variables, which needs to be done before any DBP_Option::SetDisplay call
 	bool midi_changed = false;
 	const char* midi = DBP_Option::Get(DBP_Option::midi, &midi_changed);
+	#ifndef DBP_STANDALONE
 	if (dbp_system_cached)
 	{
 		if (!strcmp(midi, "scan"))
@@ -2295,6 +2296,7 @@ static bool check_variables()
 			dbp_system_scannable = true;
 		}
 	}
+	#endif
 
 	char buf[32];
 	unsigned options_ver = 0;
@@ -2360,14 +2362,10 @@ static bool check_variables()
 	extern bool dbp_swapstereo;
 	dbp_swapstereo = (bool)control->GetProp("mixer", "swapstereo")->GetValue(); // to also get dosbox.conf override
 
-	extern float dbp_volume_sb, dbp_volume_midi, dbp_volume_adlib, dbp_volume_speaker, dbp_volume_cdrom, dbp_volume_other;
 	bool volumes_changed = false;
-	dbp_volume_sb      = (float)atof(DBP_Option::Get(DBP_Option::volume_sb,      &volumes_changed));
-	dbp_volume_midi    = (float)atof(DBP_Option::Get(DBP_Option::volume_midi,    &volumes_changed));
-	dbp_volume_adlib   = (float)atof(DBP_Option::Get(DBP_Option::volume_adlib,   &volumes_changed));
-	dbp_volume_speaker = (float)atof(DBP_Option::Get(DBP_Option::volume_speaker, &volumes_changed));
-	dbp_volume_cdrom   = (float)atof(DBP_Option::Get(DBP_Option::volume_cdrom,   &volumes_changed));
-	dbp_volume_other   = (float)atof(DBP_Option::Get(DBP_Option::volume_other,   &volumes_changed));
+	extern float dbp_volumes[6][2];
+	for (int i = DBP_Option::volume_sb; i <= DBP_Option::volume_other; i++)
+		dbp_volumes[i-DBP_Option::volume_sb][0] = (float)atof(DBP_Option::Get((DBP_Option::Index)i, &volumes_changed)) - 1.0f;
 	if (volumes_changed) { extern void DBP_MIXER_ApplyVolumes(); DBP_MIXER_ApplyVolumes(); }
 
 	if (dbp_state == DBPSTATE_BOOT)
@@ -2705,7 +2703,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 	const int path_extlen = (path ? (int)((path_fragment ? path_fragment : path + dbp_content_path.length()) - path_ext) : 0);
 	const bool newcontent = !dbp_wasloaded, force_puremenu = forcemenu || (dbp_biosreboot && dbp_wasloaded);
 	if (newcontent) dbp_biosreboot = dbp_reboot_set64mem = false; // ignore this when switching content
-	if (newcontent && !reinit) dbp_auto_mapping = NULL; // re-acquire when switching content
+	if (newcontent && !reinit) { dbp_auto_mapping = NULL; dbp_content_year = 0; } // re-acquire when switching content
 
 	// Loading a .conf file behaves like regular DOSBox (no union drive mounting, save file, start menu, etc.)
 	dbp_skip_c_mount = (path_extlen == 4 && !strncasecmp(path_ext, "conf", 4));
@@ -2731,7 +2729,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 
 	if (!dbp_skip_c_mount)
 	{
-		dbp_legacy_save = false;
+		dbp_legacy_save = dbp_save_name = false;
 		std::string save_file = DBP_GetSaveFile(SFT_GAMESAVE); // this can set dbp_legacy_save to true, needed by DBP_Mount
 		DOS_Drive* union_underlay = (path ? DBP_Mount(0, false, 0, path) : NULL);
 
@@ -2822,9 +2820,6 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 	// Always start network again when it has been used once (or maybe we're restarting to start it up the first time)
 	if (dbp_use_network) { dbp_use_network = false; DBP_EnableNetwork(); }
 
-	// Joysticks are refreshed after control modifications but needs to be done here also to happen on core restart
-	DBP_PadMapping::RefreshDosJoysticks();
-
 	// Always switch to the C: drive directly (for puremenu, to run DOSBOX.BAT and to run the autoexec of the dosbox conf)
 	// For DBP we modified init_line to always run Z:\AUTOEXEC.BAT and not just any AUTOEXEC.BAT of the current drive/directory
 	if (DOS_SetDrive('C'-'A') && autoexec) // SetDrive will fail if dbp_skip_c_mount
@@ -2870,7 +2865,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 		return 0;
 	}};
 
-	if (newcontent) DBP_PadMapping::SetInputDescriptors(true);
+	DBP_PadMapping::SetInputDescriptors(true);
 
 	// Start DOSBox thread
 	dbp_frame_pending = true;
@@ -2879,7 +2874,13 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 }
 
 // This is called on the main thread
-void DBP_ForceReset(bool forcemenu) { init_dosbox(forcemenu); } 
+void DBP_ForceReset(bool forcemenu)
+{
+	#ifdef DBP_STANDALONE
+	if (dbp_wasloaded) DBPS_OnReset();
+	#endif
+	init_dosbox(forcemenu);
+}
 
 void retro_init(void) //#3
 {

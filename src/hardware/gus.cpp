@@ -931,7 +931,7 @@ void DBPSerialize_GUS(DBPArchive& ar_outer)
 			if (guschan[chan_idx] == curchan)
 				break;
 
-	ar.Serialize(myGUS);
+	if (!ar.IsReset()) ar.Serialize(myGUS);
 	ar.Serialize(adlib_commandreg);
 	ar.SerializeSparse(GUSRam, GUSRAM_SIZE);
 	ar.SerializeArray(vol16bit);

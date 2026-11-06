@@ -89,9 +89,8 @@ static Mutex DBP_AudioMutex;
 
 #ifdef C_DBP_LIBRETRO
 bool dbp_swapstereo;
-float dbp_volume_sb = 1, dbp_volume_midi = 1, dbp_volume_adlib = 1, dbp_volume_speaker = 1, dbp_volume_cdrom = 1, dbp_volume_other = 1;
+float dbp_volumes[6][2];
 #endif
-
 
 static INLINE Bit16s MIXER_CLIP(Bits SAMP) {
 	if (SAMP < MAX_AUDIO) {
@@ -166,22 +165,23 @@ void MixerChannel::UpdateVolume(void) {
 	volmul[1]=(Bits)((1 << MIXER_VOLSHIFT)*scale*volmain[1]*mixer.mastervol[1]);
 #else
 	DBP_ASSERT(!strcmp(name, "SB") || !strcmp(name, "CMS") || !strcmp(name, "TSF") || !strcmp(name, "MT32") || !strcmp(name, "SC55") || !strcmp(name, "FM") || !strcmp(name, "SPKR") || !strcmp(name, "CDAUDIO") || !strcmp(name, "TANDY") || !strcmp(name, "TANDYDAC") || !strcmp(name, "GUS") || !strcmp(name, "DISNEY"));
-	float vol = 1;
+	int volidx = 0;
 	switch ((name[0]<<8) | name[1])
 	{
-		case (('S'<<8) | 'B'): vol = dbp_volume_sb;      break; // "SB"
-		case (('C'<<8) | 'M'): vol = dbp_volume_sb;      break; // "CMS"
-		case (('T'<<8) | 'S'): vol = dbp_volume_midi;    break; // "TSF"
-		case (('M'<<8) | 'T'): vol = dbp_volume_midi;    break; // "MT32"
-		case (('S'<<8) | 'C'): vol = dbp_volume_midi;    break; // "SC55"
-		case (('F'<<8) | 'M'): vol = dbp_volume_adlib;   break; // "FM"
-		case (('S'<<8) | 'P'): vol = dbp_volume_speaker; break; // "SPKR"
-		case (('C'<<8) | 'D'): vol = dbp_volume_cdrom;   break; // "CDAUDIO"
-		case (('T'<<8) | 'A'): vol = dbp_volume_other;   break; // "TANDY" / "TANDYDAC"
-		case (('G'<<8) | 'U'): vol = dbp_volume_other;   break; // "GUS"
-		case (('D'<<8) | 'I'): vol = dbp_volume_other;   break; // "DISNEY"
+		case (('S'<<8) | 'B') /* "SB"                 */:
+		case (('C'<<8) | 'M') /* "CMS"                */: break;
+		case (('T'<<8) | 'S') /* "TSF"                */:
+		case (('M'<<8) | 'T') /* "MT32"               */:
+		case (('S'<<8) | 'C') /* "SC55"               */: volidx = 1; break;
+		case (('F'<<8) | 'M') /* "FM"                 */: volidx = 2; break;
+		case (('S'<<8) | 'P') /* "SPKR"               */: volidx = 3; break;
+		case (('C'<<8) | 'D') /* "CDAUDIO"            */: volidx = 4; break;
+		case (('T'<<8) | 'A') /* "TANDY" / "TANDYDAC" */:
+		case (('G'<<8) | 'U') /* "GUS"                */:
+		case (('D'<<8) | 'I') /* "DISNEY"             */: volidx = 5; break;
 		default: DBP_ASSERT(0); break;
 	}
+	float vol = (1.0f + dbp_volumes[volidx][0]) * (1.0f + dbp_volumes[volidx][1]);
 	vol = (vol < 1.0f ? powf(10.0f,(vol-1.0f)*2.0f) : vol*vol);
 	volmul[0]=(Bits)((1 << MIXER_VOLSHIFT)*scale*volmain[0]*mixer.mastervol[0]*vol);
 	volmul[1]=(Bits)((1 << MIXER_VOLSHIFT)*scale*volmain[1]*mixer.mastervol[1]*vol);
@@ -938,9 +938,11 @@ DBPArchiveOptional::DBPArchiveOptional(DBPArchive& ar_outer, MixerChannel* chan)
 	if (optionality != OPTIONAL_DISCARD)
 	{
 		chan->done = chan->needed = 0;
+		Callback_LockAudio();
 		mixer.pos = 0;
 		mixer.done = 0;
 		mixer.needed = mixer.min_needed+1;
+		Callback_UnlockAudio();
 	}
 }
 

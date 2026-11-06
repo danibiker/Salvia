@@ -2800,6 +2800,8 @@ void DBP_CPU_AutoEnableDynamicCore()
 //This function is safer than setting new cycle settings through config (can cause FPU overflow crashes)
 void DBP_CPU_ModifyCycles(const char* val, const char* params)
 {
+	extern Bitu PIC_Ticks;
+	if (PIC_Ticks == 0) CPU_CycleMax = CPU_OldCycleMax; // revert if called multiple times during startup
 	CPU_AutoDetermineMode &= ~(CPU_AUTODETERMINE_CYCLES|(CPU_AUTODETERMINE_CYCLES<<CPU_AUTODETERMINE_SHIFT));
 	if (val[0] == 'm') { //max
 		CPU_CycleAutoAdjust = true;

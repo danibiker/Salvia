@@ -553,6 +553,7 @@ struct patchDriveImpl
 			root.entries.Clear();
 			directories.Clear();
 		}
+		patchDrive::dos_yml.clear(); 
 
 		DBP_ASSERT(layer_top == &layers.back() && layer_bottom == &layers.front() && variant_index >= -1);
 		ActiveVariantIndex = variant_index;
@@ -594,7 +595,7 @@ struct patchDriveImpl
 		// When loading a utility with no own files (other than DOS.YML) we keep using the files of the previously active variant (except DOS.YML)
 		const size_t oldYmlLen = patchDrive::dos_yml.size();
 		ActiveVariantIndex = LastNonUtilityVariantIndex;
-		for (IterateLayer = 0; IterateLayer == layerLast; IterateLayer++)
+		for (IterateLayer = 0; IterateLayer <= layerLast; IterateLayer++)
 			DriveFileIterator(layer_bottom[IterateLayer].patchzip, LoadFiles, (Bitu)this);
 		ActiveVariantIndex = variant_index;
 		patchDrive::dos_yml.resize(oldYmlLen);
@@ -722,14 +723,24 @@ struct patchDriveImpl
 
 patchDrive::patchDrive() : impl(new patchDriveImpl()) { }
 
-void patchDrive::AddLayer(DOS_Drive& under, bool autodelete_under, DOS_File* patchzip, bool enable_crc_check, bool final_layer_load_yml)
+void patchDrive::AddLayer(DOS_Drive& under, bool autodelete_under, DOS_File* patchzip, bool enable_crc_check, bool final_layer_load_yml, const char* name)
 {
 	impl->layers.emplace_back(under, autodelete_under, (patchzip ? new zipDrive(patchzip, enable_crc_check) : NULL));
 	impl->layer_top = &impl->layers.back();
 	impl->layer_bottom = &impl->layers.front();
 	if (impl->layers.size() == 1) label.SetLabel(under.GetLabel(), false, true);
-	if (ActiveVariantIndex == -2) ActiveVariantIndex = -1; // because we fill out dos_yml for the default config now
-	if (final_layer_load_yml) { patchDrive::dos_yml.clear(); impl->Reload(ActiveVariantIndex); }
+	if (final_layer_load_yml && ActiveVariantIndex == -2) ActiveVariantIndex = -1; // because we fill out dos_yml for the default config now
+	if (final_layer_load_yml) impl->Reload(ActiveVariantIndex);
+	if (name)
+	{
+		const char *ext = strrchr(name, '.'), *nend = (ext ? ext : name + strlen(name));
+		if (nend - name < sizeof(under.info) - 1) { memcpy(under.info, name, nend - name); under.info[nend - name] = '\0'; }
+	}
+}
+
+const char* patchDrive::GetLayerName(int layer) const
+{
+	return ((layer <= 0 || impl->layer_top - layer < impl->layer_bottom) ? NULL : impl->layer_top[-layer].under.info);
 }
 
 patchDrive::~patchDrive()

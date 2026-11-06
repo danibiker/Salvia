@@ -308,8 +308,8 @@ struct DBP_Run
 	enum EMode : Bit8u { RUN_NONE, RUN_EXEC, RUN_BOOTIMG, RUN_BOOTOS, RUN_INSTALLOS, RUN_SHELL, RUN_VARIANT, RUN_COMMANDLINE };
 	static struct Startup { EMode mode = RUN_NONE; bool reboot = false; int info = 0; std::string exec; } startup;
 	static struct Autoboot { Startup startup; bool have = false, use = false; int skip = 0; Bit32u hash = 0; } autoboot;
-	static struct Autoinput { std::string str; const char* ptr = NULL; Bit32s oldcycles = 0; Bit8u oldchange = 0; Bit16s oldyear = 0; } autoinput;
-	static struct Patch { int enabled_variant = 0; bool show_default = false; } patch;
+	static struct Autoinput { std::string str; const char* ptr = NULL; } autoinput;
+	static struct Patch { int enabled_variant = 0; bool show_variants = false, show_default = false; } patch;
 
 	static bool Run(EMode mode, int info, std::string& str, bool from_osd = false)
 	{
@@ -324,14 +324,14 @@ struct DBP_Run
 		if (mode == RUN_VARIANT)
 		{
 			patch.enabled_variant = info;
-			DOSYMLLoader ymlload(true);
+			DOSYMLLoader ymlload(true, startup.reboot); // pass reboot to simplify (and avoid it calling DBP_PadMapping::PostYML from the emulation thread)
 			startup.reboot |= ymlload.reboot; // read startup and autoinput from YML
 			mode = startup.mode;
 			info = startup.info;
 			if (mode == RUN_NONE) return false; // YML had no startup
-			autoboot.use = !ymlload.is_utility; // disable autoboot for utility config
+			autoboot.use = (patchDrive::variants.Len() && !ymlload.is_utility); // disable autoboot for utility config
 			autoboot.skip = 0; // otherwise force enable auto start when switching variant
-			if (!ymlload.is_utility) WriteAutoBoot(RUN_VARIANT, patch.enabled_variant, str);
+			if (autoboot.use) WriteAutoBoot(RUN_VARIANT, patch.enabled_variant, str);
 		}
 		else
 		{
@@ -357,16 +357,7 @@ struct DBP_Run
 		}
 
 		autoinput.ptr = ((mode != RUN_COMMANDLINE && autoinput.str.size()) ? autoinput.str.c_str() : NULL);
-		autoinput.oldcycles = 0;
-		if (autoinput.ptr && dbp_content_year > 1970 && (CPU_CycleAutoAdjust || (CPU_AutoDetermineMode & (CPU_AUTODETERMINE_CYCLES|(CPU_AUTODETERMINE_CYCLES<<CPU_AUTODETERMINE_SHIFT)))))
-		{
-			// enforce cycle rate during auto input (but limited to 1994 CPU speed, above will likely just waste time waiting for rendering out the skipped frames)
-			autoinput.oldcycles = CPU_CycleMax;
-			autoinput.oldchange = (Bit8u)control->GetProp("cpu", "cycles")->getChange();
-			autoinput.oldyear = dbp_content_year;
-			if (dbp_content_year > 1994) dbp_content_year = 1994;
-			DBP_SetCyclesByYear(dbp_content_year, 1994);
-		}
+		if (autoinput.ptr) DBP_Run::ProcessAutoInput(true);
 
 		// if a booted OS does a bios reboot, auto reboot that OS from now on
 		if (mode == RUN_EXEC || mode == RUN_COMMANDLINE)
@@ -497,6 +488,20 @@ struct DBP_Run
 			}
 			return true;
 		}
+		bool ParseVolume()
+		{
+			if ((KeyX - Key) <= 7 && strncmp("volume_", Key, 7)) return false;
+			for (int i = DBP_Option::volume_sb; i <= DBP_Option::volume_other; i++)
+			{
+				if (option_defs[i].key[19 + (KeyX - Key) - 7] != '\0' || strncmp(Key + 7, option_defs[i].key + 19, (KeyX - Key) - 7)) continue;
+				extern float dbp_volumes[6][2];
+				dbp_volumes[i-DBP_Option::volume_sb][1] = (atoi(Val) * 0.01f) - 1.0f;
+				extern void DBP_MIXER_ApplyVolumes();
+				DBP_MIXER_ApplyVolumes();
+				return true;
+			}
+			return false;
+		}
 		bool ProcessKey()
 		{
 			switch (*Key)
@@ -524,6 +529,7 @@ struct DBP_Run
 						||Parse("video_memory", "dosbox", "vmemsize", "/")
 						||Parse("video_voodoo", "pci", "voodoo" , "v1_8mb","8mb" , "v1_4mb","4mb" , "none","false" , "")
 						||Parse("video_cga_composite", "render", "cga_composite" , "true","1" , "false","2" , "")
+						||ParseVolume()
 					);
 				case 's':
 					return (0
@@ -605,6 +611,7 @@ struct DBP_Run
 
 		// Show default variant as an option only if there is a auto run setting in the base root yml
 		patch.show_default = (ymlload.first_startup_mode_key && ymlload.first_startup_mode_key < patchDrive::dos_yml.c_str() + root_yml_len);
+		patch.show_variants = (ymlload.first_startup_mode_key || patchDrive::variants.Len());
 
 		// reset and re-run PreInit to set all settings of yml
 		if (ymlload.reboot) return true;
@@ -636,6 +643,20 @@ struct DBP_Run
 	{
 		char buf[DOS_PATHLENGTH + 32 + 256 + 256 + 2];
 		Bit16u autostrlen = DriveReadFileBytes(Drives['C'-'A'], "AUTOBOOT.DBP", (Bit8u*)buf, (Bit16u)(sizeof(buf)-1));
+		const char* layername;
+		const patchDrive* patch_drive = ((!autostrlen && patchDrive::variants.Len() && !dbp_save_name) ? dynamic_cast<patchDrive*>(Drives['C'-'A']->GetShadow(1, true)) : NULL);
+		for (int layer = 1; patch_drive && (layername = patch_drive->GetLayerName(layer)) != NULL; layer++)
+		{
+			std::string tmp = dbp_content_name;
+			dbp_content_name.assign(layername);
+			std::string parent_save_file = DBP_GetSaveFile(SFT_GAMESAVE);
+			dbp_content_name.assign(tmp);
+			if (FILE* zip_file_h = fopen_wrap(parent_save_file.c_str(), "rb"))
+			{
+				zipDrive drv(new rawFile(zip_file_h, false), false);
+				if ((autostrlen = DriveReadFileBytes(&drv, "AUTOBOOT.DBP", (Bit8u*)buf, (Bit16u)(sizeof(buf)-1))) != 0) break;
+			}
+		}
 		autoboot.have = !!autostrlen;
 
 		const char* cpath = (autostrlen ? NULL : strrchr(dbp_content_path.c_str(), '#'));
@@ -727,19 +748,30 @@ struct DBP_Run
 
 	static Bit32u ModeHash() { return (Bit32u)((render.src.width * 2100781) ^ (render.src.height * 65173) ^ ((Bitu)(render.src.fps * 521)) ^ (render.src.bpp * 31) ^ ((Bitu)vga.mode + 1)); }
 
-	static void ProcessAutoInput()
+	static void ProcessAutoInput(bool first = false)
 	{
 		extern Bitu PIC_Ticks;
-		static Bitu InpTickStart, InpNextTick; static Bit32u InpDelay, InpReleaseKey, InpSkipMode;
-		if (autoinput.ptr == autoinput.str.c_str())
-			InpTickStart = PIC_Ticks, InpNextTick = 0, InpDelay = 70, InpReleaseKey = InpSkipMode = 0;
+		static Bitu InpTickStart, InpNextTick; static Bit32u InpDelay, InpReleaseKey, InpSkipMode, InpLastMode, InpOldCycles; static Bit16s InpOldYear; static Bit8u InpOldChange;
+		if (first)
+		{
+			InpTickStart = PIC_Ticks, InpNextTick = 0, InpDelay = 70, InpReleaseKey = InpSkipMode = InpLastMode = InpOldCycles = 0;
+			if (dbp_content_year > 1970 && (CPU_CycleAutoAdjust || (CPU_AutoDetermineMode & (CPU_AUTODETERMINE_CYCLES|(CPU_AUTODETERMINE_CYCLES<<CPU_AUTODETERMINE_SHIFT)))))
+			{
+				// enforce cycle rate during auto input (but limited to 1994 CPU speed, above will likely just waste time waiting for rendering out the skipped frames)
+				InpOldCycles = CPU_CycleMax;
+				InpOldChange = (Bit8u)control->GetProp("cpu", "cycles")->getChange();
+				InpOldYear = dbp_content_year;
+				if (dbp_content_year > 1994) dbp_content_year = 1994;
+				DBP_SetCyclesByYear(dbp_content_year, 1994);
+			}
+		}
 
 		const Bitu InpDoneTicks = PIC_Ticks - InpTickStart;
 		if (InpSkipMode && !vga.draw.resizing)
 		{
-			Bit32u mode = ModeHash();
+			const Bit32u mode = ModeHash();
 			if (InpSkipMode == mode) { } // video mode unchanged
-			else if (InpSkipMode < 31) { InpSkipMode = mode; } // initial resolution was set (before it was size 0)
+			else if (InpSkipMode == (Bit32u)vga.mode + 1) { InpSkipMode = mode; } // initial resolution was set (before it was size 0)
 			else { InpSkipMode = 0; InpNextTick = InpDoneTicks; } // new video mode
 		}
 
@@ -801,9 +833,8 @@ struct DBP_Run
 			}
 			else if (i == KBD_LAST+1) // waitmodechange command
 			{
-				if (vga.draw.resizing && InpDoneTicks && (InpDoneTicks - InpNextTick < 5000)) break; // don't start while vga is resizing
 				InpNextTick += 30000; // wait max 30 seconds (if the game crashes, auto input is aborted below)
-				InpSkipMode = ModeHash();
+				InpSkipMode = ((first || !InpLastMode) ? ModeHash() : InpLastMode);
 			}
 			else if (i == KBD_LAST+2 && cmdColon) // delay command
 			{
@@ -815,6 +846,7 @@ struct DBP_Run
 			}
 			else if (i < KBD_LAST) // key press
 			{
+				if (!InpDoneTicks) { InpNextTick = 30; continue; } // wait before starting the first key press
 				if (bShift) KEYBOARD_AddKey(KBD_leftshift, true);
 				if (bAltGr) KEYBOARD_AddKey(KBD_rightalt, true);
 				KEYBOARD_AddKey((KBD_KEYS)i, true);
@@ -828,6 +860,7 @@ struct DBP_Run
 				break;
 			}
 			autoinput.ptr = cmdNext;
+			InpLastMode = (i < KBD_LAST ? ModeHash() : 0);
 		}
 
 		// Check if done, dbp_game_running should switch to true at tick 1 unless the game crashes or exits but give it 5 seconds to be sure
@@ -844,13 +877,13 @@ struct DBP_Run
 			// done
 			autoinput.ptr = NULL; // reset on game crash/exit (dbp_game_running is false)
 			DBP_KEYBOARD_ReleaseKeys();
-			if (autoinput.oldcycles)
+			if (InpOldCycles)
 			{
-				if (!CPU_CycleAutoAdjust && CPU_CycleMax == DBP_CyclesForYear(dbp_content_year, 1994) && control->GetProp("cpu", "cycles")->getChange() == autoinput.oldchange)
-					CPU_CycleMax = autoinput.oldcycles; // revert from Run()
+				if (!CPU_CycleAutoAdjust && CPU_CycleMax == DBP_CyclesForYear(dbp_content_year, 1994) && control->GetProp("cpu", "cycles")->getChange() == InpOldChange)
+					CPU_CycleMax = InpOldCycles; // revert from Run()
 				else if (CPU_CycleAutoAdjust && cpu.pmode && (CPU_AutoDetermineMode & (CPU_AUTODETERMINE_CORE<<CPU_AUTODETERMINE_SHIFT)))
-					CPU_OldCycleMax = autoinput.oldcycles; // we switched to protected mode since auto input, fix up old cycles
-				dbp_content_year = autoinput.oldyear;
+					CPU_OldCycleMax = InpOldCycles; // we switched to protected mode since auto input, fix up old cycles
+				dbp_content_year = InpOldYear;
 				DBP_SetRealModeCycles(); // if still in real mode reset the defaults
 			}
 		}

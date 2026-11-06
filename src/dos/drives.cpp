@@ -430,9 +430,9 @@ Bit32u DBP_Make8dot3FileName(char* target, Bit32u target_len, const char* source
 		}
 	};
 	const char *target_start = target, *target_end = target + target_len, *source_end = source + source_len, *sDot;
-	for (sDot = source_end - 1; *sDot != '.' && sDot > source; sDot--);
-	Bit32u baseLen = (Bit32u)((*sDot == '.' ? sDot : source_end) - source);
-	Bit32u extLen = (Bit32u)(*sDot == '.' ? source_end - 1 - sDot : 0);
+	for (sDot = source_end - 1; *sDot != '.'; sDot--) { if (sDot <= source) { sDot = NULL; break; } }
+	Bit32u baseLen = (Bit32u)((sDot ? sDot : source_end) - source);
+	Bit32u extLen = (Bit32u)(sDot ? (source_end - 1 - sDot) : 0);
 	if (baseLen <= 8 && extLen <= 3 && target_len >= source_len)
 	{
 		extern const Bit8u DOS_ValidCharBits[32];
@@ -448,8 +448,7 @@ Bit32u DBP_Make8dot3FileName(char* target, Bit32u target_len, const char* source
 	Func::AppendFiltered(target, target_end, source, baseLeft);
 	Func::AppendFiltered(target, target_end, source + baseLen - baseRight, baseRight);
 	if (!baseLen && target < target_end) *(target++) = DBP_8DOT3_INVALID_CHAR;
-	if (extLen && target < target_end) *(target++) = '.';
-	Func::AppendFiltered(target, target_end, sDot + 1, (extLen > 3 ? 3 : extLen));
+	if (extLen && target < target_end) { *(target++) = '.'; Func::AppendFiltered(target, target_end, sDot + 1, (extLen > 3 ? 3 : extLen)); }
 	was_changed = true;
 	return (Bit32u)(target - target_start);
 }

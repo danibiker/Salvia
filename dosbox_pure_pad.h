@@ -26,7 +26,7 @@ static const Bit8u* dbp_auto_mapping;
 static const char *dbp_auto_mapping_names, *dbp_auto_mapping_title;
 static bool dbp_yml_directmouse, dbp_yml_mapping;
 static float dbp_yml_mousespeed = 1, dbp_yml_mousexfactor = 1, dbp_yml_padmousespeed = 1;
-static float dbp_mouse_speed = 1, dbp_mouse_speed_x = 1, dbp_joymouse_speed = .0003f;
+static float dbp_mouse_speed_x = 1, dbp_mouse_speed_y = 1, dbp_joymouse_speed = .0003f;
 
 struct DBP_PadMapping
 {
@@ -268,6 +268,7 @@ struct DBP_PadMapping
 		RefreshDosJoysticks(); // do after bindings change
 		dbp_binds_changed = 0; // this contains which ports had changes but we're just rebuilding all descriptors anyway here
 
+		#ifndef DBP_STANDALONE
 		static std::vector<std::string> input_names;
 		input_names.reserve(dbp_input_binds.size() + DBP_MAX_PORTS); // otherwise strings move their data in memory when the vector reallocates
 		input_names.clear();
@@ -301,6 +302,7 @@ struct DBP_PadMapping
 		}
 		ports[DBP_MAX_PORTS] = {0};
 		environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+		#endif
 	}
 
 	static void RefreshDosJoysticks()
@@ -352,8 +354,10 @@ struct DBP_PadMapping
 			dbp_bind_mousewheel = bind_mousewheel;
 			if (dbp_state > DBPSTATE_SHUTDOWN) DBP_PadMapping::SetInputDescriptors(true);
 		}
-		dbp_mouse_speed = (float)atof(DBP_Option::Get(DBP_Option::mouse_speed_factor)) * dbp_yml_mousespeed;
-		dbp_mouse_speed_x = (float)atof(DBP_Option::Get(DBP_Option::mouse_speed_factor_x)) * dbp_yml_mousexfactor;
+		const char* mouse_factor_x = DBP_Option::Get(DBP_Option::mouse_speed_factor_x);
+		const float mouse_speed = (float)atof(DBP_Option::Get(DBP_Option::mouse_speed_factor)) * dbp_yml_mousespeed;
+		dbp_mouse_speed_x = mouse_speed * (mouse_factor_x[0] == 'o' ? 1.0f : (float)atof(mouse_factor_x)) * (dbp_yml_mousexfactor == 6154613.f ? 1.0f : dbp_yml_mousexfactor);
+		dbp_mouse_speed_y = mouse_speed * ((mouse_factor_x[0] == 'o' || dbp_yml_mousexfactor == 6154613.f) ? 0.0f : 1.0f);
 		dbp_joymouse_speed = .0003f * dbp_yml_padmousespeed;
 	}
 
@@ -384,8 +388,8 @@ struct DBP_PadMapping
 			|| (keyLen == (sizeof("input_padmousespeed") - 1) && !strncmp("input_padmousespeed", Key, (size_t)(sizeof("input_padmousespeed") - 1))))
 		{
 			int percent = atoi(Val);
-			if (percent <= 0) return false;
-			(Key[6] == 'p' ? dbp_yml_padmousespeed : (Key[11] == 'x' ? dbp_yml_mousexfactor : dbp_yml_mousespeed)) = percent / 100.0f;
+			if (percent <= (Key[11] == 'x' ? -1 : 0)) return false; // x-factor can be 0 (disable horizontal) or 'only' (disable vertical)
+			(Key[6] == 'p' ? dbp_yml_padmousespeed : (Key[11] == 'x' ? dbp_yml_mousexfactor : dbp_yml_mousespeed)) = ((Key[11] == 'x' && (Val[0]|0x20) == 'o') ? 6154613.f : (percent / 100.0f));
 			return true;
 		}
 		if (   (keyLen == (sizeof("input_mousewheelup")   - 1) && !strncmp("input_mousewheelup",   Key, (size_t)(sizeof("input_mousewheelup")   - 1)))

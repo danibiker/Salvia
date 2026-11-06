@@ -418,6 +418,9 @@ void DBPSerialize_DISNEY(DBPArchive& ar_outer)
 	ar.SerializeExcept(disney, disney.mo, disney.chan, disney.leader);
 	ar.Serialize(leader_idx);
 
+	if (ar.IsReset())
+		disney.status=0x84;
+
 	if (ar.mode == DBPArchive::MODE_LOAD)
 		disney.leader = (leader_idx < 2 ? &disney.da[leader_idx] : NULL);
 }
