@@ -1674,7 +1674,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 
 	std::string msgShader;
 	ConfigEmu *emu = getCfgLoader()->getCfgEmu();
-	static int lastSync = *current_sync;
+	static int lastSync = SYNC_TO_VIDEO;
 
 	std::string msg;
 
@@ -1836,12 +1836,16 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				sync->set_vsync_permitido(!current_fast_forward);
 				if (current_fast_forward){
 					sync->init_fps_counter(originalFps * speed);
-					lastSync = *current_sync;
-					*current_sync = SYNC_TO_VIDEO;
+					/* Sobre la sincronizacion en uso (la que puso el override
+					 * del core o el menu), no sobre la opcion general: asi no
+					 * se guarda en la configuracion y al salir vuelve la que
+					 * habia. */
+					lastSync = cfgLoader->current_video_settings.sync_type;
+					cfgLoader->current_video_settings.sync_type = SYNC_TO_VIDEO;
 					showSystemMessage(Constant::string_format(LanguageManager::instance()->get("msg.fastfoward.speed"), speed * 100), 3000);
 				} else {
 					sync->init_fps_counter(originalFps);
-					*current_sync = lastSync;
+					cfgLoader->current_video_settings.sync_type = lastSync;
 					showLangSystemMessage("msg.fastfoward.reset", 3000);
 				}
 			} else {

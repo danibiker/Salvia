@@ -838,13 +838,20 @@ void CfgLoader::loadCoreParams(){
 	// the aspect ratio or filters options, which have specific hotkeys attached and menu options. I found that at that level,
 	// it can be a bit confusing for the user to select the synchronization mode in combination with the core overrides.
 
+	// Valor inicial; se vuelve a resolver al lanzar cada juego (launchGame).
+	current_video_settings.sync_type = effectiveSyncType();
+}
+
+int CfgLoader::effectiveSyncType(){
 	// Overriding the video synchronization mode if the core has specified something greater than 0. 
 	// 0 is actually -1 in the cfg file which represents "Auto"
-	const int currentSyncType = getCfgEmu()->syncMode > 0 ? getCfgEmu()->syncMode - 1 : configMain[cfg::syncMode].valueInt;
-	if (current_video_settings.sync_type != currentSyncType){
-		//I don't want to change the current general option, so I store the value in the option sync_type 
-		current_video_settings.sync_type = currentSyncType;
-	}
+	const int coreOverrideSync = emulators.empty() ? 0 : getCfgEmu()->syncMode;
+	// The salvia config starts in 0
+	const int salviaSync = configMain[cfg::syncMode].valueInt;
+	// if the auto mode is selected, choose the salvia configured value. If not, the core overrides
+	if (coreOverrideSync > 0 && coreOverrideSync - 1 < TOTAL_VIDEO_SYNC)
+		return coreOverrideSync - 1;
+	return salviaSync;
 }
 
 // Aplica un fichero de opciones de core (lineas "key=indice", '#'=comentario)

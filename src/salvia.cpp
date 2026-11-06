@@ -1605,7 +1605,7 @@ void retro_audio_sample(int16_t left, int16_t right) {
 	g_singleSampleFrames++;
 
 	if (g_singleSampleFrames >= RETRO_SAMPLE_BLOCK) {
-		const int mode = *gameMenu->current_sync;
+		const int mode = gameMenu->getCfgLoader()->current_video_settings.sync_type;   /* la efectiva, con el override del core */
 		if (mode != SYNC_FAST_FORWARD) {
 			audioSubmit(g_singleSampleBlock, g_singleSampleFrames, mode == SYNC_TO_AUDIO);
 		}
@@ -1618,7 +1618,7 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10)
 		return frames;
 	
-	const int mode = *gameMenu->current_sync;
+	const int mode = gameMenu->getCfgLoader()->current_video_settings.sync_type;   /* la efectiva, con el override del core */
     switch(mode) {
         case SYNC_TO_AUDIO:
             /* El bloqueo ya sincroniza naturalmente con el reloj de audio, pero
@@ -1952,6 +1952,11 @@ int launchGame(std::string rompath, bool tmpDelete){
 	if (!bios_only)
 		gameMenu->getCfgLoader()->loadCoreParamsForGame(rompath);
 
+	// Sincronizacion al iniciar el core: el override del core si no esta en
+	// Auto, si no la general. Solo aqui; despues manda lo que el usuario elija
+	// en el menu de emulacion (GestorMenus::selectSync).
+	gameMenu->getCfgLoader()->current_video_settings.sync_type = gameMenu->getCfgLoader()->effectiveSyncType();
+
 	//Cargamos el juego en memoria o lo extraemos al disco
 	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
 	if(!gameLoaded) {
@@ -2150,49 +2155,10 @@ inline void updateGame() {
 				//	occupancy, gameMenu->g_audioRate.getBaseRatio());
 			}
 		}
-
-		/* La PANTALLA, contada por el hardware.  Ventana de 10 s por el mismo
-		 * motivo que la del audio: se buscan decimas de por ciento.
-		 *
-		 * `vbl/frame` es el dato que no se puede obtener de ninguna otra forma.
-		 * Con core y panel a 60 debe salir 1,00 clavado.  Con un core PAL a 50
-		 * en un panel a 60 debe salir 1,20 -alternando 1 y 2 en patron 5:6-,
-		 * porque 50 no divide a 60 y no hay swap interval entero que lo arregle.
-		 * Si en ese caso saliese 1,00, el Present no esta haciendo lo que creo y
-		 * hay que pararse ahi antes de seguir. */
-		//{
-		//	static DWORD        t0     = 0;
-		//	static unsigned int vb0    = 0;
-		//	static unsigned int miss0  = 0;
-		//	static unsigned int frames = 0;
-		//
-		//	unsigned int vb = 0, miss = 0;
-		//	const DWORD  ahora = GetTickCount();
-		//
-		//	SDL_XBOX_GetVBlankStats(&vb, &miss);
-		//	++frames;
-		//
-		//	if (t0 == 0 || vb == 0) {
-		//		/* vb == 0: plataforma sin reloj de hardware (Windows). */
-		//		t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
-		//	} else if (ahora - t0 >= 10000) {
-		//		const double seg = (double)(ahora - t0) / 1000.0;
-		//		const double hz  = (double)(vb - vb0) / seg;
-		//		const float  dec = SDL_XBOX_GetRefreshRate();
-		//
-		//		LOG_INFO("Sync: pantalla -> declarado %.4f Hz | contado %.4f Hz | desvio %+.3f%% | vbl/frame %.3f | perdidos %u\n",
-		//			dec, hz,
-		//			(dec > 0.0f) ? ((hz / (double)dec - 1.0) * 100.0) : 0.0,
-		//			frames ? ((double)(vb - vb0) / (double)frames) : 0.0,
-		//			miss - miss0);
-		//
-		//		t0 = ahora; vb0 = vb; miss0 = miss; frames = 0;
-		//	}
-		//}
 	}
 	retro_run();
 
-	/* FASE 3: ancla la FASE del muestreo del DRC.  A partir de aqui, el primer
+	/* Ancla la FASE del muestreo del DRC.  A partir de aqui, el primer
 	 * lote de audio del frame siguiente recomputa el ratio, y los demas reusan
 	 * el ya calculado.  Sin esto el controlador se muestreaba una vez por LOTE
 	 * -varias veces por frame, con fase distinta cada vez- y eso mete ruido en

@@ -48,6 +48,9 @@ public:
 
 	std::string saveCoreParams();
 	void loadCoreParams();
+	// Sincronizacion efectiva: el override del core (ConfigEmu::syncMode, 0 =
+	// Auto) o, si esta en Auto, la general (configMain[cfg::syncMode]).
+	int effectiveSyncType();
 	// [XBOX360] Opciones del core POR JUEGO: fichero junto al juego con su mismo
 	// nombre base + CORE_OPT_EXT. En la carga, si existe se aplican en lugar de
 	// las generales del core. Ver launchGame (salvia.cpp).
