@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string>
+#include "midireplay.h"
 
 /* Sintetizador General MIDI del frontend, sobre TinySoundFont.
  *
@@ -40,6 +41,13 @@
  */
 
 struct tsf; /* tsf.h solo se incluye en midisynth.cpp */
+class Sc55Synth;
+
+/* Ruta especial de open() para el Roland SC-55 (Nuked-SC55) en lugar de un
+ * SoundFont: "sc55:" seguido del directorio con las ROMs (ver sc55synth.h).
+ * Lo construye applyMidiSoundfont cuando se elige la entrada "Roland SC-55" de
+ * la lista. */
+#define MIDISYNTH_SC55_PREFIX "sc55:"
 
 /* Definida en salvia.cpp.  Resuelve que SoundFont toca segun la configuracion y
  * lo aplica.  Se declara aqui, como applyMenuMusic en musicplayer.h, porque la
@@ -63,10 +71,13 @@ public:
 	/* ---- hilo principal ---- */
 
 	/* Carga el .sf2 entero en memoria y lo abre.  coreSampleRate es la tasa a la
-	 * que se le pedira render() (la del core, no la del dispositivo). */
+	 * que se le pedira render() (la del core, no la del dispositivo).
+	 * Con MIDISYNTH_SC55_PREFIX + directorio de ROMs abre en su lugar el
+	 * Roland SC-55, que corre en un hilo propio (ver sc55synth.h): writeByte,
+	 * render y panic se le pasan tal cual y no hay traduccion MT-32. */
 	bool open(const std::string& sf2Path, int coreSampleRate);
 	void close();
-	bool isLoaded() const { return m_tsf != 0; }
+	bool isLoaded() const { return m_tsf != 0 || m_sc55 != 0; }
 
 	/* Re-aplica la tasa cuando el core la cambia (SET_SYSTEM_AV_INFO).  Es
 	 * seguro a media reproduccion: solo reajusta la salida y las voces vivas se
@@ -99,11 +110,16 @@ public:
 
 	/* true en cuanto el core ha mandado algun byte MIDI: sirve para que la ruta
 	 * de audio se salte todo el trabajo en los juegos que no usan MIDI. */
-	bool isActive() const { return m_tsf != 0 && m_sawData; }
+	bool isActive() const { return (m_tsf != 0 || m_sc55 != 0) && m_sawData; }
 
 	/* Corta todo el sonido y reinicia el estado de trama.  Al cerrar un juego o
 	 * al entrar en fast-forward, o quedan notas colgadas. */
 	void panic();
+
+	/* Olvida el estado de la cancion que se guarda para reabrir el SC-55 a
+	 * media partida (ver m_sc55Song).  Al cerrar el juego: el siguiente no
+	 * tiene que heredarlo. */
+	void resetSongState() { m_sc55Song.clear(); }
 
 private:
 	enum { MIDI_CHANNELS = 16, SYSEX_MAX = 256, DRUM_CHANNEL = 9 };
@@ -123,6 +139,12 @@ private:
 	};
 
 	tsf*         m_tsf;
+	Sc55Synth*   m_sc55;          /* en lugar de m_tsf con el Roland SC-55 */
+	/* Estado de la cancion para el SC-55, que recibe el stream crudo y no pasa
+	 * por ChannelState.  Sobrevive a close()/open() a proposito: apagar y
+	 * encender el sintetizador desde el menu a media partida crea una unidad
+	 * nueva, y open() se lo reenvia para que siga con los mismos instrumentos. */
+	MidiReplay   m_sc55Song;
 	std::string  m_path;
 	int          m_sampleRate;
 	int          m_volumePct;

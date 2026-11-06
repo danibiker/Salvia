@@ -38,15 +38,15 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		// render lo hace nuestra capa D3D9 (no llamamos a SDL_Flip en PC).
 		SDL_putenv("SDL_VIDEODRIVER=windib");
 	#elif defined(_XBOX)
-		HANDLE currrentThread = GetCurrentThread();
-		SetThreadPriority(currrentThread, THREAD_PRIORITY_NORMAL);
+		//HANDLE currrentThread = GetCurrentThread();
+		//SetThreadPriority(currrentThread, THREAD_PRIORITY_NORMAL);
 		// Pinear el main thread (Salvia + retro_run + dynarec PSX del core libretro) a HW thread 0.
 		// Razones:
 		//  - SMT partner (HW thread 1) idle: pipeline del core fisico 0 enteramente para el dynarec.
 		//  - No comparte L1/L2 con SPU (HW thread 3), GPU helper (HW thread 4) ni IO/HTTP (HW thread 5).
 		//  - Salvia ya arranca en HW thread 0 por defecto; el pin solo garantiza que el
 		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
-		XSetThreadProcessor(currrentThread, CPU_THREAD);
+		//XSetThreadProcessor(currrentThread, CPU_THREAD);
 
 		video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;   // 0 = Auto
 		video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;

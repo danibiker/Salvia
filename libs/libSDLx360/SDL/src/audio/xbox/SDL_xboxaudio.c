@@ -49,6 +49,9 @@ static void XboxDX_CloseAudio(_THIS);
 
 IXAudio2* g_sound;
 
+#define THREAD_XAUDIO2 XAUDIO2_DEFAULT_PROCESSOR
+#define THREAD_SDL_AUDIO 4
+
 static int Audio_Available(void)
 {
 	// Audio is always available on Xbox
@@ -113,8 +116,7 @@ static SDL_AudioDevice *Audio_CreateDevice(int devindex)
 
 	this->free = Audio_DeleteDevice;
 
-	// XAudio2 mezcla en el core 1 - thread 2
-	result = XAudio2Create(&sound, 0, XboxThread5 );
+	result = XAudio2Create(&sound, 0, THREAD_XAUDIO2 );
 	if ( result != S_OK ) {
 		return(0);
 	}
@@ -147,7 +149,7 @@ void XboxDX_SoundFocus(int nHwnd)
 
 static void XboxDX_ThreadInit(_THIS)
 {
-	XSetThreadProcessor(GetCurrentThread(), 5);
+	XSetThreadProcessor(GetCurrentThread(), THREAD_SDL_AUDIO);
 }
 
 static void XboxDX_WaitAudio_BusyWait(_THIS)

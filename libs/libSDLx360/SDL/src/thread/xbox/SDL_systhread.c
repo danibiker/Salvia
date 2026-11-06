@@ -54,7 +54,8 @@ int SDL_SYS_CreateThread(SDL_Thread *thread, void *args)
 		return(-1);
 	}
 
-	XSetThreadProcessor((thread->handle),hardwarethread++);
+	//Only work in hardware 4 and 5
+	XSetThreadProcessor((thread->handle), 4 + (hardwarethread++ % 2));
 	return(0);
 }
 

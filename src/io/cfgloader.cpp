@@ -7,6 +7,7 @@
 #include <io/dirutil.h>
 #include <io/fileio.h>
 #include <video/shaderpreset.h>
+#include <audio/sc55synth.h>
 
 #include <libretro/libretro.h>
 
@@ -23,6 +24,7 @@ cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
 std::string CfgLoader::appliedFileParmsCore;
 
 CfgLoader::CfgLoader(){
+	sc55ListIndex = -1;
 	emuCfgPos = 0;
 	idxRegion = 0;
 	idxIdioma = 0;
@@ -1057,6 +1059,17 @@ void CfgLoader::findAllSoundfonts(){
 	dir.listFiles(configMain[cfg::libretrosystem].valueStr.c_str(), files, ".sf2", "", true, false);
 	for (unsigned int i = 0; i < files.size(); i++){
 		soundfontFiles.push_back(files[i]->filename);
+	}
+
+	/* Roland SC-55 (Nuked-SC55), si estan sus ROMs en 'system' o en una de sus
+	 * subcarpetas habituales (ver Sc55Synth::findRomSet).  Al final de la lista
+	 * para no mover los indices de los .sf2. */
+	sc55ListIndex = -1;
+	sc55RomDir.clear();
+	bool mk2 = false;
+	if (Sc55Synth::findRomSet(configMain[cfg::libretrosystem].valueStr, sc55RomDir, mk2)){
+		sc55ListIndex = (int)soundfontFiles.size();
+		soundfontFiles.push_back(mk2 ? "Roland SC-55mkII" : "Roland SC-55");
 	}
 }
 

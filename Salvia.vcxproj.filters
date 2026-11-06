@@ -197,6 +197,12 @@
     <ClCompile Include="src\audio\midisynth.cpp">
       <Filter>Source Files\audio</Filter>
     </ClCompile>
+    <ClCompile Include="src\audio\sc55synth.cpp">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio\sc55_frontend.c">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
     <ClCompile Include="src\io\presentclock.cpp">
       <Filter>Source Files\io</Filter>
     </ClCompile>
@@ -394,6 +400,15 @@
     <ClInclude Include="src\audio\midisynth.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\audio\midireplay.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\sc55synth.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\sc55_frontend.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="libs\tinysoundfont\tsf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -405,9 +420,6 @@
     </ClInclude>
     <ClInclude Include="src\io\statesram.h">
       <Filter>Source Files\io</Filter>
-    </ClInclude>
-    <ClInclude Include="src\cheats\cheatlocator.h">
-      <Filter>Source Files\cheats</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

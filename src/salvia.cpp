@@ -1493,8 +1493,11 @@ void applyMidiSoundfont(bool loadNow) {
 	 * interruptor general. */
 	if (cfg->configMain[cfg::midiEnabled].valueBool &&
 	    idx > 0 && (std::size_t)idx < cfg->soundfontFiles.size()) {
-		path = cfg->configMain[cfg::libretrosystem].valueStr +
-		       Constant::getFileSep() + cfg->soundfontFiles[idx];
+		if (idx == cfg->sc55ListIndex)
+			path = std::string(MIDISYNTH_SC55_PREFIX) + cfg->sc55RomDir;   /* Roland SC-55 */
+		else
+			path = cfg->configMain[cfg::libretrosystem].valueStr +
+			       Constant::getFileSep() + cfg->soundfontFiles[idx];
 	}
 
 	LOG_DEBUG("MIDI: applyMidiSoundfont enabled=%d idx=%d listado=%d cargado=%d ruta='%s'",
@@ -1899,6 +1902,7 @@ void closeGame(){
 		 * pedir si lo necesita.  Aqui ya no queda nadie del lado de la
 		 * emulacion que pueda estar dentro de render(). */
 		gameMenu->g_midi.close();
+		gameMenu->g_midi.resetSongState();   /* el siguiente juego no hereda la cancion */
 
 		/* De vuelta al menu: reanudar el dispositivo, que el bloque de audio de
 		 * arriba dejo pausado.  No hay que recargar nada -- la musica sigue en

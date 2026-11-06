@@ -20,7 +20,7 @@ struct Thread {
 	typedef DWORD RET_t; 
 	typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); 
 	
-	__inline static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 2) {
+	__inline static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 1) {
 		HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0);
 		if (h){
 			#ifdef _XBOX
@@ -55,7 +55,7 @@ struct SpinLock { __inline SpinLock() : f(0) {} __inline void Lock() { while (_I
 #include <atomic>
 #endif
 #define THREAD_CC
-struct Thread { typedef void* RET_t; typedef RET_t (THREAD_CC *FUNC_t)(void*); static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 2) { (void)xbox_core; pthread_t h = 0; pthread_attr_t a; pthread_attr_init(&a); pthread_attr_setstacksize(&a, DBP_STACK_SIZE); pthread_create(&h, &a, f, p); pthread_attr_destroy(&a); pthread_detach(h); } };
+struct Thread { typedef void* RET_t; typedef RET_t (THREAD_CC *FUNC_t)(void*); static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 1) { (void)xbox_core; pthread_t h = 0; pthread_attr_t a; pthread_attr_init(&a); pthread_attr_setstacksize(&a, DBP_STACK_SIZE); pthread_create(&h, &a, f, p); pthread_attr_destroy(&a); pthread_detach(h); } };
 struct Mutex { __inline Mutex() { pthread_mutex_init(&h,0); } __inline ~Mutex() { pthread_mutex_destroy(&h); } __inline void Lock() { pthread_mutex_lock(&h); } __inline void Unlock() { pthread_mutex_unlock(&h); } private:pthread_mutex_t h;Mutex(const Mutex&);Mutex& operator=(const Mutex&);friend struct Conditional;};
 struct Conditional { __inline Conditional() { pthread_cond_init(&h,0); } __inline ~Conditional() { pthread_cond_destroy(&h); } __inline void Broadcast() { pthread_cond_broadcast(&h); } __inline void Wait(Mutex& m) { pthread_cond_wait(&h,&m.h); } private:pthread_cond_t h;Conditional(const Conditional&);Conditional& operator=(const Conditional&);};
 struct Semaphore { __inline Semaphore() : v(0) {} __inline void Post() { m.Lock(); v = 1; c.Broadcast(); m.Unlock(); } __inline void Wait() { m.Lock(); while (!v) c.Wait(m); v = 0; m.Unlock(); } private:Mutex m;Conditional c;int v;Semaphore(const Semaphore&);Semaphore& operator=(const Semaphore&);};

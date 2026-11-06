@@ -19,14 +19,13 @@
 static const int video_bpp = 16;
 
 /* Final layout:
- *   core 0  Xbox 360 Dashboard                      ┐
- *   core 1  main / Salvia / retro_run / dynarec PSX ┘ same physical core
- *   core 2  PSX GPU helper thread        ┐
- *   core 3  idle                         ┘ same physical core
- *   core 4  IO & HTTP					  ┐
- *   core 5  Xaudio and SDL Sound thread  ┘ same physical core
+ *   core 0  Xbox 360 Dashboard                 ┐
+ *   core 1  (Salvia & retro_run) | dynarec PSX ┘ same physical core
+ *   core 2  PSX GPU helper thread | Roland SC-55 midi ┐
+ *   core 3  idle                                      ┘ same physical core
+ *   core 4  IO & HTTP & SDL Sound thread & Xaudio2 & SDL_SYS_CreateThread ┐
+ *   core 5  Xaudio2 & SDL_SYS_CreateThread                                ┘ same physical core
  */
-#define CPU_THREAD 1
 #define IO_THREAD 4
 
 static int video_width = 1280;

@@ -7313,6 +7313,10 @@
     <ClCompile Include="src\retroachievements\HashCHD.cpp" />
     <ClCompile Include="src\salvia.cpp" />
     <ClCompile Include="src\audio\midisynth.cpp" />
+    <ClCompile Include="src\audio\sc55synth.cpp" />
+    <ClCompile Include="src\audio\sc55_frontend.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="src\so\launcher.cpp" />
     <ClCompile Include="src\so\soutils.cpp" />
     <ClCompile Include="src\uiobjects\image.cpp" />
@@ -7327,6 +7331,9 @@
     <ClInclude Include="src\audio\audiobuffer.h" />
     <ClInclude Include="src\audio\audiorate.h" />
     <ClInclude Include="src\audio\midisynth.h" />
+    <ClInclude Include="src\audio\midireplay.h" />
+    <ClInclude Include="src\audio\sc55synth.h" />
+    <ClInclude Include="src\audio\sc55_frontend.h" />
     <ClInclude Include="src\audio\mt32map.h" />
     <ClInclude Include="src\audio\musicplayer.h" />
     <ClInclude Include="libs\tinysoundfont\tsf.h" />

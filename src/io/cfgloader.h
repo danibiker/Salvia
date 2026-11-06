@@ -39,6 +39,12 @@ public:
 	 * elemento es siempre "ninguno".  Runtime, no se persiste: lo que se guarda
 	 * es el indice elegido (cfg::midiSoundfont). */
 	std::vector<std::string> soundfontFiles;
+	/* Si en 'system' hay ROMs del Roland SC-55, findAllSoundfonts lo anade al
+	 * final de soundfontFiles: este es su indice (-1 si no hay) y el directorio
+	 * donde estan.  Va al final para no mover los indices de los .sf2 ya
+	 * guardados en la configuracion. */
+	int sc55ListIndex;
+	std::string sc55RomDir;
 
 	std::string saveCoreParams();
 	void loadCoreParams();

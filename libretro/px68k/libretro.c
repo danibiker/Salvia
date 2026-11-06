@@ -367,6 +367,27 @@ static int libretro_supports_midi_output = 0;
 static struct retro_midi_interface midi_cb = { 0 };
 static bool libretro_supports_option_categories = 0;
 
+/* Bytes of a short message from its status byte.  Program change (Cx) and
+ * channel pressure (Dx) carry ONE data byte: sending the packed third byte
+ * too made a real synth (the frontend's SC-55) read it as a second program
+ * change to program 0 through running status, so every instrument change
+ * ended on the piano.  The internal SC-55 path already did this. */
+static size_t midi_short_msg_len(uint8_t status)
+{
+   switch (status & 0xF0)
+   {
+      case 0xC0:
+      case 0xD0:
+         return 2;
+      case 0xF0:
+         if (status == 0xF2) return 3;                   /* song position */
+         if (status == 0xF1 || status == 0xF3) return 2; /* MTC / song select */
+         return 1;                                       /* real time, tune request */
+      default:
+         return 3;
+   }
+}
+
 void midi_out_short_msg(size_t msg)
 {
    if (px68k_sc55_enabled())
@@ -376,9 +397,11 @@ void midi_out_short_msg(size_t msg)
    }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
    {
-      midi_cb.write(msg         & 0xFF, 0); /* status byte */
-      midi_cb.write((msg >> 8)  & 0xFF, 0); /* note no. */
-      midi_cb.write((msg >> 16) & 0xFF, 0); /* velocity */
+      const uint8_t status = (uint8_t)(msg & 0xFF);
+      const size_t  len    = midi_short_msg_len(status);
+      midi_cb.write(status, 0);                                     /* status byte */
+      if (len > 1) midi_cb.write((uint8_t)((msg >> 8) & 0xFF), 0);  /* data 1 */
+      if (len > 2) midi_cb.write((uint8_t)((msg >> 16) & 0xFF), 0); /* data 2 */
    }
 }
 
