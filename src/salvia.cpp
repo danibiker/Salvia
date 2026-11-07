@@ -1834,8 +1834,8 @@ std::string initPathAndLog(char** argv){
 
 	Constant::setExecMethod(launch_spawn);
 
-	LOG_INFO("Directorio de app: %s\n", Constant::getAppDir().c_str());
-	LOG_INFO("Ejecutable: %s\n", Constant::getAppExecutable().c_str());
+	LOG_DEBUG("Directorio de app: %s\n", Constant::getAppDir().c_str());
+	LOG_DEBUG("Ejecutable: %s\n", Constant::getAppExecutable().c_str());
 	g_excp_emulator_path = Constant::getAppExecutable();
 	return Constant::getAppDir();
 }

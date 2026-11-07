@@ -74,6 +74,12 @@ static LPDIRECT3DPIXELSHADER9  g_hlslBg_ps[HLSL_BG_COUNT];
 static LPDIRECT3DPIXELSHADER9  g_hlslBg_psAlphaFix = NULL;
 static LPDIRECT3DVERTEXBUFFER9 g_hlslBg_vb  = NULL;
 static LPDIRECT3DVERTEXDECLARATION9 g_hlslBg_vd = NULL;
+/* Vertex shader del fondo. Se guarda en vez de liberarlo nada mas ponerlo:
+ * en Xbox 360, Set*Shader no se queda una referencia, asi que liberarlo
+ * dejaba el device apuntando a memoria liberada y el siguiente
+ * SetVertexShader escribia en ella (corrompia el heap: bloque libre con su
+ * enlace pisado por un 5). */
+static D3DVertexShader*        g_hlslBg_vs = NULL;
 static int g_hlslBkg_active = 0;
 
 /* Tabla de presets publicada por la app + objetos compilados por preset. */
@@ -200,7 +206,7 @@ void HLSLBackground_init(LPDIRECT3DDEVICE9 dev)
 			0, &vsCode, &errs, NULL))) {
 		D3DVertexShader* pVS = NULL;
 		IDirect3DDevice9_CreateVertexShader(dev, (DWORD*)vsCode->lpVtbl->GetBufferPointer(vsCode), &pVS);
-		if (pVS) { IDirect3DDevice9_SetVertexShader(dev, pVS); D3DVertexShader_Release(pVS); }
+		if (pVS) { IDirect3DDevice9_SetVertexShader(dev, pVS); g_hlslBg_vs = pVS; }   /* NO liberar: ver g_hlslBg_vs */
 		vsCode->lpVtbl->Release(vsCode);
 	}
 	if (errs) { errs->lpVtbl->Release(errs); errs = NULL; }
@@ -267,6 +273,12 @@ void HLSLBackground_shutdown(void)
 	}
 	if (g_hlslBg_psAlphaFix) { IDirect3DPixelShader9_Release(g_hlslBg_psAlphaFix); g_hlslBg_psAlphaFix = NULL; }
 	if (g_hlslBg_vd) { IDirect3DVertexDeclaration9_Release(g_hlslBg_vd); g_hlslBg_vd = NULL; }
+	if (g_hlslBg_vs) {
+		/* Quitarlo del device antes de liberarlo (el device no tiene referencia). */
+		if (D3D_Device) IDirect3DDevice9_SetVertexShader(D3D_Device, NULL);
+		D3DVertexShader_Release(g_hlslBg_vs);
+		g_hlslBg_vs = NULL;
+	}
 }
 
 void HLSLBackground_setActive(int active)

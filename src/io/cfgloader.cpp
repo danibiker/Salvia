@@ -332,9 +332,10 @@ void CfgLoader::loadMainConfig(){
 		vector<std::string> emulators = Constant::splitChar(emulist, ' ');
 
 		for (std::size_t i=0; i < emulators.size(); i++){
-			loadEmuConfig(emulators.at(i));
-		}
-		if (isDebug()) cout << endl;         
+			std::string emuname = emulators.at(i);
+			if (!Constant::Trim(emuname).empty())
+				loadEmuConfig(emuname);
+		}   
 	}
 
 	//Adding always the configuration options
