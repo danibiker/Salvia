@@ -42,7 +42,7 @@ unsigned long *get_event(int type);
  * con Sleep(1)).  El usuario lo probo en HW3 -- hermano SMT del emulador en
  * HW2 -- y en HW4 va mejor (log 27): el emulador y la lista dejan de
  * repartirse un nucleo.  El consumidor de `retro_run` sigue en HW1. */
-#define HL_HW          4
+#define HL_HW          2
 #define HL_PILA        (1024u * 1024u)   /* el plugin corria en los 512 KB
                                           * del hilo principal */
 

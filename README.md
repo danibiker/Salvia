@@ -525,11 +525,26 @@ Options > Audio
 | Option | What it does |
 | --- | --- |
 | **MIDI synthesizer** | Turns it on or off |
-| **SoundFont (.sf2)** | Which bank to use, from the ones found in `system` |
+| **SoundFont (.sf2)** | Which bank to use, from the ones found in `system`. It also lists **Roland SC-55** when its ROMs are found (see below) |
 | **MIDI volume** | Music volume, in 10% steps |
 | **MIDI module** | Leave it on *Auto-detect*. See the MT-32 note below |
 
 On Xbox 360 prefer a small bank. A SoundFont takes about **twice its file size in RAM** while you play, so a 50 MB one costs around 100 MB. It is only loaded when a game actually needs MIDI, so it costs nothing for the rest of the systems.
+
+### Roland SC-55
+Instead of a SoundFont, Salvia can emulate a real **Roland SC-55** sound module (Nuked-SC55). It runs the unit's original firmware, so the music sounds like the real hardware, GS effects and custom setups included. You need the dumps of the unit's ROMs; the frontend does not include them. Use the same file names as px68k, prboom and DOSBox-Pure:
+
+| Model | Files |
+| --- | --- |
+| SC-55mkII | `rom1.bin` `rom2.bin` `rom_sm.bin` `waverom1.bin` `waverom2.bin` |
+| SC-55 | `sc55_rom1.bin` `sc55_rom2.bin` `sc55_waverom1.bin` `sc55_waverom2.bin` `sc55_waverom3.bin` |
+
+Copy them into `system`, or into one of these subfolders of it: `sc55`, `SC-55`, `roland`, `nuked`, `prboom`, `prboom/sc55`, `prboom/SC-55`, `prboom/roland` or `prboom/nuked`. If a complete set is found, **Roland SC-55** or **Roland SC-55mkII** appears in the **SoundFont (.sf2)** list, next to your `.sf2` files.
+
+A few things to know:
+- The module gets the game's MIDI stream untouched, exactly like a real one plugged in. The **MIDI module** option and the MT-32 translation described below only apply to SoundFonts.
+- Emulating the unit is much heavier than a SoundFont, so it runs on its own CPU thread and never slows the emulator down. If that thread cannot keep up, you will hear gaps in the music, not a slower game.
+- If you change the option while a song is playing, the module picks up the song where it was.
 
 ### Turning it on in each core
 

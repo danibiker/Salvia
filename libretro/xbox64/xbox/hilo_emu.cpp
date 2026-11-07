@@ -58,7 +58,7 @@ extern "C" {
  * en el nucleo 0: productor y consumidor en nucleos DISTINTOS.  HW4 y HW5
  * son de Salvia (IO y audio SDL).  Es el HW que usaba el hilo grafico
  * antiguo.  `[HILO] hw=` lo comprueba en ejecucion. */
-#define HILO_HW        2
+#define HILO_HW        1
 
 /* ====================================================================== */
 /* Estado.  Cada variable tiene UN escritor; se anota cual.               */
@@ -603,7 +603,8 @@ int hilo_emu_crear(void)
     xbox64_log_line("[HILO] traza: crear: prioridad y HW...");
 #endif
     SetThreadPriority(s_hilo, THREAD_PRIORITY_NORMAL);
-    XSetThreadProcessor(s_hilo, HILO_HW);
+	//Run the `process in the current thread
+    //XSetThreadProcessor(s_hilo, HILO_HW);
 #if XBOX64_TRAZAS
     xbox64_log_line("[HILO] traza: crear: ResumeThread...");
 #endif
