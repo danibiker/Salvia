@@ -432,7 +432,7 @@ Usb0:\Roms
     ├── DOOM.WAD
     ├── DOOM2.WAD
     ├── PLUTONIA.WAD
-    ├── SIGIL.WAD
+    ├── SIGIL_COMPAT.WAD
     └── TNT.WAD
 ```
 ## Retroachievements
