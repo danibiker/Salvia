@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdint.h>
-
 #include <stdlib.h>   /* calloc / free        */
 #include <errno.h>    /* EEXIST               */
 #include <string.h>   /* strcmp               */
+
+#include <utils\logger.h>
+
 #ifdef _XBOX
 #  include <xtl.h>
 #  include <direct.h>   /* _mkdir              */
@@ -13,11 +15,15 @@
 #  include <windows.h>  /* FindFirstFile, etc. */
 #  include <direct.h>   /* _mkdir              */
 #  include <sys/stat.h> /* _stat64             */
-#  include <io.h>        /* ← _chsize_s, _fileno */
+#  include <io.h>       /* _chsize_s, _fileno */
 #else
 #  include <dirent.h>   /* opendir / readdir   */
 #  include <sys/stat.h> /* stat / mkdir        */
 #  include <unistd.h>   /* ftruncate           */
+#endif
+
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define snprintf _snprintf
 #endif
 
 #ifndef RETRO_VFS_FILE_ACCESS_READ

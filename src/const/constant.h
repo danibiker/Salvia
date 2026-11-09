@@ -1,8 +1,5 @@
 #pragma once
 
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include <gfx/gfx_utils.h>
 #include <string>
 #include <sstream>
 #include <cctype> // Para isdigit
@@ -12,6 +9,10 @@
 #include <vector>
 #include <unordered_set>
 #include <stdarg.h>
+
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <gfx/gfx_utils.h>
 
 #include <utils/logger.h>
 #include <font/fonts.h>
@@ -138,6 +139,10 @@ struct Message {
 		ticks = 0;
 		timeout = 0;
 		content = "";
+		rect.x = 0;
+		rect.y = 0;
+		rect.w = 0;
+		rect.h = 0;
 	}
 };
 
@@ -848,7 +853,7 @@ class Constant{
 
 		static void createRectAlphaFilled(SDL_Surface*& selecAlphaRec, SDL_Rect& rectElem, SDL_PixelFormat* format, enumColors color, bool border = false){
 			bool drawWithAlfa = true;
-			#if defined(_XBOX)
+			#if defined(NO_BLEND)
 				drawWithAlfa = false;
 			#endif
 
@@ -862,7 +867,7 @@ class Constant{
 
 				const Uint8 KEY_ALPHA = 180;
 				Uint8 fillColorAlpha = KEY_ALPHA;
-				#if !defined(_XBOX) && !defined(SALVIA_GPU_VIDEO)
+				#if !defined(NO_BLEND) && !defined(SALVIA_GPU_VIDEO)
 					Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
 					SDL_FillRect(rawSurface, nullptr, colorkey);
 					SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
@@ -880,7 +885,7 @@ class Constant{
 				if (border && drawWithAlfa)
 					rect(rawSurface, 0, 0, rectElem.w - 1, rectElem.h - 1, Constant::colors[color].sdlColor);
 
-				#if defined(_XBOX)
+				#if defined(NO_BLEND)
 					//En xbox es demasiado intensivo dibujar transparencias
 					SDL_SetAlpha(rawSurface, SDL_RLEACCEL, 0xFF);
 					selecAlphaRec = rawSurface;
@@ -892,6 +897,79 @@ class Constant{
 						SDL_FreeSurface(rawSurface);
 				#endif
 			}
+		}
+
+		/* Compone 'src' sobre 'dst' respetando el alfa por pixel de 'src' y el alfa
+		 * que ya tenga 'dst' en cada pixel (el fondo semitransparente).
+		 *
+		 * No usamos SDL_BlitSurface para esto porque los blitters con alfa por
+		 * pixel de libSDLx360 (BlitNtoNPixelAlpha, BlitRGBtoRGBPixelAlphaAltivec)
+		 * conservan el alfa del destino en lugar de componerlo: al blitear
+		 * texto/badge sobre un fondo con alfa 0xC0, el texto y el badge acababan
+		 * teniendo ese mismo 0xC0 y se veian transparentes. Haciendo la mezcla
+		 * aqui el resultado no depende del blitter: los pixeles opacos de
+		 * texto/badge quedan con alfa 0xFF y el fondo conserva su 0xC0. */
+		static void blendSurfaceOver(SDL_Surface* src, SDL_Surface* dst, int dstX, int dstY)
+		{
+			if (src == NULL || dst == NULL) return;
+
+			/* Texto y badges son siempre 32bpp ARGB; si alguna vez no lo fueran,
+			 * dejamos que SDL haga el blit normal en vez de leer mal los pixeles. */
+			if (src->format->BytesPerPixel != 4 || dst->format->BytesPerPixel != 4) {
+				SDL_Rect r = { (Sint16)dstX, (Sint16)dstY, (Uint16)src->w, (Uint16)src->h };
+				SDL_BlitSurface(src, NULL, dst, &r);
+				return;
+			}
+
+			int srcX = 0;
+			int srcY = 0;
+			int w = src->w;
+			int h = src->h;
+			if (dstX < 0) { srcX = -dstX; w += dstX; dstX = 0; }
+			if (dstY < 0) { srcY = -dstY; h += dstY; dstY = 0; }
+			if (dstX + w > dst->w) w = dst->w - dstX;
+			if (dstY + h > dst->h) h = dst->h - dstY;
+			if (w <= 0 || h <= 0) return;
+
+			SDL_LockSurface(src);
+			SDL_LockSurface(dst);
+
+			for (int y = 0; y < h; ++y) {
+				Uint32* srow = (Uint32*)((Uint8*)src->pixels + (srcY + y) * src->pitch) + srcX;
+				Uint32* drow = (Uint32*)((Uint8*)dst->pixels + (dstY + y) * dst->pitch) + dstX;
+				for (int x = 0; x < w; ++x) {
+					Uint32 sp = srow[x];
+
+					/* Un color key del origen se ignora, igual que en un blit SDL. */
+					if ((src->flags & SDL_SRCCOLORKEY) && sp == src->format->colorkey)
+						continue;
+
+					Uint8 sr, sg, sb, sa;
+					SDL_GetRGBA(sp, src->format, &sr, &sg, &sb, &sa);
+					if (sa == 0)
+						continue;
+
+					Uint8 dr, dg, db, da;
+					SDL_GetRGBA(drow[x], dst->format, &dr, &dg, &db, &da);
+
+					if (sa == SDL_ALPHA_OPAQUE) {
+						/* Pixel plenamente opaco del texto/badge. */
+						dr = sr; dg = sg; db = sb; da = SDL_ALPHA_OPAQUE;
+					} else {
+						/* Mezcla RGB y compone el alfa sobre el fondo:
+						 * da_nuevo = sa + da_fondo * (255 - sa) / 255. */
+						dr = (Uint8)((sr * sa + dr * (255 - sa)) / 255);
+						dg = (Uint8)((sg * sa + dg * (255 - sa)) / 255);
+						db = (Uint8)((sb * sa + db * (255 - sa)) / 255);
+						da = (Uint8)(sa + (da * (255 - sa)) / 255);
+					}
+
+					drow[x] = SDL_MapRGBA(dst->format, dr, dg, db, da);
+				}
+			}
+
+			SDL_UnlockSurface(dst);
+			SDL_UnlockSurface(src);
 		}
 
 		// Convierte de CP_ACP (ANSI) a UTF-8 si la cadena no es UTF-8 válido

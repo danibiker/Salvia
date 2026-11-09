@@ -310,7 +310,7 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 
         if (game->cache == NULL) {
             // Cache no existe -> renderizar
-			#ifdef _XBOX 
+			#ifdef NO_BLEND 
 			game->cache = Fonts::renderUtf8Solid(fontMenu, line.c_str(), lineTextColor);
 			#else
 			game->cache = Fonts::renderUtf8Blended(fontMenu, line.c_str(), lineTextColor);
@@ -393,7 +393,7 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
 			SDL_FreeSurface(navPath);
 			navPath = NULL;
 		}
-#ifdef _XBOX
+#ifdef NO_BLEND
         SDL_Surface *txtNavPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
 #else
         SDL_Surface *txtNavPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);

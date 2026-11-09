@@ -198,6 +198,7 @@ class GameMenu : public Engine{
 		struct retro_system_av_info getAvInfo();
 		void checkDisplayOptions();
 		void loadBgImageAndTitleEmu();
+		void drawLoadingProgressBar(SDL_Surface*& screen, float progress);
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
@@ -264,6 +265,7 @@ class GameMenu : public Engine{
 		void drawTitle(ListMenu &listMenu, TTF_Font *fontBig);
 		void drawStatusBar(ListMenu &listMenu);
 		void drawSelectedGameAssets(ListMenu &listMenu, GameFile *game);
+		
 		string getAssetsDir(ConfigEmu *emu);
 		std::string reduceWords(const std::string &sentence1, const std::string &sentence2);
 };

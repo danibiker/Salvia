@@ -22,6 +22,7 @@ extern "C"{
 
 cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
 std::string CfgLoader::appliedFileParmsCore;
+const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 CfgLoader::CfgLoader(){
 	sc55ListIndex = -1;

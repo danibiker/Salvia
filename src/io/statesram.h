@@ -240,13 +240,13 @@ class StateSram{
 			}
 		}
 
-		void saveSram(const char* sram_path) {
+		bool saveSram(const char* sram_path, bool bythread = true) {
 			std::size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 			void* data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
-			if (size == 0 || !data) return;
+			if (size == 0 || !data) return false;
 
-			// 1. Comparaci�n con nuestra copia persistente
+			// 1. Comparacion con nuestra copia persistente
 			bool needsSave = (saveContext.g_sram_data_last == NULL) || 
 								(saveContext.g_sram_size_last != size) || 
 								(memcmp(saveContext.g_sram_data_last, data, size) != 0);
@@ -261,11 +261,11 @@ class StateSram{
 				SDL_mutexP(saveContext.g_saveQueue.saveMutex);
 				if (saveContext.g_saveQueue.buffer) {
 					SDL_mutexV(saveContext.g_saveQueue.saveMutex);
-					return;
+					return false;
 				}
 				SDL_mutexV(saveContext.g_saveQueue.saveMutex);
 
-				// 2. Actualizamos nuestra copia de comparaci�n
+				// 2. Actualizamos nuestra copia de comparacion
 				if (saveContext.g_sram_size_last != size) {
 					if (saveContext.g_sram_data_last) free(saveContext.g_sram_data_last);
 					saveContext.g_sram_data_last = malloc(size);
@@ -309,7 +309,7 @@ class StateSram{
 					if (saveContext.g_saveQueue.buffer) {
 						SDL_mutexV(saveContext.g_saveQueue.saveMutex);
 						free(hiloBuffer);
-						return;
+						return false;
 					}
 
 					saveContext.g_saveQueue.buffer = hiloBuffer;
@@ -318,9 +318,11 @@ class StateSram{
 					saveContext.g_saveQueue.action = SAVE_SRAM;
 					SDL_mutexV(saveContext.g_saveQueue.saveMutex);
 
-					SDL_SemPost(saveContext.g_saveQueue.semaphore);
+					if (bythread)
+						SDL_SemPost(saveContext.g_saveQueue.semaphore);
 				}
 			}
+			return needsSave;
 		}
 
 		/** 
@@ -547,6 +549,88 @@ class StateSram{
 			SaveData* saveData; // O el tipo exacto que sea g_saveQueue
 		};
 
+		void saveSramImmediatly(SaveData* sd = NULL){
+			if (sd == NULL){
+				sd = &saveContext.g_saveQueue;
+				if (sd == NULL)
+					return;
+			}
+
+			// Copiamos TODOS los datos necesarios dentro del mutex
+			SDL_mutexP(sd->saveMutex);
+			void* localBuffer = sd->buffer;
+			std::size_t localSize = sd->bufferSize;
+			std::string localPath = sd->targetPath;
+			SDL_mutexV(sd->saveMutex);
+
+			if (localBuffer) {
+				bool ret = guardar_archivo_raw(Constant::checkPath(localPath).c_str(), localBuffer, localSize);
+				free(localBuffer); // Ahora es seguro porque es una copia dedicada
+
+				SDL_mutexP(sd->saveMutex);
+				if (!ret)
+					sd->toastMessage = LanguageManager::instance()->get("msg.error.sram") + localPath;
+				sd->buffer = NULL;
+				sd->bufferSize = 0;
+				sd->action = SAVE_NONE; // IMPORTANTE: Resetea la accion
+				SDL_mutexV(sd->saveMutex);
+			}
+		}
+
+		void saveStateImmediately(SaveData* sd = NULL){
+			if (sd == NULL){
+				sd = &saveContext.g_saveQueue;
+				if (sd == NULL)
+					return;
+			}
+
+			// Copiamos TODOS los datos necesarios dentro del mutex
+			SDL_mutexP(sd->saveMutex);
+			void* localBuffer = sd->buffer;
+			std::size_t localSize = sd->bufferSize;
+			std::string localPath = sd->targetPath;
+			unsigned width = sd->width;
+			unsigned height = sd->height;
+			int bpp = sd->bpp;
+			void* localScreenshot = sd->screenshot;
+			int localSlot = sd->slot;
+			SDL_mutexV(sd->saveMutex);
+
+			if (localBuffer) {
+				sd->savingProgress = 0;
+				sd->savingMessage = LanguageManager::instance()->get("msg.state.saving");
+				std::string statePath = Constant::checkPath(localPath);
+				if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize, sd->savingProgress)){
+					if (localScreenshot != NULL) {
+						std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
+						GuardarCapturaPNG(imgPath, (uint8_t*)localScreenshot, width, height, bpp);
+						sd->screenshotSaved = true;
+						sd->toastMessage = LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot);
+					} else {
+						sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT;
+					}
+				} else {
+					sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate") + std::string(strerror(errno)) + "; " + localPath;
+				}
+
+				free(localBuffer); // Ahora es seguro porque es una copia dedicada
+				delete[] (uint8_t*)localScreenshot; // Liberar memoria de imagen
+
+				SDL_mutexP(sd->saveMutex);
+				sd->buffer = NULL;
+				sd->bufferSize = 0;
+				/* Y el puntero de la captura TAMBIEN, que se acaba de
+					* liberar: dejarlo colgando era la mitad del problema que
+					* arregla el `else` de saveState(). */
+				sd->screenshot = NULL;
+				sd->width = 0;
+				sd->height = 0;
+				sd->action = SAVE_NONE; // IMPORTANTE: Resetea la accion
+				sd->savingMessage.clear();
+				SDL_mutexV(sd->saveMutex);
+			}
+		}
+
 		// Funcion que ejecuta el hilo
 		int SaveThreadFunc(void* data) {
 			SaveData* sd = (SaveData*)data;
@@ -554,69 +638,18 @@ class StateSram{
 				SDL_SemWait(sd->semaphore);
 				if (!sd->running) break;
 
-				// Copiamos TODOS los datos necesarios dentro del mutex
-				dirutil dir;
 				SDL_mutexP(sd->saveMutex);
 				ThreadAction actionActual = sd->action;
-				std::string localPath = sd->targetPath; // Copia local segura
-				void* localBuffer = sd->buffer;
-				std::size_t localSize = sd->bufferSize;
-				void* localScreenshot = sd->screenshot;
-				unsigned width = sd->width;
-				unsigned height = sd->height;
-				int bpp = sd->bpp;
-				int localSlot = sd->slot;
 				SDL_mutexV(sd->saveMutex);
 
 				switch (actionActual) {
 					case SAVE_SRAM:
-						if (localBuffer) {
-							bool ret = guardar_archivo_raw(Constant::checkPath(localPath).c_str(), localBuffer, localSize);
-							free(localBuffer); // Ahora es seguro porque es una copia dedicada
-
-							SDL_mutexP(sd->saveMutex);
-							if (!ret)
-								sd->toastMessage = LanguageManager::instance()->get("msg.error.sram") + localPath;
-							sd->buffer = NULL;
-							sd->bufferSize = 0;
-							sd->action = SAVE_NONE; // IMPORTANTE: Resetea la accion
-							SDL_mutexV(sd->saveMutex);
-						}
+						saveSramImmediatly(sd);
 						break;
 					case SAVE_STATE:
-						if (localBuffer) {
-							sd->savingProgress = 0;
-							sd->savingMessage = LanguageManager::instance()->get("msg.state.saving");
-							std::string statePath = Constant::checkPath(localPath);
-							if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize, sd->savingProgress)){
-								if (localScreenshot != NULL) {
-									std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
-									GuardarCapturaPNG(imgPath, (uint8_t*)localScreenshot, width, height, bpp);
-									sd->screenshotSaved = true;
-									sd->toastMessage = LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot);
-								} else {
-									sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT;
-								}
-							} else {
-								sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate") + std::string(strerror(errno)) + "; " + localPath;
-							}
-
-							free(localBuffer); // Ahora es seguro porque es una copia dedicada
-							delete[] (uint8_t*)localScreenshot; // Liberar memoria de imagen
-
-							SDL_mutexP(sd->saveMutex);
-							sd->buffer = NULL;
-							sd->bufferSize = 0;
-							/* Y el puntero de la captura TAMBIEN, que se acaba de
-								* liberar: dejarlo colgando era la mitad del problema que
-								* arregla el `else` de saveState(). */
-							sd->screenshot = NULL;
-							sd->width = 0;
-							sd->height = 0;
-							sd->action = SAVE_NONE; // IMPORTANTE: Resetea la accion
-							sd->savingMessage.clear();
-							SDL_mutexV(sd->saveMutex);
-						}
+						saveStateImmediately(sd);
+						break;
+					default:
 						break;
 				}
 			}
@@ -637,10 +670,10 @@ class StateSram{
 			saveContext.g_saveQueue.running = true;
 			saveContext.g_saveQueue.semaphore = SDL_CreateSemaphore(0);
 
-		// 1. Creamos y rellenamos los argumentos en el Heap
-		StateSram::ThreadArgs* args = new StateSram::ThreadArgs();
-		args->instance = this;
-		args->saveData = &saveContext.g_saveQueue;
+			// 1. Creamos y rellenamos los argumentos en el Heap
+			StateSram::ThreadArgs* args = new StateSram::ThreadArgs();
+			args->instance = this;
+			args->saveData = &saveContext.g_saveQueue;
 
 		#if defined(_XBOX) || defined(_XBOX360)
 			// 1 MiB de stack: sobra para deflate (ventana nivel 1 ~64 KiB)
@@ -648,8 +681,8 @@ class StateSram{
 			saveContext.g_saveQueue.thread = CreateThread(
 				NULL,                       // security
 				0,				            // stack size (1 MiB)
-				&StateSram::saveThreadXbox,        // thread proc
-				args,									 // parameter
+				&StateSram::saveThreadXbox, // thread proc
+				args,						// parameter
 				CREATE_SUSPENDED,			// creation flags (create suspended)
 				NULL                        // thread id (not needed)
 			);

@@ -59,6 +59,9 @@ const std::string TITLE_EMU_FILENAME = "title.png";
 const std::string PASS_MASK = "****";
 const std::string DEFAULT_LANG = "en";
 
+const std::string Constant::MAME_SYS_ID = "75";
+const std::string Constant::WHITESPACE = " \n\r\t";
+
 // Caracteres que queremos sustituir por un espacio (para no pegar palabras)
 const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 
 

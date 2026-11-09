@@ -1,5 +1,8 @@
 #pragma once
 
+#define PICOJSON_USE_RVALUE_REFERENCE 0   // VS2010 no soporta noexcept (ver scrapper.cpp)
+#include <http/picojson.h>
+
 // Logica de red y resolucion de ficheros .cht (localizar / descargar el .cht correcto),
 // extraida de salvia.cpp para separar responsabilidades.
 //
@@ -17,6 +20,10 @@ static float         g_cheatProgress = 0.0f;   // 0..1 (por transferencia); lo e
 static volatile long g_cheatStage    = 0;      // paso actual (CHEAT_STAGE_*)
 static char          g_cheatResult[520] = {0}; // ruta del .cht descargado (o vacio)
 static char          g_cheatSourceName[260] = {0}; // nombre REAL del .cht en GitHub (basename)
+// CRC32 de la ROM cargada (0 si desconocido). Para resolver el .cht por hash via .rdb.
+uint32_t g_currentRomCrc = 0;
+
+extern GameMenu *gameMenu;
 
 // Guarda el nombre real (basename) del .cht elegido en GitHub, para mostrarlo en el menu de
 // cheats (el contenido se guarda localmente con nombre de hash: ver cheatHashedPath).
@@ -406,7 +413,7 @@ std::string downloadCheatWithProgress(){
 			Fonts::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTSMALL),
 				LanguageManager::instance()->get(cheatStageKey(InterlockedExchangeAdd(&g_cheatStage, 0))).c_str(),
 				0, -fSmall, true, true, Constant::colors[clWhite].sdlColor, 0);
-			drawLoadingProgressBar(gameMenu->overlay, g_cheatProgress);  // barra + % y hace salviaFlip
+			gameMenu->drawLoadingProgressBar(gameMenu->overlay, g_cheatProgress);  // barra + % y hace salviaFlip
 		}
 		SDL_Delay(30);
 	}

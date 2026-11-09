@@ -473,7 +473,7 @@ void TextArea::draw(SDL_Surface *video_page){
 SDL_Rect TextArea::drawTextAreaTransparent(SDL_Surface* surface, TTF_Font* font, t_line& line, int x, int y, SDL_Color color, int bg, JFY_TYPE& justifyHelper){
 	if (font && !line.text.empty()) {
 		if (line.lineSrf == NULL){
-			#ifdef _XBOX 
+			#ifdef NO_BLEND 
 			line.lineSrf = Fonts::renderUtf8Solid(font, line.text.c_str(), color);
 			#else
 			line.lineSrf = Fonts::renderUtf8Blended(font, line.text.c_str(), color);

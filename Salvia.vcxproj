@@ -7386,7 +7386,6 @@
     <ClInclude Include="src\libretro\libretro.h" />
     <ClInclude Include="src\libretro\vfs.h" />
     <ClInclude Include="src\menus\gestormenus.h" />
-    <ClInclude Include="src\salvia.h" />
     <ClInclude Include="src\so\launcher.h" />
     <ClInclude Include="src\so\soutils.h" />
     <ClInclude Include="src\uiobjects\image.h" />

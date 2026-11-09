@@ -488,6 +488,7 @@ private:
 	//Lista de lenguajes que soporta el menu. Se rellena al iniciar la aplicacion
 	std::vector<std::string> menuLangs;
 	int menuLangsIdx;
+	SDL_Surface *selecAlphaRec;
 
 
 	int getScreenNumLines();

@@ -5,16 +5,9 @@
 #include <io/keyboard.h>
 #include <video/HLSLBackground.h>
 
-#ifdef WIN
-	#include <video/win_d3d9.h>
-#endif
-
-#ifdef _XBOX
-	extern "C" struct IDirect3DDevice9* D3D_Device;
-#endif
-
 extern int launchGame(std::string rompath, bool tmpDelete=true);
 extern t_rom_paths romPaths;
+extern GameMenu *gameMenu;
 std::vector<struct MenuStatus> historyNavigation;
 
 /**
@@ -559,7 +552,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 /**
  * Shows the background and all the menu elements
  */
-void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
+void updateMenuScreen(TileMap*& tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
 	static uint32_t lastTime = SDL_GetTicks();
 	cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
 	ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
@@ -574,9 +567,9 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 			//redibujar el menu con transparencia sobre el fondo GPU.
 			gameMenu->clearOverlay();
 		} else if (listMenu.animateBkg && bgType == BG_TILES){
-			tileMap.draw(gameMenu->overlay);
+			tileMap->draw(gameMenu->overlay);
 			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
-				tileMap.incSpeed();
+				tileMap->incSpeed();
 			}
 		} else if (bgType == BG_IMAGE && gameMenu->bg_image.hasImage()){
 			gameMenu->bg_image.printImage(gameMenu->overlay);

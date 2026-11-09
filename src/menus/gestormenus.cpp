@@ -81,6 +81,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 
 	tmpTextOption = NULL;
 	menuLangsIdx = 0;
+	selecAlphaRec = NULL;
 }
 
 GestorMenus::~GestorMenus() {
@@ -102,6 +103,10 @@ GestorMenus::~GestorMenus() {
 
 	if (tmpTextOption != NULL){
 		SDL_FreeSurface(tmpTextOption);
+	}
+
+	if (selecAlphaRec != NULL){
+		SDL_FreeSurface(selecAlphaRec);
 	}
 
 	imageSavestate.closeImage();
@@ -2298,7 +2303,18 @@ void GestorMenus::draw(SDL_Surface *video_page){
     //a letter is not fixed.
     const float pixelsScrollFps = std::max(ceil(face_h / (float)textFps), 1.0f);
 	int listPos = this->iniPos -1;
+	
+	//Create or re-create the alpha rect only when needed
+	SDL_Rect rectSelElem = {0, 0, this->getW() - marginX, face_h};
+	if (selecAlphaRec == NULL){
+		Constant::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
+	} else if (selecAlphaRec->w != rectSelElem.w || selecAlphaRec->h != rectSelElem.h){
+		SDL_FreeSurface(selecAlphaRec);
+		selecAlphaRec = NULL;
+		Constant::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
+	}
 
+	//Drawing the menu options
 	for (int i=this->iniPos; i < this->endPos && i < (int)this->menuActual->opciones.size(); ++i){
         const auto& option = this->menuActual->opciones.at(i);
 
@@ -2369,14 +2385,15 @@ void GestorMenus::draw(SDL_Surface *video_page){
         //Drawing a faded background selection rectangle
         if (listPos == this->curPos){
             int y = this->getY() + fontHeightRect;
-            //Gaining some extra fps when the screen resolution is low
 			SDL_Rect rectElem = {this->getX(), y, this->getW() - marginX, face_h};
+			
             if (video_page->h >= 480){
-				DrawRectAlpha(video_page, rectElem, Constant::colors[clBkgMenu].sdlColor, 190);
+				SDL_BlitSurface(selecAlphaRec, NULL, video_page, &rectElem);
             } else {
+				//Gaining some extra fps when the screen resolution is low
                 lineTextColor = Constant::colors[clWhite].sdlColor;
+				rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, Constant::colors[clBkgMenu].sdlColor);
             }
-			rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, Constant::colors[clBkgMenu].sdlColor);
         }
         
 		int marginIco = 0;

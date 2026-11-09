@@ -370,9 +370,6 @@
     <ClInclude Include="src\dischelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\salvia.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\image\icons.h">
       <Filter>Header Files</Filter>
     </ClInclude>
