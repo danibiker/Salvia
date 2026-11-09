@@ -95,6 +95,8 @@ static int osk_select_prev = 0;
 static void reevaluate_variables_io_sound(bool setToMixer);
 static void check_variables(bool can_change_machine_type);
 
+void retro_unload_game(void);
+
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
 void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
@@ -776,6 +778,9 @@ void retro_init(void)
 #ifdef LOG_PERFORMANCE
    environ_cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf_cb);
 #endif
+   /* Make retro_init() idempotent in case the frontend reinitializes the core
+    * without a matching retro_deinit(). */
+   memZipFileSystemDestroy();
    memZipFileSystemCreate(1);
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
@@ -787,6 +792,14 @@ void retro_deinit(void)
 #ifdef LOG_PERFORMANCE
    perf_cb.perf_log();
 #endif
+
+   /* Some frontends call retro_deinit without retro_unload_game. Make sure
+    * the emulator resources (and the dangling properties/mixer pointers) are
+    * released before the next core instance is initialized. */
+   if (properties != NULL || image_buffer != NULL || mixer != NULL)
+      retro_unload_game();
+
+   memZipFileSystemDestroy();
 
    libretro_supports_bitmasks = false;
 }
@@ -1170,6 +1183,12 @@ bool retro_load_game(const struct retro_game_info *info)
 
    if (!info && log_cb)
       log_cb(RETRO_LOG_INFO, "Starting core without content\n");
+
+   /* Defensive reset: if a previous load failed halfway through and the
+    * frontend did not unload it, release the leftovers before creating the new
+    * emulator state. */
+   if (properties != NULL || image_buffer != NULL || mixer != NULL)
+      retro_unload_game();
 
    image_buffer               =  (uint16_t*)malloc(FB_MAX_LINE_WIDTH*FB_MAX_LINES*sizeof(uint16_t));
    image_buffer_base_width    =  272;
@@ -1920,9 +1939,19 @@ void retro_unload_game(void)
 {
    unmountDiskOverlay(0);
 
+   /* Stop the emulated machine first. emulatorStop() destroys the machine and,
+    * in the libretro build, the board devices/timers created by boardRun().
+    * Without this the next retro_load_game() would overwrite live allocations
+    * and leave dangling pointers behind. */
+   emulatorStop();
+   emulatorExit();
+
    if (image_buffer)
       free(image_buffer);
-   
+
+   if (mixer)
+      mixerDestroy(mixer);
+
    if (properties)
       propDestroy(properties);
 
@@ -1930,6 +1959,24 @@ void retro_unload_game(void)
    image_buffer_base_width    = 0;
    image_buffer_current_width = 0;
    image_buffer_height        = 0;
+
+   /* Do not leave dangling pointers around: check_variables() is called at the
+    * beginning of the next retro_load_game(), before properties/mixer are
+    * recreated, and would otherwise write into freed memory. */
+   mixer      = NULL;
+   properties = NULL;
+
+   /* Reset per-content state so nothing from the previous game leaks into the
+    * next one. */
+   disk_index = 0;
+   disk_images = 0;
+   disk_inserted = false;
+   memset(disk_paths, 0, sizeof(disk_paths));
+   initial_disk_index = 0;
+   initial_disk_path[0] = '\0';
+   base_dir[0] = '\0';
+   osk_select_prev = 0;
+   vkbd_active = 0;
 }
 
 unsigned retro_get_region(void)

@@ -1,0 +1,481 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\libretro.c" />
+    <ClCompile Include="..\Src\Libretro\Dialog.c" />
+    <ClCompile Include="..\Src\Libretro\Event.c" />
+    <ClCompile Include="..\Src\Libretro\File.c" />
+    <ClCompile Include="..\Src\Libretro\Glob.c" />
+    <ClCompile Include="..\Src\Libretro\Input.c" />
+    <ClCompile Include="..\Src\Libretro\Menu.c" />
+    <ClCompile Include="..\Src\Libretro\Midi.c" />
+    <ClCompile Include="..\Src\Libretro\Notifications.c" />
+    <ClCompile Include="..\Src\Libretro\Printer.c" />
+    <ClCompile Include="..\Src\Libretro\Sound.c" />
+    <ClCompile Include="..\Src\Libretro\Timer.c" />
+    <ClCompile Include="..\Src\Libretro\Uart.c" />
+    <ClCompile Include="..\Src\Libretro\VideoIn.c" />
+    <ClCompile Include="..\Src\Libretro\Eth.c" />
+    <ClCompile Include="..\Src\Libretro\Cdrom.c" />
+    <ClCompile Include="..\Src\Libretro\Mouse.c" />
+    <ClCompile Include="..\Src\Libretro\Emulator.c" />
+    <ClCompile Include="..\Src\Libretro\libretro-graph.c" />
+    <ClCompile Include="..\Src\Libretro\libretro-vkbd.c" />
+    <ClCompile Include="..\Src\Common\ArrayList.c" />
+    <ClCompile Include="..\Src\Bios\Patch.c" />
+    <ClCompile Include="..\Src\Unzip\unzip.c" />
+    <ClCompile Include="..\Src\Unzip\ioapi.c" />
+    <ClCompile Include="..\Src\Unzip\zip.c" />
+    <ClCompile Include="..\Src\Memory\AtmelPerom.c" />
+    <ClCompile Include="..\Src\Memory\AmdFlash.c" />
+    <ClCompile Include="..\Src\Memory\DeviceManager.c" />
+    <ClCompile Include="..\Src\Memory\IoPort.c" />
+    <ClCompile Include="..\Src\Memory\MegaromCartridge.c" />
+    <ClCompile Include="..\Src\Memory\MegaSCSIsub.c" />
+    <ClCompile Include="..\Src\Memory\ram1kBMirrored.c" />
+    <ClCompile Include="..\Src\Memory\ramMapper.c" />
+    <ClCompile Include="..\Src\Memory\ramMapperIo.c" />
+    <ClCompile Include="..\Src\Memory\ramNormal.c" />
+    <ClCompile Include="..\Src\Memory\RomLoader.c" />
+    <ClCompile Include="..\Src\Memory\romMapperA1FM.c" />
+    <ClCompile Include="..\Src\Memory\romMapperA1FMModem.c" />
+    <ClCompile Include="..\Src\Memory\romMapperActivisionPcb.c" />
+    <ClCompile Include="..\Src\Memory\romMapperArc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperASCII16.c" />
+    <ClCompile Include="..\Src\Memory\romMapperASCII16nf.c" />
+    <ClCompile Include="..\Src\Memory\romMapperASCII16sram.c" />
+    <ClCompile Include="..\Src\Memory\romMapperASCII8.c" />
+    <ClCompile Include="..\Src\Memory\romMapperASCII8sram.c" />
+    <ClCompile Include="..\Src\Memory\romMapperBasic.c" />
+    <ClCompile Include="..\Src\Memory\romMapperBeerIDE.c" />
+    <ClCompile Include="..\Src\Memory\romMapperBunsetu.c" />
+    <ClCompile Include="..\Src\Memory\romMapperCasette.c" />
+    <ClCompile Include="..\Src\Memory\romMapperCrossBlaim.c" />
+    <ClCompile Include="..\Src\Memory\romMapperCvMegaCart.c" />
+    <ClCompile Include="..\Src\Memory\romMapperDisk.c" />
+    <ClCompile Include="..\Src\Memory\romMapperDooly.c" />
+    <ClCompile Include="..\Src\Memory\romMapperDRAM.c" />
+    <ClCompile Include="..\Src\Memory\romMapperDumas.c" />
+    <ClCompile Include="..\Src\Memory\romMapperF4device.c" />
+    <ClCompile Include="..\Src\Memory\romMapperFMPAC.c" />
+    <ClCompile Include="..\Src\Memory\romMapperFMPAK.c" />
+    <ClCompile Include="..\Src\Memory\romMapperPAC.c" />
+    <ClCompile Include="..\Src\Memory\romMapperFmDas.c" />
+    <ClCompile Include="..\Src\Memory\romMapperForteII.c" />
+    <ClCompile Include="..\Src\Memory\romMapperGIDE.c" />
+    <ClCompile Include="..\Src\Memory\romMapperGoudaSCSI.c" />
+    <ClCompile Include="..\Src\Memory\romMapperGameMaster2.c" />
+    <ClCompile Include="..\Src\Memory\romMapperGameReader.c" />
+    <ClCompile Include="..\Src\Memory\romMapperHalnote.c" />
+    <ClCompile Include="..\Src\Memory\romMapperHarryFox.c" />
+    <ClCompile Include="..\Src\Memory\romMapperHolyQuran.c" />
+    <ClCompile Include="..\Src\Memory\romMapperJoyrexPsg.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKanji.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKanji12.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKoei.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonami4.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonami4nf.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonami5.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonamiKeyboardMaster.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonamiSynth.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKonamiWordPro.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKorean126.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKorean80.c" />
+    <ClCompile Include="..\Src\Memory\romMapperKorean90.c" />
+    <ClCompile Include="..\Src\Memory\romMapperLodeRunner.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMajutsushi.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMatraINK.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMegaRAM.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMegaFlashRomScc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMicrosol.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMicrosolVmx80.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMoonsound.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMsxAudio.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMsxDos2.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMsxMusic.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMsxPrn.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMsxRs232.c" />
+    <ClCompile Include="..\Src\Memory\romMapperMuPack.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNational.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNationalFdc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNet.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNettouYakyuu.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNms1210Rs232.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNms8280VideoDa.c" />
+    <ClCompile Include="..\Src\Memory\romMapperNormal.c" />
+    <ClCompile Include="..\Src\Memory\romMapperObsonet.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeBios.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeMegaRam.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeModule.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodePsg.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeSaveRam.c" />
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeSlotManager.c" />
+    <ClCompile Include="..\Src\Memory\romMapperPanasonic.c" />
+    <ClCompile Include="..\Src\Memory\romMapperPhilipsFdc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperPlain.c" />
+    <ClCompile Include="..\Src\Memory\romMapperPlayBall.c" />
+    <ClCompile Include="..\Src\Memory\romMapperRType.c" />
+    <ClCompile Include="..\Src\Memory\romMapperS1990.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSCCplus.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSegaBasic.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSf7000Ipl.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSfg05.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSg1000.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSg1000Castle.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSg1000RamExpander.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSC3000MultiCart.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSonyHBI55.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSonyHBIV1.c" />
+    <ClCompile Include="..\Src\Memory\romMapperStandard.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSunriseIDE.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Fdc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Prn.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Rs232.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi328RsIDE.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi727.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi707Fdc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi738Fdc.c" />
+    <ClCompile Include="..\Src\Memory\romMapperSvi80Col.c" />
+    <ClCompile Include="..\Src\Memory\romMapperTC8566AF.c" />
+    <ClCompile Include="..\Src\Memory\romMapperTurboRPcm.c" />
+    <ClCompile Include="..\Src\Memory\romMapperTurboRTimer.c" />
+    <ClCompile Include="..\Src\Memory\SlotManager.c" />
+    <ClCompile Include="..\Src\Memory\sramMapperMatsuchita.c" />
+    <ClCompile Include="..\Src\Memory\sramMapperS1985.c" />
+    <ClCompile Include="..\Src\Memory\sramMapperEseSCC.c" />
+    <ClCompile Include="..\Src\Memory\sramMapperMegaSCSI.c" />
+    <ClCompile Include="..\Src\Memory\sramLoader.c" />
+    <ClCompile Include="..\Src\Debugger\DebugDeviceManager.c" />
+    <ClCompile Include="..\Src\Debugger\Debugger.c" />
+    <ClCompile Include="..\Src\Media\Crc32Calc.c" />
+    <ClCompile Include="..\Src\VideoChips\CRTC6845.c" />
+    <ClCompile Include="..\Src\VideoChips\VDP.c" />
+    <ClCompile Include="..\Src\VideoChips\V9938.c" />
+    <ClCompile Include="..\Src\VideoChips\VideoManager.c" />
+    <ClCompile Include="..\Src\Z80\R800.c">
+      <!-- Sin /GL en Xbox 360: con LTCG el compilador del XDK da un error interno (C1001) generando el codigo de este fichero. -->
+      <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\Src\Z80\R800SaveState.c" />
+    <ClCompile Include="..\Src\Z80\R800Debug.c" />
+    <ClCompile Include="..\Src\IoDevice\Casette.c" />
+    <ClCompile Include="..\Src\IoDevice\DiskOverlay.c" />
+    <ClCompile Include="..\Src\IoDevice\DirAsDisk.c" />
+    <ClCompile Include="..\Src\IoDevice\Disk.c" />
+    <ClCompile Include="..\Src\IoDevice\FdcAudio.c" />
+    <ClCompile Include="..\Src\IoDevice\ft245.c" />
+    <ClCompile Include="..\Src\IoDevice\HarddiskIDE.c" />
+    <ClCompile Include="..\Src\IoDevice\I8250.c" />
+    <ClCompile Include="..\Src\IoDevice\I8251.c" />
+    <ClCompile Include="..\Src\IoDevice\I8254.c" />
+    <ClCompile Include="..\Src\IoDevice\I8255.c" />
+    <ClCompile Include="..\Src\IoDevice\Led.c" />
+    <ClCompile Include="..\Src\IoDevice\MB89352.c" />
+    <ClCompile Include="..\Src\IoDevice\Microchip24x00.c" />
+    <ClCompile Include="..\Src\IoDevice\Microwire93Cx6.c" />
+    <ClCompile Include="..\Src\IoDevice\MidiIO.c" />
+    <ClCompile Include="..\Src\IoDevice\MSXMidi.c" />
+    <ClCompile Include="..\Src\IoDevice\MsxPPI.c" />
+    <ClCompile Include="..\Src\IoDevice\NEC765.c" />
+    <ClCompile Include="..\Src\IoDevice\PrinterIO.c" />
+    <ClCompile Include="..\Src\IoDevice\RTC.c" />
+    <ClCompile Include="..\Src\IoDevice\rtl8019.c" />
+    <ClCompile Include="..\Src\IoDevice\Sc3000PPI.c" />
+    <ClCompile Include="..\Src\IoDevice\ScsiDevice.c" />
+    <ClCompile Include="..\Src\IoDevice\Sf7000PPI.c" />
+    <ClCompile Include="..\Src\IoDevice\sl811hs.c" />
+    <ClCompile Include="..\Src\IoDevice\SunriseIDE.c" />
+    <ClCompile Include="..\Src\IoDevice\SviPPI.c" />
+    <ClCompile Include="..\Src\IoDevice\Switches.c" />
+    <ClCompile Include="..\Src\IoDevice\TC8566AF.c" />
+    <ClCompile Include="..\Src\IoDevice\TurboRIO.c" />
+    <ClCompile Include="..\Src\IoDevice\UartIO.c" />
+    <ClCompile Include="..\Src\IoDevice\WD2793.c" />
+    <ClCompile Include="..\Src\IoDevice\wd33c93.c" />
+    <ClCompile Include="..\Src\IoDevice\WDCRC.c" />
+    <ClCompile Include="..\Src\IoDevice\Z8530.c" />
+    <ClCompile Include="..\Src\Language\LanguageMinimal.c" />
+    <ClCompile Include="..\Src\SoundChips\AudioMixer.c" />
+    <ClCompile Include="..\Src\SoundChips\AY8910.c" />
+    <ClCompile Include="..\Src\SoundChips\DAC.c" />
+    <ClCompile Include="..\Src\SoundChips\Fmopl.c" />
+    <ClCompile Include="..\Src\SoundChips\KeyClick.c" />
+    <ClCompile Include="..\Src\SoundChips\MameVLM5030.c" />
+    <ClCompile Include="..\Src\SoundChips\SamplePlayer.c" />
+    <ClCompile Include="..\Src\SoundChips\SCC.c" />
+    <ClCompile Include="..\Src\SoundChips\VLM5030.c" />
+    <ClCompile Include="..\Src\SoundChips\Y8950.c" />
+    <ClCompile Include="..\Src\SoundChips\Ymdeltat.c" />
+    <ClCompile Include="..\Src\SoundChips\SN76489.c" />
+    <ClCompile Include="..\Src\SoundChips\ym2151.c" />
+    <ClCompile Include="..\Src\SoundChips\MameYM2151.c" />
+    <ClCompile Include="..\Src\SoundChips\MsxPsg.c" />
+    <ClCompile Include="..\Src\Emulator\Actions.c" />
+    <ClCompile Include="..\Src\Emulator\AppConfig.c" />
+    <ClCompile Include="..\Src\Emulator\FileHistory.c" />
+    <ClCompile Include="..\Src\Emulator\LaunchFile.c" />
+    <ClCompile Include="..\Src\Emulator\Properties.c" />
+    <ClCompile Include="..\Src\Utils\IsFileExtension.c" />
+    <ClCompile Include="..\Src\Utils\SaveState.c" />
+    <ClCompile Include="..\Src\Utils\StrcmpNoCase.c" />
+    <ClCompile Include="..\Src\Utils\ScanParse.c" />
+    <ClCompile Include="..\Src\Utils\TokenExtract.c" />
+    <ClCompile Include="..\Src\Utils\IniFileParser.c" />
+    <ClCompile Include="..\Src\Utils\ZipFromMem.c" />
+    <ClCompile Include="..\Src\Board\Board.c" />
+    <ClCompile Include="..\Src\Board\Machine.c" />
+    <ClCompile Include="..\Src\Board\MSX.c" />
+    <ClCompile Include="..\Src\Board\SVI.c" />
+    <ClCompile Include="..\Src\Board\Coleco.c" />
+    <ClCompile Include="..\Src\Board\SG1000.c" />
+    <ClCompile Include="..\Src\Board\Adam.c" />
+    <ClCompile Include="..\Src\Input\CoinDevice.c" />
+    <ClCompile Include="..\Src\Input\ColecoJoystick.c" />
+    <ClCompile Include="..\Src\Input\ColecoSteeringWheel.c" />
+    <ClCompile Include="..\Src\Input\ColecoSuperAction.c" />
+    <ClCompile Include="..\Src\Input\InputEvent.c" />
+    <ClCompile Include="..\Src\Input\JoystickPort.c" />
+    <ClCompile Include="..\Src\Input\MagicKeyDongle.c" />
+    <ClCompile Include="..\Src\Input\MsxArkanoidPad.c" />
+    <ClCompile Include="..\Src\Input\MsxAsciiLaser.c" />
+    <ClCompile Include="..\Src\Input\MsxGunstick.c" />
+    <ClCompile Include="..\Src\Input\MsxJoystick.c" />
+    <ClCompile Include="..\Src\Input\MsxMouse.c" />
+    <ClCompile Include="..\Src\Input\MsxTetrisDongle.c" />
+    <ClCompile Include="..\Src\Input\Sg1000JoyIo.c" />
+    <ClCompile Include="..\Src\Input\Sg1000Joystick.c" />
+    <ClCompile Include="..\Src\Input\SviJoyIo.c" />
+    <ClCompile Include="..\Src\Input\SviJoystick.c" />
+    <ClCompile Include="..\Src\SoundChips\Moonsound.cpp" />
+    <ClCompile Include="..\Src\Memory\romMapperNoWind.cpp" />
+    <ClCompile Include="..\Src\Media\MediaDb.cpp" />
+    <ClCompile Include="..\Src\Media\Sha1.cpp" />
+    <ClCompile Include="..\Src\IoDevice\GameReader.cpp" />
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYM2413.cpp" />
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYM2413_2.cpp" />
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYMF262.cpp" />
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYMF278.cpp" />
+    <ClCompile Include="..\Src\SoundChips\YM2413.cpp" />
+    <ClCompile Include="..\libretro-common\formats\xml\rxml.c" />
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c" />
+    <ClCompile Include="..\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="..\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro-common\time\rtime.c" />
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Src\Z80\R800.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{11BE063A-3E94-4659-9C69-8F454A5F943B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>blueMSX</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level2</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;__LIBRETRO__;SINGLE_THREADED;VIDEO_COLOR_TYPE_RGB565;Z80_CUSTOM_CONFIGURATION</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..;..\libretro-common\include;..\Src\Arch;..\Src\Bios;..\Src\Board;..\Src\BuildInfo;..\Src\Common;..\Src\Debugger;..\Src\Emulator;..\Src\IoDevice;..\Src\Language;..\Src\Media;..\Src\Memory;..\Src\SoundChips;..\Src\Unzip;..\Src\Utils;..\Src\VideoChips;..\Src\VideoRender;..\Src\Z80;..\Src\Input;..\Src\Libretro;..\deps\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_XBOX;__BIG_ENDIAN__;__LIBRETRO__;SINGLE_THREADED;VIDEO_COLOR_TYPE_RGB565;Z80_CUSTOM_CONFIGURATION</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..;..\libretro-common\include;..\Src\Arch;..\Src\Bios;..\Src\Board;..\Src\BuildInfo;..\Src\Common;..\Src\Debugger;..\Src\Emulator;..\Src\IoDevice;..\Src\Language;..\Src\Media;..\Src\Memory;..\Src\SoundChips;..\Src\Unzip;..\Src\Utils;..\Src\VideoChips;..\Src\VideoRender;..\Src\Z80;..\Src\Input;..\Src\Libretro;..\deps\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;__LIBRETRO__;SINGLE_THREADED;VIDEO_COLOR_TYPE_RGB565;Z80_CUSTOM_CONFIGURATION;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..;..\libretro-common\include;..\Src\Arch;..\Src\Bios;..\Src\Board;..\Src\BuildInfo;..\Src\Common;..\Src\Debugger;..\Src\Emulator;..\Src\IoDevice;..\Src\Language;..\Src\Media;..\Src\Memory;..\Src\SoundChips;..\Src\Unzip;..\Src\Utils;..\Src\VideoChips;..\Src\VideoRender;..\Src\Z80;..\Src\Input;..\Src\Libretro;..\deps\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <StringPooling>true</StringPooling>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_XBOX;__BIG_ENDIAN__;__LIBRETRO__;SINGLE_THREADED;VIDEO_COLOR_TYPE_RGB565;Z80_CUSTOM_CONFIGURATION;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..;..\libretro-common\include;..\Src\Arch;..\Src\Bios;..\Src\Board;..\Src\BuildInfo;..\Src\Common;..\Src\Debugger;..\Src\Emulator;..\Src\IoDevice;..\Src\Language;..\Src\Media;..\Src\Memory;..\Src\SoundChips;..\Src\Unzip;..\Src\Utils;..\Src\VideoChips;..\Src\VideoRender;..\Src\Z80;..\Src\Input;..\Src\Libretro;..\deps\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <StringPooling>true</StringPooling>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

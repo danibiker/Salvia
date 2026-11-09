@@ -100,6 +100,14 @@ int boardRewind();
 int boardRewindOne();
 void boardEnableSnapshots(int enable);
 
+#ifdef __LIBRETRO__
+/* Releases the board resources allocated by boardRun(). In the libretro build
+ * boardRun() returns as soon as the board has been created, so the cleanup
+ * normally done at the end of boardRun() has to be performed explicitly when
+ * the content is unloaded. */
+void boardCleanup(void);
+#endif
+
 BoardType boardGetType();
 
 void boardSetMachine(Machine* machine);

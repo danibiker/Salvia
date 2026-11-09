@@ -1743,7 +1743,9 @@ static void ld_sp_xword(R800* r800) {
     r800->regs.SP.B.h = readMem(r800, addr.W);
     r800->regs.SH.W = addr.W;
 }
-
+#ifdef _XBOX
+#pragma optimize( "", off )
+#endif
 static void add_a_a(R800* r800) {
     ADD(r800, r800->regs.AF.B.h); 
 }
@@ -1891,6 +1893,9 @@ static void adc_hl_hl(R800* r800) {
 static void adc_hl_sp(R800* r800) {
     ADCW(r800, r800->regs.SP.W);
 }
+#ifdef _XBOX
+#pragma optimize( "", on )
+#endif
 
 static void sub_a(R800* r800) {
     SUB(r800, r800->regs.AF.B.h);

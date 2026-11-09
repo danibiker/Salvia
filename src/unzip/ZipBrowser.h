@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <minizip/unzip.h>
 #include <direct.h>        // _mkdir (Windows)
+#include <utils/logger.h>
 
 // -----------------------------------------------------------------------
 // Estructuras de resultado
@@ -432,10 +433,25 @@ public:
  
             // --- Entrada encontrada ---
             found = true;
- 
+			
+			int unzipResult = unzOpenCurrentFile(m_hZip);
+
             // Abrir la entrada para descompresion
-            if (unzOpenCurrentFile(m_hZip) != UNZ_OK)
-                return false;
+            if (unzipResult != UNZ_OK){
+				switch (unzipResult){
+					case UNZ_BADZIPFILE:
+						LOG_ERROR("Unzip error: Bad zip file");
+						break;
+					case UNZ_CRCERROR:
+						LOG_ERROR("Unzip error: CRC error");
+						break;
+					default:
+						LOG_ERROR("Unzip error: %d", unzipResult);
+						break;
+				}
+				return false;
+			}
+                
 			
 #ifdef _XBOX
 			std::replace(destPath.begin(), destPath.end(), '/', '\\');

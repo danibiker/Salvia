@@ -811,6 +811,60 @@ int boardRun(Machine* machine,
     return success;
 }
 
+#ifdef __LIBRETRO__
+/* Counterpart to the early return taken by boardRun() in libretro builds.
+ * boardRun() creates the board (which in turn creates the CPU, devices and
+ * their timers) and then returns without running the emulation loop, so the
+ * cleanup code at the end of boardRun() is never reached. Call this when the
+ * emulated machine is stopped/unloaded so a following load starts from a clean
+ * state instead of overwriting live allocations. */
+void boardCleanup(void)
+{
+    if (!boardRunning)
+        return;
+
+    boardCaptureDestroy();
+
+    if (boardInfo.destroy != NULL) {
+        boardInfo.destroy();
+        boardInfo.destroy = NULL;
+    }
+
+    if (periodicTimer != NULL) {
+        boardTimerDestroy(periodicTimer);
+        periodicTimer = NULL;
+    }
+    if (fdcTimer != NULL) {
+        boardTimerDestroy(fdcTimer);
+        fdcTimer = NULL;
+    }
+    if (syncTimer != NULL) {
+        boardTimerDestroy(syncTimer);
+        syncTimer = NULL;
+    }
+    if (mixerTimer != NULL) {
+        boardTimerDestroy(mixerTimer);
+        mixerTimer = NULL;
+    }
+    if (breakpointTimer != NULL) {
+        boardTimerDestroy(breakpointTimer);
+        breakpointTimer = NULL;
+    }
+    if (stateTimer != NULL) {
+        boardTimerDestroy(stateTimer);
+        stateTimer = NULL;
+        memZipFileSystemDestroy();
+    }
+
+    boardRunning    = 0;
+    boardMixer      = NULL;
+    boardMachine    = NULL;
+    boardDeviceInfo = NULL;
+
+    memset(&boardInfo, 0, sizeof(boardInfo));
+}
+#endif
+
 BoardType boardGetType()
 {
     return boardType & BOARD_MASK;

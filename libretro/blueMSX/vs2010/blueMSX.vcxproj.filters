@@ -1,0 +1,906 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{49E96DAC-EA7A-4D57-8036-D8CA067CC5D8}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="libretro-common">
+      <UniqueIdentifier>{9AC5AD81-81F9-4705-8681-268F1158B9F9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\compat">
+      <UniqueIdentifier>{0B7BC68F-4293-4FAD-8925-997084842221}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\encodings">
+      <UniqueIdentifier>{2032E9CA-C31D-4961-BBD5-B478F240C1CF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\file">
+      <UniqueIdentifier>{FDF40274-5819-4380-8CD5-BC9588DA9944}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\formats">
+      <UniqueIdentifier>{CEE243E1-06F7-4D31-86A9-7D8B8CDA1D16}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\formats\xml">
+      <UniqueIdentifier>{789749A8-AE00-4D00-998C-79AFA65CB914}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\streams">
+      <UniqueIdentifier>{BBBC7F7B-278D-4E10-8EE6-BE1C1CAC2AA3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\string">
+      <UniqueIdentifier>{660845A6-9F7E-4D19-82D0-366B095E9880}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\time">
+      <UniqueIdentifier>{7960CDBE-0547-4F2E-96E0-2314AE0FBFFA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro-common\vfs">
+      <UniqueIdentifier>{137CF9CF-89DC-4BCB-98EF-8C77EBB0D320}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{AF39612C-9FDE-465C-A464-313FC22D43EE}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{8B4D3AA2-D8A4-41EB-AC0D-9FDA065A8568}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Src">
+      <UniqueIdentifier>{30600C21-2EE1-494A-97F0-32F1F0BCE8D7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Bios">
+      <UniqueIdentifier>{6A4A0008-9AC6-46B7-A500-63B8859B733D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Board">
+      <UniqueIdentifier>{A42582CC-A9A2-41F5-9B9A-8DD245B9E431}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Common">
+      <UniqueIdentifier>{D27D8544-01E6-428F-93EE-27E68EF8C6C2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Debugger">
+      <UniqueIdentifier>{575331ED-0544-4422-802C-438A8E8C2849}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Emulator">
+      <UniqueIdentifier>{F7367B3B-25AF-40E4-97CD-4A3FC5F7B1BF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Input">
+      <UniqueIdentifier>{7C4033A8-006A-47AF-A6BF-54D694F2A389}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\IoDevice">
+      <UniqueIdentifier>{E6EFC9B7-209D-4C6A-89BF-B7D95F8F6014}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Language">
+      <UniqueIdentifier>{9C7F64D0-CD09-4242-8794-F61B605B1284}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Libretro">
+      <UniqueIdentifier>{E801563B-C0C3-4580-AAE0-49BE2A0E88AE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Media">
+      <UniqueIdentifier>{F75B0558-98D6-4843-A8E3-9AD766AD059F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Memory">
+      <UniqueIdentifier>{32EDF6B4-3C63-4B19-AC06-586C9D1402DB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\SoundChips">
+      <UniqueIdentifier>{EA216151-F11C-4FBB-9A5E-C3530ADB8A5B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Unzip">
+      <UniqueIdentifier>{CA959E96-EB0E-4EF5-AC12-ABBBCA5E5756}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Utils">
+      <UniqueIdentifier>{3F40A474-3F79-4F34-8B55-C00B04F27473}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\VideoChips">
+      <UniqueIdentifier>{55D9FFDF-EC62-4A13-8BE0-B8C798947667}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Z80">
+      <UniqueIdentifier>{373AB3CA-F401-4471-8B33-D57C32673CC2}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\libretro.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Dialog.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Event.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\File.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Glob.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Input.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Menu.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Midi.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Notifications.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Printer.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Sound.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Timer.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Uart.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\VideoIn.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Eth.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Cdrom.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Mouse.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\Emulator.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\libretro-graph.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Libretro\libretro-vkbd.c">
+      <Filter>Src\Libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Common\ArrayList.c">
+      <Filter>Src\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Bios\Patch.c">
+      <Filter>Src\Bios</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Unzip\unzip.c">
+      <Filter>Src\Unzip</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Unzip\ioapi.c">
+      <Filter>Src\Unzip</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Unzip\zip.c">
+      <Filter>Src\Unzip</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\AtmelPerom.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\AmdFlash.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\DeviceManager.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\IoPort.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\MegaromCartridge.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\MegaSCSIsub.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\ram1kBMirrored.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\ramMapper.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\ramMapperIo.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\ramNormal.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\RomLoader.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperA1FM.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperA1FMModem.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperActivisionPcb.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperArc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperASCII16.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperASCII16nf.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperASCII16sram.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperASCII8.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperASCII8sram.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperBasic.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperBeerIDE.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperBunsetu.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperCasette.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperCrossBlaim.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperCvMegaCart.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperDisk.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperDooly.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperDRAM.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperDumas.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperF4device.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperFMPAC.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperFMPAK.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperPAC.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperFmDas.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperForteII.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperGIDE.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperGoudaSCSI.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperGameMaster2.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperGameReader.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperHalnote.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperHarryFox.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperHolyQuran.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperJoyrexPsg.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKanji.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKanji12.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKoei.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonami4.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonami4nf.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonami5.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonamiKeyboardMaster.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonamiSynth.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKonamiWordPro.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKorean126.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKorean80.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperKorean90.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperLodeRunner.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMajutsushi.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMatraINK.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMegaRAM.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMegaFlashRomScc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMicrosol.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMicrosolVmx80.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMoonsound.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMsxAudio.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMsxDos2.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMsxMusic.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMsxPrn.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMsxRs232.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperMuPack.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNational.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNationalFdc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNet.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNettouYakyuu.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNms1210Rs232.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNms8280VideoDa.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNormal.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperObsonet.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeBios.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeMegaRam.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeModule.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodePsg.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeSaveRam.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperOpcodeSlotManager.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperPanasonic.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperPhilipsFdc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperPlain.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperPlayBall.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperRType.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperS1990.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSCCplus.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSegaBasic.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSf7000Ipl.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSfg05.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSg1000.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSg1000Castle.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSg1000RamExpander.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSC3000MultiCart.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSonyHBI55.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSonyHBIV1.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperStandard.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSunriseIDE.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Fdc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Prn.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi328Rs232.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi328RsIDE.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi727.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi707Fdc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi738Fdc.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperSvi80Col.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperTC8566AF.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperTurboRPcm.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperTurboRTimer.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\SlotManager.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\sramMapperMatsuchita.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\sramMapperS1985.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\sramMapperEseSCC.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\sramMapperMegaSCSI.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\sramLoader.c">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Debugger\DebugDeviceManager.c">
+      <Filter>Src\Debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Debugger\Debugger.c">
+      <Filter>Src\Debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Media\Crc32Calc.c">
+      <Filter>Src\Media</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\VideoChips\CRTC6845.c">
+      <Filter>Src\VideoChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\VideoChips\VDP.c">
+      <Filter>Src\VideoChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\VideoChips\V9938.c">
+      <Filter>Src\VideoChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\VideoChips\VideoManager.c">
+      <Filter>Src\VideoChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Z80\R800.c">
+      <Filter>Src\Z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Z80\R800SaveState.c">
+      <Filter>Src\Z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Z80\R800Debug.c">
+      <Filter>Src\Z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Casette.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\DiskOverlay.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\DirAsDisk.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Disk.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\FdcAudio.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\ft245.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\HarddiskIDE.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\I8250.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\I8251.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\I8254.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\I8255.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Led.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\MB89352.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Microchip24x00.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Microwire93Cx6.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\MidiIO.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\MSXMidi.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\MsxPPI.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\NEC765.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\PrinterIO.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\RTC.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\rtl8019.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Sc3000PPI.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\ScsiDevice.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Sf7000PPI.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\sl811hs.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\SunriseIDE.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\SviPPI.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Switches.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\TC8566AF.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\TurboRIO.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\UartIO.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\WD2793.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\wd33c93.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\WDCRC.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\Z8530.c">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Language\LanguageMinimal.c">
+      <Filter>Src\Language</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\AudioMixer.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\AY8910.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\DAC.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\Fmopl.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\KeyClick.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\MameVLM5030.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\SamplePlayer.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\SCC.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\VLM5030.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\Y8950.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\Ymdeltat.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\SN76489.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\ym2151.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\MameYM2151.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\MsxPsg.c">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Emulator\Actions.c">
+      <Filter>Src\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Emulator\AppConfig.c">
+      <Filter>Src\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Emulator\FileHistory.c">
+      <Filter>Src\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Emulator\LaunchFile.c">
+      <Filter>Src\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Emulator\Properties.c">
+      <Filter>Src\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\IsFileExtension.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\SaveState.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\StrcmpNoCase.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\ScanParse.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\TokenExtract.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\IniFileParser.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Utils\ZipFromMem.c">
+      <Filter>Src\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\Board.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\Machine.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\MSX.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\SVI.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\Coleco.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\SG1000.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Board\Adam.c">
+      <Filter>Src\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\CoinDevice.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\ColecoJoystick.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\ColecoSteeringWheel.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\ColecoSuperAction.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\InputEvent.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\JoystickPort.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MagicKeyDongle.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxArkanoidPad.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxAsciiLaser.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxGunstick.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxJoystick.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxMouse.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\MsxTetrisDongle.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\Sg1000JoyIo.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\Sg1000Joystick.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\SviJoyIo.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Input\SviJoystick.c">
+      <Filter>Src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\Moonsound.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Memory\romMapperNoWind.cpp">
+      <Filter>Src\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Media\MediaDb.cpp">
+      <Filter>Src\Media</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\Media\Sha1.cpp">
+      <Filter>Src\Media</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\IoDevice\GameReader.cpp">
+      <Filter>Src\IoDevice</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYM2413.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYM2413_2.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYMF262.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\OpenMsxYMF278.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Src\SoundChips\YM2413.cpp">
+      <Filter>Src\SoundChips</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\formats\xml\rxml.c">
+      <Filter>libretro-common\formats\xml</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c">
+      <Filter>libretro-common\file</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path.c">
+      <Filter>libretro-common\file</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path_io.c">
+      <Filter>libretro-common\file</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream.c">
+      <Filter>libretro-common\streams</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c">
+      <Filter>libretro-common\streams</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c">
+      <Filter>libretro-common\vfs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\string\stdstring.c">
+      <Filter>libretro-common\string</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\time\rtime.c">
+      <Filter>libretro-common\time</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c">
+      <Filter>libretro-common\encodings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c">
+      <Filter>libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c">
+      <Filter>libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c">
+      <Filter>libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c">
+      <Filter>libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c">
+      <Filter>libretro-common\compat</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Src\Z80\R800.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

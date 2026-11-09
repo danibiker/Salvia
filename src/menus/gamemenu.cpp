@@ -1349,7 +1349,7 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 			if (ret != FS_ZIP_FILE_EXTRACTED){
 				//Error Extract the file trying to remove some special characters
 				LOG_ERROR("Error extracting %s Trying to delete special chars...", extractionPath.c_str());
-				extractionPath = Constant::getTmpDir() + Constant::getFileSep() + Constant::checkPath(internalPath);
+				extractionPath = Constant::getTmpDir() + Constant::getFileSep() + dir.getFileName(Constant::checkPath(internalPath));
 				ret = extractFileFromZip(internalPath, extractionPath, zb, listMenu);
 			}
 

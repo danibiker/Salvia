@@ -241,7 +241,11 @@ void emulatorStart(const char* stateName) {
 }
 
 void emulatorStop() {
-    if (emuState == EMU_STOPPED) {
+    if (emuState == EMU_STOPPED && machine == NULL) {
+#ifdef __LIBRETRO__
+        /* A failed start may still have left board resources behind. */
+        boardCleanup();
+#endif
         return;
     }
 
@@ -252,17 +256,28 @@ void emulatorStop() {
     emuExitFlag = 1;
 
     archMidiEnable(0);
-    machineDestroy(machine);
+
+    if (machine != NULL) {
+        machineDestroy(machine);
+        machine = NULL;
+    }
 
     // Reset active indicators in mixer
-    mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MOONSOUND, 1);
-    mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_YAMAHA_SFG, 1);
-    mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MSXAUDIO, 1);
-    mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MSXMUSIC, 1);
-    mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_SCC, 1);
+    if (mixer != NULL) {
+        mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MOONSOUND, 1);
+        mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_YAMAHA_SFG, 1);
+        mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MSXAUDIO, 1);
+        mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_MSXMUSIC, 1);
+        mixerIsChannelTypeActive(mixer, MIXER_CHANNEL_SCC, 1);
+    }
 
     archEmulationStopNotification();
 
+#ifdef __LIBRETRO__
+    /* boardRun() returns immediately after creating the board in libretro
+     * builds, so release the board devices and timers here. */
+    boardCleanup();
+#endif
 }
 
 

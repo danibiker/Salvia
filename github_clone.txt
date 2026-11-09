@@ -29,6 +29,7 @@ git subtree add --prefix=libretro/prboom https://github.com/libretro/libretro-pr
 git subtree add --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
 git subtree add --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
 git subtree add --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
+git subtree add --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
 
 ###########################################################################################################
 # External libraries
@@ -69,6 +70,7 @@ git subtree pull --prefix=libretro/prboom https://github.com/libretro/libretro-p
 git subtree pull --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
 git subtree pull --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
 git subtree pull --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
+git subtree pull --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
 
 
 ###########################################################################################################

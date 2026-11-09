@@ -58,6 +58,33 @@ std::string limpiarRutaWindows(std::string ruta) {
     return ruta;
 }
 
+//definimos pares de valores con el caracter que hay que reemplazar y la palabra con la que lo reemplazamos
+const char *FORBIDDEN_REPLACE[1][2] = {{"+", "plus"}};
+
+//Esta funcion reemplaza caracteres por otras palabras definidas
+std::string replaceForbiddenChars(std::string cleanPath) {
+//PATH_REPLACE es una opcion de PREPROCESADOR para no depender de codigo estatico
+#ifdef PATH_REPLACE
+	std::string lowPath = cleanPath;
+    std::transform(lowPath.begin(), lowPath.end(), lowPath.begin(), ::tolower);
+	
+    if (lowPath.find(PATH_REPLACE) != std::string::npos) {
+        size_t targetLen = std::strlen(FORBIDDEN_REPLACE[0][0]);      // Longitud de "+"
+        size_t replaceLen = std::strlen(FORBIDDEN_REPLACE[0][1]);     // Longitud de "plus"
+
+        size_t pos = cleanPath.find(FORBIDDEN_REPLACE[0][0]);
+        while (pos != std::string::npos) {
+            std::string oldPath = cleanPath; 
+            cleanPath.replace(pos, targetLen, FORBIDDEN_REPLACE[0][1]);
+            LOG_DEBUG("vfs_open: Modified path %s to %s", oldPath.c_str(), cleanPath.c_str());
+            // Avanza de forma segura sumando la longitud real del reemplazo
+            pos = cleanPath.find(FORBIDDEN_REPLACE[0][0], pos + replaceLen);
+        }
+    }
+#endif
+    return cleanPath;
+}
+
 struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, unsigned hints) {
     if (!path || !*path) return NULL;
     
@@ -65,8 +92,8 @@ struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, uns
     if (mode & RETRO_VFS_FILE_ACCESS_WRITE) mode_str = "wb";
     if (mode & RETRO_VFS_FILE_ACCESS_UPDATE) mode_str = "rb+";
 
-	std::string cleanPath = limpiarRutaWindows(path);
-
+	std::string cleanPath = replaceForbiddenChars(limpiarRutaWindows(path));
+	
 	FILE* fp = fopen(cleanPath.c_str(), mode_str);
     if (!fp) {
         LOG_ERROR("Fallo al abrir archivo: %s", cleanPath.c_str());
