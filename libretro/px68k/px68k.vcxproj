@@ -65,6 +65,7 @@
     <ClCompile Include="libretro\fake.c" />
     <ClCompile Include="libretro\joystick.c" />
     <ClCompile Include="libretro\keyboard.c" />
+    <ClCompile Include="libretro\midi_shadow.c" />
     <ClCompile Include="libretro\mouse.c" />
     <ClCompile Include="libretro\peace.c" />
     <ClCompile Include="libretro\prop.c" />
@@ -139,6 +140,8 @@
     <ClInclude Include="libretro-common\include\compat\msvc.h" />
     <ClInclude Include="libretro-common\include\libretro.h" />
     <ClInclude Include="libretro\compiler.h" />
+    <ClInclude Include="libretro\keytbl.inc" />
+    <ClInclude Include="libretro\midi_shadow.h" />
     <ClInclude Include="libretro_core_options.h" />
     <ClInclude Include="libretro_core_options_intl.h" />
   </ItemGroup>

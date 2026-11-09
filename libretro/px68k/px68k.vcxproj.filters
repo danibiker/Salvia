@@ -138,6 +138,9 @@
     <ClCompile Include="libretro\keyboard.c">
       <Filter>Source Files\libretro</Filter>
     </ClCompile>
+    <ClCompile Include="libretro\midi_shadow.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
     <ClCompile Include="libretro\mouse.c">
       <Filter>Source Files\libretro</Filter>
     </ClCompile>
@@ -270,6 +273,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="libretro\compiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro\keytbl.inc">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro\midi_shadow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
