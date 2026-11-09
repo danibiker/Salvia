@@ -82,6 +82,40 @@ const float framerates[2][2] = {
    { MODE_NORM_COMPAT, MODE_HIGH_COMPAT }
 };
 
+/*
+ * Refresh rate follows the CRTC timing (R00, R04, R20) instead of the two
+ * fixed 61.46/55.46 Hz values: real modes run at e.g. 61.23, 60.46, 59.59,
+ * 57.89 or 53.49 Hz (verified against XM6 type G).
+ *
+ * "actual" is the true rate; with Adjust Frame Rates enabled the frontend is
+ * given a nearby friendlier rate and the audio clock is scaled to match.
+ */
+/* The rates must be exact, not rounded: the sound renderer produces
+ * 44100 * frame_clocks / 10MHz samples per emulated frame and the frontend
+ * consumes 44100 / fps per frame.  Rounding fps to 2 decimals made the two
+ * differ by up to 0.016%, which is a missing sample every few frames and is
+ * heard as crackling. */
+static double px68k_fps_actual(void)
+{
+   return 1e7 / (double)CRTC_FrameClocks();
+}
+
+static double px68k_fps_compat(double actual)
+{
+   if (actual >= 58.0)
+      return 60.0;
+   return floor(actual * 2.0 + 0.5) / 2.0;
+}
+
+static double px68k_current_framerate(void)
+{
+   double a = px68k_fps_actual();
+   return Config.AdjustFrameRates ? px68k_fps_compat(a) : a;
+}
+
+/* frame period the frontend was last told about, 100ns units */
+static uint32_t applied_frame_clk = 0;
+
 char	winx68k_dir[2048];
 char	winx68k_ini[2048];
 
@@ -112,13 +146,23 @@ char save_base_dir[MAX_PATH];     /* base dir for writable state (sram.dat, conf
 static uint8_t Core_Key_State[512];
 static uint8_t Core_old_Key_State[512];
 
-static bool joypad1, joypad2;
+static bool joypad1 = true, joypad2 = true;
+static unsigned controller_device[2] = {
+   RETRO_DEVICE_JOYPAD, RETRO_DEVICE_JOYPAD
+};
+static bool controller_device_set[2];
+static float joy_mouse_analog_speed = 12.0f;
+static float joy_mouse_deadzone = 12.5f;
+static float joy_mouse_digital_speed = 6.0f;
 
-static bool opt_analog;
+static int controller_type[2];
 
-/* Velocidad del puntero movido con el mando, en pixeles por frame a fondo de
- * recorrido (px68k_joy_mouse_speed). */
-static int opt_joy_mouse_speed = 8;
+#define PX68K_DEVICE_CPSF_MD      RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1)
+#define PX68K_DEVICE_CPSF_SFC     RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 2)
+#define PX68K_DEVICE_CYBERSTICK_D RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 3)
+#define PX68K_DEVICE_CYBERSTICK_A RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 4)
+#define PX68K_DEVICE_JOY2KEY      RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 5)
+
 
 static char CMDFILE[512];
 
@@ -137,13 +181,44 @@ static int FrameSkipQueue = 0;
 static int ClkUsed        = 0;
 
 uint32_t retrow           = 800;
+/* Display aspect of the active picture, derived from CRTC timing
+ * (see WinDraw_Draw). 4:3 means the window fills the whole screen. */
+float    retro_aspect      = 4.0f / 3.0f;
+/* core option px68k_aspect_ratio: 0 = X68000 (CRT timing), 1 = 4:3 (default), 2 = 1:1 */
+int      px68k_aspect_mode = 1;
 uint32_t retroh           = 600;
+/* Keep the full OSD keyboard visible even when the emulated mode is low-res. */
+static bool osd_video_geometry_active = false;
+static uint16_t osd_video_buffer[800 * 512];
+#define OSD_VIDEO_WIDTH  768
+#define OSD_VIDEO_HEIGHT 512
+
+/* Geometry the frontend should currently use: the keyboard's fixed 768x512
+ * 4:3 reference while it is visible, otherwise the emulated mode with the
+ * aspect ratio chosen by the "Aspect Ratio" option / CRTC timing. */
+static void px68k_fill_geometry(struct retro_game_geometry *g)
+{
+   g->max_width  = 800;
+   g->max_height = 600;
+   if (osd_video_geometry_active)
+   {
+      g->base_width   = OSD_VIDEO_WIDTH;
+      g->base_height  = OSD_VIDEO_HEIGHT;
+      g->aspect_ratio = 4.0f / 3.0f;
+   }
+   else
+   {
+      g->base_width   = retrow;
+      g->base_height  = retroh;
+      g->aspect_ratio = retro_aspect;
+   }
+}
 int CHANGEAV              = 0;
 int CHANGEAV_TIMING       = 0; /* Separate change of geometry from change of refresh rate */
 int VID_MODE              = MODE_NORM; /* what framerate we start in */
-static float FRAMERATE;
+static double FRAMERATE;
 uint32_t libretro_supports_input_bitmasks = 0;
-
+ 
 static int16_t soundbuf[1024 * 2];
 /* Legacy timer module linkage; no longer used to gate emulated frames. */
 unsigned int total_usec = (unsigned int)-1;
@@ -159,20 +234,21 @@ static int fb_audio_clock(int clock)
 {
    double ratio, scaled;
    int result;
+   double actual = px68k_fps_actual();
    if (!Config.AdjustFrameRates)
    {
       fb_audio_clock_remainder = 0.0;
-      fb_audio_last_mode = VID_MODE;
+      fb_audio_last_mode = (int)(actual * 100.0);
       fb_audio_last_adjust = 0;
       return clock;
    }
-   if (fb_audio_last_mode != VID_MODE || fb_audio_last_adjust != Config.AdjustFrameRates)
+   if (fb_audio_last_mode != (int)(actual * 100.0f) || fb_audio_last_adjust != Config.AdjustFrameRates)
    {
       fb_audio_clock_remainder = 0.0;
-      fb_audio_last_mode = VID_MODE;
+      fb_audio_last_mode = (int)(actual * 100.0f);
       fb_audio_last_adjust = Config.AdjustFrameRates;
    }
-   ratio = (double)framerates[0][VID_MODE] / (double)framerates[1][VID_MODE];
+   ratio = actual / px68k_fps_compat(actual);
    scaled = (double)clock * ratio + fb_audio_clock_remainder;
    result = (int)scaled;
    fb_audio_clock_remainder = scaled - (double)result;
@@ -182,9 +258,9 @@ static int fb_audio_clock(int clock)
 static int next_audio_frame_size(void)
 {
    int frames;
-   if (FRAMERATE <= 0.0f)
+   if (FRAMERATE <= 0.0)
       return 0;
-   audio_frame_fraction += (double)SOUNDRATE / (double)FRAMERATE;
+   audio_frame_fraction += (double)SOUNDRATE / FRAMERATE;
    frames = (int)audio_frame_fraction;
    audio_frame_fraction -= frames;
    if (frames > 1024) frames = 1024;
@@ -264,47 +340,6 @@ static struct retro_disk_control_ext_callback dskcb_ext;
 
 static struct retro_input_descriptor input_descs[64];
 
-static struct retro_input_descriptor input_descs_p1[] = {
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "A" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "B" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "X" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Y" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Left" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Up" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Down" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, "R" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L, "L" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "R2 - Touroku" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "L2 - Menu" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3, "R3" },
-   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3, "L3" },
-};
-static struct retro_input_descriptor input_descs_p2[] = {
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "A" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "B" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X, "X" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y, "Y" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Left" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Up" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Down" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, "R" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L, "L" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "R2" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "L2" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3, "R3" },
-   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3, "L3" },
-
-};
-
-static struct retro_input_descriptor input_descs_null[] = {
-   { 0, 0, 0, 0, NULL }
-};
 
 static bool is_path_absolute(const char* path)
 {
@@ -362,6 +397,7 @@ static void extract_directory(char *buf, const char *path, size_t size)
 
 /* BEGIN MIDI INTERFACE */
 #include "x68k/midi.h"
+#include "libretro/midi_shadow.h"
 #include "libretro/mmsystem.h"
 static int libretro_supports_midi_output = 0;
 static struct retro_midi_interface midi_cb = { 0 };
@@ -388,7 +424,15 @@ static size_t midi_short_msg_len(uint8_t status)
    }
 }
 
-void midi_out_short_msg(size_t msg)
+/* While a setup is being re-created on load, don't record it as new input. */
+static bool midi_replaying;
+
+/* 0 = off, 1 = re-create the synth setup, 2 = also switch back to the output
+ * (internal SC-55 or external MIDI) that was in use when the state was saved. */
+static int midi_restore_mode = 2;
+
+/* Raw output: straight to whichever destination is active. */
+static void midi_emit_short(size_t msg)
 {
    if (px68k_sc55_enabled())
    {
@@ -405,7 +449,7 @@ void midi_out_short_msg(size_t msg)
    }
 }
 
-void midi_out_long_msg(uint8_t *s, size_t len)
+static void midi_emit_long(const uint8_t *s, size_t len)
 {
    if (px68k_sc55_enabled())
    {
@@ -414,11 +458,92 @@ void midi_out_long_msg(uint8_t *s, size_t len)
    }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
    {
-      int i;
+      size_t i;
       for (i = 0; i < len; i++)
          midi_cb.write(s[i], 0);
    }
 }
+
+/* Called by the emulated MIDI board. */
+void midi_out_short_msg(size_t msg)
+{
+   if (!midi_replaying)
+      MIDIShadow_Short(msg);
+   midi_emit_short(msg);
+}
+
+void midi_out_long_msg(uint8_t *s, size_t len)
+{
+   if (!midi_replaying)
+      MIDIShadow_Long(s, len);
+   midi_emit_long(s, len);
+}
+
+/* 0 = nothing audible, 1 = external MIDI interface, 2 = internal SC-55. */
+static int midi_current_source(void)
+{
+   if (!Config.MIDI_SW)
+      return 0;
+   if (px68k_sc55_enabled())
+      return 2;
+   if (libretro_supports_midi_output && midi_cb.output_enabled())
+      return 1;
+   return 0;
+}
+
+/* Switch to the output that was in use when a state was saved, if it can be
+ * had. Returns 1 if the destination changed. Never turns MIDI itself on: the
+ * guest probes the board at startup, so that can't be changed mid-run. */
+static int midi_apply_saved_source(int saved)
+{
+   int now = midi_current_source();
+
+   if (!Config.MIDI_SW || saved == 0 || saved == now)
+      return 0;
+
+   if (saved == 2)
+   {
+      px68k_sc55_configure(1, retro_system_directory, retro_content_directory);
+      if (!px68k_sc55_enabled())
+         return 0; /* ROMs not available here: stay on what we have */
+   }
+   else if (saved == 1)
+   {
+      if (!(libretro_supports_midi_output && midi_cb.output_enabled()))
+         return 0;
+      px68k_sc55_configure(0, retro_system_directory, retro_content_directory);
+   }
+
+   MIDI_ReopenOutput();
+   return 1;
+}
+
+/* After loading a normal state: put the synth back into the sound setup the
+ * state was saved with (mode, programs, volumes, SysEx parameters), and
+ * optionally the output that was in use. */
+static void midi_restore_after_load(void)
+{
+   int saved = MIDIShadow_GetLoadedSource();
+   int source_changed;
+
+   /* -1: older state, it says nothing about the synth. */
+   if (!midi_restore_mode || saved < 0 || !Config.MIDI_SW)
+      return;
+
+   source_changed = (midi_restore_mode >= 2) ? midi_apply_saved_source(saved) : 0;
+
+   if (!source_changed && !MIDIShadow_NeedsReplay())
+      return;
+
+   midi_replaying = true;
+   MIDI_SendModuleReset();               /* the standard the state was using (LA/GM/GS/XG) */
+   MIDIShadow_Replay(midi_emit_short, midi_emit_long);
+   midi_replaying = false;
+
+   if (libretro_supports_midi_output && midi_cb.output_enabled())
+      midi_cb.flush();
+}
+
 
 /* A non-NULL handle is required by x68k/midi.c before it will dispatch
  * MIDI bytes. Use a private sentinel for the internal synthesizer: no
@@ -455,6 +580,19 @@ static void update_variable_midi_interface(int running)
          Config.MIDI_SW = 1;
    }
 
+   var.key = "px68k_midi_state_restore";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "disabled"))
+         midi_restore_mode = 0;
+      else if (!strcmp(var.value, "setup"))
+         midi_restore_mode = 1;
+      else
+         midi_restore_mode = 2;
+   }
+
    var.key = "px68k_midi_output_type";
    var.value = NULL;
 
@@ -482,12 +620,14 @@ static void midi_output_panic(void)
    if (!Config.MIDI_SW)
       return;
 
+   /* Raw output: this is not something the game sent, so it must not be
+    * recorded as part of the synth's setup. */
    for (ch = 0; ch < 16; ch++)
    {
       /* Release sustain, then stop held notes and any remaining voices. */
-      midi_out_short_msg(((size_t)0 << 16) | ((size_t)64 << 8) | (0xB0 | ch));
-      midi_out_short_msg(((size_t)0 << 16) | ((size_t)123 << 8) | (0xB0 | ch));
-      midi_out_short_msg(((size_t)0 << 16) | ((size_t)120 << 8) | (0xB0 | ch));
+      midi_emit_short(((size_t)0 << 16) | ((size_t)64 << 8) | (0xB0 | ch));
+      midi_emit_short(((size_t)0 << 16) | ((size_t)123 << 8) | (0xB0 | ch));
+      midi_emit_short(((size_t)0 << 16) | ((size_t)120 << 8) | (0xB0 | ch));
    }
 
    if (libretro_supports_midi_output && midi_cb.output_enabled())
@@ -894,78 +1034,128 @@ static void parse_cmdline(const char *argv)
 }
 
 
+static const char *m3u_zip_separator(const char *path)
+{
+   const char *p;
+   for (p = path; *p; p++)
+      if (p[0] == '.' && p[1] && p[2] && p[3] && p[4] == '#'
+            && tolower((unsigned char)p[1]) == 'z'
+            && tolower((unsigned char)p[2]) == 'i'
+            && tolower((unsigned char)p[3]) == 'p')
+         return p + 4;
+   return NULL;
+}
+
 static bool read_m3u(const char *file)
 {
    unsigned index = 0;
-   char line[MAX_PATH];
-   char name[MAX_PATH];
-   char *carriage_return;
-   char *newline;
+   char line[4096];
    FILE *f = fopen(file, "r");
 
    if (!f)
       return false;
 
-   while (fgets(line, sizeof(line), f) && index < sizeof(disk.path) / sizeof(disk.path[0]))
+   while (fgets(line, sizeof(line), f)
+         && index < sizeof(disk.path) / sizeof(disk.path[0]))
    {
-      if (line[0] == '#')
+      char entry[2048];
+      char name[MAX_PATH];
+      char image_label[MAX_PATH];
+      char *label;
+      size_t len;
+      const char *zip_sep;
+
+      /* Trim line endings and surrounding whitespace before interpreting it. */
+      len = strlen(line);
+      while (len && (line[len - 1] == '\n' || line[len - 1] == '\r'
+               || isspace((unsigned char)line[len - 1])))
+         line[--len] = '\0';
+      while (line[0] && isspace((unsigned char)line[0]))
+         memmove(line, line + 1, strlen(line));
+      if (!line[0] || line[0] == '#')
          continue;
 
-      carriage_return = strchr(line, '\r');
-      if (carriage_return)
-         *carriage_return = '\0';
-
-      newline = strchr(line, '\n');
-      if (newline)
-         *newline = '\0';
-
-      /* Remove any beginning and ending quotes as these can cause issues when feeding the paths into command line later */
-      if (line[0] == '"')
-          memmove(line, line + 1, strlen(line));
-
-      if (line[strlen(line) - 1] == '"')
-          line[strlen(line) - 1]  = '\0';
-
-      if (line[0] != '\0')
+      /* Accept quoted entries as well as normal M3U paths. */
+      len = strlen(line);
+      if (len >= 2 && line[0] == '"' && line[len - 1] == '"')
       {
-         char image_label[4096];
-         char *custom_label;
-         size_t len = 0;
-
-         if (is_path_absolute(line))
-            strncpy(name, line, sizeof(name));
-         else
-            snprintf(name, sizeof(name), "%s%c%s", base_dir, SLASH, line);
-
-         custom_label = strchr(name, '|');
-         if (custom_label)
-         {
-            /* get disk path */
-            len = custom_label + 1 - name;
-            strncpy(disk.path[index], name, len - 1);
-
-            /* get custom label */
-            custom_label++;
-            strncpy(disk.label[index], custom_label, sizeof(disk.label[index]));
-         }
-         else
-         {
-            /* copy path */
-            strncpy(disk.path[index], name, sizeof(disk.path[index]));
-
-            /* extract base name from path for labels */
-            extract_basename(image_label, name, sizeof(image_label));
-            strncpy(disk.label[index], image_label, sizeof(disk.label[index]));
-         }
-
-         index++;
+         memmove(line, line + 1, len - 2);
+         line[len - 2] = '\0';
       }
+      if (!line[0])
+         continue;
+
+      /* RetroArch's optional |label suffix is not part of the path. */
+      label = strchr(line, '|');
+      if (label)
+      {
+         *label++ = '\0';
+         while (*label && isspace((unsigned char)*label))
+            label++;
+      }
+      len = strlen(line);
+      while (len && isspace((unsigned char)line[len - 1]))
+         line[--len] = '\0';
+      if (!len || len >= sizeof(entry))
+         continue;
+      strcpy(entry, line);
+
+      if (is_path_absolute(entry))
+      {
+         if (snprintf(name, sizeof(name), "%s", entry) >= (int)sizeof(name))
+            continue;
+      }
+      else if (base_dir[0])
+      {
+         if (snprintf(name, sizeof(name), "%s%c%s", base_dir, SLASH, entry)
+               >= (int)sizeof(name))
+            continue;
+      }
+      else if (snprintf(name, sizeof(name), "%s", entry) >= (int)sizeof(name))
+         continue;
+
+      zip_sep = m3u_zip_separator(name);
+      if (zip_sep)
+      {
+         char archive[MAX_PATH];
+         int slot;
+         size_t archive_len = (size_t)(zip_sep - name);
+         if (!archive_len || archive_len >= sizeof(archive) || !zip_sep[1])
+            continue;
+         memcpy(archive, name, archive_len);
+         archive[archive_len] = '\0';
+         slot = px68k_zip_register_archive(archive);
+         if (slot < 0
+               || !px68k_zip_make_virtual_path(slot, zip_sep + 1,
+                  disk.path[index], sizeof(disk.path[index]))
+               || !px68k_zip_preload(disk.path[index]))
+         {
+            disk.path[index][0] = '\0';
+            continue;
+         }
+         /* M3U entries can refer to several archives. Keep every archive
+          * referenced by the disk table alive for the whole playlist. */
+         px68k_zip_pin_playlist(slot);
+         extract_basename(image_label, zip_sep + 1, sizeof(image_label));
+      }
+      else
+      {
+         if (strlen(name) >= sizeof(disk.path[index]))
+            continue;
+         strcpy(disk.path[index], name);
+         extract_basename(image_label, name, sizeof(image_label));
+      }
+
+      if (label && *label)
+         snprintf(disk.label[index], sizeof(disk.label[index]), "%s", label);
+      else
+         snprintf(disk.label[index], sizeof(disk.label[index]), "%s", image_label);
+      index++;
    }
 
    disk.total_images = index;
    fclose(f);
-
-   return (disk.total_images != 0);
+   return disk.total_images != 0;
 }
 
 static void Add_Option(const char* option)
@@ -1418,84 +1608,213 @@ run_pmain:
 
 static void retro_set_controller_descriptors(void)
 {
-   unsigned i;
-   unsigned size = 16;
+   static const char *default_labels[16] = {
+      "A", "B", "X", "Y", "Select", "Start", "Right", "Left",
+      "Up", "Down", "R", "L", "R2", "L2", "R3", "L3"
+   };
+   static const char *cyber_d_labels[16] = {
+      "A", "B", "C", "D", "Select", "Start",
+      "Right", "Left", "Up", "Down", "E2", "E1",
+      NULL, NULL, NULL, NULL
+   };
+   static const char *cyber_a_labels[16] = {
+      "A", "B", "C", "D", "Select", "Start",
+      NULL, NULL, NULL, NULL, "E2", "E1",
+      NULL, NULL, NULL, NULL
+   };
+   static char dynamic_labels[2][16][80];
+   unsigned port;
+   unsigned count = 0;
 
-   for (i = 0; i < (2 * size); i++)
-      input_descs[i] = input_descs_null[0];
+   memset(input_descs, 0, sizeof(input_descs));
 
-   if (joypad1 && joypad2)
+   for (port = 0; port < 2; port++)
    {
-      for (i = 0; i < (2 * size); i++)
+      unsigned i;
+      const char **labels = default_labels;
+      if ((port == 0 && !joypad1) || (port == 1 && !joypad2))
+         continue;
+
+      switch (Config.JOY_TYPE[port])
       {
-         if (i < size)
-            input_descs[i] = input_descs_p1[i];
-         else
-            input_descs[i] = input_descs_p2[i - size];
+         case PAD_CYBERSTICK_D: labels = cyber_d_labels; break;
+         case PAD_CYBERSTICK_A: labels = cyber_a_labels; break;
+         default: break;
+      }
+
+      for (i = 0; i < 16 && count < 63; i++)
+      {
+         unsigned retropad_button = Joystick_GetJoy2KeyRetropadId(i);
+         const char *label = labels[i];
+         const char *native_label =
+            Joystick_NativeLabel(Config.JOY_TYPE[port], retropad_button);
+
+         /* CPSF labels come from the same table that drives the emulated
+          * signals, so the descriptors always match the real behaviour. */
+         if (native_label)
+            label = native_label;
+
+         {
+            int action = Joystick_GetJoy2KeyAction(
+                  Config.JOY_TYPE[port], retropad_button);
+            if (action >= 0)
+            {
+               const char *key_label =
+                  Joystick_GetKeyMappingLabel(port, (unsigned)action);
+               if (action == 13 && !strcmp(key_label, "Menu"))
+                  snprintf(dynamic_labels[port][i], sizeof(dynamic_labels[port][i]),
+                        "PX68K Menu (J2K %s [Menu])",
+                        Joystick_GetJoy2KeyActionName((unsigned)action));
+               else
+                  snprintf(dynamic_labels[port][i], sizeof(dynamic_labels[port][i]),
+                        "J2K %s [%s]",
+                        Joystick_GetJoy2KeyActionName((unsigned)action), key_label);
+               label = dynamic_labels[port][i];
+            }
+         }
+
+         input_descs[count].port = port;
+         input_descs[count].device = RETRO_DEVICE_JOYPAD;
+         input_descs[count].index = 0;
+         input_descs[count].id = retropad_button;
+         input_descs[count].description = label;
+         count++;
+      }
+
+      if (port == 0 && Config.JOY_TYPE[port] == PAD_CYBERSTICK_A)
+      {
+         static const struct retro_input_descriptor cyber_analog_descs[] = {
+            { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT,
+               RETRO_DEVICE_ID_ANALOG_X, "CyberStick Stick X" },
+            { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT,
+               RETRO_DEVICE_ID_ANALOG_Y, "CyberStick Stick Y" },
+            { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT,
+               RETRO_DEVICE_ID_ANALOG_Y, "CyberStick Throttle (Right Y)" },
+            { 0, 0, 0, 0, NULL }
+         };
+         unsigned j;
+         for (j = 0; cyber_analog_descs[j].description && count < 63; j++)
+         {
+            input_descs[count] = cyber_analog_descs[j];
+            count++;
+         }
       }
    }
-   else if (joypad1 || joypad2)
-   {
-      for (i = 0; i < size; i++)
-      {
-         if (joypad1)
-            input_descs[i] = input_descs_p1[i];
-         else
-            input_descs[i] = input_descs_p2[i];
-      }
-   }
-   else
-      input_descs[0] = input_descs_null[0];
+
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, &input_descs);
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
+   unsigned base_device;
+   int joy_type = PAD_NONE;
+
    if (port >= 2)
       return;
 
-   switch (device)
+   base_device = device & RETRO_DEVICE_MASK;
+
+   if (base_device == RETRO_DEVICE_JOYPAD)
    {
-      case RETRO_DEVICE_JOYPAD:
-         if (port == 0)
-            joypad1 = true;
-         if (port == 1)
-            joypad2 = true;
-         break;
-      case RETRO_DEVICE_KEYBOARD:
-         if (port == 0)
-            joypad1 = false;
-         if (port == 1)
-            joypad2 = false;
-         break;
-      case RETRO_DEVICE_NONE:
-         if (port == 0)
-            joypad1 = false;
-         if (port == 1)
-            joypad2 = false;
-         break;
-      default:
+      joy_type = PAD_2BUTTON;
+      if (device == PX68K_DEVICE_CPSF_MD)
+         joy_type = PAD_CPSF_MD;
+      else if (device == PX68K_DEVICE_CPSF_SFC)
+         joy_type = PAD_CPSF_SFC;
+      else if (device == PX68K_DEVICE_CYBERSTICK_D)
+         joy_type = PAD_CYBERSTICK_D;
+      else if (device == PX68K_DEVICE_CYBERSTICK_A && port == 0)
+         joy_type = PAD_CYBERSTICK_A;
+      else if (device == PX68K_DEVICE_JOY2KEY)
+         joy_type = PAD_JOY2KEY;
+      else if (device != RETRO_DEVICE_JOYPAD &&
+               device != PX68K_DEVICE_CPSF_MD &&
+               device != PX68K_DEVICE_CPSF_SFC &&
+               device != PX68K_DEVICE_CYBERSTICK_D &&
+               device != PX68K_DEVICE_CYBERSTICK_A &&
+               device != PX68K_DEVICE_JOY2KEY)
+      {
          if (log_cb)
-            log_cb(RETRO_LOG_ERROR, "[libretro]: Invalid device, setting type to RETRO_DEVICE_JOYPAD ...\n");
+            log_cb(RETRO_LOG_ERROR, "[libretro]: Unknown joypad subclass %u, using RetroPad.\n", device);
+      }
    }
-   log_cb(RETRO_LOG_INFO, "Set Controller Device: %d, Port: %d %d %d\n", device, port, joypad1, joypad2);
+   else if (device != RETRO_DEVICE_KEYBOARD && device != RETRO_DEVICE_NONE)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "[libretro]: Unsupported controller device %u.\n", device);
+      return;
+   }
+
+   controller_device[port] = device;
+   controller_device_set[port] = true;
+   Config.JOY_TYPE[port] = joy_type;
+   controller_type[port] = joy_type;
+   if (port == 0)
+      joypad1 = (base_device == RETRO_DEVICE_JOYPAD);
+   else
+      joypad2 = (base_device == RETRO_DEVICE_JOYPAD);
+
+   /* Changing one logical port's device must not reset the other port's
+    * PIA strobe state. Joystick_Init() is reserved for core initialization. */
    retro_set_controller_descriptors();
+}
+
+/* The device chosen through the libretro controller interface is the single
+ * source of truth for a logical port. If anything else overwrote
+ * Config.JOY_TYPE, restore it so a port can never silently fall back to a
+ * 2-button joystick. */
+static void sync_controller_types(void)
+{
+   unsigned port;
+   int changed = 0;
+
+   for (port = 0; port < 2; port++)
+   {
+      if (!controller_device_set[port])
+         continue;
+      if (Config.JOY_TYPE[port] != controller_type[port])
+      {
+         Config.JOY_TYPE[port] = controller_type[port];
+         changed = 1;
+      }
+   }
+   if (changed)
+      retro_set_controller_descriptors();
 }
 
 void retro_set_environment(retro_environment_t cb)
 {
    int nocontent = 1;
 
-   static const struct retro_controller_description port[] = {
-      { "RetroPad",              RETRO_DEVICE_JOYPAD },
-      { "RetroKeyboard",         RETRO_DEVICE_KEYBOARD },
-      { 0 },
+   /* Controller types are listed per emulated port. Keep the generic
+    * RetroPad first, followed by the supported device subclasses. Port 2
+    * intentionally omits the analog Cyberstick, which is P1-only. */
+   static const struct retro_controller_description port_controllers[2][8] = {
+      {
+         { "2-button joystick", RETRO_DEVICE_JOYPAD },
+         { "CPSF-MD (8 Buttons)", PX68K_DEVICE_CPSF_MD },
+         { "CPSF-SFC (8 Buttons)", PX68K_DEVICE_CPSF_SFC },
+         { "Cyberstick (Digital)", PX68K_DEVICE_CYBERSTICK_D },
+         { "Cyberstick (Analog)", PX68K_DEVICE_CYBERSTICK_A },
+         { "Joy2Key Remap", PX68K_DEVICE_JOY2KEY },
+         { "RetroKeyboard", RETRO_DEVICE_KEYBOARD },
+         { "None", RETRO_DEVICE_NONE }
+      },
+      {
+         { "2-button joystick", RETRO_DEVICE_JOYPAD },
+         { "CPSF-MD (8 Buttons)", PX68K_DEVICE_CPSF_MD },
+         { "CPSF-SFC (8 Buttons)", PX68K_DEVICE_CPSF_SFC },
+         { "Cyberstick (Digital)", PX68K_DEVICE_CYBERSTICK_D },
+         { "Joy2Key Remap", PX68K_DEVICE_JOY2KEY },
+         { "RetroKeyboard", RETRO_DEVICE_KEYBOARD },
+         { "None", RETRO_DEVICE_NONE }
+      }
    };
 
    static const struct retro_controller_info ports[] = {
-      { port, 2 },
-      { port, 2 },
-      { NULL, 0 },
+      { port_controllers[0], 8 },
+      { port_controllers[1], 7 },
+      { NULL, 0 }
    };
 
    environ_cb = cb;
@@ -1563,31 +1882,25 @@ static void update_variables(int running)
          Config.MIDI_SW = 1;
    }
 
-   strcpy(key, "px68k_joytype");
-   var.key = key;
-   for (i = 0; i < 2; i++)
    {
-      key[strlen("px68k_joytype")] = '1' + i;
-      var.value = NULL;
-      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-      {
-         int val = Config.JOY_TYPE[i];
-         if (!(strcmp(var.value, "Default (2 Buttons)")))
-            Config.JOY_TYPE[i] = PAD_2BUTTON;
-         else if (!(strcmp(var.value, "CPSF-MD (8 Buttons)")))
-            Config.JOY_TYPE[i] = PAD_CPSF_MD;
-         else if (!(strcmp(var.value, "CPSF-SFC (8 Buttons)")))
-            Config.JOY_TYPE[i] = PAD_CPSF_SFC;
-         else if (!(strcmp(var.value, "Cyberstick (Digital)")))
-            Config.JOY_TYPE[i] = PAD_CYBERSTICK_D;
-         else if (!(strcmp(var.value, "Cyberstick (Analog)")))
-            Config.JOY_TYPE[i] = PAD_CYBERSTICK_A;
-         if (Config.JOY_TYPE[i] != val)
+      unsigned port, input;
+      int descriptors_changed = 0;
+      char joy2key_option[40];
+      for (port = 0; port < 2; port++)
+         for (input = 0; input < 16; input++)
          {
-            log_cb(RETRO_LOG_DEBUG, "player: %d type: %d\n", i + 1, Config.JOY_TYPE[i]);
-            Joystick_Init();
+            const char *option_name = Joystick_GetJoy2KeyOptionName(input);
+            if (!option_name)
+               continue;
+            snprintf(joy2key_option, sizeof(joy2key_option),
+                  "px68k_j2k_p%u_%s", port + 1, option_name);
+            var.key = joy2key_option;
+            var.value = NULL;
+            if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+               descriptors_changed |= Joystick_SetKeyMapping(port, input, var.value);
          }
-      }
+      if (descriptors_changed)
+         retro_set_controller_descriptors();
    }
 
    var.key = "px68k_cpuspeed";
@@ -1641,17 +1954,6 @@ static void update_variables(int running)
          value = 12;
 
       Config.ram_size = (value * 1024 * 1024);
-   }
-
-   var.key = "px68k_analog";
-   var.value = NULL;
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "disabled"))
-         opt_analog = false;
-      if (!strcmp(var.value, "enabled"))
-         opt_analog = true;
    }
 
    /* Read on every variable update: ADPCM_Update checks this each audio block. */
@@ -1726,31 +2028,27 @@ static void update_variables(int running)
          Config.MenuLinesJump = jump;
    }
 
-   var.key    = "px68k_joy1_select";
-   var.value  = NULL;
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if (!strcmp(var.value, "XF1"))
-         Config.joy1_select_mapping = KBD_XF1;
-      else if (!strcmp(var.value, "XF2"))
-         Config.joy1_select_mapping = KBD_XF2;
-      else if (!strcmp(var.value, "XF3"))
-         Config.joy1_select_mapping = KBD_XF3;
-      else if (!strcmp(var.value, "XF4"))
-         Config.joy1_select_mapping = KBD_XF4;
-      else if (!strcmp(var.value, "XF5"))
-         Config.joy1_select_mapping = KBD_XF5;
-      else if (!strcmp(var.value, "F1"))
-         Config.joy1_select_mapping = KBD_F1;
-      else if (!strcmp(var.value, "F2"))
-         Config.joy1_select_mapping = KBD_F2;
-      else if (!strcmp(var.value, "OPT1"))
-         Config.joy1_select_mapping = KBD_OPT1;
-      else if (!strcmp(var.value, "OPT2"))
-         Config.joy1_select_mapping = KBD_OPT2;
-      else
-         Config.joy1_select_mapping = 0;
+      /* Keyboard repeat: follow the X68000's own setting unless overridden. */
+      int repeat_delay = -1, repeat_interval = -1;
+
+      var.key   = "px68k_key_repeat_delay";
+      var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (!strcmp(var.value, "off"))
+            repeat_delay = 0;
+         else if (strcmp(var.value, "machine"))
+            repeat_delay = atoi(var.value);
+      }
+      var.key   = "px68k_key_repeat_interval";
+      var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (strcmp(var.value, "machine"))
+            repeat_interval = atoi(var.value);
+      }
+      Keyboard_SetRepeatOptions(repeat_delay, repeat_interval);
    }
 
    var.key    = "px68k_save_fdd_path";
@@ -1803,42 +2101,26 @@ static void update_variables(int running)
    var.value    = NULL;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      int value = 0;
-      if (!strcmp(var.value, "Joystick"))
-         value = 0;
-      else if (!strcmp(var.value, "Mouse"))
-         value = 1;
+      Config.Joy2Mouse = !strcmp(var.value, "enabled");
 
-      Config.JoyOrMouse = value;
-      /* La captura queda SIEMPRE activa: la ruta hacia el X68000 es la misma en
-       * los dos modos (Mouse_Event -> SCC) y Mouse_Event descarta todo lo que le
-       * llega si MouseSW es 0.  Lo que decide la opcion es solo si el mando
-       * mueve ademas el puntero (ver joy_mouse_update). */
-      Mouse_StartCapture(1);
-   }
-
-   var.key    = "px68k_joy_mouse_speed";
-   var.value  = NULL;
-
+   var.key   = "px68k_joy2mouse_analog_speed";
+   var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      int value = atoi(var.value);
-      if (value > 0)
-         opt_joy_mouse_speed = value;
-   }
+      joy_mouse_analog_speed = (float)atoi(var.value);
 
-   var.key    = "px68k_vbtn_swap";
-   var.value  = NULL;
-
+   var.key   = "px68k_joy2mouse_analog_deadzone";
+   var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "TRIG1 TRIG2"))
-         Config.VbtnSwap = 0;
-      else if (!strcmp(var.value, "TRIG2 TRIG1"))
-         Config.VbtnSwap = 1;
-   }
+      joy_mouse_deadzone = (float)atof(var.value);
 
+   var.key   = "px68k_joy2mouse_digital_speed";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      joy_mouse_digital_speed = (float)atoi(var.value);
+
+   Joystick_SetMouseOptions(joy_mouse_analog_speed, joy_mouse_deadzone,
+         joy_mouse_digital_speed);
+   Mouse_StartCapture(1);
 
    var.key    = "px68k_frameskip";
    var.value  = NULL;
@@ -1867,6 +2149,20 @@ static void update_variables(int running)
          Config.FrameRate = 60;
       else if (!strcmp(var.value, "Full Frame"))
          Config.FrameRate = 1;
+   }
+
+   var.key     = "px68k_aspect_ratio";
+   var.value   = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "x68000"))
+         px68k_aspect_mode = 0;
+      else if (!strcmp(var.value, "1:1"))
+         px68k_aspect_mode = 2;
+      else
+         px68k_aspect_mode = 1; /* "4:3" */
+      /* WinDraw_Draw notices the new aspect and updates the geometry */
    }
 
    var.key     = "px68k_adjust_frame_rates";
@@ -1944,18 +2240,58 @@ void retro_get_system_info(struct retro_system_info *info)
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
    /* FIXME handle PAL/NTSC */
-   struct retro_game_geometry geom   = { retrow, retroh, 800, 600, 4.0 / 3.0 };
+   struct retro_game_geometry geom;
    struct retro_system_timing timing = { FRAMERATE, SOUNDRATE };
+   px68k_fill_geometry(&geom);
    info->geometry                    = geom;
    info->timing                      = timing;
 }
 
-/* TODO/FIXME - implement savestates */
+/* Length of main RAM up to and including its last non-zero 4 KiB page.
+ *
+ * Fast (Run-Ahead) savestates copy 12 MiB of RAM twice per frame, yet most
+ * of it is normally untouched zeros. Everything above this length is zero
+ * by construction (it is verified here, not assumed from the RAM size
+ * option or from which code paths write memory), so it can be skipped on
+ * save and cleared on load. Reading is cheaper than copying, and the load
+ * side is a plain memset. */
+#define RAM_SCAN_PAGE 4096u
+
+static uint32_t ram_used_length(const uint8_t *ram)
+{
+   uint32_t page = MEM_SIZE / RAM_SCAN_PAGE;
+
+   while (page)
+   {
+      const uint64_t *w = (const uint64_t*)(ram + (size_t)(page - 1) * RAM_SCAN_PAGE);
+      uint64_t acc      = 0;
+      unsigned i;
+
+      for (i = 0; i < RAM_SCAN_PAGE / sizeof(uint64_t); i++)
+         acc |= w[i];
+
+      if (acc)
+         break;
+      page--;
+   }
+
+   /* Never report 0: a zero-size entry is skipped by the writer, and a
+    * label-less (fast) reader would then expect it and read the next
+    * variable into RAM. One page keeps both sides in step. */
+   return page ? page * RAM_SCAN_PAGE : RAM_SCAN_PAGE;
+}
+
 int StateAction(StateMem *sm, int load, int data_only)
 {
+   /* Normal states always store the whole array (same layout as before,
+    * so they stay interchangeable with older builds). Fast states store
+    * only the used part; on load VARLEN accepts either. */
+   uint32_t ram_len = (!load && sm->fastsavestates && !sm->count_only)
+      ? ram_used_length(MEM) : MEM_SIZE;
+
    SFORMAT StateRegs[] =
    {
-      SFARRAYN(MEM, MEM_SIZE, "RAM"),
+      { MEM, load ? (uint32_t)MEM_SIZE : ram_len, PX68KSTATE_VARLEN, "RAM" },
       SFARRAYN(SRAM, 16384, "SRAM"),
       SFVAR(ICount),
       SFVAR(ClkUsed),
@@ -1995,59 +2331,71 @@ int StateAction(StateMem *sm, int load, int data_only)
    ret &= dswin_StateAction(sm, load, data_only);
    ret &= ADPCM_StateAction(sm, load, data_only);
    ret &= MIDI_StateAction(sm, load, data_only);
+
+   /* What the synth was told is not part of the machine, but a real load needs
+    * it to put the synth back (see midi_restore_after_load). Run-Ahead
+    * states don't carry it. */
+   if (!sm->fastsavestates)
+   {
+      if (!load)
+         MIDIShadow_SetSource(midi_current_source());
+      ret &= MIDIShadow_StateAction(sm, load, data_only);
+   }
    ret &= OPM_StateAction(sm, load, data_only);
 
    return ret;
 }
 
-static bool UsingFastSavestates(void)
+static int SavestateContext(void)
 {
-   int flags;
+   int flags = RETRO_SAVESTATE_CONTEXT_NORMAL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &flags))
-      return ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE) ||
-            ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY)));
-   return false;
+      return flags;
+   return RETRO_SAVESTATE_CONTEXT_NORMAL;
 }
 
+static bool UsingFastSavestates(void)
+{
+   int flags = SavestateContext();
+   return ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE) ||
+         ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY)));
+}
+
+/* Sized in a dry run: no allocation and no copying. The result is the size
+ * of a normal (labelled, full-RAM) state, which is an upper bound for a fast
+ * state, so one buffer size serves every context. */
 size_t retro_serialize_size(void)
 {
    StateMem st;
 
-   st.data           = NULL;
-   st.loc            = 0;
-   st.len            = 0;
-   st.malloced       = 0;
-   st.initial_malloc = 0;
-   st.fastsavestates = 0;
+   PX68KSS_InitCount(&st);
 
    if (!PX68KSS_SaveSM(&st, 0, 0, NULL, NULL, NULL))
       return 0;
 
-   free(st.data);
-
    return st.len;
 }
 
+/* Writes straight into the frontend's buffer (it used to build the state in
+ * a temporary buffer and copy it over, i.e. an extra malloc plus a full
+ * memcpy of the whole state on every Run-Ahead frame). */
 bool retro_serialize(void *data, size_t size)
 {
    StateMem st;
-   bool ret          = false;
-   uint8_t *_dat     = (uint8_t*)malloc(size);
+   bool fast, ret;
 
-   if (!_dat)
+   if (!data || size > 0xffffffffU)
       return false;
 
-   st.data           = _dat;
-   st.loc            = 0;
-   st.len            = 0;
-   st.malloced       = size;
-   st.initial_malloc = 0;
-   st.fastsavestates = UsingFastSavestates();
+   fast = UsingFastSavestates();
+   PX68KSS_InitWrite(&st, data, (uint32_t)size, fast);
 
-   ret = PX68KSS_SaveSM(&st, 0, 0, NULL, NULL, NULL);
+   ret = PX68KSS_SaveSM(&st, 0, 0, NULL, NULL, NULL) != 0;
 
-   memcpy(data, st.data, size);
-   free(st.data);
+   /* Keep saved files deterministic. Fast states are never stored, so
+    * skip clearing what can be megabytes of unused tail. */
+   if (ret && !fast && st.len < size)
+      memset((uint8_t*)data + st.len, 0, size - st.len);
 
    return ret;
 }
@@ -2055,24 +2403,30 @@ bool retro_serialize(void *data, size_t size)
 bool retro_unserialize(const void *data, size_t size)
 {
    StateMem st;
-   bool ret = false;
+   bool fast;
 
-   /* RetroArch also calls retro_unserialize() repeatedly for Run-Ahead.
-    * Those restores are speculative frame rewinds, not user-requested loads;
-    * silencing MIDI here would cut off music during normal gameplay. */
-   if (!UsingFastSavestates())
+   if (!data || size > 0xffffffffU)
+      return false;
+
+   /* The state's own header says whether this is a Run-Ahead rewind (fast) or
+    * a state loaded for real. That is more reliable than the frontend's
+    * context flag at the moment of the call. */
+   fast = PX68KSS_IsFastState(data, size);
+
+   if (!fast)
       midi_output_panic();
 
-   st.data           = (uint8_t*)data;
-   st.loc            = 0;
-   st.len            = size;
-   st.malloced       = 0;
-   st.initial_malloc = 0;
-   st.fastsavestates = UsingFastSavestates();
+   PX68KSS_InitRead(&st, data, (uint32_t)size);
 
-   ret = PX68KSS_LoadSM(&st, 0, 0);
+   if (!PX68KSS_LoadSM(&st, 0, 0))
+      return false;
 
-   return ret;
+   /* A real load: the MIDI destination still holds whatever it was last told,
+    * so put it back to what the state was using. */
+   if (!fast)
+      midi_restore_after_load();
+
+   return true;
 }
 
 /* TODO/FIXME - implement cheats */
@@ -2130,6 +2484,7 @@ static int is_zip_path(const char *path)
 
 bool retro_load_game(const struct retro_game_info *info)
 {
+   ResetConfigSaveState();
    px68k_zip_reset();
    no_content = 1;
    RPATH[0] = '\0';
@@ -2174,6 +2529,11 @@ void retro_unload_game(void)
    int _d;
 
    RPATH[0]    = '\0';
+
+   /* Persist the mounted paths before cleanup clears the live drive state.
+    * retro_deinit() may run after this function, so SaveConfigBeforeUnload()
+    * also prevents that later save from replacing the paths with empty ones. */
+   SaveConfigBeforeUnload();
 
    /* Release the current content's floppy media before anything else.
     * retro_unload_game must return all 4 drives to the same clean state as
@@ -2329,15 +2689,24 @@ void retro_init(void)
    Config.save_sram     = 1;
    Config.clockmhz      = 10;
    Config.ram_size      = 2 * 1024 *1024;
-   Config.JOY_TYPE[0]   = 0;
-   Config.JOY_TYPE[1]   = 0;
 
    update_variables(0);
+
+   /* A frontend may send the controller selection before retro_init().
+    * Reapply such selections after the core defaults are initialized.
+    * Later changes are applied immediately by retro_set_controller_port_device(). */
+   {
+      unsigned port;
+      for (port = 0; port < 2; port++)
+         if (controller_device_set[port])
+            retro_set_controller_port_device(port, controller_device[port]);
+   }
 
    memset(Core_Key_State, 0, 512);
    memset(Core_old_Key_State, 0, sizeof(Core_old_Key_State));
 
-   FRAMERATE = framerates[Config.AdjustFrameRates][VID_MODE];
+   FRAMERATE = px68k_current_framerate();
+   applied_frame_clk = CRTC_FrameClocks();
 
 }
 
@@ -2619,10 +2988,6 @@ static void handle_retrok(void)
          KEYP(KeyTable[i].lrkey, KeyTable[i].keycode);
    }
    
-   /* only process kb_to_joypad map when its not zero, else button is used as
-    * joypad select mode */
-   if (Config.joy1_select_mapping)
-      KEYP(RETROK_XFX, Config.joy1_select_mapping);
 #undef KEYP
 }
 
@@ -2670,7 +3035,7 @@ static void WinX68k_Exec(void)
 
    vline     = 0;
    clk_count = -ICount;
-   clk_total = (CRTC_Regs[0x29] & 0x10) ? VSYNC_HIGH : VSYNC_NORM;
+   clk_total = (int)CRTC_FrameClocks();
 
    clk_total = (clk_total*Config.clockmhz)/10;
    clkdiv    = Config.clockmhz;
@@ -2729,8 +3094,16 @@ static void WinX68k_Exec(void)
             }
             else
             {
-               if ((long)vline == (VLINE_TOTAL-1))
-                  MFP_Int(9);		/* Is it Crazy Climber? */
+               /* V-DISP (GPIP4) falling edge = end of the display period.
+                * MFP_TimerA() (event-count mode) counts the very same edge
+                * at vline == CRTC_VEND, so the GPIP4 interrupt must fire there
+                * too.  Firing it at VLINE_TOTAL-1 delays it by the whole
+                * vertical blank and lets a game's main loop (which is woken
+                * by the Timer-A event) start modifying its sprite buffer/PCG
+                * before the V-DISP handler has copied the buffer to sprite
+                * RAM (The New Zealand Story). */
+               if ((long)vline == (long)CRTC_VEND)
+                  MFP_Int(9);
             }
          }
       }
@@ -2832,89 +3205,13 @@ static void WinX68k_Exec(void)
       WinDraw_Draw();
 
    t_end = timeGetTime();
-   if ((int)(t_end - t_start) > ((CRTC_Regs[0x29] & 0x10) ? 14 : 16))
+   if ((int)(t_end - t_start) > (CRTC_HighFreq() ? 14 : 16))
    {
-      FrameSkipQueue += ((t_end - t_start) / ((CRTC_Regs[0x29] & 0x10) ? 14 : 16)) + 1;
+      FrameSkipQueue += ((t_end - t_start) / (CRTC_HighFreq() ? 14 : 16)) + 1;
       if (FrameSkipQueue > 100)
          FrameSkipQueue = 100;
    }
 
-}
-
-/* Puntero del raton movido con el mando (px68k_joy_mouse = "Joystick").
- *
- * Upstream declara ese valor de la opcion pero lo deja sin implementar, asi que
- * hasta ahora elegirlo dejaba al usuario sin raton Y sin nada que lo sustituya.
- * Aqui se sintetizan los deltas que el X68000 espera del raton: stick izquierdo
- * proporcional, cruceta a fondo para los mandos sin stick, y L/R como botones
- * izquierdo y derecho.
- *
- * Suma sobre lo que ya haya entregado el raton fisico en vez de sustituirlo: si
- * hay raton conectado sigue funcionando igual, y si no lo hay (una consola) el
- * mando es la unica fuente. */
-static void joy_mouse_update(int *dx, int *dy, int *btn_l, int *btn_r)
-{
-   /* El acumulador es fraccionario a proposito: Mouse_SetData trunca a entero y
-    * pone su acumulador a cero en cada sondeo, asi que sin guardar aqui el resto
-    * un movimiento lento del stick no llegaria nunca a mover el puntero. */
-   static float accum_x = 0.0f;
-   static float accum_y = 0.0f;
-
-   const int dead = 4096;   /* zona muerta del stick */
-   float step;
-   int   pad_x = 0, pad_y = 0;
-   int   mx, my;
-
-   int ax = input_state_cb(0, RETRO_DEVICE_ANALOG,
-                           RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
-   int ay = input_state_cb(0, RETRO_DEVICE_ANALOG,
-                           RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
-
-   if (ax > dead || ax < -dead)
-      pad_x = ax;
-   if (ay > dead || ay < -dead)
-      pad_y = ay;
-
-   if (!pad_x)
-   {
-      if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT))
-         pad_x = -32767;
-      else if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT))
-         pad_x =  32767;
-   }
-   if (!pad_y)
-   {
-      if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP))
-         pad_y = -32767;
-      else if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN))
-         pad_y =  32767;
-   }
-
-   step     = (float)opt_joy_mouse_speed / 32767.0f;
-   accum_x += (float)pad_x * step;
-   accum_y += (float)pad_y * step;
-
-   mx       = (int)accum_x;
-   my       = (int)accum_y;
-   accum_x -= (float)mx;
-   accum_y -= (float)my;
-
-   *dx     += mx;
-   *dy     += my;
-
-   /* Boton izquierdo: A o L.  Boton derecho: B o R.
-    *
-    * A y B siguen yendo ademas al puerto de joystick como TRIG1/TRIG2, porque
-    * Joystick_Update se ejecuta igual en este modo.  No es un conflicto real:
-    * el modo existe para los juegos que se manejan con el raton, y esos no leen
-    * el puerto.  L/R se mantienen como alternativa por si algun juego usa las
-    * dos cosas y conviene tener los clics fuera de los gatillos. */
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A) ||
-       input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L))
-      *btn_l = 1;
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B) ||
-       input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R))
-      *btn_r = 1;
 }
 
 void retro_run(void)
@@ -2959,62 +3256,71 @@ void retro_run(void)
    {
       Joystick_Update(0, -1, 0);
       Joystick_Update(0, -1, 1);
+      Keyboard_OSDPointerUpdate();
+      if (FRAMERATE > 0.0)
+         Keyboard_RepeatTick((unsigned)(1000000.0 / FRAMERATE));
 
       WinX68k_Exec();
    }
+   else
+      Keyboard_OSDReleaseAll(); /* PX68K menu: no OSD key may stay held */
 
-   mouse_x       = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-   mouse_y       = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
-
-   mouse_l       = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
-   mouse_r       = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
-
-   /* Config.JoyOrMouse: 1 = raton, 0 = mando. */
-   if (!Config.JoyOrMouse)
-      joy_mouse_update(&mouse_x, &mouse_y, &mouse_l, &mouse_r);
-
+   /* Physical mouse input remains available. Joy2Mouse adds P1 controller
+    * movement as a second source without consuming native joystick buttons. */
+   mouse_x = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+   mouse_y = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+   /* While the OSD keyboard is open, touch/mouse input belongs to it:
+    * the emulated mouse stays idle (Android maps touches to the mouse). */
+   if (menu_mode == menu_out && Keyboard_IsSwKeyboard())
+      mouse_x = mouse_y = 0;
    Mouse_Event(0, mouse_x, mouse_y);
 
-   if(!mbL && mouse_l)
+   if (Config.Joy2Mouse && menu_mode == menu_out && !Keyboard_IsSwKeyboard())
    {
-      mbL         = true;
-      Mouse_Event(1,1.0,0);
+      float joy_mouse_x, joy_mouse_y;
+      Joystick_GetMouseDelta(0, &joy_mouse_x, &joy_mouse_y);
+      Mouse_Event(0, joy_mouse_x, joy_mouse_y);
    }
-   else if(mbL && !mouse_l)
+
    {
-      mbL         = false;
-      Mouse_Event(1,0,0);
-   }
-   if(!mbR && mouse_r)
-   {
-      mbR         = true;
-      Mouse_Event(2,1.0,0);
-   }
-   else if(mbR && !mouse_r)
-   {
-      mbR         = false;
-      Mouse_Event(2,0,0);
+      mouse_l = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT);
+      mouse_r = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
+      if (menu_mode == menu_out && Keyboard_IsSwKeyboard())
+         mouse_l = mouse_r = 0;
+
+      if (!mbL && mouse_l)
+      {
+         mbL = true;
+         Mouse_Event(1, 1.0f, 0.0f);
+      }
+      else if (mbL && !mouse_l)
+      {
+         mbL = false;
+         Mouse_Event(1, 0.0f, 0.0f);
+      }
+      if (!mbR && mouse_r)
+      {
+         mbR = true;
+         Mouse_Event(2, 1.0f, 0.0f);
+      }
+      else if (mbR && !mouse_r)
+      {
+         mbR = false;
+         Mouse_Event(2, 0.0f, 0.0f);
+      }
    }
 
    for(i = 0; i < 320; i++)
       Core_Key_State[i] = input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0, i) ? 0x80: 0;
 
-   Core_Key_State[RETROK_XFX] = 0;
 
-   /* Joypad Key for Menu */
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD,0, RETRO_DEVICE_ID_JOYPAD_L2))
+   sync_controller_types();
+
+   /* The PX68K menu is a Joy2Key target (default: RetroPad L2) and works
+    * from either logical port. */
+   if (Joystick_IsMenuPressed())
       Core_Key_State[RETROK_F12] = 0x80;
 
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD,0, RETRO_DEVICE_ID_JOYPAD_R2))  /*Joypad key for touroku key in order to enable MIDI when preseed on start up in Wolfteam games*/
-      Core_Key_State[RETROK_SCROLLOCK] = 0x80;
-
-   if (Config.joy1_select_mapping)
-   {
-      /* Joypad Key for Mapping */
-      if (input_state_cb(0, RETRO_DEVICE_JOYPAD,0,
-               RETRO_DEVICE_ID_JOYPAD_SELECT))
-         Core_Key_State[RETROK_XFX] = 0x80;
-   }
 
    if(memcmp( Core_Key_State,Core_old_Key_State , sizeof(Core_Key_State) ) )
       handle_retrok();
@@ -3059,6 +3365,7 @@ void retro_run(void)
    else
    {
       raudio_callback(soundbuf, NULL, soundbuf_size << 2);
+
       px68k_sc55_mix(soundbuf, (size_t)soundbuf_size);
    }
 
@@ -3067,12 +3374,39 @@ void retro_run(void)
 
    audio_batch_cb((const int16_t*)soundbuf, soundbuf_size);
    /* TODO/FIXME - hardcoded pitch here */
+   {
+      /* Refresh-rate change detection: the new rate must persist for 3
+       * frames (mode switches write several registers, sometimes across
+       * frames) and differ by more than 0.1% before the frontend is told. */
+      static uint32_t pending_clk = 0;
+      static int stable_frames = 0;
+      uint32_t c = CRTC_FrameClocks();
+      uint32_t d = c > applied_frame_clk ? c - applied_frame_clk : applied_frame_clk - c;
+      if (applied_frame_clk && d * 1000u > applied_frame_clk)
+      {
+         if (c == pending_clk)
+            stable_frames++;
+         else
+         {
+            pending_clk = c;
+            stable_frames = 1;
+         }
+         if (stable_frames >= 3)
+         {
+            CHANGEAV_TIMING = 1;
+            stable_frames = 0;
+         }
+      }
+      else
+         stable_frames = 0;
+   }
    if (CHANGEAV || CHANGEAV_TIMING)
    {
       struct retro_system_av_info av;
       if (CHANGEAV_TIMING)
       {
-         FRAMERATE = framerates[Config.AdjustFrameRates][VID_MODE];
+         FRAMERATE = px68k_current_framerate();
+         applied_frame_clk = CRTC_FrameClocks();
          audio_frame_fraction = 0.0;
          retro_get_system_av_info(&av);
          environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
@@ -3083,15 +3417,115 @@ void retro_run(void)
       else
       {
          struct retro_game_geometry geom;
-         geom.base_width = retrow;
-         geom.base_height = retroh;
-         geom.max_width = 800;
-         geom.max_height = 600;
-         geom.aspect_ratio = 4.0f / 3.0f;
-         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geom);
+         /* While the keyboard is up its own geometry stays in force; the
+          * latest game size/aspect is applied when it closes. */
+         if (!osd_video_geometry_active)
+         {
+            px68k_fill_geometry(&geom);
+            environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geom);
+         }
          CHANGEAV = 0;
       }
    }
    soundbuf_size = next_audio_frame_size();
-   video_cb(videoBuffer, retrow, retroh, /*retrow*/ 800 << 1);
+   {
+      bool osd_visible = (menu_mode == menu_out) && Keyboard_IsSwKeyboard();
+      if (osd_visible)
+      {
+         struct retro_variable osd_layout_var = {
+            "px68k_osd_keyboard_layout", NULL
+         };
+         int fullscreen_layout = 1;
+         if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &osd_layout_var) &&
+               osd_layout_var.value &&
+               !strcmp(osd_layout_var.value, "game_above"))
+            fullscreen_layout = 0;
+         {
+            struct retro_variable opacity_var = {
+               "px68k_osd_keyboard_opacity", NULL
+            };
+            struct retro_variable theme_var = {
+               "px68k_osd_keyboard_theme", NULL
+            };
+            int opacity = 100, dark = 1, look3d = 1;
+            if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &opacity_var) &&
+                  opacity_var.value)
+               opacity = atoi(opacity_var.value);
+            if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &theme_var) &&
+                  theme_var.value && strstr(theme_var.value, "light"))
+               dark = 0;
+            if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &theme_var) &&
+                  theme_var.value && strstr(theme_var.value, "flat"))
+               look3d = 0;
+            WinDraw_SetOSDKeyboardStyle(opacity, dark, look3d);
+            {
+               struct retro_variable tint_var = {
+                  "px68k_osd_keyboard_cursor_tint", NULL
+               };
+               struct retro_variable frame_var = {
+                  "px68k_osd_keyboard_cursor_frame", NULL
+               };
+               const char *tint = "fff199", *frame = "ffffff";
+               if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &tint_var) &&
+                     tint_var.value)
+                  tint = tint_var.value;
+               if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &frame_var) &&
+                     frame_var.value)
+                  frame = frame_var.value;
+               WinDraw_SetOSDKeyboardCursor(tint, frame);
+            }
+            {
+               struct retro_variable hover_var = {
+                  "px68k_osd_keyboard_hover", NULL
+               };
+               struct retro_variable fb_var = {
+                  "px68k_osd_keyboard_feedback", NULL
+               };
+               int hover = 1, feedback = 2;
+               if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &hover_var) &&
+                     hover_var.value && !strcmp(hover_var.value, "disabled"))
+                  hover = 0;
+               if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &fb_var) &&
+                     fb_var.value)
+               {
+                  if (!strcmp(fb_var.value, "off"))
+                     feedback = 0;
+                  else if (!strcmp(fb_var.value, "flash"))
+                     feedback = 1;
+               }
+               {
+                  struct retro_variable lbl_var = {
+                     "px68k_osd_keyboard_labels", NULL
+                  };
+                  int japanese = 0;
+                  if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &lbl_var) &&
+                        lbl_var.value && !strcmp(lbl_var.value, "japanese"))
+                     japanese = 1;
+                  WinDraw_SetOSDKeyboardLabels(japanese);
+               }
+               Keyboard_SetOSDHover(hover);
+               WinDraw_SetOSDKeyboardFeedback(feedback);
+            }
+         }
+         WinDraw_DrawOSDKeyboard(osd_video_buffer, videoBuffer,
+               retrow, retroh, fullscreen_layout);
+      }
+
+      /* Keep the frontend viewport at the keyboard's 768x512 reference
+       * resolution while it is visible. retrow/retroh continue tracking the
+       * emulated mode, so closing the keyboard restores the latest game size. */
+      if (osd_visible != osd_video_geometry_active)
+      {
+         struct retro_game_geometry geom;
+         osd_video_geometry_active = osd_visible;
+         /* closing the keyboard restores the current game size AND aspect */
+         px68k_fill_geometry(&geom);
+         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geom);
+      }
+
+      if (osd_visible)
+         video_cb(osd_video_buffer, OSD_VIDEO_WIDTH, OSD_VIDEO_HEIGHT, 800 << 1);
+      else
+         video_cb(videoBuffer, retrow, retroh, 800 << 1);
+   }
 }
