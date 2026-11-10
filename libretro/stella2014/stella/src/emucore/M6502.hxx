@@ -1,0 +1,336 @@
+//============================================================================
+//
+// MM     MM  6666  555555  0000   2222
+// MMMM MMMM 66  66 55     00  00 22  22
+// MM MMM MM 66     55     00  00     22
+// MM  M  MM 66666  55555  00  00  22222  --  "A 6502 Microprocessor Emulator"
+// MM     MM 66  66     55 00  00 22
+// MM     MM 66  66 55  55 00  00 22
+// MM     MM  6666   5555   0000  222222
+//
+// Copyright (c) 1995-2014 by Bradford W. Mott, Stephen Anthony
+// and the Stella Team
+//
+// See the file "License.txt" for information on usage and redistribution of
+// this file, and for a DISCLAIMER OF ALL WARRANTIES.
+//
+// $Id: M6502.hxx 2838 2014-01-17 23:34:03Z stephena $
+//============================================================================
+
+#ifndef M6502_HXX
+#define M6502_HXX
+
+class M6502;
+class CpuDebug;
+class Expression;
+class PackedBitArray;
+class Settings;
+
+#include "bspf.hxx"
+#include "System.hxx"
+#include "Array.hxx"
+#include "StringList.hxx"
+#include "Serializable.hxx"
+
+typedef Common::Array<Expression*> ExpressionList;
+
+/**
+  The 6502 is an 8-bit microprocessor that has a 64K addressing space.
+  This class provides a high compatibility 6502 microprocessor emulator.
+
+  The memory accesses and cycle counts it generates are valid at the
+  sub-instruction level and "false" reads are generated (such as the ones 
+  produced by the Indirect,X addressing when it crosses a page boundary).
+  This provides provides better compatibility for hardware that has side
+  effects and for games which are very time sensitive.
+
+  @author  Bradford W. Mott
+  @version $Id: M6502.hxx 2838 2014-01-17 23:34:03Z stephena $
+*/
+class M6502 : public Serializable
+{
+  public:
+    /**
+      Create a new 6502 microprocessor with the specified cycle 
+      multiplier.  The cycle multiplier is the number of system cycles 
+      per processor cycle.
+
+      @param systemCyclesPerProcessorCycle The cycle multiplier
+    */
+    M6502(uint32_t systemCyclesPerProcessorCycle, const Settings& settings);
+
+    /**
+      Destructor
+    */
+    virtual ~M6502();
+
+  public:
+    /**
+      Install the processor in the specified system.  Invoked by the
+      system when the processor is attached to it.
+
+      @param system The system the processor should install itself in
+    */
+    void install(System& system);
+
+    /**
+      Reset the processor to its power-on state.  This method should not 
+      be invoked until the entire 6502 system is constructed and installed
+      since it involves reading the reset vector from memory.
+    */
+    void reset();
+
+    /**
+      Request a maskable interrupt
+    */
+    void irq() { myExecutionStatus |= MaskableInterruptBit; }
+
+    /**
+      Request a non-maskable interrupt
+    */
+    void nmi() { myExecutionStatus |= NonmaskableInterruptBit; }
+
+    /**
+      Execute instructions until the specified number of instructions
+      is executed, someone stops execution, or an error occurs.  Answers
+      true iff execution stops normally.
+
+      @param number Indicates the number of instructions to execute
+      @return true iff execution stops normally
+    */
+    bool execute(uint32_t number);
+
+    /**
+      Tell the processor to stop executing instructions.  Invoking this 
+      method while the processor is executing instructions will stop 
+      execution as soon as possible.
+    */
+    void stop() { myExecutionStatus |= StopExecutionBit; }
+
+    /**
+      Get the 16-bit value of the Program Counter register.
+
+      @return The program counter register
+    */
+    uint16_t getPC() const { return PC; }
+
+    /**
+      Answer true iff the last memory access was a read.
+
+      @return true iff last access was a read
+    */ 
+    bool lastAccessWasRead() const { return myLastAccessWasRead; }
+
+    /**                                                                    
+      Return the last address that was part of a read/peek.  Note that
+      reads which are part of a write are not considered here, unless
+      they're not the same as the last write address.  This eliminates
+      accesses that are part of a normal read/write cycle.
+
+      @return The address of the last read
+    */
+    uint16_t lastReadAddress() const {
+      return myLastPokeAddress ?
+        (myLastPokeAddress != myLastPeekAddress ? myLastPeekAddress : 0) :
+        myLastPeekAddress;
+    }
+
+    /**                                                                    
+      Return the source of the address that was used for a write/poke.
+      Note that this isn't the same as the address that is poked, but
+      is instead the address of the *data* that is poked (if any).
+
+      @return The address of the data used in the last poke, else 0
+    */
+    uint16_t lastDataAddressForPoke() const { return myDataAddressForPoke; }
+
+    /**                                                                    
+      Return the last data address used as part of a peek operation for
+      the S/A/X/Y registers.  Note that if an address wasn't used (as in
+      immediate mode), then the address is -1.
+
+      @return The address of the data used in the last peek, else -1
+    */
+    int32_t lastSrcAddressS() const { return myLastSrcAddressS; }
+    int32_t lastSrcAddressA() const { return myLastSrcAddressA; }
+    int32_t lastSrcAddressX() const { return myLastSrcAddressX; }
+    int32_t lastSrcAddressY() const { return myLastSrcAddressY; }
+
+    /**
+      Get the total number of instructions executed so far.
+
+      @return The number of executed instructions
+    */
+    int totalInstructionCount() const { return myTotalInstructionCount; }
+
+    /**
+      Get the number of memory accesses to distinct memory locations
+
+      @return The number of memory accesses to distinct memory locations
+    */
+    uint32_t distinctAccesses() const { return myNumberOfDistinctAccesses; }
+
+    /**
+      Saves the current state of this device to the given Serializer.
+
+      @param out The serializer device to save to.
+      @return The result of the save.  True on success, false on failure.
+    */
+    bool save(Serializer& out) const;
+
+    /**
+      Loads the current state of this device from the given Serializer.
+
+      @param in The Serializer device to load from.
+      @return The result of the load.  True on success, false on failure.
+    */
+    bool load(Serializer& in);
+
+    /**
+      Get a null terminated string which is the processor's name (i.e. "M6532")
+
+      @return The name of the device
+    */
+    string name() const { return "M6502"; }
+
+  private:
+    /**
+      Get the byte at the specified address and update the cycle count.
+      Addresses marked as code are hints to the debugger/disassembler to
+      conclusively determine code sections, even if the disassembler cannot
+      find them itself.
+
+      @param address  The address from which the value should be loaded
+      @param flags    Indicates that this address has the given flags
+                      for type of access (CODE, DATA, GFX, etc)
+
+      @return The byte at the specified address
+    */
+    uint8_t peek(uint16_t address, uint8_t flags);
+
+    /**
+      Change the byte at the specified address to the given value and
+      update the cycle count.
+
+      @param address  The address where the value should be stored
+      @param value    The value to be stored at the address
+    */
+    void poke(uint16_t address, uint8_t value);
+
+    /**
+      Get the 8-bit value of the Processor Status register.
+
+      @return The processor status register
+    */
+    uint8_t PS() const {
+      uint8_t ps = 0x20;
+
+      if(N)     ps |= 0x80;
+      if(V)     ps |= 0x40;
+      if(B)     ps |= 0x10;
+      if(D)     ps |= 0x08;
+      if(I)     ps |= 0x04;
+      if(!notZ) ps |= 0x02;
+      if(C)     ps |= 0x01;
+
+      return ps;
+    }
+
+    /**
+      Change the Processor Status register to correspond to the given value.
+
+      @param ps The value to set the processor status register to
+    */
+    void PS(uint8_t ps) {
+      N = ps & 0x80;
+      V = ps & 0x40;
+      B = true;        // B = ps & 0x10;  The 6507's B flag always true
+      D = ps & 0x08;
+      I = ps & 0x04;
+      notZ = !(ps & 0x02);
+      C = ps & 0x01;
+    }
+
+    /**
+      Called after an interrupt has be requested using irq() or nmi()
+    */
+    void interruptHandler();
+
+  private:
+    uint8_t A;    // Accumulator
+    uint8_t X;    // X index register
+    uint8_t Y;    // Y index register
+    uint8_t SP;   // Stack Pointer
+    uint8_t IR;   // Instruction register
+    uint16_t PC;  // Program Counter
+
+    bool N;     // N flag for processor status register
+    bool V;     // V flag for processor status register
+    bool B;     // B flag for processor status register
+    bool D;     // D flag for processor status register
+    bool I;     // I flag for processor status register
+    bool notZ;  // Z flag complement for processor status register
+    bool C;     // C flag for processor status register
+
+    /** 
+      Bit fields used to indicate that certain conditions need to be 
+      handled such as stopping execution, fatal errors, maskable interrupts 
+      and non-maskable interrupts (in myExecutionStatus)
+    */
+    enum 
+    {
+      StopExecutionBit = 0x01,
+      FatalErrorBit = 0x02,
+      MaskableInterruptBit = 0x04,
+      NonmaskableInterruptBit = 0x08
+    };
+    uint8_t myExecutionStatus;
+  
+    /// Pointer to the system the processor is installed in or the null pointer
+    System* mySystem;
+
+    /// Reference to the settings
+    const Settings& mySettings;
+
+    /// Indicates the number of system cycles per processor cycle 
+    const uint32_t mySystemCyclesPerProcessorCycle;
+
+    /// Table of system cycles for each instruction
+    uint32_t myInstructionSystemCycleTable[256]; 
+
+    /// Indicates if the last memory access was a read or not
+    bool myLastAccessWasRead;
+
+    /// The total number of instructions executed so far
+    int myTotalInstructionCount;
+
+    /// Indicates the numer of distinct memory accesses
+    uint32_t myNumberOfDistinctAccesses;
+
+    /// Indicates the last address which was accessed
+    uint16_t myLastAddress;
+
+    /// Indicates the last address which was accessed specifically
+    /// by a peek or poke command
+    uint16_t myLastPeekAddress, myLastPokeAddress;
+
+    /// Indicates the last address used to access data by a peek command
+    /// for the CPU registers (S/A/X/Y)
+    int32_t myLastSrcAddressS, myLastSrcAddressA,
+          myLastSrcAddressX, myLastSrcAddressY;
+
+    /// Indicates the data address used by the last command that performed
+    /// a poke (currently, the last address used by STx)
+    /// If an address wasn't used (ie, as in immediate mode), the address
+    /// is set to zero
+    uint16_t myDataAddressForPoke;
+
+  private:
+    /**
+      Table of instruction processor cycle times.  In some cases additional 
+      cycles will be added during the execution of an instruction.
+    */
+    static uint32_t ourInstructionCycleTable[256];
+};
+
+#endif

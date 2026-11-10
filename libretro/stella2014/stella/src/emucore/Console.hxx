@@ -1,0 +1,395 @@
+//============================================================================
+//
+//   SSSS    tt          lll  lll       
+//  SS  SS   tt           ll   ll        
+//  SS     tttttt  eeee   ll   ll   aaaa 
+//   SSSS    tt   ee  ee  ll   ll      aa
+//      SS   tt   eeeeee  ll   ll   aaaaa  --  "An Atari 2600 VCS Emulator"
+//  SS  SS   tt   ee      ll   ll  aa  aa
+//   SSSS     ttt  eeeee llll llll  aaaaa
+//
+// Copyright (c) 1995-2014 by Bradford W. Mott, Stephen Anthony
+// and the Stella Team
+//
+// See the file "License.txt" for information on usage and redistribution of
+// this file, and for a DISCLAIMER OF ALL WARRANTIES.
+//
+// $Id: Console.hxx 2838 2014-01-17 23:34:03Z stephena $
+//============================================================================
+
+#ifndef CONSOLE_HXX
+#define CONSOLE_HXX
+
+class Controller;
+class Event;
+class Switches;
+class System;
+class TIA;
+class M6532;
+class Cartridge;
+class CompuMate;
+
+#include "bspf.hxx"
+#include "Control.hxx"
+#include "Props.hxx"
+#include "OSystem.hxx"
+#include "TIATables.hxx"
+#include "Serializable.hxx"
+
+/**
+  Contains detailed info about a console.
+*/
+struct ConsoleInfo
+{
+  string BankSwitch;
+  string CartName;
+  string CartMD5;
+  string Control0;
+  string Control1;
+  string DisplayFormat;
+  string InitialFrameRate;
+};
+
+/**
+  This class represents the entire game console.
+
+  @author  Bradford W. Mott
+  @version $Id: Console.hxx 2838 2014-01-17 23:34:03Z stephena $
+*/
+class Console : public Serializable
+{
+  public:
+    /**
+      Create a new console for emulating the specified game using the
+      given game image and operating system.
+
+      @param osystem  The OSystem object to use
+      @param cart     The cartridge to use with this console
+      @param props    The properties for the cartridge  
+    */
+    Console(OSystem* osystem, Cartridge* cart, const Properties& props);
+
+    /**
+      Create a new console object by copying another one
+
+      @param console The object to copy
+    */
+    Console(const Console& console);
+ 
+    /**
+      Destructor
+    */
+    virtual ~Console();
+
+  public:
+    /**
+      Get the controller plugged into the specified jack
+
+      @return The specified controller
+    */
+    Controller& controller(Controller::Jack jack) const
+    {
+      return *myControllers[jack];
+    }
+
+    /**
+      Get the TIA for this console
+
+      @return The TIA
+    */
+    TIA& tia() const { return *myTIA; }
+
+    /**
+      Get the properties being used by the game
+
+      @return The properties being used by the game
+    */
+    const Properties& properties() const { return myProperties; }
+
+    /**
+      Get the console switches
+
+      @return The console switches
+    */
+    Switches& switches() const { return *mySwitches; }
+
+    /**
+      Get the 6502 based system used by the console to emulate the game
+
+      @return The 6502 based system
+    */
+    System& system() const { return *mySystem; }
+
+    /**
+      Get the cartridge used by the console which contains the ROM code
+
+      @return The cartridge for this console
+    */
+    Cartridge& cartridge() const { return *myCart; }
+
+    /**
+      Get the 6532 used by the console
+
+      @return The 6532 for this console
+    */
+    M6532& riot() const { return *myRiot; }
+
+    /**
+      Get the CompuMate handler used by the console
+      (only valid for CompuMate ROMs)
+
+      @return The CompuMate handler for this console (if it exists), otherwise 0
+    */
+    CompuMate* compumate() const { return myCMHandler; }
+
+    /**
+      Saves the current state of this console class to the given Serializer.
+
+      @param out The serializer device to save to.
+      @return The result of the save.  True on success, false on failure.
+    */
+    bool save(Serializer& out) const;
+
+    /**
+      Loads the current state of this console class from the given Serializer.
+
+      @param in The Serializer device to load from.
+      @return The result of the load.  True on success, false on failure.
+    */
+    bool load(Serializer& in);
+
+    /**
+      Get a descriptor for this console class (used in error checking).
+
+      @return The name of the object
+    */
+    string name() const { return "Console"; }
+
+    /**
+      Set the properties to those given
+
+      @param The properties to use for the current game
+    */
+    void setProperties(const Properties& props);
+
+    /**
+      Query detailed information about this console.
+    */
+    const ConsoleInfo& about() const { return myConsoleInfo; }
+
+    /**
+      Informs the Console of a change in EventHandler state.
+    */
+    void stateChanged(EventHandler::State state);
+
+  public:
+    /**
+      Overloaded assignment operator
+
+      @param console The console object to set myself equal to
+      @return Myself after assignment has taken place
+    */
+    Console& operator = (const Console& console);
+
+  public:
+    /**
+      Toggle between NTSC/PAL/SECAM (and variants) display format.
+
+      @param direction +1 indicates increase, -1 indicates decrease.
+    */
+    void toggleFormat(int direction = 1);
+
+    /**
+      Toggle between the available palettes.
+    */
+    void togglePalette();
+
+    /**
+      Sets the palette according to the given palette name.
+
+      @param palette  The palette to switch to.
+    */
+    void setPalette(const string& palette);
+
+    /**
+      Toggles the PAL color-loss effect.
+    */
+    void toggleColorLoss();
+    void toggleColorLoss(bool state);
+
+    /**
+      Initialize the video subsystem wrt this class.
+      This is required for changing window size, title, etc.
+    */
+    void initializeVideo();
+
+    /**
+      Initialize the audio subsystem wrt this class.
+      This is required any time the sound settings change.
+    */
+    void initializeAudio();
+
+    /**
+      "Fry" the Atari (mangle memory/TIA contents)
+    */
+    void fry() const;
+
+    /**
+      Change the "Display.YStart" variable.
+
+      @param direction +1 indicates increase, -1 indicates decrease.
+    */
+    void changeYStart(int direction);
+
+    /**
+      Change the "Display.Height" variable.
+
+      @param direction +1 indicates increase, -1 indicates decrease.
+    */
+    void changeHeight(int direction);
+
+    /**
+      Sets the framerate of the console, which in turn communicates
+      this to all applicable subsystems.
+    */
+    void setFramerate(uint32_t num, uint32_t den);
+
+    /**
+      Returns the framerate based on a number of factors
+      (whether 'framerate' is set, what display format is in use, etc)
+    */
+    uint32_t getFramerateNum() const { return myFramerateNum; }
+    uint32_t getFramerateDen() const { return myFramerateDen; }
+
+    /**
+      Toggles the TIA bit specified in the method name.
+    */
+    void toggleP0Bit() const { toggleTIABit(P0Bit, "P0"); }
+    void toggleP1Bit() const { toggleTIABit(P1Bit, "P1"); }
+    void toggleM0Bit() const { toggleTIABit(M0Bit, "M0"); }
+    void toggleM1Bit() const { toggleTIABit(M1Bit, "M1"); }
+    void toggleBLBit() const { toggleTIABit(BLBit, "BL"); }
+    void togglePFBit() const { toggleTIABit(PFBit, "PF"); }
+    void toggleHMOVE() const;
+    void toggleBits() const;
+
+    /**
+      Toggles the TIA collisions specified in the method name.
+    */
+    void toggleP0Collision() const { toggleTIACollision(P0Bit, "P0"); }
+    void toggleP1Collision() const { toggleTIACollision(P1Bit, "P1"); }
+    void toggleM0Collision() const { toggleTIACollision(M0Bit, "M0"); }
+    void toggleM1Collision() const { toggleTIACollision(M1Bit, "M1"); }
+    void toggleBLCollision() const { toggleTIACollision(BLBit, "BL"); }
+    void togglePFCollision() const { toggleTIACollision(PFBit, "PF"); }
+    void toggleCollisions() const;
+
+    /**
+      Toggles the TIA 'fixed debug colors' mode.
+    */
+    void toggleFixedColors() const;
+
+    /**
+      Returns a pointer to the palette data for the palette currently defined
+      by the ROM properties.
+    */
+    const uint32_t* getPalette(int direction) const;
+
+  private:
+    /**
+      Sets various properties of the TIA (YStart, Height, etc) based on
+      the current display format.
+    */
+    void setTIAProperties();
+
+    /**
+      Adds the left and right controllers to the console.
+    */
+    void setControllers(const string& rommd5);
+
+    /**
+      Loads a user-defined palette file (from OSystem::paletteFile), filling the
+      appropriate user-defined palette arrays.
+    */
+    void loadUserPalette();
+
+    /**
+      Loads all defined palettes with PAL color-loss data, even those that
+      normally can't have it enabled (NTSC), since it's also used for
+      'greying out' the frame in the debugger.
+    */
+    void setColorLossPalette();
+
+    void toggleTIABit(TIABit bit, const string& bitname, bool show = true) const;
+    void toggleTIACollision(TIABit bit, const string& bitname, bool show = true) const;
+
+  private:
+    // Pointer to the osystem object
+    OSystem* myOSystem;
+
+    // Reference to the event object to use
+    Event& myEvent;
+
+    // Properties for the game
+    Properties myProperties;
+
+    // Pointers to the left and right controllers
+    Controller* myControllers[2];
+
+    // Pointer to the TIA object 
+    TIA* myTIA;
+
+    // Pointer to the switches on the front of the console
+    Switches* mySwitches;
+ 
+    // Pointer to the 6502 based system being emulated 
+    System* mySystem;
+
+    // Pointer to the Cartridge (the debugger needs it)
+    Cartridge* myCart;
+
+    // Pointer to the 6532 (aka RIOT) (the debugger needs it)
+    // A RIOT of my own! (...with apologies to The Clash...)
+    M6532* myRiot;
+
+    // Pointer to CompuMate handler (only used in CompuMate ROMs)
+    CompuMate* myCMHandler;
+
+    // The currently defined display format (NTSC/PAL/SECAM)
+    string myDisplayFormat;
+
+    // The currently defined display framerate
+    // Framerate as an exact rational (frames per second = num/den),
+    // e.g. NTSC 59.92 fps = 1498/25, PAL 49.92 fps = 1248/25
+    uint32_t myFramerateNum;
+    uint32_t myFramerateDen;
+
+    // Display format currently in use
+    uint32_t myCurrentFormat;
+
+    // Indicates whether an external palette was found and
+    // successfully loaded
+    bool myUserPaletteDefined;
+
+    // Contains detailed info about this console
+    ConsoleInfo myConsoleInfo;
+
+	const uint32_t *currentPalette;
+
+    // Table of RGB values for NTSC, PAL and SECAM
+    static uint32_t ourNTSCPalette[256];
+    static uint32_t ourPALPalette[256];
+    static uint32_t ourSECAMPalette[256];
+
+    // Table of RGB values for NTSC, PAL and SECAM - Z26 version
+    static uint32_t ourNTSCPaletteZ26[256];
+    static uint32_t ourPALPaletteZ26[256];
+    static uint32_t ourSECAMPaletteZ26[256];
+
+    // Table of RGB values for NTSC, PAL and SECAM - user-defined
+    static uint32_t ourUserNTSCPalette[256];
+    static uint32_t ourUserPALPalette[256];
+    static uint32_t ourUserSECAMPalette[256];
+};
+
+#endif
