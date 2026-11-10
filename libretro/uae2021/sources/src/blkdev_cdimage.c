@@ -74,6 +74,17 @@ struct cdtoc
 	int suboffset;
 	uae_u8 *subdata;
 
+	/* Read-ahead windows for the loose-image sector reads below (data and
+	   subchannel). The host stdio drops its internal buffer on every seek,
+	   so the per-sector seek+read pattern turned each CD sector into a
+	   device round trip; streaming a CD (CDDA + data at once) then stalls
+	   emulation on slow storage. The windows are content-addressed by
+	   their base offset, so they stay valid no matter where the handle
+	   is left positioned, and reads only need to seek for a refill. */
+	uae_u8 *dcache, *scache;
+	uae_s64 dcache_base, scache_base;
+	int dcache_len, scache_len;
+
 	uae_s64 filesize;
 	TCHAR *fname;
 	TCHAR *extrainfo;
@@ -168,6 +179,38 @@ static struct cdtoc *findtoc (struct cdunit *cdu, int *sectorp, bool data)
 	return NULL;
 }
 
+/* Read 'len' bytes at file offset 'pos' through a per-track read-ahead
+   window, collapsing the per-sector seek+read pattern of the CD access
+   paths into one bulk device read per window refill. Requests larger than
+   the window bypass it. Returns 1 on success, 0 on EOF/failure. */
+#define CD_CACHE_SIZE (64 * 1024)
+
+static int cd_cache_read (uae_u8 **cachep, uae_s64 *basep, int *lenp,
+	struct zfile *f, uae_s64 pos, uae_u8 *out, int len)
+{
+	uae_u8 *cache = *cachep;
+
+	if (len > CD_CACHE_SIZE) {
+		zfile_fseek (f, pos, SEEK_SET);
+		return zfile_fread (out, 1, len, f) == (size_t)len;
+	}
+	if (!cache) {
+		cache = xmalloc (uae_u8, CD_CACHE_SIZE);
+		*cachep = cache;
+		*basep = 0;
+		*lenp = 0;
+	}
+	if (pos < *basep || pos - *basep + len > *lenp) {
+		zfile_fseek (f, pos, SEEK_SET);
+		*basep = pos;
+		*lenp = (int)zfile_fread (cache, 1, CD_CACHE_SIZE, f);
+	}
+	if (pos - *basep + len > *lenp)
+		return 0;
+	memcpy (out, cache + (pos - *basep), len);
+	return 1;
+}
+
 static int do_read (struct cdunit *cdu, struct cdtoc *t, uae_u8 *data, int sector, int offset, int size, bool audio)
 {
 	if (t->enctype == ENC_CHD) {
@@ -201,8 +244,8 @@ static int do_read (struct cdunit *cdu, struct cdtoc *t, uae_u8 *data, int secto
 #endif
 	} else if (t->handle) {
 		int ssize = t->size + t->skipsize;
-		zfile_fseek (t->handle, t->offset + (uae_u64)sector * ssize + offset, SEEK_SET);
-		return zfile_fread (data, 1, size, t->handle) == size;
+		uae_s64 fpos = t->offset + (uae_u64)sector * ssize + offset;
+		return cd_cache_read (&t->dcache, &t->dcache_base, &t->dcache_len, t->handle, fpos, data, size);
 	}
 	return 0;
 }
@@ -342,12 +385,13 @@ static int getsub_deinterleaved (uae_u8 *dst, struct cdunit *cdu, struct cdtoc *
 		} else if (t->subhandle) {
 			int offset = 0;
 			int totalsize = SUB_CHANNEL_SIZE;
+			uae_s64 fpos;
 			if (t->skipsize) {
 				totalsize += t->size;
 				offset = t->size;
 			}
-			zfile_fseek (t->subhandle, (uae_u64)sector * totalsize + t->suboffset + offset, SEEK_SET);
-			if (zfile_fread (dst, SUB_CHANNEL_SIZE, 1, t->subhandle) > 0)
+			fpos = (uae_u64)sector * totalsize + t->suboffset + offset;
+			if (cd_cache_read (&t->scache, &t->scache_base, &t->scache_len, t->subhandle, fpos, dst, SUB_CHANNEL_SIZE) > 0)
 				ret = t->subcode;
 		} else {
 			memcpy (dst, t->subdata + sector * SUB_CHANNEL_SIZE + t->suboffset, SUB_CHANNEL_SIZE);
@@ -733,8 +777,8 @@ static bool cdda_play_func2 (struct cdunit *cdu, int *outpos)
 										memcpy (dst, t->data + sector * totalsize + offset, t->size);
 								} else if (t->enctype == AUDENC_PCM) {
 									if (sector * totalsize + offset + totalsize < t->filesize) {
-										zfile_fseek (t->handle, (uae_u64)sector * totalsize + offset, SEEK_SET);
-										zfile_fread (dst, t->size, 1, t->handle);
+										cd_cache_read (&t->dcache, &t->dcache_base, &t->dcache_len, t->handle,
+											(uae_s64)sector * totalsize + offset, dst, t->size);
 #ifdef WORDS_BIGENDIAN
 										/* PCM crudo es little-endian (Red Book):
 										 * en un host big-endian hay que darle la
@@ -2436,6 +2480,12 @@ static void unload_image (struct cdunit *cdu)
 		xfree (t->data);
 		xfree (t->subdata);
 		xfree (t->extrainfo);
+		xfree (t->dcache);
+		xfree (t->scache);
+		t->dcache = NULL;
+		t->scache = NULL;
+		t->dcache_len = 0;
+		t->scache_len = 0;
 	}
 #ifdef WITH_CHD
 #ifdef __LIBRETRO__

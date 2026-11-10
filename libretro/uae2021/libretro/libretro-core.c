@@ -1208,11 +1208,11 @@ static void retro_set_core_options()
          NULL,
          "media",
          {
-            { "100", "Default" },
             { "0", "Turbo" },
+            { "100", "Default" },
             { NULL, NULL },
          },
-         "100"
+         "0"
       },
       {
          "puae_cd_startup_delayed_insert",
