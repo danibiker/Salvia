@@ -1,0 +1,269 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\libretro.cxx" />
+    <ClCompile Include="..\stella\src\common\Base.cxx" />
+    <ClCompile Include="..\stella\src\common\Sound.cxx" />
+    <ClCompile Include="..\stella\src\emucore\AtariVox.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Booster.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart03E0.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart0840.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart0FA0.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart2K.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart3E.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart3EPlus.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart3EX.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart3F.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart4A50.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart4K.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Cart4KSC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartAR.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartARM.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartBF.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartBFSC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartBUS.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartCDF.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartCM.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartCTY.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartCV.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartDF.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartDFSC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartDPC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartDPCPlus.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartE0.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartE7.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartEF.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartEFSC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartEnhanced.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF0.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF4.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF4SC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF6.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF6SC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF8.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartF8SC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartFA.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartFA2.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartFC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartFE.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartGL.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartMC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartMDM.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartMVC.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartSB.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartTVBoy.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartUA.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartWD.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CartX07.cxx" />
+    <ClCompile Include="..\stella\src\emucore\CompuMate.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Console.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Control.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Driving.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Genesis.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Joystick.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Keyboard.cxx" />
+    <ClCompile Include="..\stella\src\emucore\KidVid.cxx" />
+    <ClCompile Include="..\stella\src\emucore\M6502.cxx" />
+    <ClCompile Include="..\stella\src\emucore\M6532.cxx" />
+    <ClCompile Include="..\stella\src\emucore\MD5.cxx" />
+    <ClCompile Include="..\stella\src\emucore\MindLink.cxx" />
+    <ClCompile Include="..\stella\src\emucore\MT24LC256.cxx" />
+    <ClCompile Include="..\stella\src\emucore\NullDev.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Paddles.cxx" />
+    <ClCompile Include="..\stella\src\emucore\QuadTari.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Props.cxx" />
+    <ClCompile Include="..\stella\src\emucore\PropsSet.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Random.cxx" />
+    <ClCompile Include="..\stella\src\emucore\SaveKey.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Serializer.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Settings.cxx" />
+    <ClCompile Include="..\stella\src\emucore\StateManager.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Switches.cxx" />
+    <ClCompile Include="..\stella\src\emucore\System.cxx" />
+    <ClCompile Include="..\stella\src\emucore\TIA.cxx" />
+    <ClCompile Include="..\stella\src\emucore\TIASnd.cxx" />
+    <ClCompile Include="..\stella\src\emucore\TIATables.cxx" />
+    <ClCompile Include="..\stella\src\emucore\TrackBall.cxx" />
+    <ClCompile Include="..\stella\src\emucore\Thumbulator.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="..\libretro-common\time\rtime.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{56CA2272-019E-4D04-90C6-2A80FA417F00}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>stella2014</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutDir>$(ProjectDir)$(Configuration)\Xbox 360\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutDir>$(ProjectDir)$(Configuration)\Xbox 360\</OutDir>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level1</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;__LIBRETRO__;THUMB_SUPPORT;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\stella;$(ProjectDir)..\stella\src;$(ProjectDir)..\stella\stubs;$(ProjectDir)..\stella\src\emucore;$(ProjectDir)..\stella\src\common;$(ProjectDir)..\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level1</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;__LIBRETRO__;THUMB_SUPPORT;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\stella;$(ProjectDir)..\stella\src;$(ProjectDir)..\stella\stubs;$(ProjectDir)..\stella\src\emucore;$(ProjectDir)..\stella\src\common;$(ProjectDir)..\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level1</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;THUMB_SUPPORT;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\stella;$(ProjectDir)..\stella\src;$(ProjectDir)..\stella\stubs;$(ProjectDir)..\stella\src\emucore;$(ProjectDir)..\stella\src\common;$(ProjectDir)..\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <ExceptionHandling>false</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level1</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;__LIBRETRO__;THUMB_SUPPORT;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\stella;$(ProjectDir)..\stella\src;$(ProjectDir)..\stella\stubs;$(ProjectDir)..\stella\src\emucore;$(ProjectDir)..\stella\src\common;$(ProjectDir)..\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
