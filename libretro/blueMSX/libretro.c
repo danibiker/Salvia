@@ -1527,7 +1527,7 @@ void retro_run(void)
 
    /* OSK toggle via SELECT (only for machines with keyboard: MSX, SVI, SC-3000, SF-7000) */
    if (!is_coleco && (!is_sega || is_sega_kb)) {
-      int sel = !!(joypad_bits[0] & (1 << RETRO_DEVICE_ID_JOYPAD_SELECT));
+      int sel = !!(joypad_bits[0] & (1 << RETRO_DEVICE_ID_JOYPAD_L3));
       if (sel && !osk_select_prev)
          vkbd_toggle();
       osk_select_prev = sel;

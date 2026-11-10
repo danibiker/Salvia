@@ -2849,13 +2849,8 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 	
 	//Drawing the image
 	if (!rutaSelected.empty() && lastImagePath != rutaSelected){
-
 		std::string rutaImg = opcion->file.dir + Constant::getFileSep() + opcion->file.filename + STATE_IMG_EXT;
-		#ifdef _XBOX
-		//Filtramos nombres largos o caracteres extranyos
-		rutaImg = Constant::checkPath(rutaImg);
-		#endif
-		imageSavestate.loadImage(rutaImg);
+		imageSavestate.loadImage(rutaImg, video_page->format);
 		lastImagePath = opcion->file.filename;
 	}
 

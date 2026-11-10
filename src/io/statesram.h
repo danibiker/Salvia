@@ -177,7 +177,7 @@ class StateSram{
 			//   - CPU ~3x mas rapida que wb6;
 			//   - la cola de ceros del buffer (memset en retro_serialize) se colapsa
 			//     casi igual de bien a nivel 1 que a nivel 6.
-			gzFile file = gzopen(path, "wb6");
+			gzFile file = gzopen(path, "wb1");
 			if (!file) {
 				// En el XDK, errno no siempre es fiable. GetLastError() da mas info.
 				LOG_ERROR("No se pudo abrir para comprimir: %s (Causa: %s)\n", path, strerror(errno));
@@ -208,7 +208,7 @@ class StateSram{
 
 			gzflush(file, Z_FINISH);
 			gzclose(file);
-			Fileio::commit(path);
+			//Fileio::commit(path);
 			LOG_DEBUG("Archivo comprimido guardado: %s (%Iu bytes)\n", path, buffer_size);
 			return true;
 		}
@@ -516,7 +516,9 @@ class StateSram{
 
 				if (ra_buffer)
 					free(ra_buffer);
-
+				// Limpieza final
+				free(core_buffer);
+				gzclose(file);
 				return LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(saveContext.g_currentSlot);
 			} else {
 				LOG_ERROR("Error de lectura: El archivo es mas pequenyo de lo esperado.");
@@ -602,7 +604,7 @@ class StateSram{
 				std::string statePath = Constant::checkPath(localPath);
 				if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize, sd->savingProgress)){
 					if (localScreenshot != NULL) {
-						std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
+						std::string imgPath = statePath + STATE_IMG_EXT;
 						GuardarCapturaPNG(imgPath, (uint8_t*)localScreenshot, width, height, bpp);
 						sd->screenshotSaved = true;
 						sd->toastMessage = LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot);
