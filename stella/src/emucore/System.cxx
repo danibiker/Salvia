@@ -1,0 +1,300 @@
+//============================================================================
+//
+// MM     MM  6666  555555  0000   2222
+// MMMM MMMM 66  66 55     00  00 22  22
+// MM MMM MM 66     55     00  00     22
+// MM  M  MM 66666  55555  00  00  22222  --  "A 6502 Microprocessor Emulator"
+// MM     MM 66  66     55 00  00 22
+// MM     MM 66  66 55  55 00  00 22
+// MM     MM  6666   5555   0000  222222
+//
+// Copyright (c) 1995-2014 by Bradford W. Mott, Stephen Anthony
+// and the Stella Team
+//
+// See the file "License.txt" for information on usage and redistribution of
+// this file, and for a DISCLAIMER OF ALL WARRANTIES.
+//
+// $Id: System.cxx 2838 2014-01-17 23:34:03Z stephena $
+//============================================================================
+
+#include "Device.hxx"
+#include "M6502.hxx"
+#include "M6532.hxx"
+#include "TIA.hxx"
+#include "System.hxx"
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+System::System(uint16_t n, uint16_t m)
+  : myAddressMask((1 << n) - 1),
+    myPageShift(m),
+    myPageMask((1 << m) - 1),
+    myNumberOfPages(1 << (n - m)),
+    myNumberOfDevices(0),
+    myM6502(0),
+    myTIA(0),
+    myCycles(0),
+    myDataBusState(0),
+    myDataBusLocked(false),
+    mySystemInAutodetect(false)
+{
+  // Create a new random number generator
+  myRandom = new Random();
+
+  // Allocate page table and dirty list
+  myPageAccessTable = new PageAccess[myNumberOfPages];
+  myPageIsDirtyTable = new bool[myNumberOfPages];
+
+  // Initialize page access table
+  PageAccess access;
+  access.directPeekBase = 0;
+  access.directPokeBase = 0;
+  access.device = &myNullDevice;
+  for(int page = 0; page < myNumberOfPages; ++page)
+  {
+    setPageAccess(page, access);
+    myPageIsDirtyTable[page] = false;
+  }
+
+  // Bus starts out unlocked (in other words, peek() changes myDataBusState)
+  myDataBusLocked = false;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+System::~System()
+{
+  // Free the devices attached to me, since I own them
+  for(uint32_t i = 0; i < myNumberOfDevices; ++i)
+  {
+    delete myDevices[i];
+  }
+
+  // Free the M6502 that I own
+  delete myM6502;
+
+  // Free my page access table and dirty list
+  delete[] myPageAccessTable;
+  delete[] myPageIsDirtyTable;
+
+  // Free the random number generator
+  delete myRandom;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::reset(bool autodetect)
+{
+  // Provide hint to devices that autodetection is active (or not)
+  mySystemInAutodetect = autodetect;
+
+  // Reset system cycle counter
+  resetCycles();
+
+  // First we reset the devices attached to myself
+  for(uint32_t i = 0; i < myNumberOfDevices; ++i)
+    myDevices[i]->reset();
+
+  // Now we reset the processor if it exists
+  if(myM6502 != 0)
+    myM6502->reset();
+
+  // There are no dirty pages upon startup
+  clearDirtyPages();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::attach(Device* device)
+{
+  // Add device to my collection of devices
+  myDevices[myNumberOfDevices++] = device;
+
+  // Ask the device to install itself
+  device->install(*this);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::attach(M6502* m6502)
+{
+  // Remember the processor
+  myM6502 = m6502;
+
+  // Ask the processor to install itself
+  myM6502->install(*this);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::attach(M6532* m6532)
+{
+  // Remember the processor
+  myM6532 = m6532;
+
+  // Attach it as a normal device
+  attach((Device*) m6532);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::attach(TIA* tia)
+{
+  myTIA = tia;
+  attach((Device*) tia);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::resetCycles()
+{
+  // First we let all of the device attached to me know about the reset
+  for(uint32_t i = 0; i < myNumberOfDevices; ++i)
+  {
+    myDevices[i]->systemCyclesReset();
+  }
+
+  // Now, we reset cycle count to zero
+  myCycles = 0;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::setPageAccess(uint16_t page, const PageAccess& access)
+{
+  myPageAccessTable[page] = access;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+const System::PageAccess& System::getPageAccess(uint16_t page) const
+{
+  return myPageAccessTable[page];
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+System::PageAccessType System::getPageAccessType(uint16_t addr) const
+{
+  return myPageAccessTable[(addr & myAddressMask) >> myPageShift].type;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::setDirtyPage(uint16_t addr)
+{
+  myPageIsDirtyTable[(addr & myAddressMask) >> myPageShift] = true;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool System::isPageDirty(uint16_t start_addr, uint16_t end_addr) const
+{
+  uint16_t start_page = (start_addr & myAddressMask) >> myPageShift;
+  uint16_t end_page = (end_addr & myAddressMask) >> myPageShift;
+
+  for(uint16_t page = start_page; page <= end_page; ++page)
+    if(myPageIsDirtyTable[page])
+      return true;
+
+  return false;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::clearDirtyPages()
+{
+  for(uint32_t i = 0; i < myNumberOfPages; ++i)
+    myPageIsDirtyTable[i] = false;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+uint8_t System::peek(uint16_t addr, uint8_t flags)
+{
+  uint8_t result;
+  PageAccess& access = myPageAccessTable[(addr & myAddressMask) >> myPageShift];
+
+  // See if this page uses direct accessing or not 
+  if(access.directPeekBase)
+    result = *(access.directPeekBase + (addr & myPageMask));
+  else
+    result = access.device->peek(addr);
+
+  myDataBusState = result;
+
+  return result;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::poke(uint16_t addr, uint8_t value)
+{
+  uint16_t page = (addr & myAddressMask) >> myPageShift;
+  PageAccess& access = myPageAccessTable[page];
+  
+  // See if this page uses direct accessing or not 
+  if(access.directPokeBase)
+  {
+    // Since we have direct access to this poke, we can dirty its page
+    *(access.directPokeBase + (addr & myPageMask)) = value;
+    myPageIsDirtyTable[page] = true;
+  }
+  else
+  {
+    // The specific device informs us if the poke succeeded
+    myPageIsDirtyTable[page] = access.device->poke(addr, value);
+  }
+
+  myDataBusState = value;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::lockDataBus()
+{
+  myDataBusLocked = true;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void System::unlockDataBus()
+{
+  myDataBusLocked = false;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool System::save(Serializer& out) const
+{
+   out.putString(name());
+   out.putInt(myCycles);
+   out.putByte(myDataBusState);
+
+   if(!myM6502->save(out))
+      return false;
+
+   // Now save the state of each device
+   for(uint32_t i = 0; i < myNumberOfDevices; ++i)
+      if(!myDevices[i]->save(out))
+         return false;
+
+   return true;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool System::load(Serializer& in)
+{
+   if(in.getString() != name())
+      return false;
+
+   myCycles = in.getInt();
+   myDataBusState = in.getByte();
+
+   // Next, load state for the CPU
+   if(!myM6502->load(in))
+      return false;
+
+   // Now load the state of each device
+   for(uint32_t i = 0; i < myNumberOfDevices; ++i)
+      if(!myDevices[i]->load(in))
+         return false;
+
+   return true;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+System::System(const System& s)
+  : myAddressMask(s.myAddressMask),
+    myPageShift(s.myPageShift),
+    myPageMask(s.myPageMask),
+    myNumberOfPages(s.myNumberOfPages)
+{
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+System& System::operator = (const System&)
+{
+  return *this;
+}

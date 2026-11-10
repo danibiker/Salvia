@@ -1,0 +1,1814 @@
+#ifndef _MSC_VER
+#include <sched.h>
+#endif
+#include <stddef.h>
+#include <stdlib.h>
+#include <math.h>
+
+#include <boolean.h>
+
+#ifdef _MSC_VER
+#define snprintf _snprintf
+#endif
+
+#include <libretro.h>
+#include <streams/file_stream.h>
+#include "libretro_core_options.h"
+
+#include "Console.hxx"
+#include "Cart.hxx"
+#include "Props.hxx"
+#include "MD5.hxx"
+#include "Sound.hxx"
+#include "SerialPort.hxx"
+#include "TIA.hxx"
+#include "Switches.hxx"
+#include "StateManager.hxx"
+#include "PropsSet.hxx"
+#include "Paddles.hxx"
+#include "Sound.hxx"
+#include "M6532.hxx"
+#include "Version.hxx"
+
+#include "Stubs.hxx"
+
+#ifdef _3DS
+extern "C" void* linearMemAlign(size_t size, size_t alignment);
+extern "C" void linearFree(void* mem);
+#endif
+
+static Console *console = 0;
+static Cartridge *cartridge = 0;
+static Settings *settings = 0;
+static OSystem osystem;
+static StateManager stateManager(&osystem);
+
+/* Selected color palette ("standard" or "z26"), driven by the
+ * stella2014_palette core option. Built-in palettes only, so applying it
+ * is pure computation with no file I/O. */
+static char core_palette[16] = "standard";
+
+static int videoWidth, videoHeight;
+
+/* Sized to the TIA's internal frame buffer (160 x 320 lines), not the
+ * nominal 160 x 256 display maximum: the display height (<=256), the
+ * y-start offset (<=64) and this buffer previously had to satisfy
+ * three independent invariants exactly, with zero bytes of margin.
+ * Matching the TIA buffer makes the output buffer safe for anything
+ * the TIA can hand us. */
+#define FRAME_BUFFER_MAX_LINES 320
+#define FRAME_BUFFER_SIZE (FRAME_BUFFER_MAX_LINES * 160 * 4)
+static uint8_t *frameBuffer = NULL;
+static uint8_t *frameBufferPrev = NULL;
+static uint8_t framePixelBytes = 2;
+static const uint32_t *currentPalette32 = NULL;
+static uint16_t currentPalette16[256] = {0};
+
+#define MAX_RETROPAD_DEVICES 2
+
+#define RETROPAD_STELLA_GAMEPAD RETRO_DEVICE_JOYPAD
+#define RETROPAD_STELLA_PADDLES RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
+
+static unsigned retropad_devices[MAX_RETROPAD_DEVICES] = {
+   RETROPAD_STELLA_GAMEPAD,
+   RETROPAD_STELLA_GAMEPAD,
+};
+
+static const struct retro_controller_description retropad_desc[] = {
+   { "Gamepad",                RETROPAD_STELLA_GAMEPAD },
+   { "Paddles (Stelladaptor)", RETROPAD_STELLA_PADDLES },
+   { NULL, 0 },
+};
+
+static const struct retro_controller_info retropad_port_info[] = {
+   { retropad_desc, 2 },
+   { retropad_desc, 2 },
+   { NULL, 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_gamepad0_gamepad1[] = {
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "Left" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "Up" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "Down" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "Right" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "Left Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Left Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,     "Color" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "Right Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Right Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,     "Black/White" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Reset" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,      "Paddle Fire" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Paddle Analog" },
+
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "Left" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "Up" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "Down" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "Fire" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Paddle Fire" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Paddle Analog" },
+
+   { 0 },
+};
+
+/* Descriptor labels for the 2600 keyboard/keypad controller, matching the
+ * mapping in update_input(): Y=1 X=2 L=3 / Up=4 B=5 R=6 / Left=7 Down=8
+ * Right=9 / L2=* A=0 R2=#. Applied when a loaded ROM's controller type is
+ * Keyboard (detected in init_paddles), so RetroArch labels the buttons
+ * with their keypad keys instead of "Fire"/"Up"/etc. Two variants cover
+ * left-port-keypad and right-port-keypad; the non-keypad port keeps the
+ * normal gamepad labels. */
+#define KEYPAD_PORT_DESCRIPTORS(port)                                         \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Keypad 1" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Keypad 2" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,     "Keypad 3" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "Keypad 4" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "Keypad 5" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,     "Keypad 6" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "Keypad 7" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "Keypad 8" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Keypad 9" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,    "Keypad *" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "Keypad 0" }, \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,    "Keypad #" }
+
+#define GAMEPAD_PORT_DESCRIPTORS(port)                                            \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "Left" },        \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "Up" },          \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "Down" },        \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "Right" },       \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "Fire" }
+
+static struct retro_input_descriptor retropad_inputs_keypad0_gamepad1[] = {
+   KEYPAD_PORT_DESCRIPTORS(0),
+   GAMEPAD_PORT_DESCRIPTORS(1),
+   { 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_gamepad0_keypad1[] = {
+   GAMEPAD_PORT_DESCRIPTORS(0),
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "Left Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Left Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,     "Color" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "Right Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Right Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,     "Black/White" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Reset" },
+   KEYPAD_PORT_DESCRIPTORS(1),
+   { 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_keypad0_keypad1[] = {
+   KEYPAD_PORT_DESCRIPTORS(0),
+   KEYPAD_PORT_DESCRIPTORS(1),
+   { 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_gamepad0_paddles1[] = {
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "Left" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "Up" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "Down" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "Right" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "Left Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Left Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,     "Color" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "Right Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Right Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,     "Black/White" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Reset" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,      "Paddle Fire" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Paddle Analog" },
+
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "P3 Fire" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "P4 Fire" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "P3 Wheel" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "P4 Wheel" },
+
+   { 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_paddles0_gamepad1[] = {
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "P1 Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "P2 Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "Left Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Left Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,     "Color" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "Right Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Right Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,     "Black/White" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Reset" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "P1 Wheel" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "P2 Wheel" },
+
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "Left" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "Up" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "Down" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "Fire" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Paddle Fire" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "Paddle Analog" },
+
+   { 0 },
+};
+
+static struct retro_input_descriptor retropad_inputs_paddles0_paddles1[] = {
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "P1 Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "P2 Fire" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "Left Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Left Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,     "Color" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "Right Difficulty A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Right Difficulty B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,     "Black/White" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Reset" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "P1 Wheel" },
+   { 0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "P2 Wheel" },
+
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "P3 Fire" },
+   { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "P4 Fire" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X, "P3 Wheel" },
+   { 1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y, "P4 Wheel" },
+
+   { 0 },
+};
+
+/* Regular gamepad-related parameters */
+static Controller::Type left_controller_type = Controller::Joystick;
+static Controller::Type right_controller_type = Controller::Joystick;
+static int paddle_digital_sensitivity = 50;
+
+#define PADDLE_ANALOG_RANGE 0x8000
+static int paddle_analog_sensitivity = 50;
+static bool paddle_analog_is_quadratic = false;
+static int paddle_analog_deadzone = (15 * PADDLE_ANALOG_RANGE) / 100;
+
+static Event::Type MouseAxisValue0   = Event::MouseAxisXValue;
+static Event::Type MouseButtonValue0 = Event::MouseButtonLeftValue;
+static Event::Type MouseAxisValue1   = Event::MouseAxisYValue;
+static Event::Type MouseButtonValue1 = Event::MouseButtonRightValue;
+
+/* Stelladaptor-related parameters
+ * > This type of paddle control bears no resemblance
+ *   to regular gamepads, thus independent sensitivity
+ *   and offset options are required */
+#define STELLADAPTOR_ANALOG_SENSE_DEFAULT  20
+#define STELLADAPTOR_ANALOG_SENSE_MIN      0
+#define STELLADAPTOR_ANALOG_SENSE_MAX      30
+
+#define STELLADAPTOR_ANALOG_CENTER_DEFAULT 0
+#define STELLADAPTOR_ANALOG_CENTER_FACTOR  860
+#define STELLADAPTOR_ANALOG_CENTER_MIN     -10
+#define STELLADAPTOR_ANALOG_CENTER_MAX     30
+
+/* 16.16 fixed-point table of 1.1^(sense - 20) for sense = 0..30,
+ * replacing 0.148643628 * pow(1.1, sense); entry 20 is exactly 1.0.
+ * Precomputed so no floating point or libm pow() is needed. */
+static const int32_t stelladaptor_analog_sense_table
+      [STELLADAPTOR_ANALOG_SENSE_MAX + 1] = {
+     9742,  10716,  11787,  12966,  14263,  15689,  17258,  18983,
+    20882,  22970,  25267,  27794,  30573,  33630,  36993,  40693,
+    44762,  49238,  54162,  59578,  65536,  72090,  79299,  87228,
+    95951, 105546, 116101, 127711, 140482, 154530, 169984
+};
+
+/* Sensitivity is 16.16 fixed point (0x10000 = 1.0); center is a plain
+ * integer offset (the old float factor of 860.0 was already integral) */
+static int32_t stelladaptor_analog_sensitivity = 0x10000;
+static int32_t stelladaptor_analog_center      = 0;
+
+/* Low pass audio filter */
+static bool low_pass_enabled       = false;
+static int32_t low_pass_range      = 0;
+static int32_t low_pass_left_prev  = 0;
+static int32_t low_pass_right_prev = 0;
+
+/* DC-blocking high-pass filter state.
+ *
+ * The TIA audio is unipolar: each channel's output is a non-negative
+ * volume (AUDV 0..15, scaled), so the mixed sample sits well above zero
+ * whenever sound plays and steps back toward zero when it stops. That
+ * large, sound-dependent DC offset is an audible low-frequency thump on
+ * playback chains that reproduce sub-bass (many PC speakers), though it
+ * is inaudible on small speakers / phones that high-pass it away. A
+ * one-pole high-pass with a ~20 Hz cutoff removes the offset while
+ * leaving the game tones (>=100 Hz) essentially untouched:
+ *   y[n] = x[n] - x[n-1] + R*y[n-1],  R = 0.996 (Q16 = 65274).
+ * State is per channel and carried across frames; reset on game load. */
+static int32_t dc_block_x_prev_l = 0;
+static int32_t dc_block_y_prev_l = 0;
+static int32_t dc_block_x_prev_r = 0;
+static int32_t dc_block_y_prev_r = 0;
+/* R in 16.16 fixed point: 20 Hz cutoff at the 31.4 kHz TIA sample rate. */
+#define DC_BLOCK_R 65274
+
+static retro_log_printf_t log_cb;
+static retro_video_refresh_t video_cb;
+static retro_input_poll_t input_poll_cb;
+static retro_input_state_t input_state_cb;
+static retro_environment_t environ_cb;
+static retro_audio_sample_t audio_cb;
+static retro_audio_sample_batch_t audio_batch_cb;
+
+static bool libretro_supports_bitmasks = false;
+
+/************************************
+ * Interframe blending
+ ************************************/
+
+enum frame_blend_method
+{
+   FRAME_BLEND_NONE = 0,
+   FRAME_BLEND_MIX,
+   FRAME_BLEND_GHOST_65,
+   FRAME_BLEND_GHOST_75,
+   FRAME_BLEND_GHOST_85,
+   FRAME_BLEND_GHOST_95
+};
+
+/* It would be more flexible to have 'persistence'
+ * as a core option, but using a variable parameter
+ * reduces performance by ~15%. We therefore offer
+ * fixed values, and use macros to avoid excessive
+ * duplication of code...
+ * Note: persistence fraction is (persistence/128),
+ * using a power of 2 like this further increases
+ * performance by ~15% */
+#define BLEND_FRAMES_GHOST_16(persistence)                                                         \
+{                                                                                                  \
+   const uint32_t *palette32 = console->getPalette(0);                                             \
+   uint16_t *palette16       = currentPalette16;                                                   \
+   uint8_t *in                 = stella_fb;                                                          \
+   uint16_t *prev            = (uint16_t*)frameBufferPrev;                                         \
+   uint16_t *out             = (uint16_t*)frameBuffer;                                             \
+   int i;                                                                                          \
+                                                                                                   \
+   /* If palette has changed, re-cache converted                                                   \
+    * RGB565 values */                                                                             \
+   if (palette32 != currentPalette32)                                                              \
+   {                                                                                               \
+      currentPalette32 = palette32;                                                                \
+      convert_palette(palette32, palette16);                                                       \
+   }                                                                                               \
+                                                                                                   \
+   for (i = 0; i < width * height; i++)                                                            \
+   {                                                                                               \
+      /* Get colours from current + previous frames */                                             \
+      uint16_t color_curr = *(palette16 + *(in + i));                                              \
+      uint16_t color_prev = *(prev + i);                                                           \
+                                                                                                   \
+      /* Unpack colours */                                                                         \
+      uint16_t r_curr     = (color_curr >> 11) & 0x1F;                                             \
+      uint16_t g_curr     = (color_curr >>  6) & 0x1F;                                             \
+      uint16_t b_curr     = (color_curr      ) & 0x1F;                                             \
+                                                                                                   \
+      uint16_t r_prev     = (color_prev >> 11) & 0x1F;                                             \
+      uint16_t g_prev     = (color_prev >>  6) & 0x1F;                                             \
+      uint16_t b_prev     = (color_prev      ) & 0x1F;                                             \
+                                                                                                   \
+      /* Mix colors */                                                                             \
+      uint16_t r_mix      = ((r_curr * (128 - persistence)) >> 7) + ((r_prev * persistence) >> 7); \
+      uint16_t g_mix      = ((g_curr * (128 - persistence)) >> 7) + ((g_prev * persistence) >> 7); \
+      uint16_t b_mix      = ((b_curr * (128 - persistence)) >> 7) + ((b_prev * persistence) >> 7); \
+                                                                                                   \
+      /* Output colour is the maximum of the input                                                 \
+       * and decayed values */                                                                     \
+      uint16_t r_out      = (r_mix > r_curr) ? r_mix : r_curr;                                     \
+      uint16_t g_out      = (g_mix > g_curr) ? g_mix : g_curr;                                     \
+      uint16_t b_out      = (b_mix > b_curr) ? b_mix : b_curr;                                     \
+      uint16_t color_out  = r_out << 11 | g_out << 6 | b_out;                                      \
+                                                                                                   \
+      /* Assign colour and store for next frame */                                                 \
+      *(out++)            = color_out;                                                             \
+      *(prev + i)         = color_out;                                                             \
+   }                                                                                               \
+}
+
+#define BLEND_FRAMES_GHOST_32(persistence)                                                         \
+{                                                                                                  \
+   const uint32_t *palette = console->getPalette(0);                                               \
+   uint8_t *in               = stella_fb;                                                            \
+   uint32_t *prev          = (uint32_t*)frameBufferPrev;                                           \
+   uint32_t *out           = (uint32_t*)frameBuffer;                                               \
+   int i;                                                                                          \
+                                                                                                   \
+   for (i = 0; i < width * height; i++)                                                            \
+   {                                                                                               \
+      /* Get colours from current + previous frames */                                             \
+      uint32_t color_curr = *(palette + *(in + i));                                                \
+      uint32_t color_prev = *(prev + i);                                                           \
+                                                                                                   \
+      /* Unpack colours */                                                                         \
+      uint32_t r_curr     = (color_curr >> 16) & 0xFF;                                             \
+      uint32_t g_curr     = (color_curr >>  8) & 0xFF;                                             \
+      uint32_t b_curr     = (color_curr      ) & 0xFF;                                             \
+                                                                                                   \
+      uint32_t r_prev     = (color_prev >> 16) & 0xFF;                                             \
+      uint32_t g_prev     = (color_prev >>  8) & 0xFF;                                             \
+      uint32_t b_prev     = (color_prev      ) & 0xFF;                                             \
+                                                                                                   \
+      /* Mix colors */                                                                             \
+      uint32_t r_mix      = ((r_curr * (128 - persistence)) >> 7) + ((r_prev * persistence) >> 7); \
+      uint32_t g_mix      = ((g_curr * (128 - persistence)) >> 7) + ((g_prev * persistence) >> 7); \
+      uint32_t b_mix      = ((b_curr * (128 - persistence)) >> 7) + ((b_prev * persistence) >> 7); \
+                                                                                                   \
+      /* Output colour is the maximum of the input                                                 \
+       * and decayed values */                                                                     \
+      uint32_t r_out      = (r_mix > r_curr) ? r_mix : r_curr;                                     \
+      uint32_t g_out      = (g_mix > g_curr) ? g_mix : g_curr;                                     \
+      uint32_t b_out      = (b_mix > b_curr) ? b_mix : b_curr;                                     \
+      uint32_t color_out  = r_out << 16 | g_out << 8 | b_out;                                      \
+                                                                                                   \
+      /* Assign colour and store for next frame */                                                 \
+      *(out++)            = color_out;                                                             \
+      *(prev + i)         = color_out;                                                             \
+   }                                                                                               \
+}
+
+static void convert_palette(const uint32_t *palette32, uint16_t *palette16)
+{
+   size_t i;
+   for (i = 0; i < 256; i++)
+   {
+      uint32_t color32 = *(palette32 + i);
+      *(palette16 + i) = ((color32 & 0xF80000) >> 8) |
+                         ((color32 & 0x00F800) >> 5) |
+                         ((color32 & 0x0000F8) >> 3);
+   }
+}
+
+static void blend_frames_null_16(uint8_t *stella_fb, int width, int height)
+{
+   const uint32_t *palette32 = console->getPalette(0);
+   uint16_t *palette16       = currentPalette16;
+   uint8_t *in                 = stella_fb;
+   uint16_t *out             = (uint16_t*)frameBuffer;
+   int i;
+
+   /* If palette has changed, re-cache converted
+    * RGB565 values */
+   if (palette32 != currentPalette32)
+   {
+      currentPalette32 = palette32;
+      convert_palette(palette32, palette16);
+   }
+
+   for (i = 0; i < width * height; i++)
+      *(out++) = *(palette16 + *(in++));
+}
+
+static void blend_frames_null_32(uint8_t *stella_fb, int width, int height)
+{
+   const uint32_t *palette = console->getPalette(0);
+   uint8_t *in               = stella_fb;
+   uint32_t *out           = (uint32_t*)frameBuffer;
+   int i;
+
+   for (i = 0; i < width * height; i++)
+      *(out++) = *(palette + *(in++));
+}
+
+static void blend_frames_mix_16(uint8_t *stella_fb, int width, int height)
+{
+   const uint32_t *palette32 = console->getPalette(0);
+   uint16_t *palette16       = currentPalette16;
+   uint8_t *in                 = stella_fb;
+   uint16_t *prev            = (uint16_t*)frameBufferPrev;
+   uint16_t *out             = (uint16_t*)frameBuffer;
+   int i;
+
+   /* If palette has changed, re-cache converted
+    * RGB565 values */
+   if (palette32 != currentPalette32)
+   {
+      currentPalette32 = palette32;
+      convert_palette(palette32, palette16);
+   }
+
+   for (i = 0; i < width * height; i++)
+   {
+      /* Get colours from current + previous frames */
+      uint16_t color_curr = *(palette16 + *(in + i));
+      uint16_t color_prev = *(prev + i);
+
+      /* Store colours for next frame */
+      *(prev + i) = color_curr;
+
+      /* Mix colours */
+      *(out++) = (color_curr + color_prev + ((color_curr ^ color_prev) & 0x821)) >> 1;
+   }
+}
+
+static void blend_frames_mix_32(uint8_t *stella_fb, int width, int height)
+{
+   const uint32_t *palette = console->getPalette(0);
+   uint8_t *in               = stella_fb;
+   uint32_t *prev          = (uint32_t*)frameBufferPrev;
+   uint32_t *out           = (uint32_t*)frameBuffer;
+   int i;
+
+   for (i = 0; i < width * height; i++)
+   {
+      /* Get colours from current + previous frames */
+      uint32_t color_curr = *(palette + *(in + i));
+      uint32_t color_prev = *(prev + i);
+
+      /* Store colours for next frame */
+      *(prev + i) = color_curr;
+
+      /* Mix colours */
+      *(out++) = (color_curr + color_prev + ((color_curr ^ color_prev) & 0x1010101)) >> 1;
+   }
+}
+
+static void blend_frames_ghost65_16(uint8_t *stella_fb, int width, int height)
+{
+   /* 65% = 83 / 128 */
+   BLEND_FRAMES_GHOST_16(83);
+}
+
+static void blend_frames_ghost65_32(uint8_t *stella_fb, int width, int height)
+{
+   BLEND_FRAMES_GHOST_32(83);
+}
+
+static void blend_frames_ghost75_16(uint8_t *stella_fb, int width, int height)
+{
+   /* 75% = 95 / 128 */
+   BLEND_FRAMES_GHOST_16(95);
+}
+
+static void blend_frames_ghost75_32(uint8_t *stella_fb, int width, int height)
+{
+   BLEND_FRAMES_GHOST_32(95);
+}
+
+static void blend_frames_ghost85_16(uint8_t *stella_fb, int width, int height)
+{
+   /* 85% ~= 109 / 128 */
+   BLEND_FRAMES_GHOST_16(109);
+}
+
+static void blend_frames_ghost85_32(uint8_t *stella_fb, int width, int height)
+{
+   BLEND_FRAMES_GHOST_32(109);
+}
+
+static void blend_frames_ghost95_16(uint8_t *stella_fb, int width, int height)
+{
+   /* 95% ~= 122 / 128 */
+   BLEND_FRAMES_GHOST_16(122);
+}
+
+static void blend_frames_ghost95_32(uint8_t *stella_fb, int width, int height)
+{
+   BLEND_FRAMES_GHOST_32(122);
+}
+
+static void (*blend_frames_16)(uint8_t *stella_fb, int width, int height) = blend_frames_null_16;
+static void (*blend_frames_32)(uint8_t *stella_fb, int width, int height) = blend_frames_null_32;
+
+static void init_frame_blending(enum frame_blend_method blend_method)
+{
+   /* Allocate/zero out buffer, if required */
+   if (blend_method != FRAME_BLEND_NONE)
+   {
+      if (!frameBufferPrev)
+#ifdef _3DS
+         frameBufferPrev = (uint8_t*)linearMemAlign(FRAME_BUFFER_SIZE, 128);
+#else
+         frameBufferPrev = (uint8_t*)malloc(FRAME_BUFFER_SIZE);
+#endif
+      memset(frameBufferPrev, 0, FRAME_BUFFER_SIZE);
+   }
+
+   /* Assign function pointers */
+   switch (blend_method)
+   {
+      case FRAME_BLEND_MIX:
+         blend_frames_16 = blend_frames_mix_16;
+         blend_frames_32 = blend_frames_mix_32;
+         break;
+      case FRAME_BLEND_GHOST_65:
+         blend_frames_16 = blend_frames_ghost65_16;
+         blend_frames_32 = blend_frames_ghost65_32;
+         break;
+      case FRAME_BLEND_GHOST_75:
+         blend_frames_16 = blend_frames_ghost75_16;
+         blend_frames_32 = blend_frames_ghost75_32;
+         break;
+      case FRAME_BLEND_GHOST_85:
+         blend_frames_16 = blend_frames_ghost85_16;
+         blend_frames_32 = blend_frames_ghost85_32;
+         break;
+      case FRAME_BLEND_GHOST_95:
+         blend_frames_16 = blend_frames_ghost95_16;
+         blend_frames_32 = blend_frames_ghost95_32;
+         break;
+      default:
+         blend_frames_16 = blend_frames_null_16;
+         blend_frames_32 = blend_frames_null_32;
+         break;
+   }
+}
+
+/************************************
+ * DC-blocking high-pass filter
+ ************************************/
+
+/* Reset the DC-blocker state. Called on game load so the cold-start
+ * output is reproducible (the harness relies on this). */
+static void dc_block_reset(void)
+{
+   dc_block_x_prev_l = dc_block_y_prev_l = 0;
+   dc_block_x_prev_r = dc_block_y_prev_r = 0;
+}
+
+/* On vectorisation:
+ * A one-pole high-pass is a feedback recurrence --
+ *   y[n] = x[n] - x[n-1] + R*y[n-1]
+ * -- so y[n] depends on y[n-1] and the loop cannot be vectorised along
+ * the sample axis (SSE2/NEON parallelise independent lanes, not a serial
+ * dependency chain). The only independent axis is the two channels, but
+ * for the TIA they are identical (mono duplicated into L and R), so a
+ * 2-lane SIMD step would compute the same value twice for no gain over
+ * the scalar path -- and the load/store shuffle per sample would very
+ * likely be slower than the handful of scalar integer ops here. There is
+ * therefore no useful SSE2/NEON form of this filter; the scalar loop is
+ * the right implementation. (A block-parallel scan reformulation exists in
+ * theory but is far more complex and pointless at ~525 samples/frame.)
+ * The filter is off the hot path regardless: it runs once over the ~525
+ * samples of a frame, dwarfed by TIA emulation. */
+static void apply_dc_block_filter(int16_t *buf, int frames)
+{
+   int32_t xl_prev = dc_block_x_prev_l, yl_prev = dc_block_y_prev_l;
+   int32_t xr_prev = dc_block_x_prev_r, yr_prev = dc_block_y_prev_r;
+   int i;
+
+   if (frames <= 0)
+      return;
+
+   for (i = 0; i < frames; i++)
+   {
+      int32_t xl = buf[2*i];
+      int32_t xr = buf[2*i + 1];
+      /* R*y_prev in 64-bit to avoid the ~31-bit product overflowing. */
+      int32_t yl = (int32_t)(xl - xl_prev +
+                    (((int64_t)DC_BLOCK_R * yl_prev) >> 16));
+      int32_t yr = (int32_t)(xr - xr_prev +
+                    (((int64_t)DC_BLOCK_R * yr_prev) >> 16));
+
+      /* Clamp to int16 range before storing. */
+      if (yl >  32767) yl =  32767; else if (yl < -32768) yl = -32768;
+      if (yr >  32767) yr =  32767; else if (yr < -32768) yr = -32768;
+
+      buf[2*i]     = (int16_t)yl;
+      buf[2*i + 1] = (int16_t)yr;
+
+      xl_prev = xl; yl_prev = yl;
+      xr_prev = xr; yr_prev = yr;
+   }
+
+   dc_block_x_prev_l = xl_prev; dc_block_y_prev_l = yl_prev;
+   dc_block_x_prev_r = xr_prev; dc_block_y_prev_r = yr_prev;
+}
+
+/************************************
+ * Low pass audio filter
+ ************************************/
+
+static void apply_low_pass_filter_mono(int16_t *buf, int length)
+{
+   int samples      = length;
+   int16_t *out     = buf;
+
+   /* Restore previous sample */
+   int32_t low_pass = low_pass_left_prev;
+
+   /* Single-pole low-pass filter (6 dB/octave) */
+   int32_t factor_a = low_pass_range;
+   int32_t factor_b = 0x10000 - factor_a;
+
+   do
+   {
+      /* Apply low-pass filter */
+      low_pass = (low_pass * factor_a) + (*out * factor_b);
+
+      /* 16.16 fixed point */
+      low_pass >>= 16;
+
+      /* Update sound buffer
+       * > Converted to stereo by duplicating
+       *   the left/right channels */
+      *out++   = (int16_t)low_pass;
+      *out++   = (int16_t)low_pass;
+   }
+   while (--samples);
+
+   /* Save last sample for next frame */
+   low_pass_left_prev = low_pass;
+}
+
+static void apply_low_pass_filter_stereo(int16_t *buf, int length)
+{
+   int samples            = length;
+   int16_t *out           = buf;
+
+   /* Restore previous samples */
+   int32_t low_pass_left  = low_pass_left_prev;
+   int32_t low_pass_right = low_pass_right_prev;
+
+   /* Single-pole low-pass filter (6 dB/octave) */
+   int32_t factor_a       = low_pass_range;
+   int32_t factor_b       = 0x10000 - factor_a;
+
+   do
+   {
+      /* Apply low-pass filter */
+      low_pass_left  = (low_pass_left  * factor_a) + (*out       * factor_b);
+      low_pass_right = (low_pass_right * factor_a) + (*(out + 1) * factor_b);
+
+      /* 16.16 fixed point */
+      low_pass_left  >>= 16;
+      low_pass_right >>= 16;
+
+      /* Update sound buffer */
+      *out++ = (int16_t)low_pass_left;
+      *out++ = (int16_t)low_pass_right;
+   }
+   while (--samples);
+
+   /* Save last samples for next frame */
+   low_pass_left_prev  = low_pass_left;
+   low_pass_right_prev = low_pass_right;
+}
+
+static void (*apply_low_pass_filter)(int16_t *buf, int length) = apply_low_pass_filter_mono;
+
+/************************************
+ * Auxiliary functions
+ ************************************/
+
+static int32_t get_stelladaptor_analog_sensitivity(int sensitivity)
+{
+   /* Returns 16.16 fixed point; table entry at the default (20) is 1.0 */
+   int sense = (sensitivity > STELLADAPTOR_ANALOG_SENSE_MAX) ?
+         STELLADAPTOR_ANALOG_SENSE_MAX : sensitivity;
+
+   sense = (sense < STELLADAPTOR_ANALOG_SENSE_MIN) ?
+         STELLADAPTOR_ANALOG_SENSE_MIN : sense;
+
+   return stelladaptor_analog_sense_table[sense];
+}
+
+static int32_t get_stelladaptor_analog_center(int center)
+{
+   /* Convert into ~5 pixel steps */
+
+   int offset = (center > STELLADAPTOR_ANALOG_CENTER_MAX) ?
+         STELLADAPTOR_ANALOG_CENTER_MAX : center;
+
+   offset = (offset < STELLADAPTOR_ANALOG_CENTER_MIN) ?
+         STELLADAPTOR_ANALOG_CENTER_MIN : offset;
+
+   return STELLADAPTOR_ANALOG_CENTER_FACTOR * offset;
+}
+
+static void init_paddles(void)
+{
+   /* Check whether paddles are active */
+   left_controller_type  = console->controller(Controller::Left).type();
+   right_controller_type = console->controller(Controller::Right).type();
+
+   if (left_controller_type == Controller::Paddles)
+   {
+      /* Set initial digital sensitivity */
+      Paddles::setDigitalSensitivity(paddle_digital_sensitivity);
+
+      /* Configure mouse control (mapped to
+       * gamepad analog sticks) */
+      console->controller(Controller::Left).setMouseControl(
+            Controller::Paddles, 0, Controller::Paddles, 1);
+
+      /* Stella internal mouse sensitivity is hard coded
+       * to a value of 1 - we handle 'actual' sensitivity
+       * via the libretro interface */
+      Paddles::setMouseSensitivity(1);
+
+      /* Check whether port 0/1 paddles should be swapped */
+      if (console->properties().get(Controller_SwapPaddles) == "YES")
+      {
+         MouseAxisValue1   = Event::MouseAxisXValue;
+         MouseButtonValue1 = Event::MouseButtonLeftValue;
+         MouseAxisValue0   = Event::MouseAxisYValue;
+         MouseButtonValue0 = Event::MouseButtonRightValue;
+      }
+      else
+      {
+         MouseAxisValue0   = Event::MouseAxisXValue;
+         MouseButtonValue0 = Event::MouseButtonLeftValue;
+         MouseAxisValue1   = Event::MouseAxisYValue;
+         MouseButtonValue1 = Event::MouseButtonRightValue;
+      }
+   }
+}
+
+/* Map a RetroPad's buttons onto the 12 keys of a 2600 keyboard/keypad
+ * controller. The keypad is a phone-style 4x3 grid:
+ *
+ *     1 2 3        ->   Y      X      L
+ *     4 5 6        ->   Up     B      R      (B is the natural "5"/centre)
+ *     7 8 9        ->   Left   Down   Right
+ *     * 0 #        ->   L2     A      R2
+ *
+ * The exact assignment is arbitrary (12 keys do not map to an obvious
+ * gamepad layout), but it is stable and every key is reachable. 'base' is
+ * Event::KeyboardZero1 or Event::KeyboardOne1; the 12 key events are
+ * contiguous from there, so we index off it. */
+static void set_keypad_events(Event& ev, int base, int16_t joy_bits)
+{
+   /* order matches the enum: 1,2,3,4,5,6,7,8,9,*,0,# */
+   static const int btn[12] = {
+      RETRO_DEVICE_ID_JOYPAD_Y,     /* 1 */
+      RETRO_DEVICE_ID_JOYPAD_X,     /* 2 */
+      RETRO_DEVICE_ID_JOYPAD_L,     /* 3 */
+      RETRO_DEVICE_ID_JOYPAD_UP,    /* 4 */
+      RETRO_DEVICE_ID_JOYPAD_B,     /* 5 */
+      RETRO_DEVICE_ID_JOYPAD_R,     /* 6 */
+      RETRO_DEVICE_ID_JOYPAD_LEFT,  /* 7 */
+      RETRO_DEVICE_ID_JOYPAD_DOWN,  /* 8 */
+      RETRO_DEVICE_ID_JOYPAD_RIGHT, /* 9 */
+      RETRO_DEVICE_ID_JOYPAD_L2,    /* * */
+      RETRO_DEVICE_ID_JOYPAD_A,     /* 0 */
+      RETRO_DEVICE_ID_JOYPAD_R2     /* # */
+   };
+   int k;
+   for (k = 0; k < 12; k++)
+      ev.set(Event::Type(base + k), joy_bits & (1 << btn[k]));
+}
+
+/* Set the five joystick events (up/down/left/right/fire) for a QuadTari
+ * sub-player from a RetroPad's button bits. 'up' is Event::JoystickTwoUp
+ * (player 3) or Event::JoystickThreeUp (player 4); the five events are
+ * contiguous from there. */
+static void set_quadtari_joystick_events(Event& ev, int up, int16_t joy_bits)
+{
+   ev.set(Event::Type(up + 0), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_UP));
+   ev.set(Event::Type(up + 1), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_DOWN));
+   ev.set(Event::Type(up + 2), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_LEFT));
+   ev.set(Event::Type(up + 3), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_RIGHT));
+   ev.set(Event::Type(up + 4), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_B));
+}
+
+/* Read a RetroPad's button bitmask for the given port, using the negotiated
+ * bitmask fast path when available and the per-button fallback otherwise. */
+static int16_t read_joypad_bits(unsigned port)
+{
+   int16_t joy_bits = 0;
+   if (libretro_supports_bitmasks)
+      joy_bits = input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+   else
+   {
+      unsigned j;
+      for (j = 0; j < (RETRO_DEVICE_ID_JOYPAD_R3+1); j++)
+         joy_bits |= input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, j) ? (1 << j) : 0;
+   }
+   return joy_bits;
+}
+
+static void update_input()
+{
+   unsigned i;
+
+   if (!input_poll_cb)
+      return;
+
+   input_poll_cb();
+   Event &ev = osystem.eventHandler().event();
+
+   /* Loop over input devices */
+   for (i = 0; i < MAX_RETROPAD_DEVICES; i++)
+   {
+      int16_t joy_bits = read_joypad_bits(i);
+
+      if (retropad_devices[i] == RETROPAD_STELLA_PADDLES)
+      {
+         /* Handle paddle devices */
+
+         /* Read analog input */
+         int paddle_a = input_state_cb(i, RETRO_DEVICE_ANALOG,
+               RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
+         int paddle_b = input_state_cb(i, RETRO_DEVICE_ANALOG,
+               RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
+
+         /* Apply sensitivity/offset factors */
+         paddle_a = (int)(((int64_t)paddle_a *
+               stelladaptor_analog_sensitivity) >> 16) +
+               stelladaptor_analog_center;
+         paddle_a = (paddle_a >  0x7FFF) ?  0x7FFF : paddle_a;
+         paddle_a = (paddle_a < -0x7FFF) ? -0x7FFF : paddle_a;
+
+         paddle_b = (int)(((int64_t)paddle_b *
+               stelladaptor_analog_sensitivity) >> 16) +
+               stelladaptor_analog_center;
+         paddle_b = (paddle_b >  0x7FFF) ?  0x7FFF : paddle_b;
+         paddle_b = (paddle_b < -0x7FFF) ? -0x7FFF : paddle_b;
+
+         if (i == 0)
+         {
+            /* Events for left player's paddles */
+
+            /* Paddle 0 */
+            ev.set(Event::Type(Event::SALeftAxis0Value), paddle_a);
+            ev.set(Event::Type(Event::PaddleZeroFire), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_A));
+
+            /* Paddle 1 */
+            ev.set(Event::Type(Event::SALeftAxis1Value), paddle_b);
+            ev.set(Event::Type(Event::PaddleOneFire), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_B));
+
+            /* Generic inputs */
+            ev.set(Event::Type(Event::ConsoleLeftDiffA),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L));
+            ev.set(Event::Type(Event::ConsoleLeftDiffB),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L2));
+            ev.set(Event::Type(Event::ConsoleColor),      joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L3));
+            ev.set(Event::Type(Event::ConsoleRightDiffA), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R));
+            ev.set(Event::Type(Event::ConsoleRightDiffB), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R2));
+            ev.set(Event::Type(Event::ConsoleBlackWhite), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R3));
+            ev.set(Event::Type(Event::ConsoleSelect),     joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_SELECT));
+            ev.set(Event::Type(Event::ConsoleReset),      joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_START));
+         }
+         else
+         {
+            /* Events for right player's paddles */
+
+            /* Paddle 2 */
+            ev.set(Event::Type(Event::SARightAxis0Value), paddle_a);
+            ev.set(Event::Type(Event::PaddleTwoFire), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_A));
+
+            /* Paddle 3 */
+            ev.set(Event::Type(Event::SARightAxis1Value), paddle_b);
+            ev.set(Event::Type(Event::PaddleThreeFire), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_B));
+         }
+      }
+      else
+      {
+         /* Handle regular gamepad devices */
+         if (i == 0)
+         {
+            if (left_controller_type == Controller::Keyboard)
+            {
+               /* Left player's keyboard/keypad controller */
+               set_keypad_events(ev, Event::KeyboardZero1, joy_bits);
+            }
+            else
+            {
+            /* Events for left player's joystick */
+            ev.set(Event::Type(Event::JoystickZeroUp),    joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_UP));
+            ev.set(Event::Type(Event::JoystickZeroDown),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_DOWN));
+            ev.set(Event::Type(Event::JoystickZeroLeft),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_LEFT));
+            ev.set(Event::Type(Event::JoystickZeroRight), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_RIGHT));
+            ev.set(Event::Type(Event::JoystickZeroFire),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_B));
+            /* Genesis/Sega pad second button (maps to the A button) */
+            if (left_controller_type == Controller::Genesis)
+               ev.set(Event::Type(Event::JoystickZeroFire5), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_A));
+            ev.set(Event::Type(Event::ConsoleLeftDiffA),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L));
+            ev.set(Event::Type(Event::ConsoleLeftDiffB),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L2));
+            ev.set(Event::Type(Event::ConsoleColor),      joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_L3));
+            ev.set(Event::Type(Event::ConsoleRightDiffA), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R));
+            ev.set(Event::Type(Event::ConsoleRightDiffB), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R2));
+            ev.set(Event::Type(Event::ConsoleBlackWhite), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_R3));
+            ev.set(Event::Type(Event::ConsoleSelect),     joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_SELECT));
+            ev.set(Event::Type(Event::ConsoleReset),      joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_START));
+            }
+         }
+         else
+         {
+            if (right_controller_type == Controller::Keyboard)
+            {
+               /* Right player's keyboard/keypad controller */
+               set_keypad_events(ev, Event::KeyboardOne1, joy_bits);
+            }
+            else
+            {
+            /* Events for right player's joystick */
+            ev.set(Event::Type(Event::JoystickOneUp),    joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_UP));
+            ev.set(Event::Type(Event::JoystickOneDown),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_DOWN));
+            ev.set(Event::Type(Event::JoystickOneLeft),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_LEFT));
+            ev.set(Event::Type(Event::JoystickOneRight), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_RIGHT));
+            ev.set(Event::Type(Event::JoystickOneFire),  joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_B));
+            /* Genesis/Sega pad second button (maps to the A button) */
+            if (right_controller_type == Controller::Genesis)
+               ev.set(Event::Type(Event::JoystickOneFire5), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_A));
+            }
+         }
+
+         /* Read analog paddle input, if required */
+         if (left_controller_type == Controller::Paddles)
+         {
+            int32_t paddle_amp = 0; /* 16.16 fixed point, [-1.0, 1.0] */
+            int paddle       = input_state_cb(i, RETRO_DEVICE_ANALOG,
+                  RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
+
+            /* Account for paddle deadzone, and convert
+             * analog stick input to an 'amplitude' value */
+            if ((paddle < -paddle_analog_deadzone) ||
+                (paddle > paddle_analog_deadzone))
+            {
+               int32_t p = (paddle > paddle_analog_deadzone) ?
+                     (paddle - paddle_analog_deadzone) :
+                           (paddle + paddle_analog_deadzone);
+               paddle_amp = (int32_t)(((int64_t)p << 16) /
+                     (PADDLE_ANALOG_RANGE - paddle_analog_deadzone));
+
+               /* Check whether paddle response is quadratic */
+               if (paddle_analog_is_quadratic)
+               {
+                  int32_t sq = (int32_t)
+                        (((int64_t)paddle_amp * paddle_amp) >> 16);
+                  paddle_amp = (paddle_amp < 0) ? -sq : sq;
+               }
+            }
+
+            /* Convert paddle amplitude back to an integer,
+             * scaling by current analog sensitivity value
+             * > Note: Stella internally divides paddle value
+             *   by 2 - counter this by premultiplying */
+            paddle = (int)(((int64_t)paddle_amp *
+                  paddle_analog_sensitivity) >> 16) << 1;
+
+            if (i == 0)
+            {
+               /* Events for left player's paddle */
+               ev.set(Event::Type(MouseAxisValue0), paddle);
+               ev.set(Event::Type(MouseButtonValue0), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_Y));
+            }
+            else
+            {
+               /* Events for right player's paddle */
+               ev.set(Event::Type(MouseAxisValue1), paddle);
+               ev.set(Event::Type(MouseButtonValue1), joy_bits & (1 << RETRO_DEVICE_ID_JOYPAD_Y));
+            }
+         }
+      }
+   }
+
+   /* QuadTari: poll RetroPad ports 2 and 3 for the second controller on
+    * each jack (players 3 and 4). The QuadTari sub-controllers read the
+    * JoystickTwo* / JoystickThree* events; only read the ports for a jack
+    * that actually has a QuadTari, so ordinary two-player ROMs are
+    * unaffected. */
+   if (left_controller_type == Controller::QuadTari)
+   {
+      int16_t p3 = read_joypad_bits(2);
+      set_quadtari_joystick_events(ev, Event::JoystickTwoUp, p3);
+   }
+   if (right_controller_type == Controller::QuadTari)
+   {
+      int16_t p4 = read_joypad_bits(3);
+      set_quadtari_joystick_events(ev, Event::JoystickThreeUp, p4);
+   }
+
+   /* Tell all input devices to read their state from the event structure */
+   console->controller(Controller::Left).update();
+   console->controller(Controller::Right).update();
+   console->switches().update();
+}
+
+static void check_variables(bool first_run)
+{
+   struct retro_variable var            = {0};
+   enum frame_blend_method blend_method = FRAME_BLEND_NONE;
+   int last_paddle_sensitivity;
+   int stelladaptor_sensitivity;
+   int stelladaptor_center;
+
+   /* Only read colour depth option on first run */
+   if (first_run)
+   {
+      var.key   = "stella2014_color_depth";
+      var.value = NULL;
+
+      /* Set 16bpp by default */
+      framePixelBytes = 2;
+
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+         if (strcmp(var.value, "24bit") == 0)
+            framePixelBytes = 4;
+   }
+
+   /* Read interframe blending option */
+   var.key   = "stella2014_mix_frames";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "mix"))
+         blend_method = FRAME_BLEND_MIX;
+      else if (!strcmp(var.value, "ghost_65"))
+         blend_method = FRAME_BLEND_GHOST_65;
+      else if (!strcmp(var.value, "ghost_75"))
+         blend_method = FRAME_BLEND_GHOST_75;
+      else if (!strcmp(var.value, "ghost_85"))
+         blend_method = FRAME_BLEND_GHOST_85;
+      else if (!strcmp(var.value, "ghost_95"))
+         blend_method = FRAME_BLEND_GHOST_95;
+   }
+
+   init_frame_blending(blend_method);
+
+   /* Read low pass audio filter settings */
+   var.key   = "stella2014_low_pass_filter";
+   var.value = NULL;
+
+   low_pass_enabled = false;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      if (strcmp(var.value, "enabled") == 0)
+         low_pass_enabled = true;
+
+   var.key   = "stella2014_low_pass_range";
+   var.value = NULL;
+
+   low_pass_range = (60 * 0x10000) / 100;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      low_pass_range = (strtol(var.value, NULL, 10) * 0x10000) / 100;
+
+   /* Read paddle digital sensitivity option */
+   var.key   = "stella2014_paddle_digital_sensitivity";
+   var.value = NULL;
+
+   last_paddle_sensitivity    = paddle_digital_sensitivity;
+   paddle_digital_sensitivity = 50;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      paddle_digital_sensitivity = atoi(var.value);
+      paddle_digital_sensitivity = (paddle_digital_sensitivity > 100) ?
+            100 : paddle_digital_sensitivity;
+      paddle_digital_sensitivity = (paddle_digital_sensitivity <  10) ?
+            10  : paddle_digital_sensitivity;
+   }
+
+   /* Only apply paddle sensitivity update if
+    * this is *not* the first run */
+   if (!first_run &&
+       (left_controller_type == Controller::Paddles) &&
+       (paddle_digital_sensitivity != last_paddle_sensitivity))
+      Paddles::setDigitalSensitivity(paddle_digital_sensitivity);
+
+   /* Read paddle analog sensitivity option */
+   var.key   = "stella2014_paddle_analog_sensitivity";
+   var.value = NULL;
+
+   paddle_analog_sensitivity = 50.0f;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      int analog_sensitivity = atoi(var.value);
+      analog_sensitivity = (analog_sensitivity > 150) ?
+            150 : analog_sensitivity;
+      analog_sensitivity = (analog_sensitivity <  10) ?
+            10  : analog_sensitivity;
+      paddle_analog_sensitivity = analog_sensitivity;
+   }
+
+   /* Read paddle analog response option */
+   var.key   = "stella2014_paddle_analog_response";
+   var.value = NULL;
+
+   paddle_analog_is_quadratic = false;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      if (strcmp(var.value, "quadratic") == 0)
+         paddle_analog_is_quadratic = true;
+
+   /* Read paddle analog deadzone option */
+   var.key   = "stella2014_paddle_analog_deadzone";
+   var.value = NULL;
+
+   paddle_analog_deadzone = (15 * PADDLE_ANALOG_RANGE) / 100;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      paddle_analog_deadzone = (atoi(var.value) * PADDLE_ANALOG_RANGE) / 100;
+
+   /* Read Stelladaptor analog sensitivity option */
+   var.key   = "stella2014_stelladaptor_analog_sensitivity";
+   var.value = NULL;
+
+   stelladaptor_sensitivity = STELLADAPTOR_ANALOG_SENSE_DEFAULT;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      stelladaptor_sensitivity = atoi(var.value);
+
+   stelladaptor_analog_sensitivity =
+         get_stelladaptor_analog_sensitivity(
+               stelladaptor_sensitivity);
+
+   /* Read Stelladaptor analog centre option */
+   var.key   = "stella2014_stelladaptor_analog_center";
+   var.value = NULL;
+
+   stelladaptor_center = STELLADAPTOR_ANALOG_CENTER_DEFAULT;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      stelladaptor_center = atoi(var.value);
+
+   stelladaptor_analog_center =
+         get_stelladaptor_analog_center(
+               stelladaptor_center);
+
+   /* Read color palette option. Both choices are built-in palettes, so
+    * this involves no file I/O and never blocks. On first run the console
+    * does not exist yet; the value is stashed in core_palette and pushed
+    * into Settings before the Console is created (retro_load_game). For a
+    * live change the console exists, so apply it immediately. */
+   var.key   = "stella2014_palette";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "z26"))
+         strcpy(core_palette, "z26");
+      else
+         strcpy(core_palette, "standard");
+   }
+
+   if (console && settings)
+   {
+      settings->setValue("palette", core_palette);
+      console->setPalette(core_palette);
+   }
+}
+
+/************************************
+ * libretro implementation
+ ************************************/
+
+void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
+void retro_set_audio_sample(retro_audio_sample_t cb) { audio_cb = cb; }
+void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
+void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
+void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
+
+void retro_set_environment(retro_environment_t cb)
+{
+   struct retro_vfs_interface_info vfs_iface_info;
+   environ_cb = cb;
+   libretro_set_core_options(environ_cb);
+   environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)retropad_port_info);
+
+   vfs_iface_info.required_interface_version = 1;
+   vfs_iface_info.iface                      = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
+	   filestream_vfs_init(&vfs_iface_info);
+}
+
+void retro_get_system_info(struct retro_system_info *info)
+{
+   memset(info, 0, sizeof(*info));
+   info->library_name = "Stella 2014";
+#ifndef GIT_VERSION
+#define GIT_VERSION ""
+#endif
+   info->library_version = STELLA_VERSION GIT_VERSION;
+   info->need_fullpath = false;
+   info->valid_extensions = "a26|bin|mvc";
+}
+
+void retro_get_system_av_info(struct retro_system_av_info *info)
+{
+   memset(info, 0, sizeof(*info));
+   /* retro_system_timing.fps is typed 'double' by the libretro API; the
+    * value is frontend pacing metadata only and never feeds back into
+    * emulation, which is pure integer. Computed from the exact rational. */
+   info->timing.fps            = (double)console->getFramerateNum() /
+                                 (double)console->getFramerateDen();
+   info->timing.sample_rate    = 31400;
+   info->geometry.base_width   = 160 * 2;
+   info->geometry.base_height  = videoHeight;
+   info->geometry.max_width    = 320;
+   info->geometry.max_height   = 256;
+   info->geometry.aspect_ratio = 4.0f / 3.0f;
+}
+
+void retro_set_controller_port_device(unsigned port, unsigned device)
+{
+   struct retro_core_option_display option_display;
+   bool show_gamepad_options;
+   bool show_stelladaptor_options;
+
+   if (port >= MAX_RETROPAD_DEVICES)
+      return;
+
+   switch (device)
+   {
+      case RETROPAD_STELLA_GAMEPAD:
+         retropad_devices[port] = RETROPAD_STELLA_GAMEPAD;
+         break;
+      case RETROPAD_STELLA_PADDLES:
+         retropad_devices[port] = RETROPAD_STELLA_PADDLES;
+         break;
+      default:
+         if (log_cb)
+            log_cb(RETRO_LOG_ERROR,
+                  "[Stella]: Invalid libretro controller device, using default: RETROPAD_STELLA_GAMEPAD\n");
+         retropad_devices[port] = RETROPAD_STELLA_GAMEPAD;
+         break;
+   }
+
+   /* Ugly workaround to support different input
+    * descriptors on different ports... */
+   if (retropad_devices[0] == RETROPAD_STELLA_PADDLES)
+   {
+      if (retropad_devices[1] == RETROPAD_STELLA_PADDLES)
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_paddles0_paddles1);
+      else
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_paddles0_gamepad1);
+   }
+   else
+   {
+      if (retropad_devices[1] == RETROPAD_STELLA_PADDLES)
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_gamepad0_paddles1);
+      else
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_gamepad0_gamepad1);
+   }
+
+   /* Show/hide relevant controller-related core options */
+   show_gamepad_options =
+         (retropad_devices[0] == RETROPAD_STELLA_GAMEPAD) ||
+         (retropad_devices[1] == RETROPAD_STELLA_GAMEPAD);
+
+   show_stelladaptor_options =
+         (retropad_devices[0] == RETROPAD_STELLA_PADDLES) ||
+         (retropad_devices[1] == RETROPAD_STELLA_PADDLES);
+
+   /* > Gamepad */
+   option_display.visible = show_gamepad_options;
+
+   option_display.key = "stella2014_paddle_digital_sensitivity";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+   option_display.key = "stella2014_paddle_analog_sensitivity";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+   option_display.key = "stella2014_paddle_analog_response";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+   option_display.key = "stella2014_paddle_analog_deadzone";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+   /* > Stelladaptor */
+   option_display.visible = show_stelladaptor_options;
+
+   option_display.key = "stella2014_stelladaptor_analog_sensitivity";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+   option_display.key = "stella2014_stelladaptor_analog_center";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+}
+
+/* The audio low-pass filter carries per-frame state
+ * (low_pass_left_prev / low_pass_right_prev). It must round-trip
+ * through savestates or the first frames after a load diverge,
+ * breaking netplay / run-ahead determinism. It is stored as a small
+ * tagged trailer after the Stella state blob so that states written
+ * before this trailer existed still load (the filter state then
+ * resets to a deterministic zero). */
+#define LPF_TRAILER_MAGIC 0x4C504631u /* 'LPF1': low-pass state only        */
+#define LPF_TRAILER_SIZE  12u         /* magic + lp_left + lp_right          */
+/* Extended trailer: low-pass state plus the DC-blocker's per-channel
+ * x_prev/y_prev, so that audio output stays deterministic across a
+ * savestate round-trip (the filters keep state across frames). */
+#define AF_TRAILER_MAGIC  0x41463256u /* 'AF2V'                              */
+#define AF_TRAILER_SIZE   28u         /* magic + lp(2) + dc(4), all u32      */
+
+static void write_u32(uint8_t *p, uint32_t v)
+{
+   p[0] = (uint8_t)(v      );
+   p[1] = (uint8_t)(v >>  8);
+   p[2] = (uint8_t)(v >> 16);
+   p[3] = (uint8_t)(v >> 24);
+}
+
+static uint32_t read_u32(const uint8_t *p)
+{
+   return (uint32_t)p[0]        | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+size_t retro_serialize_size(void) 
+{
+   Serializer state;
+   if(!stateManager.saveState(state))
+      return 0;
+   return state.get().size() + AF_TRAILER_SIZE;
+}
+
+bool retro_serialize(void *data, size_t size)
+{
+    Serializer state;
+    if(!stateManager.saveState(state))
+        return false;
+    std::string s = state.get();
+    if(size < s.size() + AF_TRAILER_SIZE)
+        return false;
+    memcpy(data, s.data(), s.size());
+
+    uint8_t *trailer = (uint8_t*)data + s.size();
+    write_u32(trailer +  0, AF_TRAILER_MAGIC);
+    write_u32(trailer +  4, (uint32_t)low_pass_left_prev);
+    write_u32(trailer +  8, (uint32_t)low_pass_right_prev);
+    write_u32(trailer + 12, (uint32_t)dc_block_x_prev_l);
+    write_u32(trailer + 16, (uint32_t)dc_block_y_prev_l);
+    write_u32(trailer + 20, (uint32_t)dc_block_x_prev_r);
+    write_u32(trailer + 24, (uint32_t)dc_block_y_prev_r);
+    return true;
+}
+
+bool retro_unserialize(const void *data, size_t size)
+{
+   /* Stella's Serializer arms iostream exceptions on any read error, and
+    * the entire Console::load() chain reads attacker-controllable fields
+    * (including string lengths passed to string::resize) with no internal
+    * bounds checks. A corrupt or truncated savestate -- as a frontend may
+    * hand us during netplay, rewind, or from a tampered file -- therefore
+    * throws std::ios_failure (or std::bad_alloc / std::length_error) that
+    * would otherwise escape across the C libretro ABI and abort the whole
+    * process. This function is the firewall: any failure means "reject the
+    * state", reported as a false return, never a crash. */
+   try
+   {
+      std::string s((const char*)data, size);
+      Serializer state;
+      state.set(s);
+      if(!stateManager.loadState(state))
+         return false;
+   }
+   catch(...)
+   {
+      return false;
+   }
+
+   /* Restore the audio-filter state that lives outside the Console. Try
+    * the extended trailer first, then the legacy low-pass-only trailer,
+    * then fall back to deterministic defaults for older states. */
+   if(size >= AF_TRAILER_SIZE)
+   {
+      const uint8_t *trailer = (const uint8_t*)data + size - AF_TRAILER_SIZE;
+      if(read_u32(trailer) == AF_TRAILER_MAGIC)
+      {
+         low_pass_left_prev  = (int32_t)read_u32(trailer +  4);
+         low_pass_right_prev = (int32_t)read_u32(trailer +  8);
+         dc_block_x_prev_l   = (int32_t)read_u32(trailer + 12);
+         dc_block_y_prev_l   = (int32_t)read_u32(trailer + 16);
+         dc_block_x_prev_r   = (int32_t)read_u32(trailer + 20);
+         dc_block_y_prev_r   = (int32_t)read_u32(trailer + 24);
+         return true;
+      }
+   }
+   if(size >= LPF_TRAILER_SIZE)
+   {
+      const uint8_t *trailer = (const uint8_t*)data + size - LPF_TRAILER_SIZE;
+      if(read_u32(trailer) == LPF_TRAILER_MAGIC)
+      {
+         low_pass_left_prev  = (int32_t)read_u32(trailer + 4);
+         low_pass_right_prev = (int32_t)read_u32(trailer + 8);
+         dc_block_reset();
+         return true;
+      }
+   }
+   /* State predates the trailer: reset to a deterministic default */
+   low_pass_left_prev  = 0;
+   low_pass_right_prev = 0;
+   dc_block_reset();
+   return true;
+}
+
+void retro_cheat_reset(void)
+{}
+
+void retro_cheat_set(unsigned index, bool enabled, const char *code)
+{
+   (void)index;
+   (void)enabled;
+   (void)code;
+}
+
+bool retro_load_game(const struct retro_game_info *info)
+{
+   enum retro_pixel_format fmt;
+
+   /* MovieCart (MVC) images are streamed from disk and can be many MB in
+    * size; they are identified by a 'M','V','C',0 signature at the start of
+    * the file. Detect this up front so the normal upper size limit (which
+    * targets ordinary bankswitched ROMs) doesn't reject them. */
+   bool isMVC = info && info->data && info->size >= 4 &&
+                ((const uint8_t*)info->data)[0] == 'M' &&
+                ((const uint8_t*)info->data)[1] == 'V' &&
+                ((const uint8_t*)info->data)[2] == 'C' &&
+                ((const uint8_t*)info->data)[3] == 0;
+
+   /* Reject empty images and anything larger than the largest supported
+    * cartridge. The historical limit was 96K, which predates the CDF/CDFJ
+    * ARM mappers: CDF images run to 128K/256K and CDFJ+ up to 512K. The
+    * ROM data is handed straight to Cartridge::create (each cart copies
+    * out the portion it needs), so the cap is only a sanity gate, not a
+    * buffer bound. Also reject anything below the smallest real cartridge
+    * (2K): the size-based detectors index near the end of the image
+    * (image[size-8] etc.), so a too-small image would read out of bounds. */
+   if (!info || info->size < 2*1024 || (!isMVC && info->size > 512*1024))
+      return false;
+
+   /* Release any state from a previous load (repeat retro_load_game
+    * calls without an intervening retro_unload_game, or a retry after
+    * a failed load); prevents leaking the previous Settings/Console
+    * and keeps the ownership invariants below simple. */
+   retro_unload_game();
+
+   // Set color depth
+   check_variables(true);
+
+   if (framePixelBytes == 4)
+   {
+      fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+      if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
+      {
+         if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[Stella]: XRGB8888 is not supported - trying RGB565...\n");
+
+         /* Fallback to RETRO_PIXEL_FORMAT_RGB565 */
+         framePixelBytes = 2;
+      }
+   }
+
+   if (framePixelBytes == 2)
+   {
+      fmt = RETRO_PIXEL_FORMAT_RGB565;
+      if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
+      {
+         if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[Stella]: RGB565 is not supported.\n");
+         return false;
+      }
+   }
+
+   // Get the game properties
+   string cartMD5 = MD5((const uint8_t*)info->data, (uint32_t)info->size);
+   Properties props;
+   osystem.propSet().getMD5(cartMD5, props);
+
+   // Load the cart
+   string cartType = props.get(Cartridge_Type);
+   string cartId;//, romType("AUTO-DETECT");
+   settings = new Settings(&osystem);
+   settings->setValue("romloadcount", false);
+   /* Apply the selected palette before the Console is created, since the
+    * Console reads settings("palette") during construction. This is a
+    * built-in palette selection: no file is read. */
+   settings->setValue("palette", core_palette);
+   /* Pass the on-disk path through as well: streaming carts (MovieCart)
+    * reopen the file by path rather than using the in-memory image. */
+   string cartPath = (info->path != 0) ? string(info->path) : string("");
+   cartridge = Cartridge::create((const uint8_t*)info->data, (uint32_t)info->size, cartMD5, cartType, cartId, osystem, *settings, cartPath);
+
+   if(cartridge == 0)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "Stella: Failed to load cartridge.\n");
+      delete settings;
+      settings = 0;
+      return false;
+   }
+
+   // Create the console
+   console = new Console(&osystem, cartridge, props);
+   osystem.myConsole = console;
+
+   // Init sound and video
+   console->initializeVideo();
+   console->initializeAudio();
+
+   // Reset the DC-blocker so cold-start audio output is reproducible
+   dc_block_reset();
+
+   // Check number of audio channels
+   if (console->properties().get(Cartridge_Sound) == "STEREO")
+      apply_low_pass_filter = apply_low_pass_filter_stereo;
+   else
+      apply_low_pass_filter = apply_low_pass_filter_mono;
+
+   // Init paddle controls
+   init_paddles();
+
+   /* If the ROM uses keyboard/keypad controllers, relabel the RetroPad
+    * buttons with their keypad keys so the mapping is discoverable in the
+    * frontend. Only applies when a port's detected Stella controller is
+    * Keyboard; other ports keep the normal gamepad labels. The paddle
+    * descriptor sets are handled separately via the libretro device type. */
+   {
+      bool kb0 = (left_controller_type  == Controller::Keyboard);
+      bool kb1 = (right_controller_type == Controller::Keyboard);
+      if (kb0 && kb1)
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_keypad0_keypad1);
+      else if (kb0)
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_keypad0_gamepad1);
+      else if (kb1)
+         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retropad_inputs_gamepad0_keypad1);
+   }
+
+   // Get the ROM's width and height
+   TIA& tia = console->tia();
+   videoWidth = tia.width();
+   videoHeight = tia.height();
+
+   return true;
+}
+
+bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
+{
+   (void)game_type;
+   (void)info;
+   (void)num_info;
+   return false;
+}
+
+void retro_unload_game(void) 
+{
+   if (console)
+   {
+      /* Console owns System, and System owns every attached Device
+       * including the cartridge, so deleting the console also frees
+       * the cartridge. Null the global so it can never dangle. */
+      delete console;
+      console   = 0;
+      cartridge = 0;
+   }
+   else if (cartridge)
+   {
+      /* Load failed after the cartridge was created but before the
+       * console took ownership of it */
+      delete cartridge;
+      cartridge = 0;
+   }
+   if (settings)
+   {
+      delete settings;
+      settings = 0;
+   }
+}
+
+unsigned retro_get_region(void)
+{
+   return RETRO_REGION_NTSC;
+}
+
+unsigned retro_api_version(void)
+{
+   return RETRO_API_VERSION;
+}
+
+void *retro_get_memory_data(unsigned id)
+{
+   switch (id)
+   {
+      case RETRO_MEMORY_SYSTEM_RAM: return console->system().m6532().getRAM();
+      default: return NULL;
+   }
+}
+
+size_t retro_get_memory_size(unsigned id)
+{
+   switch (id)
+   {
+      case RETRO_MEMORY_SYSTEM_RAM: return 128;
+      default: return 0;
+   }
+}
+
+void retro_init(void)
+{
+   struct retro_log_callback log;
+   unsigned level = 4;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
+      log_cb = log.log;
+   else
+      log_cb = NULL;
+
+   environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
+      libretro_supports_bitmasks = true;
+
+#ifdef _3DS
+   frameBuffer = (uint8_t*)linearMemAlign(FRAME_BUFFER_SIZE, 128);
+#else
+   frameBuffer = (uint8_t*)malloc(FRAME_BUFFER_SIZE);
+#endif
+}
+
+void retro_deinit(void)
+{
+   libretro_supports_bitmasks = false;
+   left_controller_type       = Controller::Joystick;
+   right_controller_type      = Controller::Joystick;
+   MouseAxisValue0            = Event::MouseAxisXValue;
+   MouseButtonValue0          = Event::MouseButtonLeftValue;
+   MouseAxisValue1            = Event::MouseAxisYValue;
+   MouseButtonValue1          = Event::MouseButtonRightValue;
+   low_pass_enabled           = false;
+   low_pass_left_prev         = 0;
+   low_pass_right_prev        = 0;
+   currentPalette32           = NULL;
+
+   if (frameBuffer)
+   {
+#ifdef _3DS
+      linearFree(frameBuffer);
+#else
+      free(frameBuffer);
+#endif
+      frameBuffer = NULL;
+   }
+
+   if (frameBufferPrev)
+   {
+#ifdef _3DS
+      linearFree(frameBufferPrev);
+#else
+      free(frameBufferPrev);
+#endif
+      frameBufferPrev = NULL;
+   }
+}
+
+void retro_reset(void)
+{
+   console->system().reset();
+}
+
+void retro_run(void)
+{
+   static int16_t sampleBuffer[2048];
+   //Number of samples in this frame: sampleRate/fps as exact integers,
+   //31400 * den / num (e.g. NTSC 31400*25/1498 = 524, PAL 31400*25/1248 = 629).
+   //Recomputed every frame: the TIA auto-framerate can retune num/den at
+   //any frame boundary, and the previous once-only 'static' froze the
+   //value computed on the very first retro_run() forever.
+   uint32_t tiaSamplesPerFrame =
+         (31400u * console->getFramerateDen()) /
+         (console->getFramerateNum() ? console->getFramerateNum() : 1498u);
+   //sampleBuffer holds 2048 int16 = 1024 stereo samples; worst case is
+   //31400*342/15600 = 688 samples (auto-framerate at 342 scanlines)
+   if (tiaSamplesPerFrame > 1024)
+      tiaSamplesPerFrame = 1024;
+
+   //CORE OPTIONS
+   bool updated = false;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
+      check_variables(false);
+
+   //INPUT
+   update_input();
+
+   //EMULATE
+   TIA& tia = console->tia();
+   tia.update();
+
+   //VIDEO
+   //Get the frame info from stella
+   videoWidth = tia.width();
+   videoHeight = tia.height();
+
+   //Defensive: never let the blend loops run past either the TIA's
+   //internal buffer or our output buffer, whatever the TIA reports
+   if (videoHeight > FRAME_BUFFER_MAX_LINES)
+      videoHeight = FRAME_BUFFER_MAX_LINES;
+
+   //Copy the frame from stella to libretro
+   if (framePixelBytes == 2)
+      blend_frames_16(tia.currentFrameBuffer(), videoWidth, videoHeight);
+   else
+      blend_frames_32(tia.currentFrameBuffer(), videoWidth, videoHeight);
+
+   video_cb(frameBuffer, videoWidth, videoHeight, videoWidth * framePixelBytes);
+
+   osystem.sound().processFragment(sampleBuffer, tiaSamplesPerFrame);
+
+   /* Remove the TIA's unipolar DC offset before output. Always on: the
+    * offset is never wanted, and the ~20 Hz cutoff leaves game audio
+    * (>=100 Hz) untouched. */
+   apply_dc_block_filter(sampleBuffer, tiaSamplesPerFrame);
+
+   if (low_pass_enabled)
+      apply_low_pass_filter(sampleBuffer, tiaSamplesPerFrame);
+
+   audio_batch_cb(sampleBuffer, tiaSamplesPerFrame);
+}
