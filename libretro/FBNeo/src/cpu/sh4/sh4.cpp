@@ -110,6 +110,7 @@ void Sh3SetDrcReadMirror(UINT8*, UINT32, UINT32, INT32) {}
 void Sh3SetDrcIdleWatch(const UINT32*, const UINT32*) {}
 void Sh3SetDrcDeviceRead(INT32, UINT32, INT32) {}
 INT32 Sh3SetDrcRam(UINT8*, UINT32, UINT32, UINT32) { return 0; }
+void Sh3DrcPrecompile(UINT32, UINT32) {}
 #endif
 
 static UINT32  m_spc;
@@ -1722,26 +1723,29 @@ static inline void DT(const UINT16 opcode)
 	{
 		UINT32 next_opcode = RW(m_ppc & AM);
 		int step_cycles = 0;
-		if (next_opcode == 0x8bfd)
+		if (next_opcode == 0x8bfd ||
+		    ((next_opcode & 0xff00) == 0x8b00 && (UINT32)(m_ppc + 4 + (INT32)(INT8)(next_opcode & 0xff) * 2) == m_pc))
 		{
 			/* DT   Rn
-			 * BF   $-2
+			 * BF   start
 			 */
 			step_cycles = 4;
 		}
-		else if (next_opcode == 0x8ffd && RW((m_ppc + 2) & AM) == 0x0009)
+		else if ((next_opcode == 0x8ffd || ((next_opcode & 0xff00) == 0x8f00 && (UINT32)(m_ppc + 4 + (INT32)(INT8)(next_opcode & 0xff) * 2) == m_pc)) &&
+		         RW((m_ppc + 2) & AM) == 0x0009)
 		{
 			/* DT   Rn
-			 * BF/S $-3
+			 * BF/S start
 			 * NOP
 			 */
 			step_cycles = 4;
 		}
-		else if (next_opcode == 0x8ffc && RW((m_ppc + 2) & AM) == 0x0009 && m_pc >= 4 && RW((m_pc - 4) & AM) == 0x0009)
+		else if ((next_opcode == 0x8ffc || ((next_opcode & 0xff00) == 0x8f00 && m_pc >= 4 && (UINT32)(m_ppc + 4 + (INT32)(INT8)(next_opcode & 0xff) * 2) == m_pc - 4)) &&
+		         RW((m_ppc + 2) & AM) == 0x0009 && m_pc >= 4 && RW((m_pc - 4) & AM) == 0x0009)
 		{
 			/* NOP
 			 * DT   Rn
-			 * BF/S $-4
+			 * BF/S start
 			 * NOP
 			 */
 			step_cycles = 5;

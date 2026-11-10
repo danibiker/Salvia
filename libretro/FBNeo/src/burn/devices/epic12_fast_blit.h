@@ -176,74 +176,31 @@ static void epic12_blend_fixed(BLIT_PARAMS)
 					out[2] = epic12_packed_add(s2, d2) | 0x20000000;
 					out[3] = epic12_packed_add(s3, d3) | 0x20000000;
 				} else {
-					if ((pen0 & pen1) & 0x20000000) {
-						UINT32 s0 = FullSource ? (pen0 & 0x00f8f8f8)
-						                       : (red[(pen0 >> 19) & 31] | green[(pen0 >> 11) & 31] | blue[(pen0 >> 3) & 31]);
-						UINT32 s1 = FullSource ? (pen1 & 0x00f8f8f8)
-						                       : (red[(pen1 >> 19) & 31] | green[(pen1 >> 11) & 31] | blue[(pen1 >> 3) & 31]);
-						UINT32 d0 = out[0];
-						UINT32 d1 = out[1];
-						if (FullDestination) {
-							d0 &= 0x00f8f8f8;
-							d1 &= 0x00f8f8f8;
-						} else {
-							d0 = dred[(d0 >> 19) & 31] | dgreen[(d0 >> 11) & 31] | dblue[(d0 >> 3) & 31];
-							d1 = dred[(d1 >> 19) & 31] | dgreen[(d1 >> 11) & 31] | dblue[(d1 >> 3) & 31];
-						}
-						out[0] = epic12_packed_add(s0, d0) | 0x20000000;
-						out[1] = epic12_packed_add(s1, d1) | 0x20000000;
-					} else {
-						if (pen0 & 0x20000000) {
-							UINT32 s0 = FullSource ? (pen0 & 0x00f8f8f8)
-							                       : (red[(pen0 >> 19) & 31] | green[(pen0 >> 11) & 31] | blue[(pen0 >> 3) & 31]);
-							UINT32 d0 = out[0];
-							if (FullDestination) d0 &= 0x00f8f8f8;
-							else d0 = dred[(d0 >> 19) & 31] | dgreen[(d0 >> 11) & 31] | dblue[(d0 >> 3) & 31];
-							out[0] = epic12_packed_add(s0, d0) | 0x20000000;
-						}
-						if (pen1 & 0x20000000) {
-							UINT32 s1 = FullSource ? (pen1 & 0x00f8f8f8)
-							                       : (red[(pen1 >> 19) & 31] | green[(pen1 >> 11) & 31] | blue[(pen1 >> 3) & 31]);
-							UINT32 d1 = out[1];
-							if (FullDestination) d1 &= 0x00f8f8f8;
-							else d1 = dred[(d1 >> 19) & 31] | dgreen[(d1 >> 11) & 31] | dblue[(d1 >> 3) & 31];
-							out[1] = epic12_packed_add(s1, d1) | 0x20000000;
-						}
-					}
-					if ((pen2 & pen3) & 0x20000000) {
-						UINT32 s2 = FullSource ? (pen2 & 0x00f8f8f8)
-						                       : (red[(pen2 >> 19) & 31] | green[(pen2 >> 11) & 31] | blue[(pen2 >> 3) & 31]);
-						UINT32 s3 = FullSource ? (pen3 & 0x00f8f8f8)
-						                       : (red[(pen3 >> 19) & 31] | green[(pen3 >> 11) & 31] | blue[(pen3 >> 3) & 31]);
-						UINT32 d2 = out[2];
-						UINT32 d3 = out[3];
-						if (FullDestination) {
-							d2 &= 0x00f8f8f8;
-							d3 &= 0x00f8f8f8;
-						} else {
-							d2 = dred[(d2 >> 19) & 31] | dgreen[(d2 >> 11) & 31] | dblue[(d2 >> 3) & 31];
-							d3 = dred[(d3 >> 19) & 31] | dgreen[(d3 >> 11) & 31] | dblue[(d3 >> 3) & 31];
-						}
-						out[2] = epic12_packed_add(s2, d2) | 0x20000000;
-						out[3] = epic12_packed_add(s3, d3) | 0x20000000;
-					} else {
-						if (pen2 & 0x20000000) {
-							UINT32 s2 = FullSource ? (pen2 & 0x00f8f8f8)
-							                       : (red[(pen2 >> 19) & 31] | green[(pen2 >> 11) & 31] | blue[(pen2 >> 3) & 31]);
-							UINT32 d2 = out[2];
-							if (FullDestination) d2 &= 0x00f8f8f8;
-							else d2 = dred[(d2 >> 19) & 31] | dgreen[(d2 >> 11) & 31] | dblue[(d2 >> 3) & 31];
-							out[2] = epic12_packed_add(s2, d2) | 0x20000000;
-						}
-						if (pen3 & 0x20000000) {
-							UINT32 s3 = FullSource ? (pen3 & 0x00f8f8f8)
-							                       : (red[(pen3 >> 19) & 31] | green[(pen3 >> 11) & 31] | blue[(pen3 >> 3) & 31]);
-							UINT32 d3 = out[3];
-							if (FullDestination) d3 &= 0x00f8f8f8;
-							else d3 = dred[(d3 >> 19) & 31] | dgreen[(d3 >> 11) & 31] | dblue[(d3 >> 3) & 31];
-							out[3] = epic12_packed_add(s3, d3) | 0x20000000;
-						}
-					}
+					UINT32 s0 = FullSource ? (pen0 & 0x00f8f8f8)
+					                       : (red[(pen0 >> 19) & 31] | green[(pen0 >> 11) & 31] | blue[(pen0 >> 3) & 31]);
+					UINT32 s1 = FullSource ? (pen1 & 0x00f8f8f8)
+					                       : (red[(pen1 >> 19) & 31] | green[(pen1 >> 11) & 31] | blue[(pen1 >> 3) & 31]);
+					UINT32 s2 = FullSource ? (pen2 & 0x00f8f8f8)
+					                       : (red[(pen2 >> 19) & 31] | green[(pen2 >> 11) & 31] | blue[(pen2 >> 3) & 31]);
+					UINT32 s3 = FullSource ? (pen3 & 0x00f8f8f8)
+					                       : (red[(pen3 >> 19) & 31] | green[(pen3 >> 11) & 31] | blue[(pen3 >> 3) & 31]);
+					UINT32 orig0 = out[0], orig1 = out[1], orig2 = out[2], orig3 = out[3];
+					UINT32 d0 = FullDestination ? (orig0 & 0x00f8f8f8) : (dred[(orig0 >> 19) & 31] | dgreen[(orig0 >> 11) & 31] | dblue[(orig0 >> 3) & 31]);
+					UINT32 d1 = FullDestination ? (orig1 & 0x00f8f8f8) : (dred[(orig1 >> 19) & 31] | dgreen[(orig1 >> 11) & 31] | dblue[(orig1 >> 3) & 31]);
+					UINT32 d2 = FullDestination ? (orig2 & 0x00f8f8f8) : (dred[(orig2 >> 19) & 31] | dgreen[(orig2 >> 11) & 31] | dblue[(orig2 >> 3) & 31]);
+					UINT32 d3 = FullDestination ? (orig3 & 0x00f8f8f8) : (dred[(orig3 >> 19) & 31] | dgreen[(orig3 >> 11) & 31] | dblue[(orig3 >> 3) & 31]);
+					UINT32 res0 = epic12_packed_add(s0, d0) | 0x20000000;
+					UINT32 res1 = epic12_packed_add(s1, d1) | 0x20000000;
+					UINT32 res2 = epic12_packed_add(s2, d2) | 0x20000000;
+					UINT32 res3 = epic12_packed_add(s3, d3) | 0x20000000;
+					UINT32 m0 = 0 - ((pen0 >> 29) & 1);
+					UINT32 m1 = 0 - ((pen1 >> 29) & 1);
+					UINT32 m2 = 0 - ((pen2 >> 29) & 1);
+					UINT32 m3 = 0 - ((pen3 >> 29) & 1);
+					out[0] = (res0 & m0) | (orig0 & ~m0);
+					out[1] = (res1 & m1) | (orig1 & ~m1);
+					out[2] = (res2 & m2) | (orig2 & ~m2);
+					out[3] = (res3 & m3) | (orig3 & ~m3);
 				}
 				out += 4;
 				in += FlipX ? -4 : 4;
@@ -277,26 +234,19 @@ static void epic12_blend_fixed(BLIT_PARAMS)
 					out[0] = epic12_packed_add(s0, d0) | 0x20000000;
 					out[1] = epic12_packed_add(s1, d1) | 0x20000000;
 				} else {
-					if (pen0 & 0x20000000) {
-						UINT32 s0 = FullSource ? (pen0 & 0x00f8f8f8)
-						                       : (red[(pen0 >> 19) & 31] | green[(pen0 >> 11) & 31] | blue[(pen0 >> 3) & 31]);
-						UINT32 d0 = out[0];
-						if (FullDestination) d0 &= 0x00f8f8f8;
-						else d0 = dred[(d0 >> 19) & 31] |
-						         dgreen[(d0 >> 11) & 31] |
-						         dblue[(d0 >> 3) & 31];
-						out[0] = epic12_packed_add(s0, d0) | 0x20000000;
-					}
-					if (pen1 & 0x20000000) {
-						UINT32 s1 = FullSource ? (pen1 & 0x00f8f8f8)
-						                       : (red[(pen1 >> 19) & 31] | green[(pen1 >> 11) & 31] | blue[(pen1 >> 3) & 31]);
-						UINT32 d1 = out[1];
-						if (FullDestination) d1 &= 0x00f8f8f8;
-						else d1 = dred[(d1 >> 19) & 31] |
-						         dgreen[(d1 >> 11) & 31] |
-						         dblue[(d1 >> 3) & 31];
-						out[1] = epic12_packed_add(s1, d1) | 0x20000000;
-					}
+					UINT32 s0 = FullSource ? (pen0 & 0x00f8f8f8)
+					                       : (red[(pen0 >> 19) & 31] | green[(pen0 >> 11) & 31] | blue[(pen0 >> 3) & 31]);
+					UINT32 s1 = FullSource ? (pen1 & 0x00f8f8f8)
+					                       : (red[(pen1 >> 19) & 31] | green[(pen1 >> 11) & 31] | blue[(pen1 >> 3) & 31]);
+					UINT32 orig0 = out[0], orig1 = out[1];
+					UINT32 d0 = FullDestination ? (orig0 & 0x00f8f8f8) : (dred[(orig0 >> 19) & 31] | dgreen[(orig0 >> 11) & 31] | dblue[(orig0 >> 3) & 31]);
+					UINT32 d1 = FullDestination ? (orig1 & 0x00f8f8f8) : (dred[(orig1 >> 19) & 31] | dgreen[(orig1 >> 11) & 31] | dblue[(orig1 >> 3) & 31]);
+					UINT32 res0 = epic12_packed_add(s0, d0) | 0x20000000;
+					UINT32 res1 = epic12_packed_add(s1, d1) | 0x20000000;
+					UINT32 m0 = 0 - ((pen0 >> 29) & 1);
+					UINT32 m1 = 0 - ((pen1 >> 29) & 1);
+					out[0] = (res0 & m0) | (orig0 & ~m0);
+					out[1] = (res1 & m1) | (orig1 & ~m1);
 				}
 				out += 2;
 				in += FlipX ? -2 : 2;

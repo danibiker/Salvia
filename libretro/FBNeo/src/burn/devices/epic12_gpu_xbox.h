@@ -128,16 +128,23 @@ static const char epic12_xenos_shader[] =
 " if (mode.x>0.5) clip(raw.a-0.0625);\n"
 " float3 s=floor(raw.rgb*(255.0/8.0)+0.001);\n"
 " s=min(31.0,floor(s*tintAlpha.rgb/31.0+0.0001));\n"
+" if (mode.z>2.5 && mode.z<3.5) s=floor(s*s/31.0+0.0001);\n"
 " float3 outc=s;\n"
 " if(mode.y>0.5) {\n"
-"  if(mode.z>0.5 && tintAlpha.a<0.5) {\n"
+"  if(mode.z>3.5 && mode.z<4.5) {\n"
+"   float3 d=floor(tex2D(destination,p.dst).rgb*(255.0/8.0)+0.001);\n"
+"   outc=min(31.0,floor((31.0-d)*s/31.0+0.0001)+floor(d*mode.w/31.0+0.0001));\n"
+"  } else if(mode.z>1.5 && mode.z<2.5) {\n"
+"   float3 d=floor(tex2D(destination,p.dst).rgb*(255.0/8.0)+0.001);\n"
+"   outc=min(31.0,floor(d*s/31.0+0.0001)+floor(d*mode.w/31.0+0.0001));\n"
+"  } else if(mode.z>0.5 && mode.z<1.5 && tintAlpha.a<0.5) {\n"
 "   outc=s;\n"
 "  } else {\n"
 "   outc=floor(s*tintAlpha.a/31.0+0.0001);\n"
-"   if(mode.z>0.5 || (mode.w>0.5 && mode.w<30.5)) {\n"
+"   if((mode.z>0.5 && mode.z<1.5) || (mode.w>0.5 && mode.w<30.5)) {\n"
 "    float3 d=floor(tex2D(destination,p.dst).rgb*(255.0/8.0)+0.001);\n"
 "    float3 factor=mode.w;\n"
-"    if(mode.z>0.5) factor=s; // mode 4 was normalized on the CPU\n"
+"    if(mode.z>0.5 && mode.z<1.5) factor=s;\n"
 "    outc=min(31.0,outc+floor(d*factor/31.0+0.0001));\n"
 "   }\n"
 "  }\n"
@@ -146,16 +153,15 @@ static const char epic12_xenos_shader[] =
 "}\n"
 "float4 ps_main(P p):COLOR0 { return shade(p,floor(p.tint+0.5),floor(p.mode+0.5)); }\n"
 "float4 ps_uniform(P p):COLOR0 { return shade(p,uniformTint,uniformMode); }\n"
-// Keep destination fetch/branch instructions out of the common plain and
-// additive shaders. The CPU planner already separates feedback groups.
 "float4 shade_fast(P p, float4 tintAlpha, float4 mode) {\n"
 " float4 raw=tex2D(source,p.uv);\n"
 " if(mode.x>0.5) clip(raw.a-0.0625);\n"
 " float3 s=floor(raw.rgb*(255.0/8.0)+0.001);\n"
 " s=min(31.0,floor(s*tintAlpha.rgb/31.0+0.0001));\n"
+" if(mode.z>2.5 && mode.z<3.5) s=floor(s*s/31.0+0.0001);\n"
 " float3 outc=s;\n"
 " if(mode.y>0.5) {\n"
-"  if(mode.z>0.5) outc=s;\n"
+"  if(mode.z>0.5 && mode.z<1.5) outc=s;\n"
 "  else outc=floor(s*tintAlpha.a/31.0+0.0001);\n"
 " }\n"
 " return float4(outc*(8.0/255.0),raw.a);\n"
@@ -165,11 +171,18 @@ static const char epic12_xenos_shader[] =
 " if(mode.x>0.5) clip(raw.a-0.0625);\n"
 " float3 s=floor(raw.rgb*(255.0/8.0)+0.001);\n"
 " s=min(31.0,floor(s*tintAlpha.rgb/31.0+0.0001));\n"
-" float3 outc=floor(s*tintAlpha.a/31.0+0.0001);\n"
 " float3 d=floor(tex2D(destination,p.dst).rgb*(255.0/8.0)+0.001);\n"
-" float3 factor=mode.w;\n"
-" if(mode.z>0.5) factor=s;\n"
-" outc=min(31.0,outc+floor(d*factor/31.0+0.0001));\n"
+" float3 outc;\n"
+" if(mode.z>3.5 && mode.z<4.5) {\n"
+"  outc=min(31.0,floor((31.0-d)*s/31.0+0.0001)+floor(d*mode.w/31.0+0.0001));\n"
+" } else if(mode.z>1.5 && mode.z<2.5) {\n"
+"  outc=min(31.0,floor(d*s/31.0+0.0001)+floor(d*mode.w/31.0+0.0001));\n"
+" } else {\n"
+"  outc=floor(s*tintAlpha.a/31.0+0.0001);\n"
+"  float3 factor=mode.w;\n"
+"  if(mode.z>0.5 && mode.z<1.5) factor=s;\n"
+"  outc=min(31.0,outc+floor(d*factor/31.0+0.0001));\n"
+" }\n"
 " return float4(outc*(8.0/255.0),raw.a);\n"
 "}\n"
 "float4 ps_fast(P p):COLOR0 { return shade_fast(p,floor(p.tint+0.5),floor(p.mode+0.5)); }\n"
@@ -514,8 +527,13 @@ static bool epic12_xenos_run(UINT32 *vram,const Epic12GpuCommand *cmd,int count,
 		d->SetVertexDeclaration(epic12_xenos_decl); d->SetVertexShader(epic12_xenos_vs);
 	}
 	d->SetTexture(0,epic12_xenos_atlas);
-	D3DPixelShader *activePs=epic12_xenos_attributes?epic12_xenos_ps:epic12_xenos_uniform_ps;
+	D3DPixelShader *activePs=(epic12_xenos_attributes && epic12_xenos_specialized)?
+		epic12_xenos_fast_ps:(epic12_xenos_attributes?epic12_xenos_ps:epic12_xenos_uniform_ps);
 	d->SetPixelShader(activePs);
+	BOOL cur_alpha_blend = FALSE;
+	D3DBLEND cur_src_blend = D3DBLEND_ONE;
+	D3DBLEND cur_dest_blend = D3DBLEND_ONE;
+	DWORD cur_blend_factor = 0xffffffff;
 	int snapshotEnd=0;
 	for (int first=0;first<count;) {
 		const Epic12GpuCommand &c=cmd[first];
@@ -537,21 +555,55 @@ static bool epic12_xenos_run(UINT32 *vram,const Epic12GpuCommand *cmd,int count,
 		int da_norm = epic12_gpu_dest_alpha(c);
 		int dm_norm = epic12_gpu_dest_mode(c);
 		if (!c.blend || (dm_norm == 0 && da_norm == 0) || feedback) {
-			d->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+			if (cur_alpha_blend) {
+				d->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+				cur_alpha_blend = FALSE;
+			}
 		} else if (dm_norm == 1 && c.sa == 0) {
-			d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
-			d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ZERO);
-			d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_SRCCOLOR);
+			if (!cur_alpha_blend) {
+				d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+				cur_alpha_blend = TRUE;
+			}
+			if (cur_src_blend != D3DBLEND_ZERO) {
+				d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ZERO);
+				cur_src_blend = D3DBLEND_ZERO;
+			}
+			if (cur_dest_blend != D3DBLEND_SRCCOLOR) {
+				d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_SRCCOLOR);
+				cur_dest_blend = D3DBLEND_SRCCOLOR;
+			}
 		} else if (da_norm == 31) {
-			d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
-			d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
-			d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+			if (!cur_alpha_blend) {
+				d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+				cur_alpha_blend = TRUE;
+			}
+			if (cur_src_blend != D3DBLEND_ONE) {
+				d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+				cur_src_blend = D3DBLEND_ONE;
+			}
+			if (cur_dest_blend != D3DBLEND_ONE) {
+				d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+				cur_dest_blend = D3DBLEND_ONE;
+			}
 		} else {
-			d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
-			d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
-			d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_BLENDFACTOR);
+			if (!cur_alpha_blend) {
+				d->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+				cur_alpha_blend = TRUE;
+			}
+			if (cur_src_blend != D3DBLEND_ONE) {
+				d->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+				cur_src_blend = D3DBLEND_ONE;
+			}
+			if (cur_dest_blend != D3DBLEND_BLENDFACTOR) {
+				d->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_BLENDFACTOR);
+				cur_dest_blend = D3DBLEND_BLENDFACTOR;
+			}
 			DWORD factor = (da_norm * 255 + 15) / 31;
-			d->SetRenderState(D3DRS_BLENDFACTOR, D3DCOLOR_RGBA(factor, factor, factor, factor));
+			DWORD factor_rgba = D3DCOLOR_RGBA(factor, factor, factor, factor);
+			if (cur_blend_factor != factor_rgba) {
+				d->SetRenderState(D3DRS_BLENDFACTOR, factor_rgba);
+				cur_blend_factor = factor_rgba;
+			}
 		}
 		if (!epic12_xenos_attributes) {
 			float constants[8]={(float)c.tint.r,(float)c.tint.g,(float)c.tint.b,(float)c.sa,
@@ -606,6 +658,7 @@ static bool epic12_xenos_selftest()
 	for(int y=0;y<128;++y) for(int x=0;x<256;++x)
 		scratch[y*8192+x]=((x+y)&1?0x20000000:0)|((x&31)<<19)|((y&31)<<11)|(((x+y)&31)<<3);
 	Epic12GpuCommand commands[224];
+	memset(commands, 0, sizeof(commands));
 	for(int i=0;i<32;++i) {
 		Epic12GpuCommand &c=commands[i];
 		c.sx=128+i; c.sy=i; c.x=(i*7)%33; c.y=(i*11)%33; c.w=32; c.h=32;

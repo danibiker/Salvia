@@ -126,8 +126,118 @@ static void epic12_gpu_copy_rows(void *destination, size_t dstPitch,
 	// word aligned, has no aligned-store form at all.
 	if ((((size_t)out & 15) == 0) && (((size_t)in & 3) == 0) &&
 		(((dstPitch | srcPitch) & 15) == 0)) {
-		const size_t body = (width >> 4) << 4;
 		const bool aligned_in = (((size_t)in & 15) == 0);
+		if (width == 64) {
+			if (aligned_in) {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __lvx(in, 0);
+					__vector4 v1 = __lvx(in + 16, 0);
+					__vector4 v2 = __lvx(in + 32, 0);
+					__vector4 v3 = __lvx(in + 48, 0);
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+					__stvx_volatile(v2, out + 32, 0);
+					__stvx_volatile(v3, out + 48, 0);
+				}
+			} else {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __loadunalignedvector((const unsigned int*)in);
+					__vector4 v1 = __loadunalignedvector((const unsigned int*)(in + 16));
+					__vector4 v2 = __loadunalignedvector((const unsigned int*)(in + 32));
+					__vector4 v3 = __loadunalignedvector((const unsigned int*)(in + 48));
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+					__stvx_volatile(v2, out + 32, 0);
+					__stvx_volatile(v3, out + 48, 0);
+				}
+			}
+			return;
+		}
+		if (width == 32) {
+			if (aligned_in) {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __lvx(in, 0);
+					__vector4 v1 = __lvx(in + 16, 0);
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+				}
+			} else {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __loadunalignedvector((const unsigned int*)in);
+					__vector4 v1 = __loadunalignedvector((const unsigned int*)(in + 16));
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+				}
+			}
+			return;
+		}
+		if (width == 128) {
+			if (aligned_in) {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __lvx(in, 0);
+					__vector4 v1 = __lvx(in + 16, 0);
+					__vector4 v2 = __lvx(in + 32, 0);
+					__vector4 v3 = __lvx(in + 48, 0);
+					__vector4 v4 = __lvx(in + 64, 0);
+					__vector4 v5 = __lvx(in + 80, 0);
+					__vector4 v6 = __lvx(in + 96, 0);
+					__vector4 v7 = __lvx(in + 112, 0);
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+					__stvx_volatile(v2, out + 32, 0);
+					__stvx_volatile(v3, out + 48, 0);
+					__stvx_volatile(v4, out + 64, 0);
+					__stvx_volatile(v5, out + 80, 0);
+					__stvx_volatile(v6, out + 96, 0);
+					__stvx_volatile(v7, out + 112, 0);
+				}
+			} else {
+				for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
+					if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {
+						const unsigned char *ahead = in + EPIC12_REGION_PREFETCH_ROWS * srcPitch;
+						__dcbt(0, ahead);
+					}
+					__vector4 v0 = __loadunalignedvector((const unsigned int*)in);
+					__vector4 v1 = __loadunalignedvector((const unsigned int*)(in + 16));
+					__vector4 v2 = __loadunalignedvector((const unsigned int*)(in + 32));
+					__vector4 v3 = __loadunalignedvector((const unsigned int*)(in + 48));
+					__vector4 v4 = __loadunalignedvector((const unsigned int*)(in + 64));
+					__vector4 v5 = __loadunalignedvector((const unsigned int*)(in + 80));
+					__vector4 v6 = __loadunalignedvector((const unsigned int*)(in + 96));
+					__vector4 v7 = __loadunalignedvector((const unsigned int*)(in + 112));
+					__stvx_volatile(v0, out, 0);
+					__stvx_volatile(v1, out + 16, 0);
+					__stvx_volatile(v2, out + 32, 0);
+					__stvx_volatile(v3, out + 48, 0);
+					__stvx_volatile(v4, out + 64, 0);
+					__stvx_volatile(v5, out + 80, 0);
+					__stvx_volatile(v6, out + 96, 0);
+					__stvx_volatile(v7, out + 112, 0);
+				}
+			}
+			return;
+		}
+		const size_t body = (width >> 4) << 4;
 		if (aligned_in) {
 			for (size_t y = 0; y < rows; ++y, out += dstPitch, in += srcPitch) {
 				if (y + EPIC12_REGION_PREFETCH_ROWS < rows) {

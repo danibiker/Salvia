@@ -14,6 +14,9 @@
 #include "burnint.h"
 #include "mpeg_audio.h"
 
+static double s_cos_transposed[32][32];
+static bool s_cos_transposed_inited = false;
+
 mpeg_audio::mpeg_audio(const void *_base, unsigned int _accepted, bool lsb_first, int _position_align)
 {
 	base = (const UINT8 *)_base;
@@ -22,9 +25,12 @@ mpeg_audio::mpeg_audio(const void *_base, unsigned int _accepted, bool lsb_first
 	position_align = _position_align ? _position_align - 1 : 0;
 
 	for (int i = 0; i < 32; i++) {
-		for (int j = 0; j < 32; j++)
+		for (int j = 0; j < 32; j++) {
 			m_cos_cache[i][j] = cos(i*(2 * j + 1)*M_PI / 64);
+			s_cos_transposed[j][i] = m_cos_cache[i][j];
+		}
 	}
+	s_cos_transposed_inited = true;
 
 	clear();
 }
@@ -58,6 +64,15 @@ void mpeg_audio::scan()
 	SCAN_VAR(audio_buffer);
 	SCAN_VAR(audio_buffer_pos);
 	SCAN_VAR(m_cos_cache);
+
+	if (!s_cos_transposed_inited) {
+		for (int j = 0; j < 32; j++) {
+			for (int i = 0; i < 32; i++) {
+				s_cos_transposed[j][i] = m_cos_cache[i][j];
+			}
+		}
+		s_cos_transposed_inited = true;
+	}
 
 	SCAN_VAR(current_pos);
 	SCAN_VAR(current_limit);
@@ -758,13 +773,30 @@ void mpeg_audio::retrieve_subbuffer(int step)
 
 void mpeg_audio::idct32(const double *input, double *output)
 {
-	// Simplest idct32 ever, non-fast at all
-	for (int i = 0; i < 32; i++) {
-		double s = 0;
-		for (int j = 0; j < 32; j++)
-			s += input[j] * m_cos_cache[i][j];
-		output[i] = s;
+	if (!s_cos_transposed_inited) {
+		for (int j = 0; j < 32; j++) {
+			for (int i = 0; i < 32; i++) {
+				s_cos_transposed[j][i] = cos(i*(2 * j + 1)*M_PI / 64);
+			}
+		}
+		s_cos_transposed_inited = true;
 	}
+
+	double s[32] = { 0.0 };
+	for (int j = 0; j < 32; j++) {
+		const double in = input[j];
+		if (in == 0.0)
+			continue;
+		const double *c = s_cos_transposed[j];
+		for (int i = 0; i < 32; i += 4) {
+			s[i + 0] += in * c[i + 0];
+			s[i + 1] += in * c[i + 1];
+			s[i + 2] += in * c[i + 2];
+			s[i + 3] += in * c[i + 3];
+		}
+	}
+	for (int i = 0; i < 32; i++)
+		output[i] = s[i];
 }
 
 void mpeg_audio::resynthesis(const double *input, double *output)

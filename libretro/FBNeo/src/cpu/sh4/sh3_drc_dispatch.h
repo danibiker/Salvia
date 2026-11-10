@@ -5,6 +5,19 @@
 #include "sh3_drc_source_check.h"
 #include "sh3_drc_lookup.h"
 
+static inline bool sh3_drc_check_read_map(UINT32 phys, const UINT8 *page)
+{
+	const UINT8 *r = MemMapR[phys >> SH3_SHIFT];
+	if (r == page) return true;
+	if (sh3_ppc_state.read_mirror &&
+	    (uintptr_t)r == (uintptr_t)sh3_ppc_state.mirror_handler &&
+	    (phys & ~(unsigned)SH3_PAGEM) == sh3_ppc_state.mirror_page &&
+	    sh3_ppc_state.read_mirror == page) {
+		return true;
+	}
+	return false;
+}
+
 
 // Keep the native loop in the caller: interpreter fallback should not pay a
 // second dispatcher stack frame. This does not inline/link generated PPC blocks.
@@ -46,7 +59,10 @@ template<bool Chained> static SH3_DISPATCH_INLINE bool sh3_drc_dispatch_impl()
  using namespace Sh3Ppc;
  // Preserve allocate()'s failure precedence and cold initialization. On a
  // warm cache it only returns true, so avoid its out-of-line call here.
- if(m_sh4_icount<=0 || failed || (!blocks && !allocate())) {
+ if(m_sh4_icount<=0) {
+  return false;
+ }
+ if(failed || (!blocks && !allocate())) {
   return false;
  }
  // Generated entries are leaf functions: they cannot release the cache or
@@ -73,8 +89,8 @@ template<bool Chained> static SH3_DISPATCH_INLINE bool sh3_drc_dispatch_impl()
   if(shadow) {
    const Shadow &cand=shadow[index];
    if(cand.pc==pc && cand.source==source && sector_epoch[cand.sector]==cand.epoch &&
-      (!cand.check_read_map || MemMapR[phys>>SH3_SHIFT]==page) &&
-      sh3_drc_source_equal(cand.original,source,cand.words)) copy=&cand;
+      (!cand.check_read_map || sh3_drc_check_read_map(phys, page))
+     ) copy=&cand;
   }
   if(copy) {
    entry=copy->entry; cycles=copy->cycles; words=copy->words;
@@ -87,7 +103,7 @@ template<bool Chained> static SH3_DISPATCH_INLINE bool sh3_drc_dispatch_impl()
   Block &b=blocks[index*WAYS+way];
   // Recheck EVERY entry, including successors, aliases, DMA/cheat writes and
   // changed fetch/read mappings. No cached host entry bypasses these guards.
-  const bool rebuild=(b.source!=source || b.pc!=pc || (b.check_read_map && MemMapR[phys>>SH3_SHIFT]!=page) ||
+  const bool rebuild=(b.source!=source || b.pc!=pc || (b.check_read_map && !sh3_drc_check_read_map(phys, page)) ||
     !sh3_drc_source_equal(b.original,source,b.words));
   if(rebuild) {
    compile(b,pc,source);
@@ -113,9 +129,6 @@ template<bool Chained> static SH3_DISPATCH_INLINE bool sh3_drc_dispatch_impl()
 #endif
   }
   if(!entry) {
-   return false;
-  }
-  if(m_sh4_icount<cycles) {
    return false;
   }
   // A partial/guarded block requests one interpreter step at its updated PC,

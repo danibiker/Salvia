@@ -42,6 +42,7 @@ static INT32 is_type_d;
 static INT32 DriverClock; // selected cpu clockrate
 static INT32 nPrevBurnCPUSpeedAdjust;
 static UINT8 nPrevCPUTenth;
+static UINT8 nPrevTimingModel = 0xFF;
 static INT32 speedhack_burn; // 10ms @ cpu clock, calculated in DrvFrame
 
 static struct BurnInputInfo Cv1kInputList[] = {
@@ -108,6 +109,10 @@ static struct BurnDIPInfo DefaultDIPList[]=
 	{0   , 0xfe, 0   ,    2, "Thread Sync"		},
 	{0x01, 0x01, 0x04, 0x00, "Before Exec"		},
 	{0x01, 0x01, 0x04, 0x04, "Before Draw"		},
+
+	{0   , 0xfe, 0   ,    2, "Timing Model (ibara360)" },
+	{0x01, 0x01, 0x08, 0x00, "Arcade PCB Fit (Bus Stall)" },
+	{0x01, 0x01, 0x08, 0x08, "Unthrottled (102.4MHz No Stall)" },
 
 	{0   , 0xfe, 0   ,    2, "Blitter Timing"	},
 	{0x02, 0x01, 0x20, 0x00, "Accurate (Buffis)"},
@@ -347,10 +352,12 @@ static UINT32 hacky_idle_pc;
 
 static UINT32 __fastcall speedhack_read_long(UINT32 offset)
 {
-	UINT32 pc = Sh3GetPC(-1);
-	if ( offset == hacky_idle_ram && (pc == hacky_idle_pc || pc == hacky_idle_pc+2)) {
-		INT32 rem = Sh3GetRemainingCycles();
-		Sh3BurnCycles(rem > 0 ? rem : speedhack_burn);
+	if ( offset == hacky_idle_ram ) {
+		UINT32 pc = Sh3GetPC(-1);
+		if (pc >= hacky_idle_pc && pc <= hacky_idle_pc + 10) {
+			INT32 rem = Sh3GetRemainingCycles();
+			Sh3BurnCycles(rem > 0 ? rem : speedhack_burn);
+		}
 	}
 	UINT32 V = *((UINT32 *)(DrvMainRAM + (offset & 0xfffffc)));
 #ifdef LSB_FIRST
@@ -365,7 +372,7 @@ static UINT16 __fastcall speedhack_read_word(UINT32 offset)
 	// speedhack for all games uses long handler, just passthru for word/byte
 	// reads since this is a high-traffic area. (0xc000000 - 0xc00ffff)
 	UINT32 pc = Sh3GetPC(-1);
-	if ( offset == hacky_idle_ram && (pc == hacky_idle_pc || pc == hacky_idle_pc+2)) {
+	if ( offset == hacky_idle_ram && (pc >= hacky_idle_pc && pc <= hacky_idle_pc + 10)) {
 		//bprintf(0, _T("w"));
 		Sh3BurnCycles(speedhack_burn);
 	}
@@ -377,7 +384,7 @@ static UINT8 __fastcall speedhack_read_byte(UINT32 offset)
 {
 #if 0
 	UINT32 pc = Sh3GetPC(-1);
-	if ( offset == hacky_idle_ram && (pc == hacky_idle_pc || pc == hacky_idle_pc+2)) {
+	if ( offset == hacky_idle_ram && (pc >= hacky_idle_pc && pc <= hacky_idle_pc + 10)) {
 		//bprintf(0, _T("b"));
 		Sh3BurnCycles(speedhack_burn);
 	}
@@ -403,6 +410,7 @@ static void speedhack_set(UINT32 ram, UINT32 pc)
 
 #if defined(_XBOX) || defined(SH3_PPC_DRC_TEST)
 #include "cv1k_fastboot.h"
+static bool s_cv1k_aot_done = false;
 #endif
 
 static INT32 DrvDoReset()
@@ -414,6 +422,7 @@ static INT32 DrvDoReset()
 	Sh3Close();
 #if defined(_XBOX) || defined(SH3_PPC_DRC_TEST)
 	cv1k_boot_prepare();
+	s_cv1k_aot_done = false;
 #endif
 
 	epic12_reset();
@@ -425,6 +434,7 @@ static INT32 DrvDoReset()
 
 	nPrevBurnCPUSpeedAdjust = -1;
 	nPrevCPUTenth = 0xff;
+	nPrevTimingModel = 0xff;
 
 	hold_coin.reset();
 
@@ -562,10 +572,10 @@ static INT32 DrvInit()
 
 	init_speedhack(); // install the hacky speedhack handler
 	Sh3SetDrcRam(DrvMainRAM, 0x0c000000, 0x1000000, is_type_d ? 0x1000000 : 0x800000);
-	// Frequent CV1000 polling: blitter busy and DMA channel 0 completion.
+	// Frequent CV1000 polling: blitter busy and external register / ROM read.
 	// DRC servicing calls RL, preserving the device handler, burn and IRQ order.
 	Sh3SetDrcDeviceRead(0, 0x18000010, 0);
-	Sh3SetDrcDeviceRead(1, 0x0400002c, 7);
+	Sh3SetDrcDeviceRead(1, 0x04000000, 7);
 
 	Sh3Close();
 
@@ -612,12 +622,14 @@ static INT32 DrvFrame()
 	}
 
 	// check if cpu rate changes here..
-	if (nPrevBurnCPUSpeedAdjust != nBurnCPUSpeedAdjust || (DrvDips[3] & 0x0f) != nPrevCPUTenth) {
+	if (nPrevBurnCPUSpeedAdjust != nBurnCPUSpeedAdjust || (DrvDips[3] & 0x0f) != nPrevCPUTenth || (DrvDips[1] & 0x08) != nPrevTimingModel) {
 		bprintf(0, _T("Setting CPU Clock selection.\n"));
 		nPrevBurnCPUSpeedAdjust = nBurnCPUSpeedAdjust;
 		nPrevCPUTenth = DrvDips[3] & 0x0f;
+		nPrevTimingModel = DrvDips[1] & 0x08;
 
-		INT32 i_percent = ((double)100 * nBurnCPUSpeedAdjust / 256) + 0.5; // whole percent comes from UI
+		INT32 base_percent = 100; // 102.4MHz nominal; authentic slowdown is achieved dynamically via bus stalls in epic12
+		INT32 i_percent = ((double)base_percent * nBurnCPUSpeedAdjust / 256) + 0.5; // whole percent comes from UI
 		double dPercent = i_percent + (0.1 * (DrvDips[3] & 0xf)); // .x tenth percent comes from DIPS
 
 		DriverClock = (INT32)((INT64)SH3_CLOCK * dPercent / 100);
@@ -626,7 +638,7 @@ static INT32 DrvFrame()
 		Sh3SetClockCV1k(DriverClock);
 		ymz770_set_buffered(Sh3TotalCycles, DriverClock);
 
-		bprintf(0, _T("Main Clock %d  at %0.1f%%  Adjusted Clock %d\n"), SH3_CLOCK, dPercent, DriverClock);
+		bprintf(0, _T("Main Clock %d  at %0.1f%%  Adjusted Clock %d (base %d%%)\n"), SH3_CLOCK, dPercent, DriverClock, base_percent);
 	}
 	// set blitter delay, blitter threading & speedhack via dip setting
 	{
@@ -664,6 +676,13 @@ static INT32 DrvFrame()
 
 #if defined(_XBOX) || defined(SH3_PPC_DRC_TEST)
 	cv1k_boot_step();
+	if (!s_cv1k_aot_done) {
+		bool force_early = ((DrvInputs[0] & 0x0c) != 0x0c);
+		if (!cv1k_boot_pending && (nCurrentFrame >= 30 || force_early)) {
+			s_cv1k_aot_done = true;
+			Sh3DrcPrecompile(0x0c000000, is_type_d ? 0x400000 : 0x200000);
+		}
+	}
 #endif
 
 	Sh3NewFrame();
@@ -738,7 +757,11 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	// A loaded state already contains its own program bytes. Never patch an
 	// older running-game state or carry a pending cold-boot patch into it.
 	// Loading persistent EEPROM/high scores during cold boot must keep it armed.
-	if ((nAction & ACB_WRITE) && (nAction & ACB_VOLATILE)) cv1k_boot_pending = NULL;
+	if ((nAction & ACB_WRITE) && (nAction & ACB_VOLATILE)) {
+		cv1k_boot_pending = NULL;
+		s_cv1k_aot_done = true;
+		Sh3DrcPrecompile(0x0c000000, is_type_d ? 0x400000 : 0x200000);
+	}
 #endif
 
 	serflash_scan(nAction, pnMin); // writes back to flash (hiscores ddpdfk, etc) here

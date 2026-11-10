@@ -4,28 +4,35 @@
 
 static int epic12_gpu_dest_mode(const Epic12GpuCommand &c)
 {
+	if (c.smode == 6 && (c.dmode == 0 || c.dmode == 3 || c.dmode == 4 || c.dmode == 7)) return 4;
+	if (c.smode == 2 && (c.dmode == 0 || c.dmode == 2 || c.dmode == 3 || c.dmode == 7)) return 2;
+	if (c.smode == 1 && (c.dmode == 0 || c.dmode == 3 || c.dmode == 7)) return 3;
 	return (c.dmode == 4 || c.dmode == 7 || c.dmode == 3) ? 0 : c.dmode;
 }
 
 static int epic12_gpu_dest_alpha(const Epic12GpuCommand &c)
 {
+	if (c.smode == 6) return (c.dmode == 7 || c.dmode == 3) ? 31 : c.da;
 	if (c.dmode == 7 || c.dmode == 3) return 31;
 	return c.dmode == 4 ? 31 - c.da : c.da;
 }
 
 static bool epic12_gpu_additive(const Epic12GpuCommand &c)
 {
-	return c.blend && epic12_gpu_dest_mode(c) == 0 && epic12_gpu_dest_alpha(c) == 31;
+	return c.blend && (epic12_gpu_dest_mode(c) == 0 || epic12_gpu_dest_mode(c) == 3) && epic12_gpu_dest_alpha(c) == 31;
 }
 
 static bool epic12_gpu_feedback(const Epic12GpuCommand &c)
 {
 #ifdef EPIC12_GPU_TEST
-	return c.blend && (epic12_gpu_dest_mode(c) != 0 ||
-		(epic12_gpu_dest_alpha(c) != 0 && epic12_gpu_dest_alpha(c) != 31));
+	if (!c.blend) return false;
+	int dm = epic12_gpu_dest_mode(c);
+	if (dm == 1 || dm == 2 || dm == 4) return true;
+	if (dm == 3) return false;
+	int da = epic12_gpu_dest_alpha(c);
+	return da != 0 && da != 31;
 #else
-	return c.blend && epic12_gpu_dest_mode(c) != 0 &&
-		!(epic12_gpu_dest_mode(c) == 1 && c.sa == 0);
+	return c.blend && (epic12_gpu_dest_mode(c) == 2 || epic12_gpu_dest_mode(c) == 4 || (epic12_gpu_dest_mode(c) == 1 && c.sa != 0));
 #endif
 }
 
@@ -35,11 +42,12 @@ static inline int epic12_gpu_blend_state(const Epic12GpuCommand &c)
 #ifndef EPIC12_GPU_TEST
 	if (epic12_gpu_dest_mode(c) == 1 && c.sa == 0) return 200;
 #endif
-	if (epic12_gpu_dest_mode(c) != 0) return 100;
+	int dm = epic12_gpu_dest_mode(c);
+	if (dm == 1 || dm == 2 || dm == 4) return 100;
 	int da = epic12_gpu_dest_alpha(c);
 	if (da == 0) return 0;
-	if (da == 31) return 1;
-	return 2 + da;
+	if (da == 31) return (dm == 3) ? 50 : 1;
+	return (dm == 3 ? 60 : 2) + da;
 }
 
 // Blend classification helper for reorder lookahead: 0 = plain, 1 = additive, 2..32 = hw factor, 100 = feedback.
@@ -223,10 +231,27 @@ static int epic12_gpu_vertex_count(const Epic12GpuCommand &c)
 static int epic12_gpu_vertices(const Epic12GpuCommand &c, const rectangle &bounds,
 	const int *slots, Epic12GpuVertex *out)
 {
-	int n = 0;
 	UINT32 tint = epic12_gpu_pack4(c.tint.r, c.tint.g, c.tint.b, c.sa);
 	UINT32 mode = epic12_gpu_pack4(c.transparent, c.blend,
 		epic12_gpu_dest_mode(c), epic12_gpu_dest_alpha(c));
+
+	const int spx0 = c.sx >> 7, spx1 = (c.sx + c.w - 1) >> 7;
+	const int spy0 = c.sy >> 7, spy1 = (c.sy + c.h - 1) >> 7;
+	if (spx0 == spx1 && spy0 == spy1) {
+		int slot = slots[(spy0 << 6) | spx0];
+		int u0 = (slot & 15) * 128 + (c.sx & 127), u1 = u0 + c.w;
+		int v0 = (slot >> 4) * 128 + (c.sy & 127), v1 = v0 + c.h;
+		int dx = c.x - bounds.min_x;
+		int dy = c.y - bounds.min_y;
+		Epic12GpuVertex v[3] = {
+			{(UINT16)dx, (UINT16)dy, (UINT16)(c.flipx ? u1 : u0), (UINT16)(c.flipy ? v1 : v0), tint, mode},
+			{(UINT16)(dx + c.w), (UINT16)dy, (UINT16)(c.flipx ? u0 : u1), (UINT16)(c.flipy ? v1 : v0), tint, mode},
+			{(UINT16)dx, (UINT16)(dy + c.h), (UINT16)(c.flipx ? u1 : u0), (UINT16)(c.flipy ? v0 : v1), tint, mode}};
+		out[0] = v[0]; out[1] = v[1]; out[2] = v[2];
+		return 3;
+	}
+
+	int n = 0;
 	for (int sy = c.sy; sy < c.sy + c.h;) {
 		int ey = ((sy >> 7) + 1) * 128; if (ey > c.sy + c.h) ey = c.sy + c.h;
 		int slot_row = (sy >> 7) * 64;

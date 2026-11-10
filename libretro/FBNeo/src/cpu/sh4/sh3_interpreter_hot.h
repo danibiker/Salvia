@@ -14,9 +14,8 @@ static SH3_HOT_INLINE void sh3_execute_hot_fallback(const UINT16 opcode)
 #if defined(SH3_PPC_DRC) || defined(SH3_HOT_FALLBACK_TEST)
  // This is still the interpreter: reuse its exact instruction helpers, including
  // all mapped memory handlers, idle-cycle charging and postincrement semantics.
- // Only the high-frequency R0 destination family skips the general decoder.
- if ((opcode & 0xff00) == 0x6000) {
-  // Exact-opcode samples identify MOV.L @Rm,R0 as the dominant 0x60 fallback.
+ if ((opcode & 0xf000) == 0x6000) {
+  // Exact-opcode samples identify MOV.L @Rm,Rn as the dominant 0x60 fallback.
   // Keep the original helper, including WaitState/ReadLong and idle accounting;
   // only bypass the remaining multiway decode for this common operation.
   if ((opcode & 0x0f) == 2) {
@@ -40,6 +39,25 @@ static SH3_HOT_INLINE void sh3_execute_hot_fallback(const UINT16 opcode)
    case 0x0e: EXTSB(opcode); break;
    case 0x0f: EXTSW(opcode); break;
   }
+  return;
+ }
+ else if ((opcode & 0xf000) == 0x2000) {
+  switch (opcode & 0x0f) {
+   case 0x00: MOVBS(opcode); return;
+   case 0x01: MOVWS(opcode); return;
+   case 0x02: MOVLS(opcode); return;
+   case 0x04: MOVBM(opcode); return;
+   case 0x05: MOVWM(opcode); return;
+   case 0x06: MOVLM(opcode); return;
+   default: break;
+  }
+ }
+ else if ((opcode & 0xf000) == 0x1000) {
+  MOVLS4(opcode);
+  return;
+ }
+ else if ((opcode & 0xf000) == 0x5000) {
+  MOVLL4(opcode);
   return;
  }
 #endif

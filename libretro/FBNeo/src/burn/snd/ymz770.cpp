@@ -420,13 +420,18 @@ static void ymz770_sequencer()
 				switch (reg)
 				{
 				case 0x0f:
-					for (int ch = 0; ch < 8; ch++) // might be wrong, ie not needed in case of loop
-						if (sequence.stopchan & (1 << ch))
-							m_channels[ch].is_playing = false;
 					if (sequence.loop)
+					{
 						sequence.offset = get_seq_offs(sequence.sequence); // loop sequence
+					}
 					else
+					{
+						for (int ch = 0; ch < 8; ch++)
+							if (sequence.stopchan & (1 << ch))
+								m_channels[ch].is_playing = false;
 						sequence.is_playing = false;
+						sequence.delay = 0;
+					}
 					break;
 				case 0x0e:
 					sequence.delay += sequence.timer * 32 + 32 - 1;
@@ -845,9 +850,6 @@ static void ymz774_sequencer()
 				switch (reg)
 				{
 				case 0xff: // end
-					for (int ch = 0; ch < 16; ch++) // might be wrong, ie not needed in case of loop
-						if (sequence.stopchan & (1 << ch))
-							m_channels[ch].is_playing = false;
 					if (sequence.loop)
 					{
 						if (sequence.loop != 255)
@@ -856,6 +858,9 @@ static void ymz774_sequencer()
 					}
 					else
 					{
+						for (int ch = 0; ch < 16; ch++) // might be wrong, ie not needed in case of loop
+							if (sequence.stopchan & (1 << ch))
+								m_channels[ch].is_playing = false;
 						sequence.is_playing = false;
 						sqc.is_waiting = false;
 					}

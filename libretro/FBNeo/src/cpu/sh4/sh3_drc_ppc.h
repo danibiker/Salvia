@@ -31,7 +31,8 @@
 // at 1800), so the working set reaches a 20 MiB arena inside one 3,500-frame
 // console window and the ring starts reusing 1 MiB sectors. 32 MiB is the size
 // the pre-ring sweep measured as the default; it keeps the same state inside
-// ~62% instead of 99.9% and delays the first reuse by about 1,000 frames.
+// 32 MiB arena keeps the working set bounded within 16 ring sectors while
+// preserving crucial title RAM for 160MB-footprint games (ddpsdoj).
 #define SH3_PPC_CACHE_BYTES (32 * 1024 * 1024)
 #endif
 
@@ -63,10 +64,10 @@
 // straddles a sector boundary, so reusing a sector can be made safe by
 // invalidating exactly the block-table slots that were compiled into it — a
 // bounded cost — instead of discarding every compiled block in the cache.
-// 1 MiB keeps the alignment waste (at most MAX_WORDS per sector) under 1% and
-// the slot map that makes the invalidation cheap at TABLE_SIZE bytes.
+// 2 MiB keeps the alignment waste under 1% while ensuring SECTOR_COUNT <= 32
+// so the sector index fits into the 5-bit field of slot_sector without overflow.
 #ifndef SH3_PPC_SECTOR_BYTES
-#define SH3_PPC_SECTOR_BYTES (1024 * 1024)
+#define SH3_PPC_SECTOR_BYTES (2 * 1024 * 1024)
 #endif
 
 namespace Sh3Ppc {
@@ -164,6 +165,7 @@ static UINT8 *slot_sector;
 // DRC's initialization and the shadow record layout carries the same byte.
 static UINT8 *slot_stores;
 static unsigned sh3_block_stores;
+static bool s_in_aot_precompile = false;
 typedef char PointerAbiMustBe32Bits[(sizeof(void*) == 4) ? 1 : -1];
 static UINT32 *code;
 static unsigned used;
@@ -505,11 +507,11 @@ struct Compiler {
  bool memory(bool write, int size, int value, int base, int index, int disp,
              UINT32 absolute, bool ea, bool pre, bool post, unsigned service_opcode=0) {
   const RamWindow &ram=ram_window;
-  const unsigned device_opcode=(sh3_device_reads[0].callback || sh3_device_reads[1].callback)?service_opcode:0;
+  const unsigned device_opcode=service_opcode;
   bool constant_ram=ram.base && base==-1 &&
-   ((absolute&0x7fffffffu)&~(ram.span-1))==ram.start;
+   ((absolute&AM)&~(ram.span-1))==ram.start;
   bool direct=constant_ram || (ram.base && base!=-1 &&
-   ((block_pc&0x7fffffffu)&~(ram.span-1))==ram.start);
+   ((block_pc&AM)&~(ram.span-1))==ram.start);
   // A constant PC-relative operand needs no runtime address translation.
   // Keep real memory reads: literal data can change without changing code.
   if (constant_ram && ((absolute&(size-1)) ||
@@ -522,7 +524,7 @@ struct Compiler {
   int data = reg(value,write || address_value);
   if (constant_ram) {
    // A compile-time-bound RAM operand needs no runtime translation at all.
-   ram_address(12,(absolute-ram.start)&ram.mask);
+   ram_address(12,((absolute&AM)-ram.start)&ram.mask);
   } else if (direct) {
    address(base,index,disp,absolute);
    // Match every external alias accepted by the interpreter, including
@@ -544,27 +546,76 @@ struct Compiler {
     rotate(0,11,3,29,31); cmpi(0,7,true); guard(0,true,device_opcode);
    }
    rotate(0,11,32-ram.span_bits,ram.span_bits+3,31);
-   cmpi(0,ram.start>>ram.span_bits,true); guard(2,true,device_opcode);
-   const unsigned extract_bits=(ram.backing_bits && ram.backing_bits<ram.span_bits)?ram.backing_bits:ram.span_bits;
-   rotate(12,11,0,32-extract_bits,31);
-   if(!write && size==4 && ram.watch!=0xffffffffu) {
-    UINT32 watch_off=(ram.watch-ram.start)&((1u<<extract_bits)-1);
-    if(watch_off<=0xffff) { cmpi(12,(int)watch_off,true); guard(2,false,service_opcode); }
-    else { imm(0,watch_off); cmp(12,0); guard_watch(service_opcode); }
+   cmpi(0,ram.start>>ram.span_bits,true);
+   if (write) {
+    UINT32 *not_direct_ram = branch(2, false);
+    const unsigned extract_bits=(ram.backing_bits && ram.backing_bits<ram.span_bits)?ram.backing_bits:ram.span_bits;
+    rotate(12,11,0,32-extract_bits,31);
+    ram_bias(12);
+    UINT32 *done_direct = jump();
+    patch(not_direct_ram);
+    rotate(0, 11, 16, 16, 31); // r0 = (r11 >> 16) & 0xffff
+    cmpi(0, 0xe000, true);
+    UINT32 *not_p4 = branch(0, true); // if r0 < 0xe000, P0..P3
+    cmpi(0, 0xf000, true);
+    guard(2, true, device_opcode); // if not DrvCacheRAM, guard trips
+    UINT32 *is_cache_ram = jump();
+    patch(not_p4);
+    rotate(0, 11, 18, 17, 29); // ((address & AM) >> 16) * sizeof(pointer)
+    UINT32 *done_offset = jump();
+    patch(is_cache_ram);
+    rotate(0, 11, 18, 14, 29); // (address >> 16) * sizeof(pointer) for 0xf000
+    patch(done_offset);
+    load(12, SO(write_map));
+    emit(x(12, 12, 0, 23)); // lwzx map entry
+    cmpi(12, SH3_MAXHANDLER, true);
+    guard(0, false, device_opcode);
+    rotate(0, 11, 0, 16, 31);
+    add(12, 12, 0);
+    patch(done_direct);
+   } else {
+    UINT32 *not_direct_ram = branch(2, false);
+    const unsigned extract_bits=(ram.backing_bits && ram.backing_bits<ram.span_bits)?ram.backing_bits:ram.span_bits;
+    rotate(12,11,0,32-extract_bits,31);
+    if(size==4 && ram.watch!=0xffffffffu) {
+     UINT32 watch_off=(ram.watch-ram.start)&((1u<<extract_bits)-1);
+     if(watch_off<=0xffff) { cmpi(12,(int)watch_off,true); guard(2,false,service_opcode); }
+     else { imm(0,watch_off); cmp(12,0); guard_watch(service_opcode); }
+    }
+    ram_bias(12);
+    UINT32 *done_direct = jump();
+    patch(not_direct_ram);
+    rotate(0, 11, 16, 16, 31); // r0 = (r11 >> 16) & 0xffff
+    cmpi(0, 0xe000, true);
+    guard(1, false, device_opcode); // if r0 >= 0xe000 on read, guard trips
+    rotate(0, 11, 18, 17, 29); // ((address & AM) >> 16) * sizeof(pointer)
+    load(12, SO(read_map));
+    emit(x(12, 12, 0, 23)); // lwzx map entry
+    cmpi(12, SH3_MAXHANDLER, true);
+    guard(0, false, device_opcode);
+    rotate(0, 11, 0, 16, 31);
+    add(12, 12, 0);
+    patch(done_direct);
    }
-   ram_bias(12);
   } else {
    address(base, index, disp, absolute);
    // All address arithmetic is explicitly reduced to 32 bits for Xenon.
    rotate(11, 11, 0, 0, 31);
-   imm(0, 0xe0000000); cmp(11, 0, true); guard(0, true,device_opcode);
    if (size > 1) { emit(d(28, 11, 0, size - 1)); guard(2, true,device_opcode); }
-   rotate(11, 11, 0, 3, 31); // SH3 physical address mask (AM)
+   rotate(0, 11, 16, 16, 31); // r0 = (r11 >> 16) & 0xffff
+   cmpi(0, 0xe000, true);
+   UINT32 *not_p4 = branch(0, true); // if r0 < 0xe000, P0..P3
+   cmpi(0, 0xf000, true);
+   guard(2, true, device_opcode); // if not DrvCacheRAM, guard trips
+   UINT32 *is_cache_ram = jump();
+   patch(not_p4);
+   rotate(11, 11, 0, 3, 31); // SH3 physical address mask (AM) for P0..P3
+   patch(is_cache_ram);
    rotate(0, 11, 18, 14, 29); // (address >> 16) * sizeof(pointer)
    load(12, write ? SO(write_map) : SO(read_map));
    emit(x(12, 12, 0, 23)); // lwzx map entry
    cmpi(12, SH3_MAXHANDLER, true);
-   if (write) guard(0, false);
+   if (write) guard(0, false, device_opcode);
    else {
     UINT32 *mapped = branch(0, false);
     // CV1000 routes a busy RAM page through its idle-loop read handler.
@@ -574,7 +625,7 @@ struct Compiler {
     load(0, SO(mirror_handler)); cmp(12, 0); guard(2, true,device_opcode);
     rotate(0, 11, 0, 0, 15); load(12, SO(mirror_page)); cmp(0, 12); guard(2, true,device_opcode);
     if (size == 4) { load(12, SO(mirror_watch)); cmp(11, 12); guard_watch(service_opcode); }
-    load(12, SO(read_mirror)); cmpi(12, SH3_MAXHANDLER, true); guard(0, false);
+    load(12, SO(read_mirror)); cmpi(12, SH3_MAXHANDLER, true); guard(0, false, device_opcode);
     patch(mapped);
    }
    rotate(11, 11, 0, 16, 31);
@@ -635,11 +686,11 @@ struct Compiler {
   if ((op & 0xf000) == 0xd000) return memory(false,4,n,-1,-1,0,((pc+4)&~3u)+(op&255)*4,true,false,false);
   if ((op & 0xf000) == 0x2000 && (lo <= 2 || (lo >= 4 && lo <= 6))) {
    int size = 1 << (lo & 3); bool pre = (lo & 4) != 0;
-   return memory(true,size,m,n,-1,pre?-size:0,0,!pre,pre,false);
+   return memory(true,size,m,n,-1,pre?-size:0,0,!pre,pre,false,op);
   }
   if ((op & 0xf000) == 0x6000 && (lo <= 2 || (lo >= 4 && lo <= 6))) {
    bool post = (lo & 4) != 0;
-   return memory(false,1<<(lo&3),n,m,-1,0,0,!post,false,post,lo==2?op:0);
+   return memory(false,1<<(lo&3),n,m,-1,0,0,!post,false,post,op);
   }
   if ((op & 0xf000) == 0 && ((lo >= 4 && lo <= 6) || (lo >= 12 && lo <= 14))) {
    bool wr = lo < 8;
@@ -765,6 +816,17 @@ struct Compiler {
     a=reg(n); b=reg(m); logic(a,a,b,lo==9?28:lo==10?316:444); dirty(a); return true;
    case 0x2008:
     a=reg(n); b=reg(m); emit(x(a,0,b,28)|1); compare_t(2,true); return true;
+   case 0x200c: { // CMP/STR Rm, Rn: T = (any byte of Rn ^ Rm == 0)
+    a=reg(n); b=reg(m);
+    emit(x(a,0,b,316)); // xor r0, a, b (r0 = a ^ b)
+    imm(12,0x01010101);
+    sub(11,0,12); // subf r11, r12, r0: r11 = r0 - 0x01010101
+    emit(x(11,11,0,60)); // andc r11, r11, r0: r11 = r11 & ~r0
+    imm(12,0x80808080);
+    emit(x(11,12,12,28)|1); // and. r12, r11, r12 (Rc=1, tests CR0)
+    compare_t(2,false); // T = (CR0_EQ == 0)
+    return true;
+   }
    case 0x3000: case 0x3002: case 0x3003: case 0x3006: case 0x3007:
     a=reg(n); b=reg(m); cmp(a,b,lo==2||lo==6);
     compare_t(lo==0?2:lo==2||lo==3?0:1,lo!=2&&lo!=3); return true;
@@ -1065,9 +1127,10 @@ static void arena_reuse_sector(unsigned sector)
 // Called by the dispatcher for the table slot it just filled.
 static void arena_note_slot(unsigned slot,const Block &block)
 {
- if(!slot_sector || !block.entry || slot>=TABLE_SIZE) return;
- slot_sector[slot]=(UINT8)((((UINT32*)block.entry-code)/SECTOR_WORDS) | (sh3_block_end_reason<<5));
- if(slot_stores) slot_stores[slot]=(UINT8)(sh3_block_stores>255?255:sh3_block_stores);
+	if(!slot_sector || slot>=TABLE_SIZE) return;
+	if(!block.entry) return;
+	slot_sector[slot]=(UINT8)((((UINT32*)block.entry-code)/SECTOR_WORDS) | (sh3_block_end_reason<<5));
+	if(slot_stores) slot_stores[slot]=(UINT8)(sh3_block_stores>255?255:sh3_block_stores);
 }
 
 static void compile(Block &block, UINT32 pc, const UINT16 *source)
@@ -1166,7 +1229,7 @@ static void compile(Block &block, UINT32 pc, const UINT16 *source)
  block.cycles=(UINT16)max_cycles; block.check_read_map=check_read;
  block.entry=count?(int (*)(Sh3PpcState*))(code+used):NULL;
  if(count) {
-  sync_code(code+used,c.out);
+  if(!s_in_aot_precompile) sync_code(code+used,c.out);
   used=(unsigned)(c.out-code+3)&~3u; // 16-byte block alignment
  }
 }
@@ -1199,6 +1262,8 @@ void Sh3SetDrcDeviceRead(INT32 slot, UINT32 address, INT32 handler)
  Sh3DrcDeviceRead &read=sh3_device_reads[slot];
  read.address=0; read.handler=0; read.callback=NULL;
  if(handler>=0 && handler<SH3_MAXHANDLER && address<=AM && !(address&3)) {
+  UINT8 *pr = MemMapR[(address&AM) >> SH3_SHIFT];
+  if((uintptr_t)pr < SH3_MAXHANDLER) handler = (INT32)(uintptr_t)pr;
   read.address=address; read.handler=handler; read.callback=ReadLong[handler];
  }
  // Tagged exits depend on registration at compile time, not just execution.
@@ -1277,4 +1342,254 @@ static void sh3_drc_exit()
 
 // Preserve the one-block entry for the existing instruction differential tests.
 static bool sh3_drc_run() { return sh3_drc_dispatch<false>(); }
+
+
+struct Sh3PrecompileQueue {
+	UINT8 *visited;
+	UINT32 bitmap_bytes;
+	UINT32 start_pc;
+	UINT32 size;
+	UINT32 *queue;
+	UINT32 q_head;
+	UINT32 q_tail;
+	UINT32 q_mask;
+
+	bool is_visited(UINT32 a) const {
+		if (a < start_pc || a >= start_pc + size || (a & 1)) return true;
+		UINT32 off = (a - start_pc) >> 1;
+		if ((off >> 3) >= bitmap_bytes) return true;
+		return (visited[off >> 3] & (1u << (off & 7))) != 0;
+	}
+	void mark_visited(UINT32 a) {
+		if (a < start_pc || a >= start_pc + size || (a & 1)) return;
+		UINT32 off = (a - start_pc) >> 1;
+		if ((off >> 3) < bitmap_bytes) {
+			visited[off >> 3] |= (1u << (off & 7));
+		}
+	}
+	void push(UINT32 a) {
+		if (a < start_pc || a >= start_pc + size || (a & 1)) return;
+		if (is_visited(a)) return;
+		if (((q_tail + 1) & q_mask) != q_head) {
+			mark_visited(a);
+			queue[q_tail] = a;
+			q_tail = (q_tail + 1) & q_mask;
+		}
+	}
+	bool pop(UINT32 &a) {
+		if (q_head == q_tail) return false;
+		a = queue[q_head];
+		q_head = (q_head + 1) & q_mask;
+		return true;
+	}
+};
+
+void Sh3DrcPrecompile(UINT32 start_pc, UINT32 size)
+{
+	if (!sh3_drc_enabled || (!Sh3Ppc::blocks && !Sh3Ppc::allocate()) || !Sh3Ppc::lookup || size < 2) return;
+
+	Sh3Ppc::s_in_aot_precompile = true;
+	UINT32 used_before = Sh3Ppc::used;
+
+	UINT32 span_words = (size + 1) >> 1;
+	UINT32 bitmap_bytes = (span_words + 7) >> 3;
+	if (bitmap_bytes > (1024 * 1024)) bitmap_bytes = (1024 * 1024);
+	UINT8 *visited = (UINT8*)calloc(1, bitmap_bytes);
+	if (!visited) {
+		Sh3Ppc::s_in_aot_precompile = false;
+		return;
+	}
+
+	const UINT32 QUEUE_MASK = 65535u;
+	UINT32 *queue = (UINT32*)malloc((QUEUE_MASK + 1) * sizeof(UINT32));
+	if (!queue) {
+		free(visited);
+		Sh3Ppc::s_in_aot_precompile = false;
+		return;
+	}
+
+	Sh3PrecompileQueue q;
+	q.visited = visited;
+	q.bitmap_bytes = bitmap_bytes;
+	q.start_pc = start_pc;
+	q.size = size;
+	q.queue = queue;
+	q.q_head = 0;
+	q.q_tail = 0;
+	q.q_mask = QUEUE_MASK;
+
+	// 1. Seed vector and primary entry points
+	q.push(start_pc);
+	q.push(start_pc + 0x100);
+	q.push(start_pc + 0x400);
+	q.push(start_pc + 0x600);
+
+	UINT32 phys_start = start_pc & AM;
+	const UINT8 *base_page = MemMapF[phys_start >> SH3_SHIFT];
+	const UINT16 *words = NULL;
+	UINT32 scan_words = 0;
+	if (base_page && (uintptr_t)base_page >= SH3_MAXHANDLER) {
+		words = (const UINT16*)(base_page + (phys_start & SH3_PAGEM));
+		scan_words = (size >> 1);
+		if (scan_words >= 2) {
+			UINT32 reset_pc = ((UINT32)words[0] << 16) | words[1];
+			UINT32 phys_reset = reset_pc & AM;
+			if (phys_reset >= phys_start && phys_reset < phys_start + size && !(phys_reset & 1)) {
+				q.push((start_pc & ~AM) | phys_reset);
+			}
+		}
+	}
+
+	// 2. Priority-ordered BFS control-flow traversal and precompilation
+	UINT32 legacy_budget = 0;
+	UINT32 precompiled_count = 0;
+	UINT32 prologue_scan_idx = 0;
+	UINT32 pointer_scan_idx = 0;
+	UINT32 pc = 0;
+
+	for (;;) {
+		// If queue is empty, replenish with next unvisited seed from memory (prologues first, then pointers)
+		if (q.q_head == q.q_tail) {
+			if (words) {
+				bool found_seed = false;
+				while (prologue_scan_idx < scan_words - 1) {
+					UINT32 i = prologue_scan_idx++;
+					UINT16 op = words[i];
+					if (op == 0x4f22 || op == 0x2fe6 || op == 0x2fd6 || op == 0x2fc6 ||
+					    op == 0x2fb6 || op == 0x2fa6 || op == 0x2f96 || op == 0x2f86) {
+						UINT32 cand_pc = start_pc + (i << 1);
+						if (!q.is_visited(cand_pc)) {
+							q.push(cand_pc);
+							found_seed = true;
+							break;
+						}
+					}
+				}
+				if (!found_seed) {
+					while (pointer_scan_idx < scan_words - 1) {
+						UINT32 i = pointer_scan_idx++;
+						if ((i & 1) == 0 && i + 1 < scan_words) {
+							UINT32 ptr = ((UINT32)words[i] << 16) | words[i + 1];
+							UINT32 phys_ptr = ptr & AM;
+							if (phys_ptr >= phys_start && phys_ptr < phys_start + size && !(phys_ptr & 1)) {
+								UINT32 cand_pc = (start_pc & ~AM) | phys_ptr;
+								if (!q.is_visited(cand_pc)) {
+									q.push(cand_pc);
+									found_seed = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+				if (!found_seed) {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+
+		if (!q.pop(pc)) break;
+
+		if (++legacy_budget >= 16384) {
+			break;
+		}
+		if (Sh3Ppc::used + Sh3Ppc::MAX_WORDS >= (Sh3Ppc::CACHE_WORDS - 262144)) {
+			break;
+		}
+
+		UINT32 phys = pc & AM;
+		const UINT8 *page = MemMapF[phys >> SH3_SHIFT];
+		if (!page || (uintptr_t)page < SH3_MAXHANDLER || (phys & 1)) {
+			continue;
+		}
+		const UINT16 *source = (const UINT16*)(page + (phys & SH3_PAGEM));
+
+		unsigned index = ((pc >> 1) ^ (pc >> 11) ^ (pc >> 21)) & (Sh3Ppc::CACHE_SETS - 1);
+		Sh3Ppc::Lookup &set = Sh3Ppc::lookup[index];
+		bool is_already = false;
+		for (unsigned w = 0; w < Sh3Ppc::WAYS; ++w) {
+			if (set.tag[w] == pc) {
+				Sh3Ppc::Block &ex = Sh3Ppc::blocks[index * Sh3Ppc::WAYS + w];
+				if (ex.entry && ex.pc == pc && ex.source == source) {
+					is_already = true;
+					break;
+				}
+			}
+		}
+		if (is_already) {
+			continue;
+		}
+
+		unsigned way = sh3_drc_lookup4(set.tag, set.next, pc);
+		Sh3Ppc::Block &b = Sh3Ppc::blocks[index * Sh3Ppc::WAYS + way];
+		Sh3Ppc::compile(b, pc, source);
+		Sh3Ppc::arena_note_slot(index * Sh3Ppc::WAYS + way, b);
+		set.tag[way] = pc;
+
+		if (b.entry) {
+			++legacy_budget;
+			precompiled_count++;
+#if SALVIA_CV1K_SHADOW
+			if (Sh3Ppc::shadow) {
+				Sh3Ppc::Shadow &dst = Sh3Ppc::shadow[index];
+				dst.pc = b.pc; dst.source = b.source; dst.entry = b.entry;
+				dst.words = b.words; dst.cycles = b.cycles;
+				dst.check_read_map = b.check_read_map ? 1 : 0;
+				dst.sector = (UINT8)Sh3Ppc::arena_sector_of(b.entry);
+				dst.epoch = Sh3Ppc::sector_epoch[dst.sector];
+				dst.reason = (UINT8)(Sh3Ppc::slot_sector ? (Sh3Ppc::slot_sector[index * Sh3Ppc::WAYS + way] >> 5) : 0);
+				dst.stores = (UINT8)(Sh3Ppc::slot_stores ? Sh3Ppc::slot_stores[index * Sh3Ppc::WAYS + way] : 0);
+				memcpy(dst.original, b.original, (unsigned)b.words * 2);
+			}
+#endif
+			for (unsigned i = 0; i < b.words; ++i) {
+				UINT16 op = source[i];
+				UINT32 cur_pc = pc + (i << 1);
+				if ((op & 0xff00) == 0x8b00) { // BF
+					INT8 disp = (INT8)(op & 0xff);
+					q.push(cur_pc + 4 + disp * 2);
+					q.push(cur_pc + 2);
+				} else if ((op & 0xff00) == 0x8f00) { // BF/S
+					INT8 disp = (INT8)(op & 0xff);
+					q.push(cur_pc + 4 + disp * 2);
+					q.push(cur_pc + 4);
+				} else if ((op & 0xff00) == 0x8900) { // BT
+					INT8 disp = (INT8)(op & 0xff);
+					q.push(cur_pc + 4 + disp * 2);
+					q.push(cur_pc + 2);
+				} else if ((op & 0xff00) == 0x8d00) { // BT/S
+					INT8 disp = (INT8)(op & 0xff);
+					q.push(cur_pc + 4 + disp * 2);
+					q.push(cur_pc + 4);
+				} else if ((op & 0xf000) == 0xa000) { // BRA
+					INT16 disp12 = (INT16)((op & 0xfff) << 4) >> 4;
+					q.push(cur_pc + 4 + disp12 * 2);
+				} else if ((op & 0xf000) == 0xb000) { // BSR
+					INT16 disp12 = (INT16)((op & 0xfff) << 4) >> 4;
+					q.push(cur_pc + 4 + disp12 * 2);
+					q.push(cur_pc + 4);
+				} else if ((op & 0xf0ff) == 0x0003 || (op & 0xf0ff) == 0x400b) { // BSRF / JSR
+					q.push(cur_pc + 4);
+				}
+			}
+			if (Sh3Ppc::sh3_block_end_reason == Sh3Ppc::END_WINDOW) {
+				q.push(pc + (b.words << 1));
+			}
+		}
+	}
+
+	Sh3Ppc::s_in_aot_precompile = false;
+
+	free(queue);
+	free(visited);
+
+	if (precompiled_count > 0) {
+		Sh3Ppc::sync_code(Sh3Ppc::code + used_before, Sh3Ppc::code + Sh3Ppc::used);
+	}
+
+	bprintf(PRINT_IMPORTANT, _T("CV1000: AOT precompiled %u blocks (%u KB PPC code)\n"),
+		precompiled_count, (Sh3Ppc::used * 4) / 1024);
+}
 #endif
