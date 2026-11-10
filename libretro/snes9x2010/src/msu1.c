@@ -35,6 +35,18 @@ struct msu1_src
 static struct msu1_src	dataSrc;
 static struct msu1_src	audioSrc;
 
+/* Data fast path: the game streams the data ROM byte-by-byte through $2001.
+   Seeking the underlying file for every byte drops the stdio/VFS buffer, so
+   each byte would become a full device read - ruinous on slow storage, where
+   a multi-MB boot-time copy of the data ROM stalls emulation for minutes.
+   Mirror the audio read-ahead below: cache a window in RAM and refill in
+   bulk. The window is content-addressed by base/len, so a reopen needs
+   nothing beyond the invalidation in msu1_src_close(). */
+#define MSU1_DATA_BUFSZ		32768
+static uint8_t			data_buf[MSU1_DATA_BUFSZ];
+static uint32_t			data_buf_base = 0;             /* file offset of data_buf[0] */
+static uint32_t			data_buf_len  = 0;             /* valid bytes in data_buf */
+
 static uint8_t msu1_src_open (struct msu1_src *src, const char *loose_path,
                               const char *pack_path, const char *suffix);
 static void    msu1_src_close (struct msu1_src *src);
@@ -141,6 +153,10 @@ static void msu1_src_close (struct msu1_src *src)
 		src->packed = FALSE;
 	}
 	src->size = 0;
+
+	/* Any remount of the data source must not be served from a stale window. */
+	if (src == &dataSrc)
+		data_buf_len = 0;
 }
 
 static uint32_t msu1_src_read (struct msu1_src *src, uint32_t offset, uint8_t *out, uint32_t len)
@@ -153,6 +169,31 @@ static uint32_t msu1_src_read (struct msu1_src *src, uint32_t offset, uint8_t *o
 	if (src->packed)
 		return (msu1_pack_read(&src->pack, offset, out, len));
 	return (0);
+}
+
+/* Buffered read of the data source, used by the $2001 port. Requests larger
+   than the window bypass it. Returns len on success, 0 on EOF/failure (the
+   port's contract, matching mainline's GETC_STREAM returning < 0). */
+static uint32_t msu1_data_read (uint32_t offset, uint8_t *out, uint32_t len)
+{
+	uint32_t	got;
+
+	if (len > MSU1_DATA_BUFSZ)
+		return (msu1_src_read(&dataSrc, offset, out, len));
+
+	if (offset < data_buf_base ||
+	    offset - data_buf_base + len > data_buf_len)
+	{
+		got = msu1_src_read(&dataSrc, offset, data_buf, MSU1_DATA_BUFSZ);
+		data_buf_base = offset;
+		data_buf_len  = got;
+	}
+
+	if (offset - data_buf_base + len > data_buf_len)
+		return (0);
+
+	memcpy(out, data_buf + (offset - data_buf_base), len);
+	return (len);
 }
 
 static uint8_t msu1_open_data (void)
@@ -415,7 +456,7 @@ uint8_t S9xMSU1ReadPort (uint8_t port)
 				return (0x00);
 			{
 				uint8_t b;
-				if (msu1_src_read(&dataSrc, MSU1.MSU1_DataReadOffset, &b, 1) != 1)
+				if (msu1_data_read(MSU1.MSU1_DataReadOffset, &b, 1) != 1)
 					return (0x00);
 				MSU1.MSU1_DataReadOffset++;
 				return (b);

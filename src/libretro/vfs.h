@@ -85,6 +85,36 @@ std::string replaceForbiddenChars(std::string cleanPath) {
     return cleanPath;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Ventana de lectura (solo handles de solo-lectura)
+
+   El stdio de Xbox 360 descarta su buffer interno con cada
+   _fseeki64, de modo que un core que lee con seek+fread pequeño
+   (puerto de datos MSU-1, cabeceras, tablas...) convierte cada
+   petición en E/S física al dispositivo. Para handles de lectura
+   mantenemos una ventana en RAM: las peticiones dentro de la
+   ventana se sirven con memcpy y solo el relleno (bloques de
+   64 KB) toca el disco. Los handles de escritura/update quedan
+   sin buffer, así no hay coherencia que mantener.
+   ───────────────────────────────────────────────────────────── */
+#define VFS_READ_BUF_CAP 65536
+
+typedef struct vfs_file {
+    FILE*    fp;
+    uint8_t* buf;        /* NULL en handles de escritura/update */
+    uint64_t buf_base;   /* offset de fichero de buf[0]         */
+    uint32_t buf_len;    /* bytes válidos en buf                */
+    uint64_t pos;        /* posición lógica                     */
+} vfs_file_t;
+
+/* Sitúa el FILE en la posición lógica y rellena la ventana. */
+static void vfs_buf_fill(vfs_file_t* f)
+{
+    if (_fseeki64(f->fp, (int64_t)f->pos, SEEK_SET) != 0) { f->buf_len = 0; return; }
+    f->buf_base = f->pos;
+    f->buf_len  = (uint32_t)fread(f->buf, 1, VFS_READ_BUF_CAP, f->fp);
+}
+
 struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, unsigned hints) {
     if (!path || !*path) return NULL;
     
@@ -99,29 +129,54 @@ struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, uns
         LOG_ERROR("Fallo al abrir archivo: %s", cleanPath.c_str());
         return NULL;
     }
-    return (struct retro_vfs_file_handle*)fp;
+
+    vfs_file_t* f = (vfs_file_t*)calloc(1, sizeof(vfs_file_t));
+    if (!f) { fclose(fp); return NULL; }
+    f->fp = fp;
+    /* Solo el camino de lectura se bufferiza: es el caliente (ROMs,
+       MSU-1, ISOs...) y el único sin escrituras que mantener. */
+    if (!(mode & (RETRO_VFS_FILE_ACCESS_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE)))
+        f->buf = (uint8_t*)malloc(VFS_READ_BUF_CAP);
+    return (struct retro_vfs_file_handle*)f;
 }
 
 int vfs_close_impl(struct retro_vfs_file_handle* stream) {
-    return fclose((FILE*)stream);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+    int ret = fclose(f->fp);
+    if (f->buf) free(f->buf);
+    free(f);
+    return ret;
 }
 
 int64_t vfs_size_impl(struct retro_vfs_file_handle* stream) {
-    long pos = ftell((FILE*)stream);
-    fseek((FILE*)stream, 0, SEEK_END);
-    int64_t size = _ftelli64((FILE*)stream);
-    fseek((FILE*)stream, pos, SEEK_SET);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+    if (f->buf) {
+        /* Medir mueve el FILE, pero no importa: la ventana queda
+           validada por su base/longitud y el relleno re-sitúa el
+           FILE a la posición lógica antes de leer. */
+        if (_fseeki64(f->fp, 0, SEEK_END) != 0) return -1;
+        return _ftelli64(f->fp);
+    }
+    long pos = ftell(f->fp);
+    _fseeki64(f->fp, 0, SEEK_END);
+    int64_t size = _ftelli64(f->fp);
+    _fseeki64(f->fp, pos, SEEK_SET);
     return size;
 }
 
 int64_t vfs_tell_impl(struct retro_vfs_file_handle* stream) {
-    return _ftelli64((FILE*)stream);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+    if (f->buf) return (int64_t)f->pos;
+    return _ftelli64(f->fp);
 }
 
-// Usa int64_t explícitamente de <stdint.h>
 int64_t vfs_seek_impl(struct retro_vfs_file_handle* stream, int64_t offset, int seek_position) {
-    if (!stream) return -1;
-    
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+
     int whence;
     switch (seek_position) {
         case 0: whence = SEEK_SET; break; // RETRO_VFS_SEEK_POSITION_START
@@ -129,21 +184,78 @@ int64_t vfs_seek_impl(struct retro_vfs_file_handle* stream, int64_t offset, int 
         case 2: whence = SEEK_END; break; // RETRO_VFS_SEEK_POSITION_END
         default: whence = SEEK_SET;
     }
-    
+
+    if (f->buf) {
+        int64_t target;
+        switch (seek_position) {
+            case 0: target = offset; break;
+            case 1: target = (int64_t)f->pos + offset; break;
+            case 2:
+                if (_fseeki64(f->fp, 0, SEEK_END) != 0) return -1;
+                target = _ftelli64(f->fp) + offset;
+                break;
+            default: target = offset;
+        }
+        if (target < 0) return -1;
+        f->pos = (uint64_t)target;
+        /* Seek dentro de la ventana: gratis, sin tocar el FILE.
+           Fuera de ella: se descarta y el próximo read rellena. */
+        if (target < (int64_t)f->buf_base ||
+            target >= (int64_t)(f->buf_base + f->buf_len))
+            f->buf_len = 0;
+        return target;
+    }
+
     // IMPORTANTE: En MSVC usa _fseeki64 para manejar el offset de 64 bits correctamente
-    return _fseeki64((FILE*)stream, offset, whence);
+    return _fseeki64(f->fp, offset, whence);
 }
 
 int64_t vfs_read_impl(struct retro_vfs_file_handle* stream, void* s, uint64_t len) {
-    return fread(s, 1, (size_t)len, (FILE*)stream);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return 0;
+
+    if (f->buf) {
+        uint8_t* out = (uint8_t*)s;
+        uint64_t total = 0;
+        /* Lecturas grandes: directo al FILE, la ventana no aporta. */
+        if (len >= VFS_READ_BUF_CAP) {
+            int64_t n;
+            if (_fseeki64(f->fp, (int64_t)f->pos, SEEK_SET) != 0) return 0;
+            n = (int64_t)fread(s, 1, (size_t)len, f->fp);
+            if (n > 0) f->pos += (uint64_t)n;
+            return n;
+        }
+        while (total < len) {
+            uint64_t win_end = f->buf_base + f->buf_len;
+            uint64_t chunk;
+            if (f->pos < f->buf_base || f->pos >= win_end) {
+                vfs_buf_fill(f);
+                win_end = f->buf_base + f->buf_len;
+                if (f->pos < f->buf_base || f->pos >= win_end)
+                    break; /* EOF o fallo de E/S */
+            }
+            chunk = win_end - f->pos;
+            if (chunk > len - total) chunk = len - total;
+            memcpy(out + total, f->buf + (size_t)(f->pos - f->buf_base), (size_t)chunk);
+            f->pos += chunk;
+            total += chunk;
+        }
+        return (int64_t)total;
+    }
+
+    return fread(s, 1, (size_t)len, f->fp);
 }
 
 int64_t vfs_write_impl(struct retro_vfs_file_handle* stream, const void* s, uint64_t len) {
-    return fwrite(s, 1, (size_t)len, (FILE*)stream);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+    return fwrite(s, 1, (size_t)len, f->fp);
 }
 
 int vfs_flush_impl(struct retro_vfs_file_handle* stream) {
-    return fflush((FILE*)stream);
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f) return -1;
+    return fflush(f->fp);
 }
 
 int vfs_remove_impl(const char* path) { return remove(path); }
@@ -155,11 +267,12 @@ int vfs_rename_impl(const char* old_path, const char* new_path) { return rename(
 
 int64_t vfs_truncate_impl(struct retro_vfs_file_handle* stream, int64_t length)
 {
-    if (!stream || length < 0) return -1;
+    vfs_file_t* f = (vfs_file_t*)stream;
+    if (!f || length < 0) return -1;
 #if defined(_WIN32)
-    return _chsize_s(_fileno((FILE*)stream), length);
+    return _chsize_s(_fileno(f->fp), length);
 #else
-    return ftruncate(fileno((FILE*)stream), (off_t)length);
+    return ftruncate(fileno(f->fp), (off_t)length);
 #endif
 }
 
