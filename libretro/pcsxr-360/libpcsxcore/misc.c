@@ -681,6 +681,7 @@ int LoadStateMem(const void *data, size_t size) {
 	psxSS_read(&ss, psxH_2, 0x00010000);
 
 	psxSS_read(&ss, (void *)&psxRegs, sizeof(psxRegs));
+	psxMemSyncIsolation();   /* [2026-11-11] el aislamiento de la cache sigue a Status */
 	schedule_timeslice();
 
 	if (Config.HLE)

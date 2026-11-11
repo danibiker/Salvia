@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 #include "psxcommon.h"
+#include "openbios.bin.h"
 
 extern __declspec(align(32))u8* psxMemWLUT[0x10000];
 extern __declspec(align(32))u8* psxMemRLUT[0x10000];
@@ -144,6 +145,7 @@ void psxMemWrite32(u32 mem, u32 value);                                         
 
 int psxMemInit_2();
 void psxMemReset_2();
+void psxMemSyncIsolation(void);   /* tras cambiar Status (MTC0) o cargar un estado */
 void psxMemShutdown_2();
 
 u8 psxMemRead8_2  (u32 mem);

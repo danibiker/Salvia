@@ -182,8 +182,18 @@ static void DmaIcr(u32 add, u32 value) {
 //	u32 tmp = (~value) & SWAPu32(HW_DMA_ICR);
 //	HW_DMA_ICR = SWAPu32(((tmp ^ value) & 0xffffff) ^ tmp);}
 //else{
-	u32 tmp = (~value) & SWAPu32(HW_DMA_ICR_2);
-	HW_DMA_ICR_2 = SWAPu32(((tmp ^ value) & 0xffffff) ^ tmp);//}//teste
+	/* [2026-11-11] psxHwWriteDmaIcr32 de pcsx_rearmed: los bits 24..30 se
+	 * borran escribiendo 1, y el bit 31 (IRQ enviada) se recalcula: si con
+	 * el permiso global sigue habiendo flags (o hay error de bus), queda a 1
+	 * y, si no lo estaba, sale la IRQ de DMA. */
+	u32 tmp = value & 0x00ff803fu;
+	tmp |= (SWAPu32(HW_DMA_ICR_2) & ~value) & 0x7f000000u;
+	if (((tmp & HW_DMA_ICR_GLOBAL_ENABLE) && (tmp & 0x7f000000u)) || (tmp & HW_DMA_ICR_BUS_ERROR)) {
+		if (!(SWAPu32(HW_DMA_ICR_2) & HW_DMA_ICR_IRQ_SENT))
+			psxHu32ref_2(0x1070) |= SWAPu32(8);
+		tmp |= HW_DMA_ICR_IRQ_SENT;
+	}
+	HW_DMA_ICR_2 = SWAPu32(tmp);
 }
 
 /**

@@ -101,6 +101,8 @@ int psxMemInit_2() {
 	return 0;
 }
 
+extern void pcsxr_lr_notify_user(const char *msg, unsigned frames);
+
 void psxMemReset_2() {
 	FILE *f = NULL;
 	char bios[1024];
@@ -109,20 +111,24 @@ void psxMemReset_2() {
 	memset(psxP_2, 0, 0x00010000);
 
 	// Load BIOS
-	if (strcmp(Config.Bios, "HLE") != 0) {
+	//There was a previous support for HLE bios, but it's changed now for and
+	//embedded openbios
+	Config.HLE = FALSE;
+	if (strcmp(Config.Bios, OPENBIOS) != 0) {
 		sprintf(bios, "%s\\%s", Config.BiosDir, Config.Bios);
 		f = fopen(bios, "rb");
 
 		if (f == NULL) {
-			SysMessage(_("Could not open BIOS:\"%s\". Enabling HLE Bios!\n"), bios);
-			memset(psxR_2, 0, 0x80000);
-			Config.HLE = TRUE;
+			SysMessage(_("Could not open BIOS:\"%s\". Enabling Openbios!\n"), bios);
+			memcpy(psxR_2, openbios_bin, 0x80000);
+			pcsxr_lr_notify_user("Enabling Openbios", 300);
 		} else {
 			fread(psxR_2, 1, 0x80000, f);
 			fclose(f);
-			Config.HLE = FALSE;
 		}
-	} else Config.HLE = TRUE;
+	} else {
+		memcpy(psxR_2, openbios_bin, 0x80000);
+	}
 }
 
 void psxMemShutdown_2() {
@@ -138,6 +144,47 @@ void psxMemShutdown_2() {
 }
 
 static int writeok = 1;
+static int s_sr_isc = 0;   /* ultimo bit IsC (16) de Status visto, ver psxMemSyncIsolation */
+
+/* Aislar la cache (ok = 0): las escrituras de la CPU a la RAM van a la
+ * I-cache y no a la memoria, asi que se quitan los bancos de RAM de la tabla
+ * de escritura y caen al camino lento (que con el dynarec invalida el bloque).
+ * ok = 1 los vuelve a poner. */
+static void psxMemSetWriteOk(int ok) {
+	int i;
+	if (!ok) {
+		if (writeok == 0) return;
+		writeok = 0;
+		memset(psxMemWLUT + 0x0000, 0, 0x80 * sizeof(void *));
+		memset(psxMemWLUT + 0x8000, 0, 0x80 * sizeof(void *));
+		memset(psxMemWLUT + 0xa000, 0, 0x80 * sizeof(void *));
+
+		psxRegs.ICache_valid = FALSE;
+		psxIcacheClear();	/* flush real de la I-cache */
+	} else {
+		if (writeok == 1) return;
+		writeok = 1;
+		for (i = 0; i < 0x80; i++) psxMemWLUT[i + 0x0000] = (void *)&psxM_2[(i & 0x1f) << 16];
+		memcpy(psxMemWLUT + 0x8000, psxMemWLUT, 0x80 * sizeof(void *));
+		memcpy(psxMemWLUT + 0xa000, psxMemWLUT, 0x80 * sizeof(void *));
+	}
+}
+
+/* [2026-11-11] Aislamiento de la cache por el bit IsC (16) de Status, como
+ * pcsx_rearmed (psxMemOnIsolate desde MTC0).  Antes solo se reconocian los
+ * valores que escribe la BIOS de Sony en 0xFFFE0130 (0x800/0x804 y
+ * 0/0x1E988); OpenBIOS escribe 0x1E90C, asi que su vaciado de la I-cache
+ * (sw $zero cada 16 bytes de 0 a 0xFFF con IsC puesto) llegaba a la RAM y
+ * borraba sus vectores A0/B0/C0: el "li t0" de 0xA0 desaparecia y el "jr t0"
+ * saltaba a basura (0x40000000).  Solo en los CAMBIOS del bit: asi no pisa
+ * a la deteccion por 0xFFFE0130, que aisla antes de poner IsC. */
+void psxMemSyncIsolation(void) {
+	const int isc = (int)((psxRegs.CP0.n.Status >> 16) & 1);
+	if (isc == s_sr_isc)
+		return;
+	s_sr_isc = isc;
+	psxMemSetWriteOk(!isc);
+}
 
 u8 psxMemRead8_2(u32 mem) {
 	char *p;
@@ -315,26 +362,13 @@ void psxMemWrite32_2(u32 mem, u32 value) {
 				if (writeok) { PSXMEM_LOG("err sw %8.8lx\n", mem); }
 #endif
 			} else {
-				int i;
-
 				// a0-44: used for cache flushing
 				switch (value) {
 					case 0x800: case 0x804:
-						if (writeok == 0) break;
-						writeok = 0;
-						memset(psxMemWLUT + 0x0000, 0, 0x80 * sizeof(void *));
-						memset(psxMemWLUT + 0x8000, 0, 0x80 * sizeof(void *));
-						memset(psxMemWLUT + 0xa000, 0, 0x80 * sizeof(void *));
-
-						psxRegs.ICache_valid = FALSE;
-						psxIcacheClear();	/* flush real de la I-cache */
+						psxMemSetWriteOk(0);
 						break;
 					case 0x00: case 0x1e988:
-						if (writeok == 1) break;
-						writeok = 1;
-						for (i = 0; i < 0x80; i++) psxMemWLUT[i + 0x0000] = (void *)&psxM_2[(i & 0x1f) << 16];
-						memcpy(psxMemWLUT + 0x8000, psxMemWLUT, 0x80 * sizeof(void *));
-						memcpy(psxMemWLUT + 0xa000, psxMemWLUT, 0x80 * sizeof(void *));
+						psxMemSetWriteOk(1);
 						break;
 					default:
 #ifdef PSXMEM_LOG

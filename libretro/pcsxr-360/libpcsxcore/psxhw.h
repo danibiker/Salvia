@@ -102,13 +102,28 @@ extern "C" {
 extern volatile uint32_t diag_hw_irq_set_count[11];
 #endif
 
+/* [2026-11-11] Port de DMA_INTERRUPT de pcsx_rearmed (psxhw.h).  Antes no
+ * se miraba el permiso global (bit 23) ni se ponia el bit 31 de DICR (IRQ
+ * enviada).  Las bibliotecas que leen el bit 31 en su manejador de la IRQ de
+ * DMA (psyqo: el shell de OpenBIOS) no veian nunca el fin de la DMA de GPU y
+ * se quedaban esperando con la pantalla en negro.  Ademas la IRQ es un
+ * flanco: no se repite mientras el bit 31 siga puesto. */
+#define HW_DMA_ICR_BUS_ERROR     (1u << 15)
+#define HW_DMA_ICR_GLOBAL_ENABLE (1u << 23)
+#define HW_DMA_ICR_IRQ_SENT      (1u << 31)
+
 __inline void DMA_INTERRUPT_2(int n){
-	if (SWAPu32(HW_DMA_ICR_2) & (1 << (16 + n))) {
-		HW_DMA_ICR_2 |= SWAP32(1 << (24 + n));
+	u32 icr = SWAPu32(HW_DMA_ICR_2);
+	if (icr & (1u << (16 + n))) {
+		icr |= 1u << (24 + n);
+		if ((icr & HW_DMA_ICR_GLOBAL_ENABLE) && !(icr & HW_DMA_ICR_IRQ_SENT)) {
 #if PCSXR_DIAG_INSTRUMENTATION
-		diag_hw_irq_set_count[3]++;  /* bit 3 = DMA completion IRQ */
+			diag_hw_irq_set_count[3]++;  /* bit 3 = DMA completion IRQ */
 #endif
-		psxHu32ref_2(0x1070) |= SWAP32(8);
+			psxHu32ref_2(0x1070) |= SWAP32(8);
+			icr |= HW_DMA_ICR_IRQ_SENT;
+		}
+		HW_DMA_ICR_2 = SWAP32(icr);
 	}
 }
 

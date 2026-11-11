@@ -1196,6 +1196,9 @@ void psxCFC0()
 }
 
 void psxTestSWInts() {
+	/* [2026-11-11] Cambio del bit IsC de Status (MTC0 del interprete y del
+	 * dynarec, que llaman aqui despues de escribirlo). */
+	psxMemSyncIsolation();
 	// the next code is untested, if u know please
 	// tell me if it works ok or not (linuzappz)
 	if (psxRegs.CP0.n.Cause & psxRegs.CP0.n.Status & 0x0300 &&

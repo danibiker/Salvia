@@ -1694,14 +1694,23 @@ u32 gpuReadStatus(void)
     {
         extern u32 hSyncCount;
         const u32 ilace_bits = (1u << 22) | (1u << 19);
+        /* [2026-11-11] Bit 13 (campo de entrelazado), port de "handle more
+         * GP0 status bits" de rearmed (hecho para OpenBIOS): vale 1 sin
+         * entrelazado y, entrelazado, es el campo que se ve, el contrario de
+         * LCF en cada frame.  El plugin lo dejaba fijo a 1 y el shell de
+         * OpenBIOS (640x480 entrelazado) espera a que cambie. */
         if ((r & ilace_bits) != ilace_bits) {
             r &= ~0x80000000u;
+            r |= 0x2000u;
             if (hSyncCount < 240)
                 r |= 0x80000000u & (psxRegs.cycle << 20);
-        } else if (hSyncCount >= (Config.PsxType ? 256u : 243u)) {
-            /* Entrelazado: el campo vale durante la zona visible; en
-             * VBlank LCF lee 0 (rearmed lo limpia en VBlankStart). */
-            r &= ~0x80000000u;
+        } else {
+            r = (r & ~0x2000u) | ((~r >> 18) & 0x2000u);   /* !LCF */
+            if (hSyncCount >= (Config.PsxType ? 256u : 243u)) {
+                /* Entrelazado: el campo vale durante la zona visible; en
+                 * VBlank LCF lee 0 (rearmed lo limpia en VBlankStart). */
+                r &= ~0x80000000u;
+            }
         }
     }
 

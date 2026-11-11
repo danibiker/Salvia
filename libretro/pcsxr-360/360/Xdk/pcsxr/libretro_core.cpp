@@ -632,15 +632,16 @@ void retro_set_environment(retro_environment_t cb) {
             "pcsxr360_slow_boot",
             "Slow Boot (show BIOS intro)", "Slow Boot (BIOS intro)",
             NULL, NULL, "system",
-            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
-            "disabled"
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
         },
 		{
             "pcsxr360_bios",
             "PSX bios", "PSX bios",
             NULL, NULL, "system",
-			{ { "scph1001.bin", "SCPH-1001 USA (v2.2)" }, 
-			  { "scph5501.bin", "SCPH-5501 USA (v3.0) (Default)" }, 
+			{ { OPENBIOS,  "OPENBIOS embedded (Default)" }, 
+			  { "scph1001.bin", "SCPH-1001 USA (v2.2)" }, 
+			  { "scph5501.bin", "SCPH-5501 USA (v3.0) (Recommended)" }, 
 			  { "scph7001.bin", "SCPH-7001 USA (v4.1)" }, 
 			  { "scph101.bin" , "SCPH-101 USA (v4.5)" },
 			  { "scph1000.bin", "SCPH-1000 JPN (v1.0)" }, 
@@ -652,7 +653,7 @@ void retro_set_environment(retro_environment_t cb) {
 			  { "scph7502.bin", "SCPH-7502 EUR (v4.1) (Recommended)" }, 
 			  { "scph102.bin",  "SCPH-102 EUR (v4.5)" }, 
 			  { NULL, NULL }},			  
-            "scph5501.bin"
+            OPENBIOS
         },
         {
             "pcsxr360_region",
@@ -2290,23 +2291,25 @@ static int emu_setup(void) {
 			strcpy(Config.Bios, "SCPH1001.BIN");
 		}
 
-		char bios[1024];
-		sprintf(bios, "%s\\%s", Config.BiosDir, Config.Bios);
-		FILE *f = fopen(bios, "rb");
-		if (f == NULL) {
-			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] selected bios: not found. Listing bios directory\n");
-			std::string biosFile = buscar_archivos_scph(Config.BiosDir);
-			char warn[256];
-			if (biosFile.empty()){
-				_snprintf(warn, sizeof(warn), "No bios found in system directory. Copy the file scph1001.bin", Config.BiosDir);
-				pcsxr_lr_notify_user(warn, msgFrames);
+		if (strcmp(Config.Bios, OPENBIOS) != 0 ){
+			char bios[1024];
+			sprintf(bios, "%s\\%s", Config.BiosDir, Config.Bios);
+			FILE *f = fopen(bios, "rb");
+			if (f == NULL) {
+				pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] selected bios: not found. Listing bios directory\n");
+				std::string biosFile = buscar_archivos_scph(Config.BiosDir);
+				char warn[256];
+				if (biosFile.empty()){
+					_snprintf(warn, sizeof(warn), "No bios found in system directory. Copy the file %s to %s", Config.Bios, Config.BiosDir);
+					pcsxr_lr_notify_user(warn, msgFrames);
+				} else {
+					strcpy(Config.Bios, biosFile.c_str());
+					_snprintf(warn, sizeof(warn), "Auto-selected bios: %s", Config.Bios);
+					pcsxr_lr_notify_user(warn, msgFrames);
+				}
 			} else {
-				strcpy(Config.Bios, biosFile.c_str());
-				_snprintf(warn, sizeof(warn), "Auto-selected bios: %s", Config.Bios);
-				pcsxr_lr_notify_user(warn, msgFrames);
+				fclose(f);
 			}
-		} else {
-			fclose(f);
 		}
 		pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] bios: %s\n", Config.Bios);
 	}
