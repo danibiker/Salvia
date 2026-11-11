@@ -1470,6 +1470,23 @@ void cdrInterrupt(void) {
 				goto set_error;
 			}
 
+			/* [2026-11-11] Mismo destino con la busqueda aun en marcha: se
+			 * deja seguir, como DuckStation (GetTicksForSeek suma lo que le
+			 * queda a la busqueda en curso y la distancia es 0).  El menu del
+			 * CD de Tomb Raider 3 repite Setloc+Setmode+ReadS cada frame hasta
+			 * que llega el XA de la musica; cada ReadS reiniciaba la busqueda
+			 * con el tiempo de giro (hasta 8 medios sectores) y la lectura de
+			 * 1 sector, mas de un frame: no terminaba nunca y no sonaba. */
+			if (cdr.SetlocPending && cdr.Reading && cdr.DriveState == DRIVESTATE_SEEK &&
+			    (psxRegs.interrupt & (1 << PSXINT_CDREAD)) && memcmp(cdr.SetSector, cdr.SetSectorPlay, 3) == 0) {
+				cdr.SetlocPending = 0;
+				cdr.FileChannelSelected = 0;
+				cdr.AdpcmActive = 0;
+				SetPlaySeekRead(cdr.StatP, STATUS_SEEK);
+				start_rotating = 1;
+				break;
+			}
+
 			StopCdda();
 			if (cdr.SetlocPending) {
 				seekTime = cdrSeekTime(cdr.SetSector);
