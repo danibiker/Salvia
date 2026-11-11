@@ -83,6 +83,15 @@ static INT32 use_z80 = 0;
 static INT32 use_bsmt = 0;
 static INT32 speedhack_address = 0;
 
+// [Salvia] the ARM idle-loop speed hack ("Speed Hacks" dip) is off by default upstream.
+// The interpreter is too slow on the Xbox 360 to burn a whole frame in the idle loop,
+// so there it defaults to on (it can still be switched off in the dip switches).
+#ifdef _XBOX
+#define SALVIA_DECO32_SPEEDHACK 0x01
+#else
+#define SALVIA_DECO32_SPEEDHACK 0x00
+#endif
+
 static INT32 (*pStartDraw)() = NULL;
 static INT32 (*pDrawScanline)(INT32) = NULL;
 
@@ -139,7 +148,7 @@ static struct BurnDIPInfo CaptavenDIPList[]=
 	{0x00, 0xff, 0xff, 0xff, NULL			},
 	{0x01, 0xff, 0xff, 0x7f, NULL			},
 	{0x02, 0xff, 0xff, 0xff, NULL			},
-	{0x03, 0xff, 0xff, 0x00, NULL			},
+	{0x03, 0xff, 0xff, SALVIA_DECO32_SPEEDHACK, NULL			}, // [Salvia]
 
 	{0   , 0xfe, 0   ,    8, "Coin A"		},
 	{0x00, 0x01, 0x07, 0x00, "3 Coins 1 Credits"	},
@@ -258,7 +267,7 @@ STDINPUTINFO(Fghthist)
 static struct BurnDIPInfo FghthistDIPList[]=
 {
 	{0x1a, 0xff, 0xff, 0xef, NULL				},
-	{0x1b, 0xff, 0xff, 0x00, NULL				},
+	{0x1b, 0xff, 0xff, SALVIA_DECO32_SPEEDHACK, NULL				}, // [Salvia]
 
 	{0   , 0xfe, 0   ,    2, "Service Mode"			},
 	{0x1a, 0x01, 0x08, 0x08, "Off"				},
@@ -314,7 +323,7 @@ static struct BurnDIPInfo NslasherDIPList[]=
 {
 	DIP_OFFSET(0x1d)
 	{0x00, 0xff, 0xff, 0x08, NULL			},
-	{0x01, 0xff, 0xff, 0x00, NULL			},
+	{0x01, 0xff, 0xff, SALVIA_DECO32_SPEEDHACK, NULL			}, // [Salvia]
 
 	{0   , 0xfe, 0   ,    2, "Service Mode "	},
 	{0x00, 0x01, 0x08, 0x08, "Off"			},
@@ -366,7 +375,7 @@ STDINPUTINFO(Tattass)
 static struct BurnDIPInfo TattassDIPList[]=
 {
 	{0x1b, 0xff, 0xff, 0x00, NULL			},
-	{0x1c, 0xff, 0xff, 0x00, NULL			},
+	{0x1c, 0xff, 0xff, SALVIA_DECO32_SPEEDHACK, NULL			}, // [Salvia]
 
 	{0   , 0xfe, 0   ,    2, "Speed Hacks"			},
 	{0x1c, 0x01, 0x01, 0x00, "Off"				},
@@ -404,7 +413,7 @@ STDINPUTINFO(Dragngun)
 static struct BurnDIPInfo DragngunDIPList[]=
 {
 	{0x0e, 0xff, 0xff, 0xfe, NULL			},
-	{0x0f, 0xff, 0xff, 0x00, NULL			},
+	{0x0f, 0xff, 0xff, SALVIA_DECO32_SPEEDHACK, NULL			}, // [Salvia]
 	{0x10, 0xff, 0xff, 0x04, NULL			},
 
 	{0   , 0xfe, 0   ,    2, "Reset"		},

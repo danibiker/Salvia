@@ -70,6 +70,49 @@ void deco16_draw_prio_sprite(UINT16 *dest, UINT8 *gfx, INT32 code, INT32 color, 
 	sy -= deco16_global_y_offset;
 	sx -= deco16_global_x_offset;
 
+	// [Salvia] same output as the stock loop (kept below under #if 0): line
+	// pointers and clipping are resolved per row instead of per pixel.
+	{
+		const INT32 nWidth = nScreenWidth;
+		const INT32 nHeight = nScreenHeight;
+		const INT32 x0 = (sx < 0) ? -sx : 0;
+		const INT32 x1 = (sx + 16 > nWidth) ? (nWidth - sx) : 16;
+
+		for (INT32 yy = 0; yy < 16; yy++, sy++) {
+			if (sy < 0 || sy >= nHeight) continue;
+
+			const INT32 gflip = flip & 0xf0;  // y flip selects another source row
+			const INT32 xflip = flip & 0x0f;
+			UINT16 *d = dest + (sy * nWidth) + sx;
+			UINT8 *pm = deco16_prio_map + (sy * 512) + sx;
+			UINT8 *sm = (spri == -1) ? NULL : (deco16_sprite_prio_map + (sy * 512) + sx);
+
+			const UINT8 *g = gfx + ((yy * 16) ^ gflip);
+
+			for (INT32 xx = x0; xx < x1; xx++) {
+				INT32 pxl = g[xx ^ xflip];
+
+				if (!pxl) continue;
+
+				if (pri != -1) {
+					INT32 bpriority = pm[xx];
+
+					if (spri == -1) {
+						if ((pri & (1 << (bpriority & 0x1f))) || (bpriority & 0x80)) continue;
+					} else {
+						if (pri <= bpriority || spri <= sm[xx]) continue;
+						sm[xx] = spri;
+						pm[xx] = pri; // right?
+					}
+				}
+
+				d[xx] = pxl | color;
+
+				pm[xx] |= 0x80; // right?
+			}
+		}
+	}
+#if 0
 	for (INT32 yy = 0; yy < 16; yy++, sy++) {
 
 		if (sy < 0 || sy >= nScreenHeight) continue;
@@ -100,6 +143,7 @@ void deco16_draw_prio_sprite(UINT16 *dest, UINT8 *gfx, INT32 code, INT32 color, 
 
 		sx -= 16;
 	}
+#endif
 }
 
 void deco16_draw_prio_sprite_nitrobal(UINT16 *dest, UINT8 *gfx, INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT32 flipy, INT32 pri, INT32 spri)
@@ -353,6 +397,104 @@ void deco16_draw_layer_by_line(INT32 draw_start, INT32 draw_end, INT32 tmap, UIN
 
 	//bprintf(0, _T("tmap %x: hmask %x  wmask %x  shift %x  smask %x\n"), tmap, hmask, wmask, shift, smask);
 	//bprintf(0, _T(" - layer width %x  height %x\n"), deco16_layer_width[tmap], deco16_layer_height[tmap]);
+	// [Salvia] same output as the stock loop (kept below under #if 0), with the
+	// divisions by run-time values turned into shifts, the line pointers and the
+	// horizontal clipping resolved outside of the pixel loop.
+	const INT32 nWidth = nScreenWidth;
+	const INT32 sshift = (size == 16) ? 4 : 3;
+	const INT32 nRowDiv = deco16_scroll_rows[tmap];
+	const INT32 nColDiv = deco16_scroll_cols[tmap];
+	INT32 nRowShift = -1, nColShift = -1; // -1: not a power of two, divide
+	if (nRowDiv > 0 && (nRowDiv & (nRowDiv - 1)) == 0) { nRowShift = 0; while ((1 << nRowShift) < nRowDiv) nRowShift++; }
+	if (nColDiv > 0 && (nColDiv & (nColDiv - 1)) == 0) { nColShift = 0; while ((1 << nColShift) < nColDiv) nColShift++; }
+	const UINT16 *pScrollX = deco16_scroll_x[tmap];
+	const UINT16 *pScrollY = deco16_scroll_y[tmap];
+	const INT32 nYBase = deco16_yscroll[tmap] + deco16_global_y_offset;
+	const INT32 nFlipCtrl = control & 0x03;
+
+	for (INT32 y = draw_start; y < draw_end; y++)
+	{
+		INT32 nRowIdx = (y + nYBase) & hmask;
+		nRowIdx = (nRowShift >= 0) ? (nRowIdx >> nRowShift) : (nRowIdx / nRowDiv);
+		INT32 xoff = pScrollX[nRowIdx] & wmask;
+
+		UINT16 *pDestLine = dest + (y * nWidth);
+		UINT8 *pPrioLine = deco16_prio_map + (y * 512);
+
+		for (INT32 x = 0; x < nWidth + size; x+=size)
+		{
+			INT32 xx = (x + xoff) & wmask;
+
+			INT32 nColIdx = (nColShift >= 0) ? (xx >> nColShift) : (xx / nColDiv);
+			INT32 yoff = pScrollY[nColIdx] & hmask;
+
+			INT32 yy = (y + yoff) & hmask;
+
+			INT32 col = xx >> sshift;
+			INT32 row = yy >> sshift;
+
+			INT32 ofst;
+			if (size == 8) {
+				ofst = (row << shift) | col;
+			} else {
+				ofst = (col & 0x1f) + ((row & 0x1f) << 5) + ((col & 0x20) << 5) + ((row & 0x20) << 6);
+			}
+
+			INT32 code  = BURN_ENDIAN_SWAP_INT16(vram[ofst]);
+			INT32 color = code >> 12;
+
+			INT32 flipx = 0;
+			INT32 flipy = 0;
+
+			if ((color & 0x0008) && nFlipCtrl) {
+				flipx = control & 0x01;
+				flipy = control & 0x02;
+				color &= 0x07;
+			}
+
+			if (deco16_captaven) {
+				code = ((code & 0x3fff) | tilebank) & gfxmask;
+				color = ((color & colmask) + colbank) >> 2;
+			} else {
+				code = ((code & 0xfff) | tilebank) & gfxmask;
+				color = (color & colmask) + colbank;
+			}
+
+			if (t_mask == 0) {
+				if (transtab[code]) {
+					continue;
+				}
+			}
+
+			color <<= bpp;
+
+			INT32 sx = x - (xx & smask);
+
+			INT32 sy = yy & smask;
+			if (flipy) sy ^= smask;
+
+			const UINT8 *src = gfx + (code << (sshift * 2)) + (sy << sshift);
+
+			if (flipx) flipx = smask;
+
+			// clip the tile span to the screen once
+			INT32 x0 = (sx < 0) ? -sx : 0;
+			INT32 x1 = (sx + size > nWidth) ? (nWidth - sx) : size;
+
+			UINT16 *d = pDestLine + sx;
+			UINT8 *pr = pPrioLine + sx;
+
+			for (INT32 xxx = x0; xxx < x1; xxx++) {
+				INT32 pxl = src[xxx^flipx];
+
+				if (tmask[pxl]) continue;
+
+				d[xxx] = pxl + color;
+				pr[xxx] = priority;
+			}
+		}
+	}
+#if 0
 	for (INT32 y = draw_start; y < draw_end; y++)
 	{
 		INT32 xoff = deco16_scroll_x[tmap][((y + deco16_yscroll[tmap] + deco16_global_y_offset)&hmask)/deco16_scroll_rows[tmap]] & wmask;
@@ -425,6 +567,7 @@ void deco16_draw_layer_by_line(INT32 draw_start, INT32 draw_end, INT32 tmap, UIN
 			}
 		}
 	}
+#endif
 }
 
 void deco16_draw_layer(INT32 tmap, UINT16 *dest, INT32 flags)

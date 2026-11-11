@@ -79,6 +79,7 @@ Sync::Sync(int syncMode){
 	dtAvg           = 0.0;
 	vsyncGuarda     = 0.0;
 	audioOcup       = -1.0;   /* centinela: "sin muestra aun" */
+	audioCatchUp    = false;
 	vblPrev         = 0;      /* 0 = sin muestra del contador de hardware */
 	vblMissPrev     = 0;
 	vblAnchor       = 0;      /* 0 = el pacer de vblanks aun sin anclar */
@@ -821,7 +822,10 @@ double Sync::limit_fps(double& nextFrameTime, int syncType, GameTicks &gameTicks
 		reset_pace(currentTime);
 	}
 
-	if (syncType != SYNC_TO_VIDEO && syncType != SYNC_TO_VIDEO_ADAPT){
+	/* audioCatchUp: el core hace frameskip por audio y el anillo esta bajo, asi
+	 * que este frame no se espera (ver set_audio_catchup en sync.h).  Se trata
+	 * igual que "sin limitador": el planificador se queda pegado al presente. */
+	if (audioCatchUp || (syncType != SYNC_TO_VIDEO && syncType != SYNC_TO_VIDEO_ADAPT)){
 		// Sin limitador: mantenemos el planificador pegado al presente para que
 		// al volver a SYNC_TO_VIDEO no haya un salto ni una racha de frames sin
 		// pacing recuperando una deuda inventada.

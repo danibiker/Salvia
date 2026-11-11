@@ -355,6 +355,21 @@ public:
     void update_vsync_adaptativo(double diff);
     void note_audio_ocupacion(unsigned pct);   // lo llama updateGame cada frame
 
+    /* FRAMESKIP POR AUDIO (modos "auto"/"manual" de los cores).
+     *
+     * El core decide saltarse frames mirando la ocupacion del anillo de audio
+     * que le pasamos por SET_AUDIO_BUFFER_STATUS_CALLBACK.  Ese esquema cuenta
+     * con que, al saltar frames, el core corra MAS RAPIDO que el tiempo real y
+     * el anillo se vuelva a llenar -en RetroArch el reloj es el audio-.  Aqui
+     * el reloj es el limitador, que clava cada frame a su periodo: el anillo,
+     * una vez seco, no se rellenaba nunca y el core se quedaba saltando frames
+     * sin parar (hasta su tope de 30 seguidos).
+     *
+     * Con esto activo el limitador no espera: deja que el core adelante hasta
+     * que el anillo se recupere.  Lo decide updateGame en cada frame. */
+    void set_audio_catchup(bool activo) { audioCatchUp = activo; }
+    bool     audioCatchUp;
+
     void init_fps_counter(float);
     void initAverages(uint32_t);
     void update_fps_counter(bool, uint32_t);

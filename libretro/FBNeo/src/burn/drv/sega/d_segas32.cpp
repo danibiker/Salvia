@@ -31,6 +31,10 @@ slipstrm	- gets hung booting if irq changes during RMW operation (in handler)
 
 static BurnRenderPool system32_mix_workers;
 
+// [Salvia] worker thread for sprites / sound (defined next to the sprite code)
+static void SalviaJobJoin();
+static void SalviaJobExit();
+
 static UINT8 *AllMem;
 static UINT8 *AllRam;
 static UINT8 *RamEnd;
@@ -2021,6 +2025,8 @@ inline static void DrvFMIRQHandler(INT32 chip, INT32 state)
 
 static INT32 DrvDoReset()
 {
+	SalviaJobJoin(); // [Salvia]
+
 	memset (AllRam, 0, RamEnd - AllRam);
 
 	v60Open(0);
@@ -2634,6 +2640,7 @@ static void v25_protection_init(UINT8 *table)
 
 static INT32 DrvExit()
 {
+	SalviaJobExit(); // [Salvia]
 	system32_mix_workers.exit();
 	GenericTilesExit();
 	if (has_gun) {
@@ -3597,6 +3604,84 @@ static UINT8 update_tilemaps(clip_struct cliprect)
 	return (enablet << 0) | (enable0 << 1) | (enable1 << 2) | (enable2 << 3) | (enable3 << 4) | (enableb << 5);
 }
 
+// [Salvia] ------------------------------------------------------------------
+// Sprite rendering (erase + buffer swap + sprite list) and the end-of-frame
+// sound render are moved off the emulation thread:
+//  - the sprite list is latched at scanline 1 and is not shown until the frame
+//    is mixed, so it is rendered by a worker from a snapshot of the sprite ram
+//    while the V60 keeps running;
+//  - the FM/PCM render only fills pBurnSoundOut, so it runs on the worker while
+//    the emulation thread draws the frame.
+// Every job is joined before anything else looks at the data it writes.
+// Without worker threads (non Xbox builds) everything runs inline as before.
+static UINT16 SalviaSprRAM16[0x20000 / 2];
+static UINT32 SalviaSprRAM32[0x20000 / 4];
+static BurnRenderWorker SalviaWorker;
+static INT32 SalviaWorkerState = 0; // 0 = not created, 1 = running, -1 = unavailable
+static INT32 SalviaSoundJobActive = 0; // the worker is rendering sound while we draw
+
+static void sprite_erase_buffer();
+static void sprite_swap_buffers();
+static void sprite_render_list();
+
+static void SalviaSprSnapshot()
+{
+	memcpy(SalviaSprRAM16, DrvSprRAM, 0x20000);
+	memcpy(SalviaSprRAM32, DrvSprRAM32, 0x20000);
+}
+
+static void SalviaSprLatch()
+{
+	memcpy(sprite_control_latched, sprite_control, sizeof(sprite_control_latched));
+}
+
+static void SalviaSoundRender()
+{
+	BurnYM3438Update(pBurnSoundOut, nBurnSoundLen);
+	if (is_multi32) {
+		MultiPCMUpdate(pBurnSoundOut, nBurnSoundLen);
+	} else {
+		RF5C68PCMUpdate(pBurnSoundOut, nBurnSoundLen);
+	}
+}
+
+// job: bit 0 = swap + render sprites, bit 1 = erase sprite buffer, bit 2 = render sound
+static void SalviaJob(INT32 job, INT32, INT32)
+{
+	if (job & 2) sprite_erase_buffer();
+	if (job & 1) {
+		sprite_swap_buffers();
+		sprite_render_list();
+	}
+	if (job & 4) SalviaSoundRender();
+}
+
+static void SalviaJobJoin()
+{
+	if (SalviaWorkerState == 1) SalviaWorker.finish();
+}
+
+static void SalviaJobStart(INT32 job)
+{
+	SalviaJobJoin();
+
+	if (SalviaWorkerState == 0) {
+		// worker context 2 = third core, the mixer pool uses the second one by default
+		SalviaWorkerState = SalviaWorker.init(SalviaJob, 2) ? 1 : -1;
+	}
+
+	if (SalviaWorkerState != 1 || !SalviaWorker.start(job, 0)) {
+		SalviaJob(job, 0, 0);
+	}
+}
+
+static void SalviaJobExit()
+{
+	if (SalviaWorkerState == 1) SalviaWorker.exit();
+	SalviaWorkerState = 0;
+}
+// [Salvia] ------------------------------------------------------------------
+
 static void sprite_erase_buffer()
 {
 	BurnBitmapFill(MIXER_LAYER_SPRITES+5, 0xffff);
@@ -3632,7 +3717,8 @@ static void sprite_swap_buffers()
 		}
 	}
 
-	memcpy(sprite_control_latched, sprite_control, sizeof(sprite_control_latched));
+	// [Salvia] the latch is done by the callers (see SalviaSprLatch), this function can run on a worker thread
+	//memcpy(sprite_control_latched, sprite_control, sizeof(sprite_control_latched));
 }
 
 #define sprite_draw_pixel_16(trans)                                         \
@@ -3703,7 +3789,7 @@ static INT32 draw_one_sprite(UINT16 const *data, INT32 xoffs, INT32 yoffs, const
 		{ 0x1fff, 0x0fff, 0x07ff, 0x03ff }
 	};
 
-	UINT16 *m_spriteram = (UINT16*)DrvSprRAM;
+	UINT16 *m_spriteram = SalviaSprRAM16; // [Salvia] snapshot of DrvSprRAM
 	INT32 select = (!is_multi32 || !(BURN_ENDIAN_SWAP_INT16(data[3]) & 0x0800)) ? MIXER_LAYER_SPRITES_2 : MIXER_LAYER_MULTISPR_2;
 
 	UINT16 *bitmap = BurnBitmapGetPosition(5 + select, 0, 0);
@@ -3759,7 +3845,7 @@ static INT32 draw_one_sprite(UINT16 const *data, INT32 xoffs, INT32 yoffs, const
 	/* clamp to within the memory region size */
 	if (fromram)
 	{
-		spritedata = DrvSprRAM32;
+		spritedata = SalviaSprRAM32; // [Salvia] snapshot of DrvSprRAM32
 		addrmask = (0x20000 / 4) - 1;
 	}
 	else
@@ -3928,7 +4014,7 @@ bail:
 
 static void sprite_render_list()
 {
-	UINT16 *m_spriteram = (UINT16*)DrvSprRAM;
+	UINT16 *m_spriteram = SalviaSprRAM16; // [Salvia] snapshot of DrvSprRAM
 	clip_struct outerclip, clipin, clipout;
 	INT32 xoffs = 0, yoffs = 0;
 	INT32 numentries = 0;
@@ -4017,6 +4103,16 @@ static void update_sprites()
 		}
 	}
 
+	// [Salvia] same operations, in the same order, on the worker thread
+	if (sprite_control[0] & 3) {
+		SalviaJobJoin();
+		if (sprite_control[0] & 1) {
+			SalviaSprSnapshot();
+			SalviaSprLatch();
+		}
+		SalviaJobStart(sprite_control[0] & 3);
+	}
+#if 0
 	if (sprite_control[0] & 2) {
 		sprite_erase_buffer();
 	}
@@ -4026,6 +4122,7 @@ static void update_sprites()
 		sprite_swap_buffers();
 		sprite_render_list();
 	}
+#endif
 
 	sprite_control[0] = 0;
 }
@@ -4485,6 +4582,8 @@ static void mix_all_layers(INT32 which, INT32 xoffs, const clip_struct cliprect,
 
 static void draw_screen(INT32 which)
 {
+	if (!SalviaSoundJobActive) SalviaJobJoin(); // [Salvia] the sprite buffers must be complete
+
 	clip_struct cliprect;
 	cliprect.nMinx = 0;
 	cliprect.nMaxx = (nScreenWidth >= 640 ? nScreenWidth/2 : nScreenWidth) - 1; // on dual-screen, we are only supposed to draw one side
@@ -4803,17 +4902,22 @@ static INT32 DrvFrame()
 	if (use_v25) VezClose();
 	v60Close();
 
-	if (pBurnSoundOut) {
-		BurnYM3438Update(pBurnSoundOut, nBurnSoundLen);
-		if (is_multi32) {
-			MultiPCMUpdate(pBurnSoundOut, nBurnSoundLen);
-		} else {
-			RF5C68PCMUpdate(pBurnSoundOut, nBurnSoundLen);
-		}
-	}
-
-	if (pBurnDraw) {
+	// [Salvia] render the sound on the worker while this thread draws the frame
+	if (pBurnSoundOut && pBurnDraw) {
+		SalviaJobStart(4); // waits for the sprite job first
+		SalviaSoundJobActive = 1;
 		BurnDrvRedraw();
+		SalviaSoundJobActive = 0;
+		SalviaJobJoin();
+	} else {
+		if (pBurnSoundOut) {
+			SalviaJobJoin();
+			SalviaSoundRender();
+		}
+
+		if (pBurnDraw) {
+			BurnDrvRedraw();
+		}
 	}
 
 	nExtraCycles[0] = nCyclesDone[0] - nCyclesTotal[0];
@@ -4825,6 +4929,8 @@ static INT32 DrvFrame()
 static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
+
+	SalviaJobJoin(); // [Salvia]
 
 	if (pnMin != NULL) {
 		*pnMin = 0x029698;
@@ -4895,8 +5001,11 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		ZetClose();
 
 		// force sprite update
+		SalviaJobJoin(); // [Salvia]
 		sprite_erase_buffer();
 		sprite_swap_buffers();
+		SalviaSprLatch(); // [Salvia] was inside sprite_swap_buffers()
+		SalviaSprSnapshot(); // [Salvia]
 		sprite_render_list();
 
 		if (is_multi32) {
@@ -5674,8 +5783,21 @@ static INT32 SpidmanInit()
 	if (DrvLoadRoms(true)) return 1;
 
 	system32_v60_map();
+#if defined(_XBOX) || defined(FBNEO_V60_WAIT_LOOP_TEST)
+	// [Salvia] same opt-in as Ga2Init(): coalesce read-only V60 wait loops.
+	// Main RAM is only written by this CPU (there is no V25 on this board).
+	v60SetIdleLoopRAM(0x200000, 0x20ffff);
+#endif
 	system32_sound_init();
 	tilemap_configure_allocate();
+
+#if defined(_XBOX) || defined(FBNEO_Z80_STATUS_POLL_TEST)
+	// [Salvia] same opt-in as Ga2Init(): batch the sound CPU's YM3438 status
+	// polling loop inside timer segments (same sound hardware and port).
+	ZetOpen(0);
+	ZetSetStableStatusPoll(0x0000, 0x1fff, 0xff80);
+	ZetClose();
+#endif
 
 	custom_io_read_0 = extra_custom_io_read; // CORRECT
 

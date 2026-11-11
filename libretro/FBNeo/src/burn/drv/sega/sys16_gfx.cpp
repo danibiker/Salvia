@@ -1,5 +1,9 @@
 #include "sys16.h"
 #include "thready.h"
+#include "render_worker.h"
+
+// [Salvia] worker pool for the banded X-Board renderer (see SalviaXBoardRenderBand)
+static BurnRenderPool SalviaXBoardPool;
 
 INT32 System16SpriteBanks[16];
 INT32 System16TileBanks[8];
@@ -199,8 +203,109 @@ static void RenderTile_Mask(UINT16* pDestDraw, INT32 nTileNumber, INT32 StartX, 
 #undef PLOTPIXEL
 #undef PLOTPIXEL_MASK
 
+// [Salvia] ------------------------------------------------------------------
+// Incremental tile map cache for the System 16B / 18 tile maps.
+// The stock code clears and redraws the whole 1024x512 maps (5MB of memset
+// plus 8192 tiles per layer) every time a single word of tile ram changes.
+// Here we remember what was drawn and only redraw the tiles that differ.
+// The result in the maps is identical to a full redraw.
+struct SalviaTmCache {
+	UINT16 Attr[4 * 64 * 32];	// raw tile ram words, as drawn
+	INT32  Banks[8];
+	INT32  ColourOff;
+	INT32  Page;
+	INT32  Valid;
+};
+
+static SalviaTmCache SalviaTm[4];	// 0 = fg, 1 = bg, 2 = fg alt, 3 = bg alt
+
+static void SalviaTmInvalidate()
+{
+	for (INT32 i = 0; i < 4; i++) SalviaTm[i].Valid = 0;
+}
+
+// call after a full redraw
+static void SalviaTmSnapshot(INT32 Which, INT32 EffPage)
+{
+	SalviaTmCache *c = &SalviaTm[Which];
+	UINT16 *VideoRam = (UINT16*)System16TileRam;
+
+	for (INT32 TilePage = 0; TilePage < 4; TilePage++) {
+		INT32 ActPage = (EffPage >> (TilePage * 4)) & 0x0f;
+		memcpy(c->Attr + (TilePage * 64 * 32), VideoRam + (ActPage * 64 * 32), 64 * 32 * sizeof(UINT16));
+	}
+
+	memcpy(c->Banks, System16TileBanks, sizeof(c->Banks));
+	c->ColourOff = System16TilemapColorOffset;
+	c->Page = EffPage;
+	c->Valid = 1;
+}
+
+// returns 1 if the maps were brought up to date, 0 if a full redraw is needed
+static INT32 SalviaTmUpdate(INT32 Which, INT32 EffPage, UINT16 *pPri0, UINT16 *pPri1, UINT16 *pOpaque)
+{
+	SalviaTmCache *c = &SalviaTm[Which];
+
+	if (!c->Valid || c->Page != EffPage || c->ColourOff != System16TilemapColorOffset) return 0;
+	if (memcmp(c->Banks, System16TileBanks, sizeof(c->Banks))) return 0;
+
+	UINT16 *VideoRam = (UINT16*)System16TileRam;
+
+	INT32 ColourDepth = 3;
+	INT32 ColourOffsMultiplier = 1;
+	if (Lockonph) {
+		ColourDepth = 4;
+		ColourOffsMultiplier = 2;
+	}
+
+	for (INT32 TilePage = 0; TilePage < 4; TilePage++) {
+		INT32 ActPage = (EffPage >> (TilePage * 4)) & 0x0f;
+		INT32 xOffs = (TilePage & 1) ? 512 : 0;
+		INT32 yOffs = (TilePage & 2) ? 256 : 0;
+		const UINT16 *pRam = VideoRam + (ActPage * 64 * 32);
+		UINT16 *pOld = c->Attr + (TilePage * 64 * 32);
+
+		for (INT32 n = 0; n < 64 * 32; n++) {
+			if (pRam[n] == pOld[n]) continue;
+			pOld[n] = pRam[n];
+
+			INT32 Attr = BURN_ENDIAN_SWAP_INT16(pRam[n]);
+			INT32 Priority = (Attr >> 15) & 1;
+			INT32 x = ((n & 63) * 8) + xOffs;
+			INT32 y = ((n >> 6) * 8) + yOffs;
+
+			INT32 Code = Attr & 0x1fff;
+			Code = System16TileBanks[Code / System16TileBankSize] * System16TileBankSize + Code % System16TileBankSize;
+			Code &= (System16NumTiles - 1);
+			INT32 Colour = (Attr >> 6) & 0x7f;
+
+			INT32 ColourOff = System16TilemapColorOffset;
+			if (Colour >= 0x20) ColourOff = (0x100 * ColourOffsMultiplier) | System16TilemapColorOffset;
+			if (Colour >= 0x40) ColourOff = (0x200 * ColourOffsMultiplier) | System16TilemapColorOffset;
+			if (Colour >= 0x60) ColourOff = (0x300 * ColourOffsMultiplier) | System16TilemapColorOffset;
+
+			// wipe the cell in both priority maps (the tile may have changed priority)
+			UINT16 *p0 = pPri0 + (y * 1024) + x;
+			UINT16 *p1 = pPri1 + (y * 1024) + x;
+			for (INT32 r = 0; r < 8; r++, p0 += 1024, p1 += 1024) {
+				memset(p0, 0, 8 * sizeof(UINT16));
+				memset(p1, 0, 8 * sizeof(UINT16));
+			}
+
+			RenderTile_Mask(Priority ? pPri1 : pPri0, Code, x, y, Colour, ColourDepth, 0, ColourOff, System16Tiles);
+			if (pOpaque) RenderTile(pOpaque, Code, x, y, Colour, ColourDepth, ColourOff, System16Tiles);
+		}
+	}
+
+	return 1;
+}
+// [Salvia] ------------------------------------------------------------------
+
+
 void System16ATileMapsInit(INT32 bOpaque)
 {
+	SalviaTmInvalidate(); // [Salvia]
+
 	if (bOpaque) {
 		pSys16BgTileMapOpaque = (UINT16*)BurnMalloc(1024 * 512 * sizeof(UINT16));
 	}
@@ -215,6 +320,8 @@ void System16ATileMapsInit(INT32 bOpaque)
 
 void System16BTileMapsInit(INT32 bOpaque)
 {
+	SalviaTmInvalidate(); // [Salvia]
+
 	if (bOpaque) {
 		pSys16BgTileMapOpaque = (UINT16*)BurnMalloc(1024 * 512 * sizeof(UINT16));
 		pSys16BgAltTileMapOpaque = (UINT16*)BurnMalloc(1024 * 512 * sizeof(UINT16));
@@ -235,6 +342,8 @@ void System16BTileMapsInit(INT32 bOpaque)
 
 void System16TileMapsExit()
 {
+	SalviaTmInvalidate(); // [Salvia]
+
 	BurnFree(pSys16BgTileMapOpaque);
 	BurnFree(pSys16BgAltTileMapOpaque);
 	BurnFree(pSys16BgTileMapPri0);
@@ -364,6 +473,9 @@ static void System16BCreateBgTileMaps()
 		ColourDepth = 4;
 		ColourOffsMultiplier = 2;
 	}
+
+	// [Salvia] only redraw the tiles that changed
+	if (SalviaTmUpdate(1, System16Page[1], pSys16BgTileMapPri0, pSys16BgTileMapPri1, (System16CreateOpaqueTileMaps) ? pSys16BgTileMapOpaque : NULL)) return;
 		
 	if (System16CreateOpaqueTileMaps) memset(pSys16BgTileMapOpaque, 0, 1024 * 512 * sizeof(UINT16));
 	EffPage = System16Page[1];
@@ -408,6 +520,8 @@ static void System16BCreateBgTileMaps()
 			}
 		}
 	}
+
+	SalviaTmSnapshot(1, System16Page[1]); // [Salvia]
 }
 
 static void System16BCreateBgAltTileMaps()
@@ -423,6 +537,9 @@ static void System16BCreateBgAltTileMaps()
 		ColourDepth = 4;
 		ColourOffsMultiplier = 2;
 	}
+
+	// [Salvia] only redraw the tiles that changed
+	if (SalviaTmUpdate(3, System16Page[3], pSys16BgAltTileMapPri0, pSys16BgAltTileMapPri1, (System16CreateOpaqueTileMaps) ? pSys16BgAltTileMapOpaque : NULL)) return;
 	
 	if (System16CreateOpaqueTileMaps) memset(pSys16BgAltTileMapOpaque, 0, 1024 * 512 * sizeof(UINT16));
 	EffPage = System16Page[3];
@@ -467,6 +584,8 @@ static void System16BCreateBgAltTileMaps()
 			}
 		}
 	}
+
+	SalviaTmSnapshot(3, System16Page[3]); // [Salvia]
 }
 
 static void System16BCreateFgTileMaps()
@@ -481,6 +600,9 @@ static void System16BCreateFgTileMaps()
 		ColourDepth = 4;
 		ColourOffsMultiplier = 2;
 	}
+
+	// [Salvia] only redraw the tiles that changed
+	if (SalviaTmUpdate(0, System16Page[0], pSys16FgTileMapPri0, pSys16FgTileMapPri1, NULL)) return;
 	
 	memset(pSys16FgTileMapPri0, 0, 1024 * 512 * sizeof(UINT16));
 	memset(pSys16FgTileMapPri1, 0, 1024 * 512 * sizeof(UINT16));
@@ -520,6 +642,8 @@ static void System16BCreateFgTileMaps()
 			}
 		}
 	}
+
+	SalviaTmSnapshot(0, System16Page[0]); // [Salvia]
 }
 
 static void System16BCreateFgAltTileMaps()
@@ -534,6 +658,9 @@ static void System16BCreateFgAltTileMaps()
 		ColourDepth = 4;
 		ColourOffsMultiplier = 2;
 	}
+
+	// [Salvia] only redraw the tiles that changed
+	if (SalviaTmUpdate(2, System16Page[2], pSys16FgAltTileMapPri0, pSys16FgAltTileMapPri1, NULL)) return;
 	
 	memset(pSys16FgAltTileMapPri0, 0, 1024 * 512 * sizeof(UINT16));
 	memset(pSys16FgAltTileMapPri1, 0, 1024 * 512 * sizeof(UINT16));
@@ -573,6 +700,8 @@ static void System16BCreateFgAltTileMaps()
 			}
 		}
 	}
+
+	SalviaTmSnapshot(2, System16Page[2]); // [Salvia]
 }
 
 static void System16BAltCreateBgTileMaps()
@@ -1165,8 +1294,10 @@ static void System16ARenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Trans
 	}
 }
 
-static void System16BRenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Transparent)
+static void System16BRenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Transparent, INT32 nSalviaY0 = 0, INT32 nSalviaY1 = 0x7fffffff) // [Salvia] optional band of lines
 {
+	if (nSalviaY1 > nScreenHeight) nSalviaY1 = nScreenHeight;
+
 	INT32 xScroll, yScroll, x, y;
 	UINT16 *TextRam = (UINT16*)System16TextRam;
 	
@@ -1179,7 +1310,7 @@ static void System16BRenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Trans
 	INT32 xSrcOff, ySrcOff, RowScrollIndex, RowScroll, xEffScroll, yEffScroll;
 	
 	if (yScroll & 0x8000) {
-		for (y = 0; y < nScreenHeight; y++) {
+		for (y = nSalviaY0; y < nSalviaY1; y++) {
 			pTileMapDest = pTransDraw + (y * nScreenWidth);
 		
 			RowScrollIndex = y / 8;
@@ -1228,7 +1359,7 @@ static void System16BRenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Trans
 			}
 		}
 	} else {
-		for (y = 0; y < nScreenHeight; y++) {
+		for (y = nSalviaY0; y < nSalviaY1; y++) {
 			pTileMapDest = pTransDraw + (y * nScreenWidth);
 		
 			RowScrollIndex = y / 8;
@@ -2261,7 +2392,7 @@ inline static void BoardXDrawPixel(INT32 x, INT32 pix, INT32 colour, INT32 shado
 	}
 }
 
-static void XBoardRenderSpriteLayer(INT32 Priority)
+static void XBoardRenderSpriteLayer(INT32 Priority, INT32 nSalviaY0 = 0, INT32 nSalviaY1 = 224) // [Salvia] optional band of lines
 {
 	UINT8 numbanks = System16SpriteRomSize / 0x40000;
 	const UINT32 *spritebase = (const UINT32 *)System16Sprites;
@@ -2323,7 +2454,7 @@ static void XBoardRenderSpriteLayer(INT32 Priority)
 		for (y = top; y != ytarget; y += ydelta)
 		{
 			/* skip drawing if not within the cliprect */
-			if (y >= 0 && y <= 223) {
+			if (y >= nSalviaY0 && y < nSalviaY1) {
 				UINT16* pPixel = pTransDraw + (y * 320);
 				INT32 xacc = 0;
 
@@ -3754,6 +3885,7 @@ static void OutrunScaledExit();
 // Called from System16Exit().
 void System16GfxThreadsExit()
 {
+	SalviaXBoardPool.exit(); // [Salvia]
 	OutrunScaledExit();
 	if (YBoardThreadsOn) {
 		thready.exit();
@@ -4407,12 +4539,12 @@ static void YBoardRenderSpriteLayerScaled()
 Road Rendering
 ====================================================*/
 
-static void OutrunRenderRoadBackgroundLayer()
+static void OutrunRenderRoadBackgroundLayer(INT32 nSalviaY0 = 0, INT32 nSalviaY1 = 224) // [Salvia] optional band of lines
 {
 	UINT16 *roadram = (UINT16*)System16RoadRam;
 	INT32 x, y;
 	
-	for (y = 0; y < 224; y++) {
+	for (y = nSalviaY0; y < nSalviaY1; y++) {
 		UINT16* pPixel = pTransDraw + (y * 320);
 		INT32 data0 = BURN_ENDIAN_SWAP_INT16(roadram[0x000 + y]);
 		INT32 data1 = BURN_ENDIAN_SWAP_INT16(roadram[0x100 + y]);
@@ -4451,12 +4583,12 @@ static void OutrunRenderRoadBackgroundLayer()
 	}
 }
 
-static void OutrunRenderRoadForegroundLayer()
+static void OutrunRenderRoadForegroundLayer(INT32 nSalviaY0 = 0, INT32 nSalviaY1 = 224) // [Salvia] optional band of lines
 {
 	UINT16 *roadram = (UINT16*)System16RoadRam;
 	INT32 x, y;
 	
-	for (y = 0; y < 224; y++) {
+	for (y = nSalviaY0; y < nSalviaY1; y++) {
 		static const UINT8 priority_map[2][8] =	{
 			{ 0x80,0x81,0x81,0x87,0,0,0,0x00 },
 			{ 0x81,0x81,0x81,0x8f,0,0,0,0x80 }
@@ -5134,9 +5266,113 @@ inline static void System16BUpdateTileValues()
 	}
 }
 
+// [Salvia] ------------------------------------------------------------------
+// Fast path of System18RenderTileLayer() for the (usual) case without column
+// scroll: everything that is constant along a scanline is resolved once per
+// line, the source is walked linearly, and opaque layers are plain copies.
+// Returns 0 if the layer has to go through the generic code below.
+static INT32 SalviaSys18RenderTileLayerFast(INT32 Page, INT32 PriorityDraw, INT32 Transparent, INT32 Priority)
+{
+	const INT32 yScroll = System16ScrollY[Page];
+	if (yScroll & 0x8000) return 0;
+
+	UINT16 *pMap = NULL, *pAltMap = NULL;
+
+	if (Page == 0) {
+		pMap    = (PriorityDraw) ? pSys16FgTileMapPri1    : pSys16FgTileMapPri0;
+		pAltMap = (PriorityDraw) ? pSys16FgAltTileMapPri1 : pSys16FgAltTileMapPri0;
+	} else if (Page == 1) {
+		if (Transparent == 0) {
+			pMap    = pSys16BgTileMapOpaque;
+			pAltMap = pSys16BgAltTileMapOpaque;
+		} else {
+			pMap    = (PriorityDraw) ? pSys16BgTileMapPri1    : pSys16BgTileMapPri0;
+			pAltMap = (PriorityDraw) ? pSys16BgAltTileMapPri1 : pSys16BgAltTileMapPri0;
+		}
+	}
+
+	if (pMap == NULL || pAltMap == NULL) return 0;
+
+	const UINT16 *RowRam = ((UINT16*)System16TextRam) + (0xf80/2 + 0x40/2 * Page);
+	const INT32 xScroll = System16ScrollX[Page];
+	const INT32 xAltScroll = System16ScrollX[Page + 2];
+	const INT32 yAltScroll = System16ScrollY[Page + 2];
+	const INT32 Flip = System16ScreenFlip;
+	const INT32 FlipX = 312 + System16ScreenFlipXoffs;
+	const INT32 FlipY = 216 + System16ScreenFlipYoffs;
+	const INT32 nWidth = nScreenWidth;
+	const INT32 nHeight = nScreenHeight;
+	const UINT8 nPri = (UINT8)Priority;
+
+	for (INT32 y = 0; y < nHeight; y++) {
+		UINT16 *pDest = pTransDraw + (y * nWidth);
+		UINT8 *pPrio = pPrioDraw + (y * nWidth);
+
+		INT32 RowScrollIndex = (Flip) ? ((216 - y) / 8) : (y / 8);
+		INT32 RowScroll = BURN_ENDIAN_SWAP_INT16(RowRam[RowScrollIndex]);
+		INT32 xEffScroll = (xScroll & 0x8000) ? RowScroll : xScroll;
+		INT32 yEffScroll = yScroll;
+		const UINT16 *pSrc = pMap;
+
+		if (RowScroll & 0x8000) {
+			xEffScroll = xAltScroll;
+			yEffScroll = yAltScroll;
+			pSrc = pAltMap;
+		}
+
+		pSrc += (((Flip) ? ((FlipY - y) + yEffScroll) : (y + yEffScroll)) & 0x1ff) * 1024;
+
+		// source column of screen x is (sx + x) & 0x3ff, or (sx - x) & 0x3ff when flipped
+		INT32 sx = ((Flip) ? (FlipX - xEffScroll + 192) : (192 - xEffScroll)) & 0x3ff;
+		INT32 x = 0;
+
+		while (x < nWidth) {
+			// length of the run before the source wraps around
+			INT32 n = (Flip) ? (sx + 1) : (1024 - sx);
+			if (n > nWidth - x) n = nWidth - x;
+
+			const UINT16 *s = pSrc + sx;
+			UINT16 *d = pDest + x;
+			UINT8 *p = pPrio + x;
+			INT32 i;
+
+			if (!Flip) {
+				if (Transparent) {
+					for (i = 0; i < n; i++) {
+						UINT16 Pix = s[i];
+						if (Pix) { d[i] = Pix; p[i] |= nPri; }
+					}
+				} else {
+					memcpy(d, s, n * sizeof(UINT16));
+					if (nPri) { for (i = 0; i < n; i++) p[i] |= nPri; }
+				}
+				sx = (sx + n) & 0x3ff;
+			} else {
+				if (Transparent) {
+					for (i = 0; i < n; i++) {
+						UINT16 Pix = s[-i];
+						if (Pix) { d[i] = Pix; p[i] |= nPri; }
+					}
+				} else {
+					for (i = 0; i < n; i++) d[i] = s[-i];
+					if (nPri) { for (i = 0; i < n; i++) p[i] |= nPri; }
+				}
+				sx = (sx - n) & 0x3ff;
+			}
+
+			x += n;
+		}
+	}
+
+	return 1;
+}
+// [Salvia] ------------------------------------------------------------------
+
 // System 18 / 16B v dink.01
 static void System18RenderTileLayer(INT32 Page, INT32 PriorityDraw, INT32 Transparent, INT32 Priority)
 {
+	if (SalviaSys18RenderTileLayerFast(Page, PriorityDraw, Transparent, Priority)) return; // [Salvia]
+
 	INT32 xScroll, yScroll, x, y;
 	UINT16 *TextRam = (UINT16*)System16TextRam;
 
@@ -5270,7 +5506,13 @@ static void System18RenderTextLayer(INT32 PriorityDraw, INT32 tpri)
 			Code = (System16TextRam[TileIndex + 1] << 8) | System16TextRam[TileIndex + 0];
 			Priority = (Code >> 15) & 1;
 
-			if (Priority == PriorityDraw) {
+			// [Salvia] the text map is 512x256 but only 320x224 of it is on screen:
+			// don't send the other ~1100 tiles through the clipped tile renderer
+			INT32 nSalviaX = (System16ScreenFlip) ? (312 - ((8 * mx) - 192)) : ((8 * mx) - 192);
+			INT32 nSalviaY = (System16ScreenFlip) ? (216 - (8 * my)) : (8 * my);
+			INT32 nSalviaVisible = (nSalviaX > -8 && nSalviaX < nScreenWidth && nSalviaY > -8 && nSalviaY < nScreenHeight);
+
+			if (nSalviaVisible && Priority == PriorityDraw) {
 				Colour = (Code >> ((AltModeKludge) ? 8 : 9)) & 0x07;
 				Code &= (AltModeKludge) ? 0xff : 0x1ff;
 
@@ -5455,7 +5697,8 @@ INT32 System18Render()
 	if (VDP_Enable) UpdateSystem18VDP();
 
 	if (nBurnLayer & 1) System18RenderTileLayer(1, 0, 0, 0);
-	if (nBurnLayer & 1) System18RenderTileLayer(1, 1, 0, 0);
+	// [Salvia] removed: (1, 1, 0, 0) draws the very same opaque map as (1, 0, 0, 0) above
+	//if (nBurnLayer & 1) System18RenderTileLayer(1, 1, 0, 0);
 	if (VDP_Enable && VDPLayer == 0) System18DrawVDP(VDPPri);
 
 	if (nBurnLayer & 2) System18RenderTileLayer(1, 0, 1, 1);
@@ -5473,12 +5716,13 @@ INT32 System18Render()
 	if (nSpriteEnable & 8) System18RenderSpriteLayer();
 
 	for (INT32 y = 0; y < nScreenHeight; y++) {
-		for (INT32 x = 0; x < nScreenWidth; x++) {
-			UINT16* pPixel = pSpriteBitmap + (y * 320);
-			UINT8*    pPri = pPrioDraw  + (y * nScreenWidth);
-			UINT16*  pDest = pTransDraw + (y * 320);
-			UINT16 *PalRAM = (UINT16*)System16PaletteRam;
+		// [Salvia] line pointers hoisted out of the pixel loop
+		UINT16* pPixel = pSpriteBitmap + (y * 320);
+		UINT8*    pPri = pPrioDraw  + (y * nScreenWidth);
+		UINT16*  pDest = pTransDraw + (y * 320);
+		UINT16 *PalRAM = (UINT16*)System16PaletteRam;
 
+		for (INT32 x = 0; x < nScreenWidth; x++) {
 			UINT16 pix = pPixel[x];
 			INT32 pri = (pix >> 10) & 3;
 
@@ -5538,7 +5782,8 @@ INT32 System16BRender()
 	}
 
 	if (nBurnLayer & 1) System18RenderTileLayer(1, 0, 0, 0);
-	if (nBurnLayer & 1) System18RenderTileLayer(1, 1, 0, 0);
+	// [Salvia] removed: (1, 1, 0, 0) draws the very same opaque map as (1, 0, 0, 0) above
+	//if (nBurnLayer & 1) System18RenderTileLayer(1, 1, 0, 0);
 
 	if (nBurnLayer & 2) System18RenderTileLayer(1, 0, 1, 1);
 	if (nBurnLayer & 4) System18RenderTileLayer(1, 1, 1, 2);
@@ -5552,11 +5797,12 @@ INT32 System16BRender()
 	if (nSpriteEnable & 8) System18RenderSpriteLayer();
 
 	for (INT32 y = System16SpriteYOffset; y < (nScreenHeight - System16SpriteYOffset); y++) {
-		for (INT32 x = 0; x < nScreenWidth; x++) {
-			UINT16* pPixel = pSpriteBitmap + ((y - System16SpriteYOffset) * 320);
-			UINT8*    pPri = pPrioDraw  + (y * nScreenWidth);
-			UINT16*  pDest = pTransDraw + (y * 320);
+		// [Salvia] line pointers hoisted out of the pixel loop
+		UINT16* pPixel = pSpriteBitmap + ((y - System16SpriteYOffset) * 320);
+		UINT8*    pPri = pPrioDraw  + (y * nScreenWidth);
+		UINT16*  pDest = pTransDraw + (y * 320);
 
+		for (INT32 x = 0; x < nScreenWidth; x++) {
 			UINT16 pix = pPixel[x];
 			INT32 pri = (pix >> 10) & 3;
 
@@ -8178,6 +8424,176 @@ INT32 ShangonRender()
 	return 0;
 }
 
+// [Salvia] ------------------------------------------------------------------
+// Banded X-Board renderer. Every layer of XBoardRender() is drawn line by line
+// and a line never depends on another one, so the screen is split in bands of
+// lines and each band runs the whole layer sequence on its own core
+// (BurnRenderPool, "rendering cores" option). The picture is the same as with
+// the stock sequence, which is kept in XBoardRender() under #if 0.
+
+// System16BRenderTileLayer() without column scroll: scroll and source line are
+// resolved once per line and the source is walked linearly.
+// Returns 0 if the layer has to go through the generic code.
+static INT32 SalviaSys16BTileLayerBand(INT32 Page, INT32 PriorityDraw, INT32 Transparent, INT32 nY0, INT32 nY1)
+{
+	const INT32 yScroll = System16ScrollY[Page];
+	if (yScroll & 0x8000) return 0;
+
+	UINT16 *pMap = NULL, *pAltMap = NULL;
+
+	if (Page == 0) {
+		pMap    = (PriorityDraw) ? pSys16FgTileMapPri1    : pSys16FgTileMapPri0;
+		pAltMap = (PriorityDraw) ? pSys16FgAltTileMapPri1 : pSys16FgAltTileMapPri0;
+	} else if (Page == 1) {
+		if (Transparent == 0) {
+			pMap    = pSys16BgTileMapOpaque;
+			pAltMap = pSys16BgAltTileMapOpaque;
+		} else {
+			pMap    = (PriorityDraw) ? pSys16BgTileMapPri1    : pSys16BgTileMapPri0;
+			pAltMap = (PriorityDraw) ? pSys16BgAltTileMapPri1 : pSys16BgAltTileMapPri0;
+		}
+	}
+
+	if (pMap == NULL || pAltMap == NULL) return 0;
+
+	const UINT16 *RowRam = ((UINT16*)System16TextRam) + (0xf80/2 + 0x40/2 * Page);
+	const INT32 xScroll = System16ScrollX[Page];
+	const INT32 xAltScroll = System16ScrollX[Page + 2];
+	const INT32 yAltScroll = System16ScrollY[Page + 2];
+	const INT32 Flip = System16ScreenFlip;
+	const INT32 FlipX = 312 + System16ScreenFlipXoffs;
+	const INT32 FlipY = 216 + System16ScreenFlipYoffs;
+	const INT32 nWidth = nScreenWidth;
+
+	if (nY1 > nScreenHeight) nY1 = nScreenHeight;
+
+	for (INT32 y = nY0; y < nY1; y++) {
+		UINT16 *pDest = pTransDraw + (y * nWidth);
+
+		INT32 RowScrollIndex = (Flip) ? ((216 - y) / 8) : (y / 8);
+		INT32 RowScroll = BURN_ENDIAN_SWAP_INT16(RowRam[RowScrollIndex]);
+		INT32 xEffScroll = (xScroll & 0x8000) ? RowScroll : xScroll;
+		INT32 yEffScroll = yScroll;
+		const UINT16 *pSrc = pMap;
+
+		if (RowScroll & 0x8000) {
+			xEffScroll = xAltScroll;
+			yEffScroll = yAltScroll;
+			pSrc = pAltMap;
+		}
+
+		pSrc += (((Flip) ? ((FlipY - y) + yEffScroll) : (y + yEffScroll)) & 0x1ff) * 1024;
+
+		// source column of screen x is (sx + x) & 0x3ff, or (sx - x) & 0x3ff when flipped
+		INT32 sx = ((Flip) ? (FlipX - xEffScroll + 192) : (192 - xEffScroll)) & 0x3ff;
+		INT32 x = 0;
+
+		while (x < nWidth) {
+			INT32 n = (Flip) ? (sx + 1) : (1024 - sx); // run before the source wraps
+			if (n > nWidth - x) n = nWidth - x;
+
+			const UINT16 *s = pSrc + sx;
+			UINT16 *d = pDest + x;
+			INT32 i;
+
+			if (!Flip) {
+				if (Transparent) {
+					for (i = 0; i < n; i++) { UINT16 Pix = s[i]; if (Pix) d[i] = Pix; }
+				} else {
+					memcpy(d, s, n * sizeof(UINT16));
+				}
+				sx = (sx + n) & 0x3ff;
+			} else {
+				if (Transparent) {
+					for (i = 0; i < n; i++) { UINT16 Pix = s[-i]; if (Pix) d[i] = Pix; }
+				} else {
+					for (i = 0; i < n; i++) d[i] = s[-i];
+				}
+				sx = (sx - n) & 0x3ff;
+			}
+
+			x += n;
+		}
+	}
+
+	return 1;
+}
+
+// System16BRenderTextLayer() for a band of lines. It does not go through the
+// generic tile renderers (they keep their source pointer in a global, which
+// two threads cannot share) and only looks at the tiles that touch the band.
+static void SalviaSys16BTextLayerBand(INT32 PriorityDraw, INT32 nY0, INT32 nY1)
+{
+	const INT32 ColourDepth = (Lockonph) ? 4 : 3;
+	const INT32 Flip = System16ScreenFlip;
+	const INT32 nWidth = nScreenWidth;
+
+	if (nY0 < 0) nY0 = 0;
+	if (nY1 > nScreenHeight) nY1 = nScreenHeight;
+
+	for (INT32 my = 0; my < 32; my++) {
+		INT32 y = (Flip) ? (216 - (8 * my)) : (8 * my);
+		if (y + 8 <= nY0 || y >= nY1) continue;
+
+		for (INT32 mx = 0; mx < 64; mx++) {
+			INT32 x = (Flip) ? (312 - ((8 * mx) - 192)) : ((8 * mx) - 192);
+			if (x + 8 <= 0 || x >= nWidth) continue;
+
+			INT32 TileIndex = ((my * 64) + mx) * 2;
+			INT32 Code = (System16TextRam[TileIndex + 1] << 8) | System16TextRam[TileIndex + 0];
+
+			if (((Code >> 15) & 1) != PriorityDraw) continue;
+
+			INT32 nPalette = (((Code >> 9) & 0x07) << ColourDepth) + System16TilemapColorOffset;
+
+			Code &= 0x1ff;
+			Code += System16TileBanks[0] * System16TileBankSize;
+			Code &= (System16NumTiles - 1);
+
+			const UINT8 *pTile = System16Tiles + (Code << 6);
+
+			for (INT32 r = 0; r < 8; r++, pTile += 8) {
+				INT32 dy = (Flip) ? (y + 7 - r) : (y + r);
+				if (dy < nY0 || dy >= nY1) continue;
+
+				UINT16 *pPixel = pTransDraw + (dy * nWidth);
+
+				for (INT32 c = 0; c < 8; c++) {
+					INT32 dx = (Flip) ? (x + 7 - c) : (x + c);
+					if (dx < 0 || dx >= nWidth) continue;
+					if (pTile[c]) pPixel[dx] = nPalette + pTile[c];
+				}
+			}
+		}
+	}
+}
+
+static inline void SalviaXBoardTileLayer(INT32 Page, INT32 PriorityDraw, INT32 nY0, INT32 nY1)
+{
+	if (!SalviaSys16BTileLayerBand(Page, PriorityDraw, 1, nY0, nY1)) {
+		System16BRenderTileLayer(Page, PriorityDraw, 1, nY0, nY1);
+	}
+}
+
+// same layer order as XBoardRender()
+static void SalviaXBoardRenderBand(INT32 nY0, INT32 nY1, INT32)
+{
+	OutrunRenderRoadBackgroundLayer(nY0, nY1);
+	if (!System16RoadPriority) OutrunRenderRoadForegroundLayer(nY0, nY1);
+	XBoardRenderSpriteLayer(1, nY0, nY1);
+	SalviaXBoardTileLayer(1, 0, nY0, nY1);
+	XBoardRenderSpriteLayer(2, nY0, nY1);
+	SalviaXBoardTileLayer(1, 1, nY0, nY1);
+	SalviaXBoardTileLayer(0, 0, nY0, nY1);
+	XBoardRenderSpriteLayer(4, nY0, nY1);
+	SalviaXBoardTileLayer(0, 1, nY0, nY1);
+	if (System16RoadPriority) OutrunRenderRoadForegroundLayer(nY0, nY1);
+	SalviaSys16BTextLayerBand(0, nY0, nY1);
+	XBoardRenderSpriteLayer(8, nY0, nY1);
+	SalviaSys16BTextLayerBand(1, nY0, nY1);
+}
+// [Salvia] ------------------------------------------------------------------
+
 INT32 XBoardRender()
 {
 	if (!System16VideoEnable) {
@@ -8194,6 +8610,10 @@ INT32 XBoardRender()
 	System16BCreateTileMaps();
 	
 	System16CalcPalette();
+	// [Salvia] the layers are drawn in bands of lines, one band per rendering core
+	SalviaXBoardPool.init(SalviaXBoardRenderBand);
+	SalviaXBoardPool.render(224);
+#if 0
 	OutrunRenderRoadBackgroundLayer();
 	if (!System16RoadPriority) OutrunRenderRoadForegroundLayer();
 	XBoardRenderSpriteLayer(1);
@@ -8207,6 +8627,7 @@ INT32 XBoardRender()
 	System16BRenderTextLayer(0);
 	XBoardRenderSpriteLayer(8);
 	System16BRenderTextLayer(1);
+#endif
 	BurnTransferCopy(System16Palette);
 	
 	BurnGunDrawTargets();

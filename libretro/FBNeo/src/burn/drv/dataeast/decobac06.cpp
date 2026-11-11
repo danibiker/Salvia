@@ -48,6 +48,39 @@ void bac06_draw_layer(UINT8 *vram, UINT16 control[2][4], UINT8 *rsram, UINT8 *cs
 			INT32 row = syy / tsize;
 			INT32 zy = syy & (tsize - 1);
 
+			// [Salvia] same output as the stock loop (kept below under #if 0): the tile
+			// is looked up once per tile column instead of once per pixel, and the
+			// divisions/multiplications by the tile size are shifts.
+			{
+				const INT32 tshift = size ? 4 : 3;
+				const INT32 nWidth = nScreenWidth;
+				const INT32 xbase = scrollx + (rsenable ? BURN_ENDIAN_SWAP_INT16(scrx[syy]) : 0);
+				const INT32 rowoffs = row * bsize;
+				INT32 lastcol = -1, color = 0;
+				const UINT8 *tile = NULL;
+
+				for (INT32 sx = 0; sx < nWidth; sx++)
+				{
+					INT32 sxx = (sx + xbase) & mwidth;
+					INT32 col = sxx >> tshift;
+
+					if (col != lastcol) {
+						lastcol = col;
+
+						INT32 offs = (col & (bsize - 1)) + rowoffs + ((col & ~(bsize - 1)) * high);
+						INT32 code = BURN_ENDIAN_SWAP_INT16(ram[offs]);
+
+						color = ((code >> 12) << bac06_depth) | colbase;
+						tile = gfxbase + ((((code & 0xfff) + bank) & gfxmask) << (tshift * 2)) + (zy << tshift);
+					}
+
+					INT32 pxl = tile[sxx & (tsize - 1)];
+
+					if (pxl | opaque)
+						dst[sx] = pxl + color;
+				}
+			}
+#if 0
 			for (INT32 sx = 0; sx < nScreenWidth; sx++)
 			{
 				INT32 sxx = (sx + scrollx) & mwidth;
@@ -67,6 +100,7 @@ void bac06_draw_layer(UINT8 *vram, UINT16 control[2][4], UINT8 *rsram, UINT8 *cs
 				if (pxl | opaque)
 					dst[sx] = pxl + color;
 			}
+#endif
 
 			dst += nScreenWidth;
 		}

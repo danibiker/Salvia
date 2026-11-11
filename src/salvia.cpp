@@ -70,6 +70,9 @@ static unsigned g_num_mem_descriptors = 0;
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 retro_audio_buffer_status_callback_t audio_status_cb;
+/* Ocupacion del anillo (%) por debajo de la cual el limitador deja correr al
+ * core cuando este hace frameskip por audio.  Ver Sync::set_audio_catchup. */
+#define AUDIO_CATCHUP_PCT 40
 // 1. Declara una variable global o estática para guardar el callback del core
 retro_keyboard_event_t core_key_callback = nullptr;
 
@@ -1346,9 +1349,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 			const struct retro_audio_buffer_status_callback *cb = 
 				(const struct retro_audio_buffer_status_callback*)data;
 
-			if (cb) {
-				audio_status_cb = cb->callback; // Guardamos la funcion que el core llamara
-			}
+			/* NULL = el core deja de usar el estado del buffer (frameskip por
+			 * audio desactivado): hay que olvidar el callback, no conservarlo. */
+			audio_status_cb = cb ? cb->callback : NULL;
 			return true;
 		}
 		case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY: {
@@ -1912,8 +1915,22 @@ static inline void hw_refresh(const void *data, unsigned width,
 }
 
 
+/* Frame duplicado: libretro permite que el core llame a video_refresh con
+ * data == NULL cuando no ha dibujado nada nuevo (frameskip).  En ese caso no
+ * hay nada que presentar, y presentar de todas formas hace que el Present
+ * espere al vblank en un frame que el core se habia saltado justo para ganar
+ * tiempo: el frameskip acababa frenando en vez de acelerar.  El bucle principal
+ * consulta este indicador para no presentar los frames duplicados. */
+static bool g_coreFrameDuped = false;
+static int  g_dupedSeguidos  = 0;
+/* Tope de presentaciones seguidas que se pueden omitir.  Asi los overlays del
+ * frontend (FPS, mensajes, mira) nunca se quedan congelados si un core manda
+ * muchos duplicados seguidos. */
+#define MAX_DUPED_SIN_PRESENTAR 5
+
 static void retro_video_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
+	g_coreFrameDuped = (data == NULL);
 	#ifdef SALVIA_GPU_VIDEO
 		// Xbox y Windows: la GPU escala la textura nativa y aplica el shader.
 		hw_refresh(data, width, height, pitch);
@@ -2591,6 +2608,9 @@ void closeGame(){
 
 		retro_unload_game();
 		retro_deinit();
+		/* El callback de estado de audio es del core que se acaba de cerrar. */
+		audio_status_cb = NULL;
+		gameMenu->sync->set_audio_catchup(false);
 		gameMenu->romLoaded = false;
 
 		/* El banco MIDI se suelta con el core: el proximo juego lo volvera a
@@ -2827,6 +2847,13 @@ inline void updateGame() {
 		// Notificar al core el estado del buffer de audio (para frameskip)
 		if (audio_status_cb)
 			audio_status_cb(true, occupancy, fill < cap / 4);
+
+		/* Frameskip por audio: mientras el anillo este por debajo del umbral el
+		 * limitador no espera, para que los frames saltados sirvan para
+		 * rellenarlo (ver Sync::set_audio_catchup).  El umbral queda por encima
+		 * del de "underrun probable" (25%) y por debajo del centro del DRC
+		 * (50%), para no tocar el ritmo de un juego que va sobrado. */
+		gameMenu->sync->set_audio_catchup(audio_status_cb != NULL && cap != 0 && occupancy < AUDIO_CATCHUP_PCT);
 
 		/* La tasa real del dispositivo, que publica el hilo de audio cada 10 s.
 		 * Se saca aqui y no alli para no bloquear el callback en el fichero de
@@ -3083,11 +3110,28 @@ static int __declspec(noinline) runGameLoop() {
 			 * (Probado el orden contrario -esperar y luego presentar- para
 			 * equiespaciar las presentaciones: sin diferencia apreciable ni con
 			 * vsync ni sin el, asi que no compensa la latencia de mas.) */
-			const double flipIni = Constant::getTicks();
-			salviaFlip(gameMenu->gameScreen);
-			const double flipEnd = Constant::getTicks();
-			gameMenu->sync->note_flip(flipEnd - flipIni);
-			gameMenu->sync->note_present(flipEnd);
+			/* Frame duplicado por el core (frameskip): no se presenta, ver
+			 * g_coreFrameDuped.  Solo en juego y con un tope de omisiones
+			 * seguidas; el limitador se ejecuta igual en todos los casos. */
+			bool omitirPresent = false;
+			if (g_coreFrameDuped && gameMenu->getEmuStatus() == EMU_STARTED
+				&& g_dupedSeguidos < MAX_DUPED_SIN_PRESENTAR) {
+				omitirPresent = true;
+				g_dupedSeguidos++;
+			} else {
+				g_dupedSeguidos = 0;
+			}
+			g_coreFrameDuped = false;
+
+			if (omitirPresent) {
+				gameMenu->sync->note_flip(0.0);
+			} else {
+				const double flipIni = Constant::getTicks();
+				salviaFlip(gameMenu->gameScreen);
+				const double flipEnd = Constant::getTicks();
+				gameMenu->sync->note_flip(flipEnd - flipIni);
+				gameMenu->sync->note_present(flipEnd);
+			}
 			gameMenu->sync->limit_fps(nextFrameTime, cfgLoader->current_video_settings.sync_type, gameMenu->gameTicks);
 		}
 	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {

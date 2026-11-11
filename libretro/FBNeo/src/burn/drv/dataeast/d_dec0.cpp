@@ -2265,9 +2265,13 @@ static struct BurnRomInfo Slyspy3RomDesc[] = {
 STD_ROM_PICK(Slyspy3)
 STD_ROM_FN(Slyspy3)
 
+static void SalviaDec0MapsInvalidate(); // [Salvia]
+
 static INT32 MemIndex()
 {
 	UINT8 *Next; Next = Mem;
+
+	SalviaDec0MapsInvalidate(); // [Salvia] the layer buffers are about to be (re)allocated
 
 	Drv68KRom              = Next; Next += 0x80000;
 	DrvM6502Rom            = Next; Next += 0x08000;
@@ -5187,6 +5191,103 @@ static void Dec0Render16x16Tile_Mask_FlipXY(UINT16* pDestDraw, INT32 nTileNumber
 #define TILEMAP_LAYER0		1
 #define TILEMAP_LAYER1		0
 
+// [Salvia] ------------------------------------------------------------------
+// The stock renderer clears and rebuilds every tile of a layer's tile map each
+// time the layer is drawn (up to five full rebuilds per frame, more than a
+// million pixels) and then copies the 256x240 window that is on screen.
+//
+// Here each layer keeps ONE map with every tile drawn opaque, and only the
+// tiles whose tile ram word changed are redrawn. The transparency and the
+// tile priority group, that the stock code applied while building the map,
+// are applied while copying (see DrvRenderCustomTilemap):
+//  - transparent pixels have a zero low nibble in the map, which is what the
+//    copy already tests;
+//  - the priority group of a tile is bit 7 of its pixels (colour >= 8).
+// The picture is the same as with the stock code.
+struct SalviaDec0MapCache {
+	UINT16 Attr[128 * 32];	// tile ram word drawn at each map position (raw)
+	INT32  Key;				// shape / ram bank / flip / palette offset
+	INT32  Valid;
+};
+
+static SalviaDec0MapCache SalviaDec0Maps[3];	// 0 = chars, 1 = tiles 1, 2 = tiles 2
+
+static void SalviaDec0MapsInvalidate()
+{
+	for (INT32 i = 0; i < 3; i++) SalviaDec0Maps[i].Valid = 0;
+}
+
+static void SalviaDec0DrawTile(UINT16 *pDest, const UINT8 *pTile, INT32 x, INT32 y, INT32 nPalette, INT32 nSize, INT32 nMapWidth, INT32 bFlip)
+{
+	if (!bFlip) {
+		UINT16 *p = pDest + (y * nMapWidth) + x;
+		for (INT32 r = 0; r < nSize; r++, p += nMapWidth, pTile += nSize) {
+			for (INT32 c = 0; c < nSize; c++) p[c] = nPalette | pTile[c];
+		}
+	} else {
+		UINT16 *p = pDest + ((y + nSize - 1) * nMapWidth) + x;
+		for (INT32 r = 0; r < nSize; r++, p -= nMapWidth, pTile += nSize) {
+			for (INT32 c = 0; c < nSize; c++) p[nSize - 1 - c] = nPalette | pTile[c];
+		}
+	}
+}
+
+// nLayer: 0 = chars (8x8), 1 / 2 = tiles (16x16)
+static void SalviaDec0UpdateMap(INT32 nLayer, UINT16 *pDest, UINT16 *VideoRam, INT32 RenderType, INT32 nMapWidth, INT32 nMapHeight, UINT8 *pGfx, INT32 nPalOffset)
+{
+	SalviaDec0MapCache *c = &SalviaDec0Maps[nLayer];
+	const INT32 nSize = (nLayer == 0) ? 8 : 16;
+	const INT32 nShift = (nLayer == 0) ? 3 : 4;
+	const INT32 nCols = nMapWidth >> nShift;
+	const INT32 nRows = nMapHeight >> nShift;
+	const INT32 nBank = (DrvTileRamBank[nLayer] & 0x01) ? 0x1000 : 0;
+	const INT32 bFlip = (DrvFlipScreen) ? 1 : 0;
+	const INT32 nKey = (RenderType & 3) | (nBank ? 4 : 0) | (bFlip << 3) | (nMapWidth << 4) | (nPalOffset << 16);
+
+	if (c->Key != nKey) {
+		c->Key = nKey;
+		c->Valid = 0;
+	}
+
+	UINT16 *pOld = c->Attr;
+
+	for (INT32 my = 0; my < nRows; my++) {
+		for (INT32 mx = 0; mx < nCols; mx++, pOld++) {
+			INT32 TileIndex;
+
+			// same tile ram layouts as the stock code
+			if (nLayer == 0) {
+				TileIndex = (mx & 0x1f) + ((my & 0x1f) << 5) + ((mx & 0x60) << 5);
+				if (RenderType == 1) TileIndex = (mx & 0x1f) + ((my & 0x1f) << 5) + ((my & 0x20) << 5) + ((mx & 0x20) << 6);
+				if (RenderType == 2) TileIndex = (mx & 0x1f) + ((my & 0x7f) << 5);
+			} else {
+				TileIndex = (mx & 0x0f) + ((my & 0x0f) << 4) + ((mx & 0x30) << 4);
+				if (RenderType == 1) TileIndex = (mx & 0x0f) + ((my & 0x0f) << 4) + ((my & 0x10) << 4) + ((mx & 0x10) << 5);
+				if (RenderType == 2) TileIndex = (mx & 0x0f) + ((my & 0x3f) << 4);
+			}
+			TileIndex += nBank;
+
+			UINT16 Raw = VideoRam[TileIndex];
+			if (c->Valid && *pOld == Raw) continue;
+			*pOld = Raw;
+
+			INT32 Attr = BURN_ENDIAN_SWAP_INT16(Raw);
+			INT32 x = mx << nShift;
+			INT32 y = my << nShift;
+
+			if (bFlip) {
+				x = ((256 - nSize) - x) & (nMapWidth - 1);
+				y = ((256 - nSize) - y) & (nMapHeight - 1);
+			}
+
+			SalviaDec0DrawTile(pDest, pGfx + ((Attr & 0xfff) << (nShift * 2)), x, y, ((Attr >> 12) << 4) | nPalOffset, nSize, nMapWidth, bFlip);
+		}
+	}
+
+	c->Valid = 1;
+}
+// [Salvia] ------------------------------------------------------------------
+
 static void DrvRenderCustomTilemap(UINT16 *pSrc, UINT16 *pControl0, UINT16 *pControl1, UINT16 *RowScrollRam, UINT16 *ColScrollRam, INT32 TilemapWidth, INT32 TilemapHeight, INT32 Opaque, INT32 DrawLayer)
 {
 	INT32 x, y, xSrc, ySrc, ColOffset = 0, pPixel;
@@ -5211,6 +5312,40 @@ static void DrvRenderCustomTilemap(UINT16 *pSrc, UINT16 *pControl0, UINT16 *pCon
 		xSrc &= WidthMask;
 		
 		if (DrvFlipScreen) xSrc = -xSrc;
+
+		// [Salvia] without column scroll the source line is fixed: resolve the
+		// pointers once per line and specialize the pixel tests
+		if (!ColScrollEnabled) {
+			const UINT16 *pSalviaSrc = pSrc + ((ySrc & HeightMask) * TilemapWidth);
+			UINT16 *pSalviaDst = pTransDraw + (y * nScreenWidth);
+			const INT32 nSalviaWidth = nScreenWidth;
+			INT32 nSalviaX = xSrc;
+
+			if (DrawLayer == TILEMAP_LAYER0) {
+				for (x = 0; x < nSalviaWidth; x++, nSalviaX++) {
+					pPixel = pSalviaSrc[nSalviaX & WidthMask];
+					if ((Opaque || (pPixel & 0x0f)) && (pPixel & 0x88) == 0x88) pSalviaDst[x] = pPixel;
+				}
+			} else if (DrawLayer == TILEMAP_LAYER1) {
+				for (x = 0; x < nSalviaWidth; x++, nSalviaX++) {
+					pPixel = pSalviaSrc[nSalviaX & WidthMask];
+					if (pPixel & 0x80) pPixel = 0; // tile of the other priority group
+					if (Opaque || (pPixel & 0x0f)) pSalviaDst[x] = pPixel;
+				}
+			} else if (Opaque) {
+				for (x = 0; x < nSalviaWidth; x++, nSalviaX++) {
+					pSalviaDst[x] = pSalviaSrc[nSalviaX & WidthMask];
+				}
+			} else {
+				for (x = 0; x < nSalviaWidth; x++, nSalviaX++) {
+					pPixel = pSalviaSrc[nSalviaX & WidthMask];
+					if (pPixel & 0x0f) pSalviaDst[x] = pPixel;
+				}
+			}
+
+			ySrc++;
+			continue;
+		}
 		
 		for (x = 0; x < nScreenWidth; x++) {
 			if (ColScrollEnabled) ColOffset = BURN_ENDIAN_SWAP_INT16(ColScrollRam[((xSrc >> 3) >> (BURN_ENDIAN_SWAP_INT16(pControl1[2]) & 0x0f)) & (0x3f >> (BURN_ENDIAN_SWAP_INT16(pControl1[2]) & 0x0f))]);
@@ -5218,6 +5353,9 @@ static void DrvRenderCustomTilemap(UINT16 *pSrc, UINT16 *pControl0, UINT16 *pCon
 			pPixel = pSrc[(((ySrc + ColOffset) & HeightMask) * TilemapWidth) + (xSrc & WidthMask)];
 			
 			xSrc++;
+
+			// [Salvia] the map now holds every tile: drop the other priority group here
+			if (DrawLayer == TILEMAP_LAYER1 && (pPixel & 0x80)) pPixel = 0;
 			
 			if (Opaque || (pPixel & 0x0f)) {
 				if (DrawLayer == TILEMAP_LAYER0) {
@@ -5260,6 +5398,9 @@ static void DrvRenderTile1Layer(INT32 Opaque, INT32 DrawLayer)
 		}
 	}
 	
+	// [Salvia] update the cached map instead of rebuilding it (stock code below)
+	SalviaDec0UpdateMap(1, pTile1LayerDraw, VideoRam, RenderType, DrvTile1TilemapWidth, DrvTile1TilemapHeight, DrvTiles1, 512);
+#if 0
 	memset(pTile1LayerDraw, 0, DrvTile1TilemapWidth * DrvTile1TilemapHeight * sizeof(UINT16));
 	
 	for (my = 0; my < (DrvTile1TilemapHeight / 16); my++) {
@@ -5302,6 +5443,7 @@ static void DrvRenderTile1Layer(INT32 Opaque, INT32 DrawLayer)
 			}
 		}
 	}
+#endif
 	
 	DrvRenderCustomTilemap(pTile1LayerDraw, (UINT16*)DrvVideo1Ctrl0Ram, (UINT16*)DrvVideo1Ctrl1Ram, (UINT16*)DrvVideo1RowScrollRam, (UINT16*)DrvVideo1ColScrollRam, DrvTile1TilemapWidth, DrvTile1TilemapHeight, Opaque, DrawLayer);
 }
@@ -5334,6 +5476,9 @@ static void DrvRenderTile2Layer(INT32 Opaque, INT32 DrawLayer)
 		}
 	}
 	
+	// [Salvia] update the cached map instead of rebuilding it (stock code below)
+	SalviaDec0UpdateMap(2, pTile2LayerDraw, VideoRam, RenderType, DrvTile2TilemapWidth, DrvTile2TilemapHeight, DrvTiles2, 768);
+#if 0
 	memset(pTile2LayerDraw, 0, DrvTile2TilemapWidth * DrvTile2TilemapHeight * sizeof(UINT16));
 	
 	for (my = 0; my < (DrvTile2TilemapHeight / 16); my++) {
@@ -5376,6 +5521,7 @@ static void DrvRenderTile2Layer(INT32 Opaque, INT32 DrawLayer)
 			}
 		}
 	}
+#endif
 	
 	DrvRenderCustomTilemap(pTile2LayerDraw, (UINT16*)DrvVideo2Ctrl0Ram, (UINT16*)DrvVideo2Ctrl1Ram, (UINT16*)DrvVideo2RowScrollRam, (UINT16*)DrvVideo2ColScrollRam, DrvTile2TilemapWidth, DrvTile2TilemapHeight, Opaque, DrawLayer);
 }
@@ -5408,6 +5554,9 @@ static void DrvRenderCharLayer()
 		}
 	}
 	
+	// [Salvia] update the cached map instead of rebuilding it (stock code below)
+	SalviaDec0UpdateMap(0, pCharLayerDraw, CharRam, RenderType, DrvCharTilemapWidth, DrvCharTilemapHeight, DrvChars, DrvCharPalOffset);
+#if 0
 	memset(pCharLayerDraw, 0, DrvCharTilemapWidth * DrvCharTilemapHeight * sizeof(UINT16));
 	
 	for (my = 0; my < (DrvCharTilemapHeight / 8); my++) {
@@ -5435,6 +5584,7 @@ static void DrvRenderCharLayer()
 			}
 		}
 	}
+#endif
 	
 	DrvRenderCustomTilemap(pCharLayerDraw, (UINT16*)DrvCharCtrl0Ram, (UINT16*)DrvCharCtrl1Ram, (UINT16*)DrvCharRowScrollRam, (UINT16*)DrvCharColScrollRam, DrvCharTilemapWidth, DrvCharTilemapHeight, 0, TILEMAP_BOTH_LAYERS);
 }
