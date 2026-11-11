@@ -1668,6 +1668,15 @@ void PEOPS_GPUwriteStatus(unsigned long gdata)
     if(PSXDisplay.Disabled) 
          lGPUstatusRet|=GPUSTATUS_DISPLAYDISABLED;
     else lGPUstatusRet&=~GPUSTATUS_DISPLAYDISABLED;
+    /* [2026-11-11] Al encender o apagar la pantalla hay que volver a
+     * presentar, como gpulib de pcsx_rearmed (GP1 03: fb_dirty si cambia
+     * blanked).  updateLace solo presenta con bDoVSyncUpdate, y una imagen
+     * fija subida con la pantalla apagada (creditos de X-Men Mutant Academy,
+     * Japon: carga a VRAM, GP1 03=0 y luego solo espera) no ponia nada mas
+     * que lo activara: se quedaba el negro del borrado de cuando estaba
+     * apagada.  Vale para Duck HW y Unai, que presentan por aqui. */
+    if(PSXDisplay.Disabled != PreviousPSXDisplay.Disabled)
+     bDoVSyncUpdate=TRUE;
     return;
 
    //--------------------------------------------------//

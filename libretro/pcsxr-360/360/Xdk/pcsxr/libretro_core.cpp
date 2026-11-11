@@ -639,9 +639,9 @@ void retro_set_environment(retro_environment_t cb) {
             "pcsxr360_bios",
             "PSX bios", "PSX bios",
             NULL, NULL, "system",
-			{ { OPENBIOS,  "OPENBIOS embedded (Default)" }, 
+			{ { "scph5501.bin", "SCPH-5501 USA (v3.0) (Default)" }, 
+			  { OPENBIOS,  "OPENBIOS (embedded)" }, 
 			  { "scph1001.bin", "SCPH-1001 USA (v2.2)" }, 
-			  { "scph5501.bin", "SCPH-5501 USA (v3.0) (Recommended)" }, 
 			  { "scph7001.bin", "SCPH-7001 USA (v4.1)" }, 
 			  { "scph101.bin" , "SCPH-101 USA (v4.5)" },
 			  { "scph1000.bin", "SCPH-1000 JPN (v1.0)" }, 
@@ -653,7 +653,7 @@ void retro_set_environment(retro_environment_t cb) {
 			  { "scph7502.bin", "SCPH-7502 EUR (v4.1) (Recommended)" }, 
 			  { "scph102.bin",  "SCPH-102 EUR (v4.5)" }, 
 			  { NULL, NULL }},			  
-            OPENBIOS
+            "scph5501.bin"
         },
         {
             "pcsxr360_region",
