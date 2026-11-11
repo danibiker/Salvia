@@ -2863,6 +2863,8 @@ static void (*recCP2BSC[32])() = {
 // try
 void psxREGIMM();
 void execI();
+int psxLoadHazardTest(u32 rt, u32 next);   /* psxinterpreter.c */
+void psxExecLoadHazard(void);
 
 static void smcSlotsReset(void) {
 	u32 i;
@@ -2985,6 +2987,29 @@ static void recRecompile() {
 		count++;
 
 		op = psxRegs.code>>26;
+
+		/* [2026-11-11] Carga cuya instruccion siguiente lee el registro
+		 * cargado (ensamblador a mano que cuenta con el retardo de carga del
+		 * R3000, p. ej. el manejador de tarjetas de OpenBIOS): las dos por el
+		 * interprete (psxExecLoadHazard), que da el valor viejo a la segunda,
+		 * y fin de bloque.  Como pcsx_rearmed ("drc: handle some load delay
+		 * cases with interpreter"). */
+		if (op == 0x20 || op == 0x21 || op == 0x23 || op == 0x24 || op == 0x25) {
+			const u32 ldcode = psxRegs.code;
+			const u32 nextcode = psxIcacheFetchCompile(pc);
+			if (psxLoadHazardTest((ldcode >> 16) & 0x1f, nextcode)) {
+				iFlushRegs(0);
+				LIW(PutHWRegSpecial(ARG1), ldcode);
+				STW(GetHWRegSpecial(ARG1), OFFSET(&psxRegs, &psxRegs.code), GetHWRegSpecial(PSXREGS));
+				LIW(PutHWRegSpecial(PSXPC), pc);
+				FlushAllHWReg();
+				CALLFunc((u32)psxExecLoadHazard);
+				pc += 4;   /* la siguiente ya se ha ejecutado */
+				count++;
+				iRet();
+				goto done;
+			}
+		}
 
 		recBSC[op]();
 

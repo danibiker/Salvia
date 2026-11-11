@@ -518,6 +518,74 @@ __forceinline void psxDelayTest(int reg, u32 bpc) {
 
 }
 
+/* [2026-11-11] Ranura de retardo de las cargas FUERA de un salto.  En el
+ * R3000 el valor de un LB/LBU/LH/LHU/LW no esta disponible hasta DESPUES de
+ * la instruccion siguiente: esa instruccion aun ve el valor viejo del
+ * registro.  El codigo compilado no lo aprovecha, pero el ensamblador a mano
+ * si: el manejador de IRQ de tarjetas de OpenBIOS hace
+ *     lw   $k0, -0x5074($k0)   ; puntero
+ *     move $at, $k0            ; $at = base VIEJA (0x10000)
+ *     ...  sw $k0, -0x5074($at)
+ * y sin el retardo guardaba el puntero en otra parte: escribia en la tarjeta
+ * el mismo byte 128 veces y leia cada sector a un solo byte (Tomb Raider 3:
+ * "tarjeta sin formatear").  DuckStation y pcsx_rearmed emulan el retardo.
+ * Aqui solo el caso que importa, como el que ya habia para las cargas en la
+ * ranura de un salto (psxDelayTest): si la instruccion siguiente lee el
+ * registro, se ejecuta ya con el valor viejo y despues llega la carga (salvo
+ * que esa instruccion tambien lo escriba).  Los saltos se dejan como antes. */
+/* 1 o 2 (psxTestLoadDelay) si la instruccion `next`, justo detras de una
+ * carga a `rt`, lee ese registro y hay que darle el valor viejo; 0 si no (o
+ * si es un salto / coprocesador / syscall, que siguen como antes).  La usa
+ * tambien el dynarec al compilar (pR3000A.c). */
+int psxLoadHazardTest(u32 rt, u32 next) {
+	int t;
+	if (rt == 0)
+		return 0;
+	switch (next >> 26) {
+		case 0x00:
+			if ((next & 0x3f) == 0x08 || (next & 0x3f) == 0x09 || (next & 0x3f) == 0x0c || (next & 0x3f) == 0x0d)
+				return 0;   /* JR/JALR/SYSCALL/BREAK */
+			break;
+		case 0x01: case 0x02: case 0x03: case 0x04: case 0x05: case 0x06: case 0x07:
+		case 0x10: case 0x12:
+			return 0;   /* saltos y coprocesadores: como antes */
+	}
+	t = psxTestLoadDelay((int)rt, next);
+	return (t == 1 || t == 2) ? t : 0;
+}
+
+static void psxLoadHazard(u32 rt, u32 old) {
+	const u32 *code;
+	u32 next, newv;
+	int t;
+	if (branch || rt == 0)
+		return;
+	code = (const u32 *)PSXM_2(psxRegs.pc);
+	if (code == NULL)
+		return;
+	next = SWAP32(*code);
+	t = psxLoadHazardTest(rt, next);
+	if (!t)
+		return;
+	newv = psxRegs.GPR.r[rt];
+	psxRegs.GPR.r[rt] = old;
+	psxRegs.code = next;
+	psxRegs.pc += 4;
+	psxRegs.cycle += BIAS;
+	psxBSC[next >> 26]();
+	if (t == 2)
+		psxRegs.GPR.r[rt] = newv;   /* solo la leia: ahora llega la carga */
+}
+
+/* Para el dynarec: una carga (psxRegs.code) con riesgo de retardo y su
+ * instruccion siguiente, por el interprete.  psxRegs.pc ya apunta detras de
+ * la carga.  Los ciclos los cuenta el bloque compilado (las dos). */
+void psxExecLoadHazard(void) {
+	const u32 cyc = psxRegs.cycle;
+	psxBSC[psxRegs.code >> 26]();
+	psxRegs.cycle = cyc;
+}
+
 static u32 psxBranchNoDelay(void) {
 	u32 temp;
 
@@ -916,8 +984,10 @@ void psxLB() {
 #endif
 
 	if (_Rt_) {
+	const u32 ld_old = psxRegs.GPR.r[_Rt_];
 	_i32(_rRt_) = (signed char)psxMemRead8_2(_oB_);
 	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
+	psxLoadHazard(_Rt_, ld_old);
 	} else {
 	psxMemRead8_2(_oB_);
 	}
@@ -937,8 +1007,10 @@ void psxLBU() {
 #endif
 
 	if (_Rt_) {
+	const u32 ld_old = psxRegs.GPR.r[_Rt_];
 	_u32(_rRt_) = psxMemRead8_2(_oB_);
 	if (g_pgxp_memory) PGXP_CPU_InvalidateReg(_Rt_);
+	psxLoadHazard(_Rt_, ld_old);
 	} else {
 	psxMemRead8_2(_oB_);
 	}
@@ -958,9 +1030,11 @@ void psxLH() {
 #endif
 
 	if (_Rt_) {
+	const u32 ld_old = psxRegs.GPR.r[_Rt_];
 	const u32 a = _oB_;
 	_i32(_rRt_) = (short)psxMemRead16_2(a);
 	if (g_pgxp_memory) PGXP_CPU_LHx(psxRegs.code, _u32(_rRt_), a);
+	psxLoadHazard(_Rt_, ld_old);
 	} else {
 	psxMemRead16_2(_oB_);
 	}
@@ -980,9 +1054,11 @@ void psxLHU() {
 #endif
 
 	if (_Rt_) {
+	const u32 ld_old = psxRegs.GPR.r[_Rt_];
 	const u32 a = _oB_;
 	_u32(_rRt_) = psxMemRead16_2(a);
 	if (g_pgxp_memory) PGXP_CPU_LHx(psxRegs.code, _u32(_rRt_), a);
+	psxLoadHazard(_Rt_, ld_old);
 	} else {
 	psxMemRead16_2(_oB_);
 	}
@@ -1002,9 +1078,11 @@ void psxLW() {
 #endif
 
 	if (_Rt_) {
+	const u32 ld_old = psxRegs.GPR.r[_Rt_];
 	const u32 a = _oB_;
 	_u32(_rRt_) = psxMemRead32_2(a);
 	if (g_pgxp_memory) PGXP_CPU_LW(psxRegs.code, _u32(_rRt_), a);
+	psxLoadHazard(_Rt_, ld_old);
 	} else {
 	psxMemRead32_2(_oB_);
 	}

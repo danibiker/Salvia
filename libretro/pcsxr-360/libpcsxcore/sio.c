@@ -51,7 +51,15 @@
 
 static unsigned char buf[ BUFFER_SIZE ];
 
-unsigned char cardh[4] = { 0x00, 0x00, 0x5a, 0x5d };
+/* [2026-11-11] Cabecera de la respuesta de la tarjeta como pcsx_rearmed
+ * (sio.c, "tested on real hardware"): 0xFF (alta impedancia) en el byte del
+ * 0x81 y, en el del comando, el FLAG de la tarjeta.  Su bit 3 ("tarjeta
+ * nueva") vale 1 al encenderla o cambiarla y se borra con la primera
+ * escritura.  Antes devolviamos 0x00 / 0x00: la BIOS de Sony no lo mira, pero
+ * el driver de tarjetas de OpenBIOS si (Tomb Raider 3 veia la tarjeta sin
+ * formatear y no podia guardar). */
+static const unsigned char cardh[4] = { 0xff, 0x08, 0x5a, 0x5d };
+static unsigned char McdFlag[2] = { 8, 8 };
 
 // Transfer Ready and the Buffer is Empty
 // static unsigned short StatReg = 0x002b;
@@ -272,6 +280,10 @@ void sioWrite8(unsigned char value) {
 			return;
 		case 5:
 			parp++;
+			if (rdwr == 2 && parp == 129) {
+				/* borra el "tarjeta nueva" (rearmed) */
+				McdFlag[(CtrlReg >> 13) & 1] &= ~8;
+			}
 			if (rdwr == 2) {
 				if (parp < 128) buf[parp + 1] = value;
 			}
@@ -328,6 +340,7 @@ void sioWrite8(unsigned char value) {
 		case 0x81: // start memcard
 			StatReg |= RX_RDY;
 			memcpy(buf, cardh, 4);
+			buf[1] = McdFlag[(CtrlReg >> 13) & 1];
 			parp = 0;
 			bufcount = 3;
 			mcdst = 1;
@@ -478,6 +491,8 @@ void LoadMcd(int mcd, char *str) {
 
 	if (mcd == 1) data = Mcd1Data;
 	if (mcd == 2) data = Mcd2Data;
+	if (mcd == 1 || mcd == 2)
+		McdFlag[mcd - 1] |= 8;   /* tarjeta (re)insertada: nueva */
 
 	if (*str == 0) {
 		sprintf(str, "memcards/card%d.mcd", mcd);
@@ -883,6 +898,12 @@ int sioFreeze(psxSaveState_t *f, int Mode) {
 	gzfreeze(&adrH, sizeof(adrH));
 	gzfreeze(&adrL, sizeof(adrL));
 	gzfreeze(&padst, sizeof(padst));
+	if (Mode == 0) {
+		/* la tarjeta puede haber cambiado desde que se guardo el estado:
+		 * que el juego lo sepa (rearmed) */
+		McdFlag[0] |= 8;
+		McdFlag[1] |= 8;
+	}
 
 	return 0;
 }
