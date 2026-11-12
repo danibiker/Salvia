@@ -487,6 +487,9 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 	}
     FileList::guardarVector(ruta, fileConfigJoystick);
 	Fileio::commit(ruta.c_str());
+	
+	//Reload the proper configuration
+	loadRetroJoyIni();
     return ruta;
 }
 
@@ -526,6 +529,8 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 
 	FileList::cargarVector(ruta, lineas);
     if (lineas.empty()) return false;
+
+	CfgLoader::appliedFileJoystick = dirutil::getFileName(ruta);
 
     for (std::size_t i = 0; i < lineas.size(); ++i) {
         std::string line = Constant::Trim(lineas[i]);
@@ -1186,4 +1191,44 @@ void Joystick::setInfoButtons(){
 		LOG_DEBUG("Added  key info: %s -> %s", btn.description.c_str(), btn.text.c_str());
 	}
 	infoButtonsDirty = true;
+}
+
+void Joystick::clearRetroJoyIni(){
+	dirutil dir;
+	//Main default configuration configuration
+	const std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
+	//Core configuration file	
+	const std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_JOY_EXT;
+	//Game configuration file
+	const std::string gameCfgJoyPath = dir.getFolder(romPaths.rompath) + Constant::getFileSep() + dir.getFileNameNoExt(romPaths.rompath) + CFG_JOY_EXT;
+	
+	if (!romPaths.rompath.empty() && dir.fileExists(gameCfgJoyPath.c_str()))
+		dir.borrarArchivo(gameCfgJoyPath);
+
+	if (dir.fileExists(coreDefaultsPath.c_str()))
+		dir.borrarArchivo(coreDefaultsPath);
+
+	loadButtonsRetro(rutaIni);
+}
+
+void Joystick::loadRetroJoyIni(){
+	const std::string coreName = CfgLoader::configMain[cfg::libretro_core].valueStr;
+	dirutil dir;
+	std::string rutaGameJoyCfg = dir.getFolder(romPaths.rompath) + Constant::getFileSep() + dir.getFileNameNoExt(romPaths.rompath) + CFG_JOY_EXT;
+
+	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_JOY_EXT;
+
+	if (!rutaGameJoyCfg.empty() && dirutil::fileExists(rutaGameJoyCfg.c_str())){
+		//Primero comprobamos si existe el fichero de configuracion del joystick en la ruta del juego
+		loadButtonsRetro(rutaGameJoyCfg);
+	} else if (dirutil::fileExists(coreDefaultsPath.c_str())){
+		//Comprobamos si existe en la ruta de configuracion del core
+		loadButtonsRetro(coreDefaultsPath);
+	} else {
+		//Finalmente y en ultima instancia, comprobamos si existe en la ruta del .ini y lo cargamos
+		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
+		loadButtonsRetro(rutaIni);
+	}
 }

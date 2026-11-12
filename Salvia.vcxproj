@@ -7815,6 +7815,9 @@
     <ClCompile Include="src\cheats\cheatmanager.cpp" />
     <ClCompile Include="src\cheats\rdbreader.cpp" />
     <ClCompile Include="src\const\constant.cpp" />
+    <ClCompile Include="src\db\sqlite3.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />
     <ClCompile Include="src\http\gamefaqs.cpp" />

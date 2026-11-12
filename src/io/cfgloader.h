@@ -26,6 +26,7 @@ public:
 
 	static cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
 	static std::string appliedFileParmsCore;
+	static std::string appliedFileJoystick;
 
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > startupLibretroParams;

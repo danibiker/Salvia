@@ -22,6 +22,8 @@ extern "C"{
 
 cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
 std::string CfgLoader::appliedFileParmsCore;
+std::string CfgLoader::appliedFileJoystick;
+
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 CfgLoader::CfgLoader(){

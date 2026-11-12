@@ -48,6 +48,9 @@
     <Filter Include="Source Files\audio">
       <UniqueIdentifier>{6a31f4d2-36de-4d09-86ab-7be0e5ea2e6a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\db">
+      <UniqueIdentifier>{89dfc58a-c5f7-4294-924b-5c7c6424a59c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\io\filelist.h">
@@ -205,6 +208,9 @@
     </ClCompile>
     <ClCompile Include="src\io\presentclock.cpp">
       <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\db\sqlite3.c">
+      <Filter>Source Files\db</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

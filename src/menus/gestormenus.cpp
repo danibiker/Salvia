@@ -394,8 +394,10 @@ void GestorMenus::poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystic
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
 
+	menuAssignRetro->opciones.push_back(new OpcionTxtAndDynValue(LanguageManager::instance()->get("menu.options.retropadconfig"), CfgLoader::appliedFileJoystick));
 	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, ico_saving, this));
 	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, ico_saving, this));
+	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.retropaddefaults"), &GestorMenus::restaurarJoyConfig, joystick, ico_reload, this));
 
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
@@ -3092,6 +3094,12 @@ std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
 	refConfig->deleteGameParams(romPaths.rompath);
 
 	return LanguageManager::instance()->get("menu.core.options.restore.applied");
+}
+
+std::string GestorMenus::restaurarJoyConfig(Joystick* joy){
+	LOG_DEBUG("Restaurando opciones del joystick a sus valores por defecto");
+	joy->clearRetroJoyIni();
+	return "";
 }
 
 std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){

@@ -199,6 +199,9 @@ class GameMenu : public Engine{
 		void checkDisplayOptions();
 		void loadBgImageAndTitleEmu();
 		void drawLoadingProgressBar(SDL_Surface*& screen, float progress);
+		void loadRetroJoyIni(std::string ruta);
+		void resetRetroJoyIni();
+
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;

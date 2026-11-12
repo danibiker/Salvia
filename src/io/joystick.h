@@ -202,7 +202,9 @@ class Joystick{
 		//Se guardan los botones para mostrar informacion al usuario
 		std::vector<t_info_btn> infoButtons;
 		bool infoButtonsDirty;
-		
+		void clearRetroJoyIni();
+		void loadRetroJoyIni();
+
     private:
 
 		void configMapperRetro(t_joy_mapper& mapper, int joyId);
