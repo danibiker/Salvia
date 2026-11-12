@@ -133,6 +133,8 @@ static void GBDeinit(struct mCPUComponent* component) {
 }
 
 bool GBLoadGBX(struct GBXMetadata* metadata, struct VFile* vf) {
+	int32_t gbxSize = 0;
+	uint32_t vers;
 	uint8_t footer[16];
 	if (vf->seek(vf, -(off_t) sizeof(footer), SEEK_END) < 0) {
 		return false;
@@ -140,8 +142,6 @@ bool GBLoadGBX(struct GBXMetadata* metadata, struct VFile* vf) {
 	if (vf->read(vf, footer, sizeof(footer)) < (ssize_t) sizeof(footer)) {
 		return false;
 	}
-	int32_t gbxSize = 0;
-	uint32_t vers;
 	LOAD_32BE(gbxSize, 0, footer);
 	LOAD_32BE(vers, 4, footer);
 	if (memcmp(&footer[12], "GBX!", 4) != 0 || gbxSize != 0x40 || vers != 1) {
@@ -292,14 +292,15 @@ bool GBLoadSave(struct GB* gb, struct VFile* vf) {
 			GBMBCTAMA5Read(gb);
 		}
 	}
-	return vf;
+	return !!(vf);
 }
 
 void GBResizeSram(struct GB* gb, size_t size) {
+	struct VFile* vf;
 	if (gb->memory.sram && size <= gb->sramSize) {
 		return;
 	}
-	struct VFile* vf = gb->sramVf;
+	vf = gb->sramVf;
 	if (vf) {
 		// We have a vf
 		ssize_t vfSize = vf->size(vf);
@@ -342,13 +343,14 @@ void GBResizeSram(struct GB* gb, size_t size) {
 				vf->unmap(vf, gb->memory.sram, gb->sramSize);
 			}
 			if ((vfSize <= 0 && size) || (size_t) vfSize < size) {
+				uint8_t* sram;
 				// The loaded mask file is too small. Since these can be read-only,
 				// we need to make a new one of the right size
 				if (vfSize < 0) {
 					vfSize = 0;
 				}
 				gb->sramVf = VFileMemChunk(NULL, size);
-				uint8_t* sram = gb->sramVf->map(gb->sramVf, size, MAP_WRITE);
+				sram = gb->sramVf->map(gb->sramVf, size, MAP_WRITE);
 				if (vfSize > 0) {
 					vf->seek(vf, 0, SEEK_SET);
 					vf->read(vf, sram, vfSize);
@@ -429,10 +431,11 @@ void GBSavedataMask(struct GB* gb, struct VFile* vf, bool writeback) {
 }
 
 void GBSavedataUnmask(struct GB* gb) {
+	struct VFile* vf;
 	if (!gb->sramRealVf || gb->sramVf == gb->sramRealVf) {
 		return;
 	}
-	struct VFile* vf = gb->sramVf;
+	vf = gb->sramVf;
 	GBSramDeinit(gb);
 	gb->sramVf = gb->sramRealVf;
 	gb->memory.sram = gb->sramVf->map(gb->sramVf, gb->sramSize, MAP_WRITE);
@@ -490,12 +493,13 @@ void GBUnloadROM(struct GB* gb) {
 }
 
 void GBSynthesizeROM(struct VFile* vf) {
+	const struct GBCartridge cart = {
+		{ 0 },
+		/* .logo */ { _knownHeader[0], _knownHeader[1], _knownHeader[2], _knownHeader[3] },
+	};
 	if (!vf) {
 		return;
 	}
-	const struct GBCartridge cart = {
-		.logo = { _knownHeader[0], _knownHeader[1], _knownHeader[2], _knownHeader[3]}
-	};
 
 	vf->seek(vf, 0x100, SEEK_SET);
 	vf->write(vf, &cart, sizeof(cart));
@@ -506,6 +510,9 @@ void GBLoadBIOS(struct GB* gb, struct VFile* vf) {
 }
 
 void GBApplyPatch(struct GB* gb, struct Patch* patch) {
+	const struct GBCartridge* cart;
+	uint8_t type;
+	void* newRom;
 	size_t patchedSize = patch->outputSize(patch, gb->memory.romSize);
 	if (!patchedSize) {
 		return;
@@ -514,9 +521,9 @@ void GBApplyPatch(struct GB* gb, struct Patch* patch) {
 		patchedSize = GB_SIZE_CART_MAX;
 	}
 
-	const struct GBCartridge* cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
-	uint8_t type = cart->type;
-	void* newRom = anonymousMemoryMap(GB_SIZE_CART_MAX);
+	cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
+	type = cart->type;
+	newRom = anonymousMemoryMap(GB_SIZE_CART_MAX);
 	if (!patch->applyPatch(patch, gb->memory.rom, gb->pristineRomSize, newRom, patchedSize)) {
 		mappedMemoryFree(newRom, GB_SIZE_CART_MAX);
 		return;
@@ -569,12 +576,14 @@ void GBInterruptHandlerInit(struct SM83InterruptHandler* irqh) {
 }
 
 static uint32_t _GBBiosCRC32(struct VFile* vf) {
+	void* bios;
+	uint32_t biosCrc;
 	ssize_t size = vf->size(vf);
 	if (size <= 0 || size > GB_SIZE_CART_BANK0) {
 		return 0;
 	}
-	void* bios = vf->map(vf, size, MAP_READ);
-	uint32_t biosCrc = doCrc32(bios, size);
+	bios = vf->map(vf, size, MAP_READ);
+	biosCrc = doCrc32(bios, size);
 	vf->unmap(vf, bios, size);
 	return biosCrc;
 }
@@ -711,6 +720,7 @@ void GBReset(struct SM83Core* cpu) {
 }
 
 void GBSkipBIOS(struct GB* gb) {
+	unsigned i;
 	struct SM83Core* cpu = gb->cpu;
 	const struct GBCartridge* cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
 	int nextDiv = 0;
@@ -793,7 +803,6 @@ void GBSkipBIOS(struct GB* gb) {
 		break;
 	}
 
-	unsigned i;
 	for (i = 0; i < sizeof(cart->logo); ++i) {
 		uint8_t byte = GBLoad8(cpu, 0x104 + i);
 
@@ -869,9 +878,10 @@ void GBSkipBIOS(struct GB* gb) {
 }
 
 void GBMapBIOS(struct GB* gb) {
+	ssize_t size;
 	gb->biosVf->seek(gb->biosVf, 0, SEEK_SET);
 	gb->memory.romBase = malloc(GB_SIZE_CART_BANK0);
-	ssize_t size = gb->biosVf->read(gb->biosVf, gb->memory.romBase, GB_SIZE_CART_BANK0);
+	size = gb->biosVf->read(gb->biosVf, gb->memory.romBase, GB_SIZE_CART_BANK0);
 	if (gb->memory.rom) {
 		memcpy(&gb->memory.romBase[size], &gb->memory.rom[size], GB_SIZE_CART_BANK0 - size);
 		if (size > 0x100) {
@@ -992,6 +1002,7 @@ void GBProcessEvents(struct SM83Core* cpu) {
 	struct GB* gb = (struct GB*) cpu->master;
 	bool wasHalted = cpu->halted;
 	while (true) {
+		int nextFetch;
 		do {
 			int32_t cycles = cpu->cycles;
 			int32_t nextEvent;
@@ -1022,7 +1033,7 @@ void GBProcessEvents(struct SM83Core* cpu) {
 		if (!wasHalted || (cpu->executionState & 3) == SM83_CORE_FETCH) {
 			break;
 		}
-		int nextFetch = (SM83_CORE_FETCH - cpu->executionState) * cpu->tMultiplier;
+		nextFetch = (SM83_CORE_FETCH - cpu->executionState) * cpu->tMultiplier;
 		if (nextFetch < cpu->nextEvent) {
 			cpu->cycles += nextFetch;
 			cpu->executionState = SM83_CORE_FETCH;
@@ -1072,9 +1083,10 @@ uint16_t GBIRQVector(struct SM83Core* cpu) {
 }
 
 static void _enableInterrupts(struct mTiming* timing, void* user, uint32_t cyclesLate) {
+	struct GB* gb;
 	UNUSED(timing);
 	UNUSED(cyclesLate);
-	struct GB* gb = user;
+	gb = user;
 	gb->memory.ime = true;
 	GBUpdateIRQs(gb);
 }
@@ -1130,11 +1142,14 @@ void GBIllegal(struct SM83Core* cpu) {
 }
 
 bool GBIsROM(struct VFile* vf) {
+	uint8_t header[0x100];
+	uint8_t footer[16];
+	uint32_t size;
+	uint32_t vers;
 	if (!vf) {
 		return false;
 	}
 	vf->seek(vf, 0x100, SEEK_SET);
-	uint8_t header[0x100];
 
 	if (vf->read(vf, &header, sizeof(header)) < (ssize_t) sizeof(header)) {
 		return false;
@@ -1157,13 +1172,10 @@ bool GBIsROM(struct VFile* vf) {
 		return true;
 	}
 
-	uint8_t footer[16];
 	vf->seek(vf, -(off_t) sizeof(footer), SEEK_END);
 	if (vf->read(vf, footer, sizeof(footer)) < (ssize_t) sizeof(footer)) {
 		return false;
 	}
-	uint32_t size;
-	uint32_t vers;
 	LOAD_32BE(size, 0, footer);
 	LOAD_32BE(vers, 4, footer);
 	if (memcmp(&footer[12], "GBX!", 4) == 0 && size == 0x40 && vers == 1) {
@@ -1175,12 +1187,13 @@ bool GBIsROM(struct VFile* vf) {
 }
 
 void GBGetGameInfo(const struct GB* gb, struct mGameInfo* info) {
+	const struct GBCartridge* cart;
 	memset(info, 0, sizeof(*info));
 	if (!gb->memory.rom) {
 		return;
 	}
 
-	const struct GBCartridge* cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
+	cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
 	if (cart->cgb == 0xC0) {
 		strlcpy(info->system, "CGB", sizeof(info->system));
 	} else {
@@ -1204,6 +1217,7 @@ void GBFrameStarted(struct GB* gb) {
 }
 
 void GBFrameEnded(struct GB* gb) {
+	struct mRumble* rumble;
 	GBSramClean(gb, gb->video.frameCounter);
 
 	if (gb->cpu->components && gb->cpu->components[CPU_COMPONENT_CHEAT_DEVICE]) {
@@ -1215,7 +1229,7 @@ void GBFrameEnded(struct GB* gb) {
 		}
 	}
 
-	struct mRumble* rumble = gb->memory.rumble;
+	rumble = gb->memory.rumble;
 	if (rumble && rumble->integrate) {
 		gb->memory.lastRumble = mTimingCurrentTime(&gb->timing);
 		rumble->integrate(rumble, GB_VIDEO_TOTAL_LENGTH << 1);

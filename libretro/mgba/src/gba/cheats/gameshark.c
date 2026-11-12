@@ -285,11 +285,12 @@ bool GBACheatAddGameSharkLine(struct GBACheatSet* cheats, const char* line) {
 }
 
 int GBACheatGameSharkProbability(uint32_t op1, uint32_t op2) {
+	uint32_t address;
 	int probability = 0;
 	if (op2 == 0x001DC0DE) {
 		return 0x100;
 	}
-	uint32_t address = op1 & 0x0FFFFFFF;
+	address = op1 & 0x0FFFFFFF;
 	switch (op1 >> 28) {
 	case GSA_ASSIGN_1:
 		probability += 0x20;

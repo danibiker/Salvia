@@ -165,6 +165,12 @@ static const struct mCoreScreenRegion _GBAScreenRegions[] = {
 	{ 0, "Screen", 0, 0, GBA_VIDEO_HORIZONTAL_PIXELS, GBA_VIDEO_VERTICAL_PIXELS }
 };
 
+/* C89: no compound literals, so the register aliases are named arrays */
+static const char* _GBARegisterAliasesR12[] = { "ip", NULL };
+static const char* _GBARegisterAliasesR13[] = { "r13", NULL };
+static const char* _GBARegisterAliasesR14[] = { "r14", NULL };
+static const char* _GBARegisterAliasesR15[] = { "r15", NULL };
+
 static const struct mCoreRegisterInfo _GBARegisters[] = {
 	{ "r0", NULL, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
 	{ "r1", NULL, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
@@ -178,10 +184,10 @@ static const struct mCoreRegisterInfo _GBARegisters[] = {
 	{ "r9", NULL, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
 	{ "r10", NULL, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
 	{ "r11", NULL, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
-	{ "r12", (const char*[]) { "ip", NULL }, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
-	{ "sp", (const char*[]) { "r13", NULL }, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
-	{ "lr", (const char*[]) { "r14", NULL }, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
-	{ "pc", (const char*[]) { "r15", NULL }, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
+	{ "r12", _GBARegisterAliasesR12, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
+	{ "sp", _GBARegisterAliasesR13, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
+	{ "lr", _GBARegisterAliasesR14, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
+	{ "pc", _GBARegisterAliasesR15, 4, 0xFFFFFFFF, mCORE_REGISTER_GPR },
 	{ "cpsr", NULL, 4, 0xF00000FF, mCORE_REGISTER_FLAGS },
 	{ "spsr", NULL, 4, 0xF00000FF, mCORE_REGISTER_FLAGS },
 	{ "spsr_irq", NULL, 4, 0xF00000FF, mCORE_REGISTER_FLAGS },
@@ -307,6 +313,7 @@ static bool _GBACoreInit(struct mCore* core) {
 }
 
 static void _GBACoreDeinit(struct mCore* core) {
+	struct GBACore* gbacore;
 	ARMDeinit(core->cpu);
 	GBADestroy(core->board);
 	mappedMemoryFree(core->cpu, sizeof(struct ARMCore));
@@ -320,7 +327,7 @@ static void _GBACoreDeinit(struct mCore* core) {
 	}
 #endif
 
-	struct GBACore* gbacore = (struct GBACore*) core;
+	gbacore = (struct GBACore*) core;
 	free(gbacore->debuggerPlatform);
 	if (gbacore->cheatDevice) {
 		mCheatDeviceDestroy(gbacore->cheatDevice);
@@ -354,6 +361,7 @@ static void _GBACoreSetSync(struct mCore* core, struct mCoreSync* sync) {
 }
 
 static void _GBACoreLoadConfig(struct mCore* core, const struct mCoreConfig* config) {
+	const char* idleOptimization;
 	struct GBA* gba = core->board;
 	if (core->opts.mute) {
 		gba->audio.masterVolume = 0;
@@ -367,7 +375,7 @@ static void _GBACoreLoadConfig(struct mCore* core, const struct mCoreConfig* con
 	gbacore->overrides = mCoreConfigGetOverridesConst(config);
 #endif
 
-	const char* idleOptimization = mCoreConfigGetValue(config, "idleOptimization");
+	idleOptimization = mCoreConfigGetValue(config, "idleOptimization");
 	if (idleOptimization) {
 		if (strcasecmp(idleOptimization, "ignore") == 0) {
 			gba->idleOptimization = IDLE_LOOP_IGNORE;
@@ -397,6 +405,7 @@ static void _GBACoreLoadConfig(struct mCore* core, const struct mCoreConfig* con
 }
 
 static void _GBACoreReloadConfigOption(struct mCore* core, const char* option, const struct mCoreConfig* config) {
+	struct GBACore* gbacore;
 	struct GBA* gba = core->board;
 	if (!config) {
 		config = &core->config;
@@ -443,7 +452,7 @@ static void _GBACoreReloadConfigOption(struct mCore* core, const char* option, c
 		return;
 	}
 
-	struct GBACore* gbacore = (struct GBACore*) core;
+	gbacore = (struct GBACore*) core;
 #ifdef BUILD_GLES3
 	if (strcmp("videoScale", option) == 0) {
 		if (config != &core->config) {
@@ -663,10 +672,10 @@ static bool _GBACoreLoadTemporarySave(struct mCore* core, struct VFile* vf) {
 }
 
 static bool _GBACoreLoadPatch(struct mCore* core, struct VFile* vf) {
+	struct Patch patch;
 	if (!vf) {
 		return false;
 	}
-	struct Patch patch;
 	if (!loadPatch(vf, &patch)) {
 		return false;
 	}
@@ -734,6 +743,9 @@ static void _GBACoreChecksum(const struct mCore* core, void* data, enum mCoreChe
 }
 
 static void _GBACoreReset(struct mCore* core) {
+	bool forceGbp = false;
+	bool vbaBugCompat = true;
+	bool forceSkip;
 	struct GBACore* gbacore = (struct GBACore*) core;
 	struct GBA* gba = (struct GBA*) core->board;
 	bool value;
@@ -777,8 +789,6 @@ static void _GBACoreReset(struct mCore* core) {
 		}
 	}
 
-	bool forceGbp = false;
-	bool vbaBugCompat = true;
 	mCoreConfigGetBoolValue(&core->config, "gba.forceGbp", &forceGbp);
 	mCoreConfigGetBoolValue(&core->config, "vbaBugCompat", &vbaBugCompat);
 	if (!forceGbp) {
@@ -841,7 +851,7 @@ static void _GBACoreReset(struct mCore* core) {
 #endif
 
 	ARMReset(core->cpu);
-	bool forceSkip = gba->mbVf || (core->opts.skipBios && (gba->romVf || gba->memory.rom));
+	forceSkip = gba->mbVf || (core->opts.skipBios && (gba->romVf || gba->memory.rom));
 	if (!forceSkip && (gba->romVf || gba->memory.rom) && gba->pristineRomSize >= 0xA0 && gba->biosVf) {
 		uint32_t crc = doCrc32(&gba->memory.rom[1], 0x9C);
 		if (crc != LOGO_CRC32) {
@@ -928,11 +938,12 @@ static bool _GBACoreSaveExtraState(struct mCore* core, struct mStateExtdata* ext
 	size_t size = 0;
 	gba->video.renderer->saveState(gba->video.renderer, &buffer, &size);
 	if (size > 0 && buffer) {
+		uint32_t type;
 		struct mStateExtdataItem item;
 		item.size = size + sizeof(uint32_t);
 		item.data = malloc(item.size);
 		item.clean = free;
-		uint32_t type = gba->video.renderer->rendererId(gba->video.renderer);
+		type = gba->video.renderer->rendererId(gba->video.renderer);
 		STORE_32(type, 0, item.data);
 		memcpy((void*) ((uintptr_t) item.data + sizeof(uint32_t)), buffer, size);
 		mStateExtdataPut(extdata, EXTDATA_SUBSYSTEM_START + GBA_SUBSYSTEM_VIDEO_RENDERER, &item);
@@ -946,11 +957,12 @@ static bool _GBACoreSaveExtraState(struct mCore* core, struct mStateExtdata* ext
 	if (gba->sio.driver && gba->sio.driver->driverId && gba->sio.driver->saveState) {
 		gba->sio.driver->saveState(gba->sio.driver, &buffer, &size);
 		if (size > 0 && buffer) {
+			uint32_t type;
 			struct mStateExtdataItem item;
 			item.size = size + sizeof(uint32_t);
 			item.data = malloc(item.size);
 			item.clean = free;
-			uint32_t type = gba->sio.driver->driverId(gba->sio.driver);
+			type = gba->sio.driver->driverId(gba->sio.driver);
 			STORE_32(type, 0, item.data);
 			memcpy((void*) ((uintptr_t) item.data + sizeof(uint32_t)), buffer, size);
 			mStateExtdataPut(extdata, EXTDATA_SUBSYSTEM_START + GBA_SUBSYSTEM_SIO_DRIVER, &item);
@@ -1073,38 +1085,44 @@ static void _GBACoreBusWrite32(struct mCore* core, uint32_t address, uint32_t va
 }
 
 static uint32_t _GBACoreRawRead8(struct mCore* core, uint32_t address, int segment) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	return GBAView8(cpu, address);
 }
 
 static uint32_t _GBACoreRawRead16(struct mCore* core, uint32_t address, int segment) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	return GBAView16(cpu, address);
 }
 
 static uint32_t _GBACoreRawRead32(struct mCore* core, uint32_t address, int segment) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	return GBAView32(cpu, address);
 }
 
 static void _GBACoreRawWrite8(struct mCore* core, uint32_t address, int segment, uint8_t value) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	GBAPatch8(cpu, address, value, NULL);
 }
 
 static void _GBACoreRawWrite16(struct mCore* core, uint32_t address, int segment, uint16_t value) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	GBAPatch16(cpu, address, value, NULL);
 }
 
 static void _GBACoreRawWrite32(struct mCore* core, uint32_t address, int segment, uint32_t value) {
+	struct ARMCore* cpu;
 	UNUSED(segment);
-	struct ARMCore* cpu = core->cpu;
+	cpu = core->cpu;
 	GBAPatch32(cpu, address, value, NULL);
 }
 
@@ -1113,6 +1131,7 @@ size_t _GBACoreListMemoryBlocks(const struct mCore* core, const struct mCoreMemo
 	struct GBACore* gbacore = (struct GBACore*) core;
 
 	if (gbacore->memoryBlockType != gba->memory.savedata.type) {
+		size_t i;
 		switch (gba->memory.savedata.type) {
 		case GBA_SAVEDATA_SRAM:
 			memcpy(gbacore->memoryBlocks, _GBAMemoryBlocksSRAM, sizeof(_GBAMemoryBlocksSRAM));
@@ -1144,7 +1163,6 @@ size_t _GBACoreListMemoryBlocks(const struct mCore* core, const struct mCoreMemo
 			break;
 		}
 
-		size_t i;
 		for (i = 0; i < gbacore->nMemoryBlocks; ++i) {
 			if (gbacore->memoryBlocks[i].id == GBA_REGION_ROM0 || gbacore->memoryBlocks[i].id == GBA_REGION_ROM1 || gbacore->memoryBlocks[i].id == GBA_REGION_ROM2) {
 				gbacore->memoryBlocks[i].size = gba->memory.romSize;
@@ -1206,6 +1224,8 @@ static size_t _GBACoreListRegisters(const struct mCore* core, const struct mCore
 }
 
 static bool _GBACoreReadRegister(const struct mCore* core, const char* name, int32_t* out) {
+	char* parseEnd;
+	unsigned long regId;
 	struct ARMCore* cpu = core->cpu;
 	switch (name[0]) {
 	case 'r':
@@ -1253,9 +1273,8 @@ static bool _GBACoreReadRegister(const struct mCore* core, const char* name, int
 		return false;
 	}
 
-	char* parseEnd;
 	errno = 0;
-	unsigned long regId = strtoul(name, &parseEnd, 10);
+	regId = strtoul(name, &parseEnd, 10);
 	if (errno || regId > 15 || *parseEnd) {
 		return false;
 	}
@@ -1264,6 +1283,8 @@ static bool _GBACoreReadRegister(const struct mCore* core, const char* name, int
 }
 
 static bool _GBACoreWriteRegister(struct mCore* core, const char* name, int32_t in) {
+	char* parseEnd;
+	unsigned long regId;
 	struct ARMCore* cpu = core->cpu;
 	switch (name[0]) {
 	case 'r':
@@ -1324,9 +1345,8 @@ static bool _GBACoreWriteRegister(struct mCore* core, const char* name, int32_t 
 		return false;
 	}
 
-	char* parseEnd;
 	errno = 0;
-	unsigned long regId = strtoul(name, &parseEnd, 10);
+	regId = strtoul(name, &parseEnd, 10);
 	if (errno || regId > 15 || *parseEnd) {
 		return false;
 	}
@@ -1467,6 +1487,8 @@ static struct mCheatDevice* _GBACoreCheatDevice(struct mCore* core) {
 }
 
 static size_t _GBACoreSavedataClone(struct mCore* core, void** sram) {
+	struct VFile* vf;
+	bool success;
 	struct GBA* gba = core->board;
 	size_t size = GBASavedataSize(&gba->memory.savedata);
 	if (!size) {
@@ -1474,13 +1496,13 @@ static size_t _GBACoreSavedataClone(struct mCore* core, void** sram) {
 		return 0;
 	}
 	*sram = malloc(size);
-	struct VFile* vf = VFileFromMemory(*sram, size);
+	vf = VFileFromMemory(*sram, size);
 	if (!vf) {
 		free(*sram);
 		*sram = NULL;
 		return 0;
 	}
-	bool success = GBASavedataClone(&gba->memory.savedata, vf);
+	success = GBASavedataClone(&gba->memory.savedata, vf);
 	vf->close(vf);
 	if (!success) {
 		free(*sram);
@@ -1491,12 +1513,13 @@ static size_t _GBACoreSavedataClone(struct mCore* core, void** sram) {
 }
 
 static bool _GBACoreSavedataRestore(struct mCore* core, const void* sram, size_t size, bool writeback) {
+	struct GBA* gba;
+	bool success = true;
 	struct VFile* vf = VFileMemChunk(sram, size);
 	if (!vf) {
 		return false;
 	}
-	struct GBA* gba = core->board;
-	bool success = true;
+	gba = core->board;
 	if (writeback) {
 		success = GBASavedataLoad(&gba->memory.savedata, vf);
 		vf->close(vf);

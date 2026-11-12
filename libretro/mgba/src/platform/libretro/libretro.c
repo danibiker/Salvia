@@ -750,6 +750,7 @@ static void videoPostProcessMix(unsigned width, unsigned height) {
 
 	for (y = 0; y < height; y++) {
 		for (x = 0; x < width; x++) {
+			mColor rgbMix;
 
 			/* Get colours from current + previous frames */
 			mColor rgbCurr = *(srcCurr + x);
@@ -761,7 +762,7 @@ static void videoPostProcessMix(unsigned width, unsigned height) {
 			/* Mix colours
 			 * > "Mixing Packed RGB Pixels Efficiently"
 			 *   http://blargg.8bitalley.com/info/rgb_mixing.html */
-			mColor rgbMix  = (rgbCurr + rgbPrev + ((rgbCurr ^ rgbPrev) & 0x821)) >> 1;
+			rgbMix = (rgbCurr + rgbPrev + ((rgbCurr ^ rgbPrev) & 0x821)) >> 1;
 
 			/* Assign colours for current frame */
 			*(dst + x)      = colorCorrectionEnabled ?
@@ -840,6 +841,24 @@ static void videoPostProcessLcdGhost(unsigned width, unsigned height) {
 
 	for (y = 0; y < height; y++) {
 		for (x = 0; x < width; x++) {
+			float rCurr;
+			float gCurr;
+			float bCurr;
+			float rPrev1;
+			float gPrev1;
+			float bPrev1;
+			float rPrev2;
+			float gPrev2;
+			float bPrev2;
+			float rPrev3;
+			float gPrev3;
+			float bPrev3;
+			float rPrev4;
+			float gPrev4;
+			float bPrev4;
+			mColor rMix;
+			mColor gMix;
+			mColor bMix;
 
 			/* Get colours from current + previous frames */
 			mColor rgbCurr  = *(srcCurr + x);
@@ -855,25 +874,25 @@ static void videoPostProcessLcdGhost(unsigned width, unsigned height) {
 			*(srcPrev4 + x) = rgbPrev3;
 
 			/* Unpack colours and convert to float */
-			float rCurr = (float)(rgbCurr >> 11 & 0x1F);
-			float gCurr = (float)(rgbCurr >>  6 & 0x1F);
-			float bCurr = (float)(rgbCurr       & 0x1F);
+			rCurr = (float)(rgbCurr >> 11 & 0x1F);
+			gCurr = (float)(rgbCurr >>  6 & 0x1F);
+			bCurr = (float)(rgbCurr       & 0x1F);
 
-			float rPrev1 = (float)(rgbPrev1 >> 11 & 0x1F);
-			float gPrev1 = (float)(rgbPrev1 >>  6 & 0x1F);
-			float bPrev1 = (float)(rgbPrev1       & 0x1F);
+			rPrev1 = (float)(rgbPrev1 >> 11 & 0x1F);
+			gPrev1 = (float)(rgbPrev1 >>  6 & 0x1F);
+			bPrev1 = (float)(rgbPrev1       & 0x1F);
 
-			float rPrev2 = (float)(rgbPrev2 >> 11 & 0x1F);
-			float gPrev2 = (float)(rgbPrev2 >>  6 & 0x1F);
-			float bPrev2 = (float)(rgbPrev2       & 0x1F);
+			rPrev2 = (float)(rgbPrev2 >> 11 & 0x1F);
+			gPrev2 = (float)(rgbPrev2 >>  6 & 0x1F);
+			bPrev2 = (float)(rgbPrev2       & 0x1F);
 
-			float rPrev3 = (float)(rgbPrev3 >> 11 & 0x1F);
-			float gPrev3 = (float)(rgbPrev3 >>  6 & 0x1F);
-			float bPrev3 = (float)(rgbPrev3       & 0x1F);
+			rPrev3 = (float)(rgbPrev3 >> 11 & 0x1F);
+			gPrev3 = (float)(rgbPrev3 >>  6 & 0x1F);
+			bPrev3 = (float)(rgbPrev3       & 0x1F);
 
-			float rPrev4 = (float)(rgbPrev4 >> 11 & 0x1F);
-			float gPrev4 = (float)(rgbPrev4 >>  6 & 0x1F);
-			float bPrev4 = (float)(rgbPrev4       & 0x1F);
+			rPrev4 = (float)(rgbPrev4 >> 11 & 0x1F);
+			gPrev4 = (float)(rgbPrev4 >>  6 & 0x1F);
+			bPrev4 = (float)(rgbPrev4       & 0x1F);
 
 			/* Mix colours for current frame and convert back to mColor
 			 * > Response time effect implemented via an exponential
@@ -884,19 +903,19 @@ static void videoPostProcessLcdGhost(unsigned width, unsigned height) {
 			rCurr += (rPrev2 - rCurr) * *(response + 1);
 			rCurr += (rPrev3 - rCurr) * *(response + 2);
 			rCurr += (rPrev4 - rCurr) * *(response + 3);
-			mColor rMix = (mColor)(rCurr + 0.5f) & 0x1F;
+			rMix = (mColor)(rCurr + 0.5f) & 0x1F;
 
 			gCurr += (gPrev1 - gCurr) * *response;
 			gCurr += (gPrev2 - gCurr) * *(response + 1);
 			gCurr += (gPrev3 - gCurr) * *(response + 2);
 			gCurr += (gPrev4 - gCurr) * *(response + 3);
-			mColor gMix = (mColor)(gCurr + 0.5f) & 0x1F;
+			gMix = (mColor)(gCurr + 0.5f) & 0x1F;
 
 			bCurr += (bPrev1 - bCurr) * *response;
 			bCurr += (bPrev2 - bCurr) * *(response + 1);
 			bCurr += (bPrev3 - bCurr) * *(response + 2);
 			bCurr += (bPrev4 - bCurr) * *(response + 3);
-			mColor bMix = (mColor)(bCurr + 0.5f) & 0x1F;
+			bMix = (mColor)(bCurr + 0.5f) & 0x1F;
 
 			/* Repack colours for current frame */
 			*(dst + x) = colorCorrectionEnabled ?
@@ -923,6 +942,7 @@ static void videoPostProcessLcdGhostFast(unsigned width, unsigned height) {
 
 	for (y = 0; y < height; y++) {
 		for (x = 0; x < width; x++) {
+			mColor rgbMix;
 
 			/* Get colours from current + previous frames */
 			mColor rgbCurr = *(srcCurr + x);
@@ -946,7 +966,7 @@ static void videoPostProcessLcdGhostFast(unsigned width, unsigned height) {
 			*(srcPrevB + x) = bMix;
 
 			/* Convert and repack current frame colours */
-			mColor rgbMix =   ((mColor)(rMix + 0.5f) & 0x1F) << 11
+			rgbMix = ((mColor)(rMix + 0.5f) & 0x1F) << 11
 								  | ((mColor)(gMix + 0.5f) & 0x1F) << 6
 								  | ((mColor)(bMix + 0.5f) & 0x1F);
 
@@ -1087,11 +1107,11 @@ static void _deinitPostProcessing(void) {
 #endif
 
 static void _initSensors(void) {
+	struct retro_sensor_interface sensorInterface;
 	if (sensorsInitDone) {
 		return;
 	}
 
-	struct retro_sensor_interface sensorInterface;
 	if (environCallback(RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE, &sensorInterface)) {
 		sensorGetCallback = sensorInterface.get_sensor_input;
 		sensorStateCallback = sensorInterface.set_sensor_state;
@@ -1115,11 +1135,11 @@ static void _initSensors(void) {
 }
 
 static void _initRumble(void) {
+	struct retro_rumble_interface rumbleInterface;
 	if (rumbleInitDone) {
 		return;
 	}
 
-	struct retro_rumble_interface rumbleInterface;
 	if (environCallback(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumbleInterface)) {
 		rumbleCallback = rumbleInterface.set_rumble_state;
 	}
@@ -1161,8 +1181,32 @@ static void _updateGbPal(void) {
 
 static void _reloadSettings(void) {
 	struct mCoreOptions opts = {
-		.useBios = true,
-		.volume = 0x100,
+		0,
+		0,
+		/* .useBios */ true,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		/* .volume */ 0x100,
 	};
 
 	struct retro_variable var;
@@ -1283,26 +1327,28 @@ unsigned retro_api_version(void) {
 }
 
 void retro_set_environment(retro_environment_t env) {
+	bool categoriesSupported;
 	environCallback = env;
 	libretroVFSInit(env);
 
 #ifdef M_CORE_GB
-	const struct GBColorPreset* presets;
-	size_t listSize = GBColorPresetList(&presets);
+	{
+		const struct GBColorPreset* presets;
+		size_t listSize = GBColorPresetList(&presets);
+		size_t colorOpt;
+		size_t i;
 
-	size_t colorOpt;
-	for (colorOpt = 0; option_defs_us[colorOpt].key; ++colorOpt) {
-		if (strcmp(option_defs_us[colorOpt].key, "mgba_gb_colors") == 0) {
-			break;
+		for (colorOpt = 0; option_defs_us[colorOpt].key; ++colorOpt) {
+			if (strcmp(option_defs_us[colorOpt].key, "mgba_gb_colors") == 0) {
+				break;
+			}
 		}
-	}
-	size_t i;
-	for (i = 0; i < listSize && i < RETRO_NUM_CORE_OPTION_VALUES_MAX; ++i) {
-		option_defs_us[colorOpt].values[i].value = presets[i].name;
+		for (i = 0; i < listSize && i < RETRO_NUM_CORE_OPTION_VALUES_MAX; ++i) {
+			option_defs_us[colorOpt].values[i].value = presets[i].name;
+		}
 	}
 #endif
 
-	bool categoriesSupported;
 	libretro_set_core_options(environCallback, &categoriesSupported);
 }
 
@@ -1367,20 +1413,6 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
 }
 
 void retro_init(void) {
-	enum retro_pixel_format fmt;
-#ifdef COLOR_16_BIT
-#if defined(COLOR_5_6_5) || defined(PS2)
-	fmt = RETRO_PIXEL_FORMAT_RGB565;
-#else
-#warning This pixel format is unsupported. Please use -DCOLOR_16-BIT -DCOLOR_5_6_5
-	fmt = RETRO_PIXEL_FORMAT_0RGB1555;
-#endif
-#else
-#warning This pixel format is unsupported. Please use -DCOLOR_16-BIT -DCOLOR_5_6_5
-	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-#endif
-	environCallback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
-
 	struct retro_input_descriptor inputDescriptors[] = {
 		{ 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "A" },
 		{ 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B, "B" },
@@ -1400,6 +1432,21 @@ void retro_init(void) {
 		{ 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3, "Darken Solar Sensor" },
 		{ 0 }
 	};
+	struct retro_log_callback log;
+	enum retro_pixel_format fmt;
+#ifdef COLOR_16_BIT
+#if defined(COLOR_5_6_5) || defined(PS2)
+	fmt = RETRO_PIXEL_FORMAT_RGB565;
+#else
+#warning This pixel format is unsupported. Please use -DCOLOR_16-BIT -DCOLOR_5_6_5
+	fmt = RETRO_PIXEL_FORMAT_0RGB1555;
+#endif
+#else
+#warning This pixel format is unsupported. Please use -DCOLOR_16-BIT -DCOLOR_5_6_5
+	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+#endif
+	environCallback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
+
 	environCallback(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, &inputDescriptors);
 
 	useBitmasks = environCallback(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
@@ -1435,7 +1482,6 @@ void retro_init(void) {
 		sensorsInitDone = false;
 	}
 
-	struct retro_log_callback log;
 	if (environCallback(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log)) {
 		logCallback = log.log;
 	} else {
@@ -1535,22 +1581,24 @@ int16_t cycleturbo(bool a, bool b, bool l, bool r) {
 }
 
 void retro_run(void) {
+	uint16_t keys;
+	bool skipFrame = false;
+	bool updated = false;
+	unsigned i;
+	unsigned width, height;
 	if (deferredSetup) {
 		_doDeferredSetup();
 	}
-	uint16_t keys;
-	bool skipFrame = false;
 
 	inputPollCallback();
 
-	bool updated = false;
 	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
+		struct retro_variable var = {
+			/* .key */ "mgba_allow_opposing_directions",
+			/* .value */ 0,
+		};
 		envVarsUpdated = true;
 
-		struct retro_variable var = {
-			.key = "mgba_allow_opposing_directions",
-			.value = 0
-		};
 		if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
 			mCoreConfigSetIntValue(&core->config, "allowOpposingDirections", strcmp(var.value, "yes") == 0);
 			core->reloadConfigOption(core, "allowOpposingDirections", NULL);
@@ -1568,7 +1616,6 @@ void retro_run(void) {
 	}
 
 	keys = 0;
-	unsigned i;
 	if (useBitmasks) {
 		int16_t joypadMask = inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
 		for (i = 0; i < sizeof(keymap) / sizeof(*keymap); ++i) {
@@ -1576,7 +1623,7 @@ void retro_run(void) {
 		}
 		// XXX: turbo keys, should be moved to frontend
 #define JOYPAD_BIT(BUTTON) (1 << RETRO_DEVICE_ID_JOYPAD_ ## BUTTON)
-		keys |= cycleturbo(joypadMask & JOYPAD_BIT(X), joypadMask & JOYPAD_BIT(Y), joypadMask & JOYPAD_BIT(L2), joypadMask & JOYPAD_BIT(R2));
+		keys |= cycleturbo(!!(joypadMask & JOYPAD_BIT(X)), !!(joypadMask & JOYPAD_BIT(Y)), !!(joypadMask & JOYPAD_BIT(L2)), !!(joypadMask & JOYPAD_BIT(R2)));
 #undef JOYPAD_BIT
 	} else {
 		for (i = 0; i < sizeof(keymap) / sizeof(*keymap); ++i) {
@@ -1584,10 +1631,10 @@ void retro_run(void) {
 		}
 		// XXX: turbo keys, should be moved to frontend
 		keys |= cycleturbo(
-			inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X),
-			inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y),
-			inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2),
-			inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2)
+			!!(inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X)),
+			!!(inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y)),
+			!!(inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2)),
+			!!(inputCallback(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2))
 		);
 	}
 	core->setKeys(core, keys);
@@ -1670,7 +1717,6 @@ void retro_run(void) {
    }
 
 	core->runFrame(core);
-	unsigned width, height;
 	core->currentVideoSize(core, &width, &height);
 
 	/* If using 'Fixed Interval' frameskipping, check
@@ -1721,11 +1767,12 @@ void retro_run(void) {
 			audioConverterReset(&audioConverter, coreSampleRate);
 		}
 		while (true) {
+			size_t produced;
 			size_t read = mAudioBufferRead(coreBuffer, coreSamples, GBA_AUDIO_CHUNK_FRAMES);
 			if (!read) {
 				break;
 			}
-			size_t produced = audioConverterProcess(&audioConverter, coreSamples, read, audioSampleBuffer);
+			produced = audioConverterProcess(&audioConverter, coreSamples, read, audioSampleBuffer);
 			if (produced > 0) {
 				if (audioLowPassEnabled) {
 					_audioLowPassFilter(audioSampleBuffer, produced);
@@ -1740,13 +1787,15 @@ void retro_run(void) {
 static void _setupMaps(struct mCore* core) {
 #ifdef M_CORE_GBA
 	if (core->platform(core) == mPLATFORM_GBA) {
+		size_t savedataSize;
+		bool yes = true;
 		struct GBA* gba = core->board;
 		struct retro_memory_descriptor descs[11];
 		struct retro_memory_map mmaps;
 		size_t romSize = gba->memory.romSize + (gba->memory.romSize & 1);
 
 		memset(descs, 0, sizeof(descs));
-		size_t savedataSize = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+		savedataSize = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 
 		/* Map internal working RAM */
 		descs[0].ptr    = gba->memory.iwram;
@@ -1816,21 +1865,22 @@ static void _setupMaps(struct mCore* core) {
 		mmaps.descriptors = descs;
 		mmaps.num_descriptors = sizeof(descs) / sizeof(descs[0]);
 
-		bool yes = true;
 		environCallback(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mmaps);
 		environCallback(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &yes);
 	}
 #endif
 #ifdef M_CORE_GB
 	if (core->platform(core) == mPLATFORM_GB) {
+		size_t savedataSize;
+		unsigned i = 0;
+		bool yes = true;
 		struct GB* gb = core->board;
 		struct retro_memory_descriptor descs[12];
 		struct retro_memory_map mmaps;
 
 		memset(descs, 0, sizeof(descs));
-		size_t savedataSize = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+		savedataSize = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 
-		unsigned i = 0;
 
 		/* Map ROM */
 		descs[i].ptr    = gb->memory.rom;
@@ -1923,7 +1973,6 @@ static void _setupMaps(struct mCore* core) {
 		mmaps.descriptors = descs;
 		mmaps.num_descriptors = i;
 
-		bool yes = true;
 		environCallback(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mmaps);
 		environCallback(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &yes);
 	}
@@ -1972,6 +2021,9 @@ error:
 #endif
 
 bool retro_load_game(const struct retro_game_info* game) {
+	char* sysDir = 0;
+	const char* biosName = 0;
+	char biosPath[PATH_MAX];
 	struct VFile* rom;
 
 	if (!game) {
@@ -2057,9 +2109,6 @@ bool retro_load_game(const struct retro_game_info* game) {
 	core->loadROM(core, rom);
 	deferredSetup = true;
 
-	const char* sysDir = 0;
-	const char* biosName = 0;
-	char biosPath[PATH_MAX];
 	environCallback(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &sysDir);
 
 #ifdef M_CORE_GBA
@@ -2072,6 +2121,8 @@ bool retro_load_game(const struct retro_game_info* game) {
 
 #ifdef M_CORE_GB
 	if (core->platform(core) == mPLATFORM_GB) {
+		const char* modelName;
+		struct GB* gb = core->board;
 		memset(&cam, 0, sizeof(cam));
 		cam.height = GBCAM_HEIGHT;
 		cam.width = GBCAM_WIDTH;
@@ -2081,8 +2132,7 @@ bool retro_load_game(const struct retro_game_info* game) {
 			core->setPeripheral(core, mPERIPH_IMAGE_SOURCE, &imageSource);
 		}
 
-		const char* modelName = mCoreConfigGetValue(&core->config, "gb.model");
-		struct GB* gb = core->board;
+		modelName = mCoreConfigGetValue(&core->config, "gb.model");
 
 		if (modelName) {
 			gb->model = GBNameToModel(modelName);
@@ -2109,8 +2159,9 @@ bool retro_load_game(const struct retro_game_info* game) {
 
 #ifdef ENABLE_VFS
 	if (core->opts.useBios && sysDir && biosName) {
+		struct VFile* bios;
 		snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
-		struct VFile* bios = VFileOpen(biosPath, O_RDONLY);
+		bios = VFileOpen(biosPath, O_RDONLY);
 		if (bios) {
 			core->loadBIOS(core, bios, 0);
 		}
@@ -2133,21 +2184,24 @@ void retro_unload_game(void) {
 }
 
 size_t retro_serialize_size(void) {
+	struct VFile* vfm;
+	size_t size;
 	if (deferredSetup) {
 		_doDeferredSetup();
 	}
-	struct VFile* vfm = VFileMemChunk(NULL, 0);
+	vfm = VFileMemChunk(NULL, 0);
 	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
-	size_t size = vfm->size(vfm);
+	size = vfm->size(vfm);
 	vfm->close(vfm);
 	return size;
 }
 
 bool retro_serialize(void* data, size_t size) {
+	struct VFile* vfm;
 	if (deferredSetup) {
 		_doDeferredSetup();
 	}
-	struct VFile* vfm = VFileMemChunk(NULL, 0);
+	vfm = VFileMemChunk(NULL, 0);
 	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
 	if ((ssize_t) size > vfm->size(vfm)) {
 		size = vfm->size(vfm);
@@ -2162,11 +2216,13 @@ bool retro_serialize(void* data, size_t size) {
 }
 
 bool retro_unserialize(const void* data, size_t size) {
+	struct VFile* vfm;
+	bool success;
 	if (deferredSetup) {
 		_doDeferredSetup();
 	}
-	struct VFile* vfm = VFileFromConstMemory(data, size);
-	bool success = mCoreLoadStateNamed(core, vfm, SAVESTATE_RTC);
+	vfm = VFileFromConstMemory(data, size);
+	success = mCoreLoadStateNamed(core, vfm, SAVESTATE_RTC);
 	vfm->close(vfm);
 	return success;
 }
@@ -2176,10 +2232,11 @@ void retro_cheat_reset(void) {
 }
 
 void retro_cheat_set(unsigned index, bool enabled, const char* code) {
+	struct mCheatDevice* device;
+	struct mCheatSet* cheatSet = NULL;
 	UNUSED(index);
 	UNUSED(enabled);
-	struct mCheatDevice* device = core->cheatDevice(core);
-	struct mCheatSet* cheatSet = NULL;
+	device = core->cheatDevice(core);
 	if (mCheatSetsSize(&device->cheats)) {
 		cheatSet = *mCheatSetsGetPointer(&device->cheats, 0);
 	} else {
@@ -2349,15 +2406,15 @@ size_t retro_get_memory_size(unsigned id) {
 }
 
 void GBARetroLog(struct mLogger* logger, int category, enum mLogLevel level, const char* format, va_list args) {
+	char message[128];
+	enum retro_log_level retroLevel = RETRO_LOG_INFO;
 	UNUSED(logger);
 	if (!logCallback) {
 		return;
 	}
 
-	char message[128];
 	vsnprintf(message, sizeof(message), format, args);
 
-	enum retro_log_level retroLevel = RETRO_LOG_INFO;
 	switch (level) {
 	case mLOG_ERROR:
 	case mLOG_FATAL:
@@ -2381,13 +2438,15 @@ void GBARetroLog(struct mLogger* logger, int category, enum mLogLevel level, con
 #endif
 	}
 #ifdef NDEBUG
-	static int biosCat = -1;
-	if (biosCat < 0) {
-		biosCat = mLogCategoryById("gba.bios");
-	}
+	{
+		static int biosCat = -1;
+		if (biosCat < 0) {
+			biosCat = mLogCategoryById("gba.bios");
+		}
 
-	if (category == biosCat) {
-		return;
+		if (category == biosCat) {
+			return;
+		}
 	}
 #endif
 	logCallback(retroLevel, "%s: %s\n", mLogCategoryName(category), message);
@@ -2395,8 +2454,9 @@ void GBARetroLog(struct mLogger* logger, int category, enum mLogLevel level, con
 
 /* Used only for GB/GBC content */
 static void _postAudioBuffer(struct mAVStream* stream, struct mAudioBuffer* buffer) {
+	int produced;
 	UNUSED(stream);
-	int produced = mAudioBufferRead(buffer, audioSampleBuffer, GB_SAMPLES);
+	produced = mAudioBufferRead(buffer, audioSampleBuffer, GB_SAMPLES);
 	if (produced > 0) {
 		if (audioLowPassEnabled) {
 			_audioLowPassFilter(audioSampleBuffer, produced);
@@ -2434,12 +2494,12 @@ static void _setRumble(struct mRumbleIntegrator* rumble, float level) {
 }
 
 static void _updateLux(struct GBALuminanceSource* lux) {
-	UNUSED(lux);
 	struct retro_variable var = {
-		.key = "mgba_solar_sensor_level",
-		.value = 0
+		/* .key */ "mgba_solar_sensor_level",
+		/* .value */ 0,
 	};
 	bool luxVarUpdated = envVarsUpdated;
+	UNUSED(lux);
 
 	if (luxVarUpdated && (!environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value)) {
 		luxVarUpdated = false;
@@ -2450,8 +2510,9 @@ static void _updateLux(struct GBALuminanceSource* lux) {
 	}
 
 	if (luxSensorUsed) {
+		float fLux;
 		_initSensors();
-		float fLux = luxSensorEnabled ? sensorGetCallback(0, RETRO_SENSOR_ILLUMINANCE) : 0.0f;
+		fLux = luxSensorEnabled ? sensorGetCallback(0, RETRO_SENSOR_ILLUMINANCE) : 0.0f;
 		luxLevel = cbrtf(fLux) * 8;
 	} else {
 		if (luxVarUpdated) {
@@ -2484,13 +2545,16 @@ static uint8_t _readLux(struct GBALuminanceSource* lux) {
 }
 
 static void _updateCamera(const uint32_t* buffer, unsigned width, unsigned height, size_t pitch) {
+	size_t i;
 	if (!camData || width > camWidth || height > camHeight) {
+		unsigned bufPitch;
+		unsigned bufHeight;
 		if (camData) {
 			free(camData);
 			camData = NULL;
 		}
-		unsigned bufPitch = pitch / sizeof(*buffer);
-		unsigned bufHeight = height;
+		bufPitch = pitch / sizeof(*buffer);
+		bufHeight = height;
 		if (imcapWidth > bufPitch) {
 			bufPitch = imcapWidth;
 		}
@@ -2503,7 +2567,6 @@ static void _updateCamera(const uint32_t* buffer, unsigned width, unsigned heigh
 		camHeight = bufHeight;
 		camStride = bufPitch;
 	}
-	size_t i;
 	for (i = 0; i < height; ++i) {
 		memcpy(&camData[camStride * i], &buffer[pitch * i / sizeof(*buffer)], pitch);
 	}
@@ -2528,13 +2591,13 @@ static void _stopImage(struct mImageSource* image) {
 }
 
 static void _requestImage(struct mImageSource* image, const void** buffer, size_t* stride, enum mColorFormat* colorFormat) {
+	size_t offset = 0;
 	UNUSED(image);
 	if (!camData) {
 		cam.start();
 		*buffer = NULL;
 		return;
 	}
-	size_t offset = 0;
 	if (imcapWidth < camWidth) {
 		offset += (camWidth - imcapWidth) / 2;
 	}

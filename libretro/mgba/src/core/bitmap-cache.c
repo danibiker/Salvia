@@ -34,11 +34,12 @@ static void _freeCache(struct mBitmapCache* cache) {
 }
 
 static void _redoCacheSize(struct mBitmapCache* cache) {
+	size_t size;
 	if (!mBitmapCacheConfigurationIsShouldStore(cache->config)) {
 		return;
 	}
 
-	size_t size = mBitmapCacheSystemInfoGetHeight(cache->sysConfig) * mBitmapCacheSystemInfoGetBuffers(cache->sysConfig);
+	size = mBitmapCacheSystemInfoGetHeight(cache->sysConfig) * mBitmapCacheSystemInfoGetBuffers(cache->sysConfig);
 	cache->cache = anonymousMemoryMap(mBitmapCacheSystemInfoGetWidth(cache->sysConfig) * size * sizeof(mColor));
 	cache->status = anonymousMemoryMap(size * sizeof(*cache->status));
 	if (mBitmapCacheSystemInfoIsUsesPalette(cache->sysConfig)) {
@@ -58,6 +59,9 @@ void mBitmapCacheConfigure(struct mBitmapCache* cache, mBitmapCacheConfiguration
 }
 
 void mBitmapCacheConfigureSystem(struct mBitmapCache* cache, mBitmapCacheSystemInfo config) {
+	size_t stride;
+	size_t size;
+	size_t bpe;
 	if (config == cache->sysConfig) {
 		return;
 	}
@@ -65,9 +69,9 @@ void mBitmapCacheConfigureSystem(struct mBitmapCache* cache, mBitmapCacheSystemI
 	cache->sysConfig = config;
 	_redoCacheSize(cache);
 
-	size_t stride = mBitmapCacheSystemInfoGetWidth(cache->sysConfig);
-	size_t size = stride * mBitmapCacheSystemInfoGetHeight(cache->sysConfig);
-	size_t bpe = mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig);
+	stride = mBitmapCacheSystemInfoGetWidth(cache->sysConfig);
+	size = stride * mBitmapCacheSystemInfoGetHeight(cache->sysConfig);
+	bpe = mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig);
 	if (bpe > 3) {
 		size <<= bpe - 3;
 		stride <<= bpe - 3;
@@ -86,10 +90,11 @@ void mBitmapCacheDeinit(struct mBitmapCache* cache) {
 void mBitmapCacheWriteVRAM(struct mBitmapCache* cache, uint32_t address) {
 	size_t i;
 	for (i = 0; i < mBitmapCacheSystemInfoGetBuffers(cache->sysConfig); ++i) {
+		uint32_t offset;
 		if (address < cache->bitsStart[i]) {
 			continue;
 		}
-		uint32_t offset = address - cache->bitsStart[i];
+		offset = address - cache->bitsStart[i];
 		if (offset >= cache->bitsSize) {
 			continue;
 		}
@@ -102,10 +107,11 @@ void mBitmapCacheWriteVRAM(struct mBitmapCache* cache, uint32_t address) {
 }
 
 void mBitmapCacheWritePalette(struct mBitmapCache* cache, uint32_t entry, mColor color) {
+	size_t maxEntry;
 	if (!mBitmapCacheSystemInfoIsUsesPalette(cache->sysConfig)) {
 		return;
 	}
-	size_t maxEntry = 1 << (1 << mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig));
+	maxEntry = 1 << (1 << mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig));
 	if (entry >= maxEntry) {
 		return;
 	}
@@ -122,13 +128,18 @@ uint32_t _lookupEntry15(void* vram, uint32_t offset) {
 }
 
 void mBitmapCacheCleanRow(struct mBitmapCache* cache, struct mBitmapCacheEntry* entry, unsigned y) {
+	size_t offset;
+	void* vram;
+	int bpe;
+	uint32_t (*lookupEntry)(void*, uint32_t);
+	size_t x;
 	mColor* row = &cache->cache[(cache->buffer * mBitmapCacheSystemInfoGetHeight(cache->sysConfig) + y) * mBitmapCacheSystemInfoGetWidth(cache->sysConfig)];
 	size_t location = cache->buffer + mBitmapCacheSystemInfoGetBuffers(cache->sysConfig) * y;
 	struct mBitmapCacheEntry* status = &cache->status[location];
 	struct mBitmapCacheEntry desiredStatus = {
-		.paletteVersion = cache->globalPaletteVersion,
-		.vramVersion = entry->vramVersion,
-		.vramClean = 1
+		/* .paletteVersion */ cache->globalPaletteVersion,
+		/* .vramVersion */ entry->vramVersion,
+		/* .vramClean */ 1,
 	};
 
 	if (entry) {
@@ -139,10 +150,8 @@ void mBitmapCacheCleanRow(struct mBitmapCache* cache, struct mBitmapCacheEntry* 
 		return;
 	}
 
-	size_t offset = y * mBitmapCacheSystemInfoGetWidth(cache->sysConfig);
-	void* vram;
-	int bpe = mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig);
-	uint32_t (*lookupEntry)(void*, uint32_t);
+	offset = y * mBitmapCacheSystemInfoGetWidth(cache->sysConfig);
+	bpe = mBitmapCacheSystemInfoGetEntryBPP(cache->sysConfig);
 	switch (bpe) {
 	case 3:
 		lookupEntry = _lookupEntry8;
@@ -157,7 +166,6 @@ void mBitmapCacheCleanRow(struct mBitmapCache* cache, struct mBitmapCacheEntry* 
 		break;
 	}
 
-	size_t x;
 	if (mBitmapCacheSystemInfoIsUsesPalette(cache->sysConfig)) {
 		for (x = 0; x < mBitmapCacheSystemInfoGetWidth(cache->sysConfig); ++x) {
 			row[x] = cache->palette[lookupEntry(vram, x)];
@@ -173,9 +181,9 @@ void mBitmapCacheCleanRow(struct mBitmapCache* cache, struct mBitmapCacheEntry* 
 bool mBitmapCacheCheckRow(struct mBitmapCache* cache, const struct mBitmapCacheEntry* entry, unsigned y) {
 	size_t location = cache->buffer + mBitmapCacheSystemInfoGetBuffers(cache->sysConfig) * y;
 	struct mBitmapCacheEntry desiredStatus = {
-		.paletteVersion = cache->globalPaletteVersion,
-		.vramVersion = entry->vramVersion,
-		.vramClean = 1
+		/* .paletteVersion */ cache->globalPaletteVersion,
+		/* .vramVersion */ entry->vramVersion,
+		/* .vramClean */ 1,
 	};
 
 	return memcmp(&entry[location], &desiredStatus, sizeof(*entry)) == 0;

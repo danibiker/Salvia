@@ -25,6 +25,8 @@ struct GBABundledState {
 };
 
 void GBASerialize(struct GBA* gba, struct GBASerializedState* state) {
+	int i;
+	GBASerializedMiscFlags miscFlags = 0;
 	STORE_32(GBASavestateMagic + GBASavestateVersion, 0, &state->versionMagic);
 	STORE_32(gba->biosChecksum, 0, &state->biosChecksum);
 	STORE_32(gba->romCrc32, 0, &state->romCrc32);
@@ -48,7 +50,6 @@ void GBASerialize(struct GBA* gba, struct GBASerializedState* state) {
 		memset(state->title, 0, sizeof(state->title));
 	}
 
-	int i;
 	for (i = 0; i < 16; ++i) {
 		STORE_32(gba->cpu->gprs[i], i * sizeof(state->cpu.gprs[0]), state->cpu.gprs);
 	}
@@ -69,7 +70,6 @@ void GBASerialize(struct GBA* gba, struct GBASerializedState* state) {
 	STORE_32(gba->cpu->prefetch[1], 4, state->cpuPrefetch);
 	STORE_32(gba->memory.lastPrefetchedPc, 0, &state->lastPrefetchedPc);
 
-	GBASerializedMiscFlags miscFlags = 0;
 	miscFlags = GBASerializedMiscFlagsSetHalted(miscFlags, gba->cpu->halted);
 	miscFlags = GBASerializedMiscFlagsSetPOSTFLG(miscFlags, gba->memory.io[GBA_REG(POSTFLG)] & 1);
 	if (mTimingIsScheduled(&gba->timing, &gba->irqEvent)) {
@@ -94,6 +94,9 @@ void GBASerialize(struct GBA* gba, struct GBASerializedState* state) {
 }
 
 bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
+	int region;
+	size_t i;
+	GBASerializedMiscFlags miscFlags = 0;
 	bool error = false;
 	int32_t check;
 	uint32_t ucheck;
@@ -109,8 +112,8 @@ bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
 	}
 	LOAD_32(ucheck, 0, &state->biosChecksum);
 	if (ucheck != gba->biosChecksum) {
-		mLOG(GBA_STATE, WARN, "Savestate created using a different version of the BIOS: expected %08X, got %08X", gba->biosChecksum, ucheck);
 		uint32_t pc;
+		mLOG(GBA_STATE, WARN, "Savestate created using a different version of the BIOS: expected %08X, got %08X", gba->biosChecksum, ucheck);
 		LOAD_32(pc, ARM_PC * sizeof(state->cpu.gprs[0]), state->cpu.gprs);
 		if ((ucheck == GBA_BIOS_CHECKSUM || gba->biosChecksum == GBA_BIOS_CHECKSUM) && pc < GBA_SIZE_BIOS && pc >= 0x20) {
 			error = true;
@@ -150,7 +153,7 @@ bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
 		error = true;
 	}
 	LOAD_32(check, ARM_PC * sizeof(state->cpu.gprs[0]), state->cpu.gprs);
-	int region = (check >> BASE_OFFSET);
+	region = (check >> BASE_OFFSET);
 	if ((region == GBA_REGION_ROM0 || region == GBA_REGION_ROM1 || region == GBA_REGION_ROM2) && ((check - WORD_SIZE_ARM) & GBA_SIZE_ROM0) >= gba->memory.romSize - WORD_SIZE_ARM) {
 		mLOG(GBA_STATE, WARN, "Savestate created using a differently sized version of the ROM");
 		error = true;
@@ -162,7 +165,6 @@ bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
 	LOAD_32(gba->timing.masterCycles, 0, &state->masterCycles);
 	LOAD_64LE(gba->timing.globalCycles, 0, &state->globalCycles);
 
-	size_t i;
 	for (i = 0; i < 16; ++i) {
 		LOAD_32(gba->cpu->gprs[i], i * sizeof(gba->cpu->gprs[0]), state->cpu.gprs);
 	}
@@ -214,7 +216,6 @@ bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
 			LOAD_32(gba->cpu->prefetch[1], (gba->cpu->gprs[ARM_PC]) & gba->cpu->memory.activeMask, gba->cpu->memory.activeRegion);
 		}
 	}
-	GBASerializedMiscFlags miscFlags = 0;
 	LOAD_32(miscFlags, 0, &state->miscFlags);
 	gba->cpu->halted = GBASerializedMiscFlagsGetHalted(miscFlags);
 	gba->memory.io[GBA_REG(POSTFLG)] = GBASerializedMiscFlagsGetPOSTFLG(miscFlags);
@@ -223,7 +224,7 @@ bool GBADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
 		LOAD_32(when, 0, &state->nextIrq);
 		mTimingSchedule(&gba->timing, &gba->irqEvent, when);
 	}
-	gba->cpuBlocked = GBASerializedMiscFlagsGetBlocked(miscFlags);
+	gba->cpuBlocked = !!(GBASerializedMiscFlagsGetBlocked(miscFlags));
 	gba->keysLast = GBASerializedMiscFlagsGetKeyIRQKeys(miscFlags);
 	LOAD_32(gba->biosStall, 0, &state->biosStall);
 

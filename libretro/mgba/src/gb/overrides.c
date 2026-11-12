@@ -775,12 +775,12 @@ bool GBOverrideColorFind(struct GBCartridgeOverride* override, enum GBColorLooku
 }
 
 bool GBOverrideFind(const struct Configuration* config, struct GBCartridgeOverride* override) {
+	bool found = false;
+	int i;
 	override->model = GB_MODEL_AUTODETECT;
 	override->mbc = GB_MBC_AUTODETECT;
 	memset(override->gbColors, 0, sizeof(override->gbColors));
-	bool found = false;
 
-	int i;
 	for (i = 0; _overrides[i].headerCrc32; ++i) {
 		if (override->headerCrc32 == _overrides[i].headerCrc32) {
 			*override = _overrides[i];
@@ -790,24 +790,25 @@ bool GBOverrideFind(const struct Configuration* config, struct GBCartridgeOverri
 	}
 
 	if (config) {
+		const char* model;
+		const char* mbc;
+		const char* pal[12];
 		char sectionName[24] = "";
 		snprintf(sectionName, sizeof(sectionName), "gb.override.%08X", override->headerCrc32);
-		const char* model = ConfigurationGetValue(config, sectionName, "model");
-		const char* mbc = ConfigurationGetValue(config, sectionName, "mbc");
-		const char* pal[12] = {
-			ConfigurationGetValue(config, sectionName, "pal[0]"),
-			ConfigurationGetValue(config, sectionName, "pal[1]"),
-			ConfigurationGetValue(config, sectionName, "pal[2]"),
-			ConfigurationGetValue(config, sectionName, "pal[3]"),
-			ConfigurationGetValue(config, sectionName, "pal[4]"),
-			ConfigurationGetValue(config, sectionName, "pal[5]"),
-			ConfigurationGetValue(config, sectionName, "pal[6]"),
-			ConfigurationGetValue(config, sectionName, "pal[7]"),
-			ConfigurationGetValue(config, sectionName, "pal[8]"),
-			ConfigurationGetValue(config, sectionName, "pal[9]"),
-			ConfigurationGetValue(config, sectionName, "pal[10]"),
-			ConfigurationGetValue(config, sectionName, "pal[11]")
-		};
+		model = ConfigurationGetValue(config, sectionName, "model");
+		mbc = ConfigurationGetValue(config, sectionName, "mbc");
+		pal[0] = ConfigurationGetValue(config, sectionName, "pal[0]");
+		pal[1] = ConfigurationGetValue(config, sectionName, "pal[1]");
+		pal[2] = ConfigurationGetValue(config, sectionName, "pal[2]");
+		pal[3] = ConfigurationGetValue(config, sectionName, "pal[3]");
+		pal[4] = ConfigurationGetValue(config, sectionName, "pal[4]");
+		pal[5] = ConfigurationGetValue(config, sectionName, "pal[5]");
+		pal[6] = ConfigurationGetValue(config, sectionName, "pal[6]");
+		pal[7] = ConfigurationGetValue(config, sectionName, "pal[7]");
+		pal[8] = ConfigurationGetValue(config, sectionName, "pal[8]");
+		pal[9] = ConfigurationGetValue(config, sectionName, "pal[9]");
+		pal[10] = ConfigurationGetValue(config, sectionName, "pal[10]");
+		pal[11] = ConfigurationGetValue(config, sectionName, "pal[11]");
 
 		if (model) {
 			override->model = GBNameToModel(model);
@@ -824,11 +825,12 @@ bool GBOverrideFind(const struct Configuration* config, struct GBCartridgeOverri
 		}
 
 		for (i = 0; i < 12; ++i) {
+			char* end;
+			unsigned long value;
 			if (!pal[i]) {
 				continue;
 			}
-			char* end;
-			unsigned long value = strtoul(pal[i], &end, 10);
+			value = strtoul(pal[i], &end, 10);
 			if (end == &pal[i][1] && *end == 'x') {
 				value = strtoul(pal[i], &end, 16);
 			}
@@ -849,9 +851,10 @@ bool GBOverrideFind(const struct Configuration* config, struct GBCartridgeOverri
 }
 
 void GBOverrideSave(struct Configuration* config, const struct GBCartridgeOverride* override) {
+	const char* model;
 	char sectionName[24] = "";
 	snprintf(sectionName, sizeof(sectionName), "gb.override.%08X", override->headerCrc32);
-	const char* model = GBModelToName(override->model);
+	model = GBModelToName(override->model);
 	ConfigurationSetValue(config, sectionName, "model", model);
 
 	if (override->gbColors[0] & 0xFF000000) {
@@ -904,6 +907,7 @@ size_t GBColorPresetList(const struct GBColorPreset** presets) {
 }
 
 void GBOverrideApply(struct GB* gb, const struct GBCartridgeOverride* override) {
+	int i;
 	if (override->model != GB_MODEL_AUTODETECT) {
 		gb->model = override->model;
 		gb->video.renderer->deinit(gb->video.renderer);
@@ -915,7 +919,6 @@ void GBOverrideApply(struct GB* gb, const struct GBCartridgeOverride* override) 
 		GBMBCInit(gb);
 	}
 
-	int i;
 	for (i = 0; i < 12; ++i) {
 		if (!(override->gbColors[i] & 0xFF000000)) {
 			continue;

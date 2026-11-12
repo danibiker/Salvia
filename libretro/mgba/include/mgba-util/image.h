@@ -330,17 +330,21 @@ ATTRIBUTE_UNUSED static unsigned mColorMix5Bit(int weightA, unsigned colorA, int
 }
 
 ATTRIBUTE_UNUSED static uint32_t mColorMixARGB8(uint32_t colorA, uint32_t colorB) {
+	uint32_t alphaB;
+	uint32_t color = 0;
 	uint32_t alphaA = colorA >> 24;
+#if 1
+	uint32_t a, b;
+	uint32_t alpha;
+#endif
 	if (!alphaA) {
 		return colorB;
 	}
-	uint32_t alphaB = colorB >> 24;
-	uint32_t color = 0;
+	alphaB = colorB >> 24;
 
 #if 1
 	// TODO: Benchmark integer and float versions
-	uint32_t a, b;
-	uint32_t alpha = (alphaA * 0xFF) + alphaB * (0xFF - alphaA);
+	alpha = (alphaA * 0xFF) + alphaB * (0xFF - alphaA);
 
 	a = colorA & 0xFF;
 	a *= alphaA * 0xFF;

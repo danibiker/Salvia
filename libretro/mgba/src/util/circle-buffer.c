@@ -46,13 +46,14 @@ void mCircleBufferClear(struct mCircleBuffer* buffer) {
 }
 
 int mCircleBufferWrite8(struct mCircleBuffer* buffer, int8_t value) {
+	size_t size;
 	int8_t* data = buffer->writePtr;
 	if (buffer->size + sizeof(int8_t) > buffer->capacity) {
 		return 0;
 	}
 	*data = value;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->writePtr = data;
 	} else {
@@ -64,6 +65,7 @@ int mCircleBufferWrite8(struct mCircleBuffer* buffer, int8_t value) {
 }
 
 int mCircleBufferWrite32(struct mCircleBuffer* buffer, int32_t value) {
+	size_t size;
 	int32_t* data = buffer->writePtr;
 	if (buffer->size + sizeof(int32_t) > buffer->capacity) {
 		return 0;
@@ -78,7 +80,7 @@ int mCircleBufferWrite32(struct mCircleBuffer* buffer, int32_t value) {
 	}
 	*data = value;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->writePtr = data;
 	} else {
@@ -90,6 +92,7 @@ int mCircleBufferWrite32(struct mCircleBuffer* buffer, int32_t value) {
 }
 
 int mCircleBufferWrite16(struct mCircleBuffer* buffer, int16_t value) {
+	size_t size;
 	int16_t* data = buffer->writePtr;
 	if (buffer->size + sizeof(int16_t) > buffer->capacity) {
 		return 0;
@@ -102,7 +105,7 @@ int mCircleBufferWrite16(struct mCircleBuffer* buffer, int16_t value) {
 	}
 	*data = value;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->writePtr = data;
 	} else {
@@ -114,11 +117,12 @@ int mCircleBufferWrite16(struct mCircleBuffer* buffer, int16_t value) {
 }
 
 size_t mCircleBufferWrite(struct mCircleBuffer* buffer, const void* input, size_t length) {
+	size_t remaining;
 	int8_t* data = buffer->writePtr;
 	if (buffer->size + length > buffer->capacity) {
 		return 0;
 	}
-	size_t remaining = buffer->capacity - ((int8_t*) data - (int8_t*) buffer->data);
+	remaining = buffer->capacity - ((int8_t*) data - (int8_t*) buffer->data);
 	if (length <= remaining) {
 		memcpy(data, input, length);
 		if (length == remaining) {
@@ -145,13 +149,14 @@ size_t mCircleBufferWriteTruncate(struct mCircleBuffer* buffer, const void* inpu
 }
 
 int mCircleBufferRead8(struct mCircleBuffer* buffer, int8_t* value) {
+	size_t size;
 	int8_t* data = buffer->readPtr;
 	if (buffer->size < sizeof(int8_t)) {
 		return 0;
 	}
 	*value = *data;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->readPtr = data;
 	} else {
@@ -163,6 +168,7 @@ int mCircleBufferRead8(struct mCircleBuffer* buffer, int8_t* value) {
 }
 
 int mCircleBufferRead16(struct mCircleBuffer* buffer, int16_t* value) {
+	size_t size;
 	int16_t* data = buffer->readPtr;
 	if (buffer->size < sizeof(int16_t)) {
 		return 0;
@@ -175,7 +181,7 @@ int mCircleBufferRead16(struct mCircleBuffer* buffer, int16_t* value) {
 	}
 	*value = *data;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->readPtr = data;
 	} else {
@@ -187,6 +193,7 @@ int mCircleBufferRead16(struct mCircleBuffer* buffer, int16_t* value) {
 }
 
 int mCircleBufferRead32(struct mCircleBuffer* buffer, int32_t* value) {
+	size_t size;
 	int32_t* data = buffer->readPtr;
 	if (buffer->size < sizeof(int32_t)) {
 		return 0;
@@ -201,7 +208,7 @@ int mCircleBufferRead32(struct mCircleBuffer* buffer, int32_t* value) {
 	}
 	*value = *data;
 	++data;
-	size_t size = (int8_t*) data - (int8_t*) buffer->data;
+	size = (int8_t*) data - (int8_t*) buffer->data;
 	if (size < buffer->capacity) {
 		buffer->readPtr = data;
 	} else {
@@ -213,6 +220,7 @@ int mCircleBufferRead32(struct mCircleBuffer* buffer, int32_t* value) {
 }
 
 size_t mCircleBufferRead(struct mCircleBuffer* buffer, void* output, size_t length) {
+	size_t remaining;
 	int8_t* data = buffer->readPtr;
 	if (buffer->size == 0) {
 		return 0;
@@ -220,7 +228,7 @@ size_t mCircleBufferRead(struct mCircleBuffer* buffer, void* output, size_t leng
 	if (length > buffer->size) {
 		length = buffer->size;
 	}
-	size_t remaining = buffer->capacity - ((int8_t*) data - (int8_t*) buffer->data);
+	remaining = buffer->capacity - ((int8_t*) data - (int8_t*) buffer->data);
 	if (length <= remaining) {
 		if (output) {
 			memcpy(output, data, length);
@@ -244,6 +252,7 @@ size_t mCircleBufferRead(struct mCircleBuffer* buffer, void* output, size_t leng
 }
 
 size_t mCircleBufferDump(const struct mCircleBuffer* buffer, void* output, size_t length, size_t offset) {
+	size_t remaining;
 	int8_t* data = buffer->readPtr;
 	if (buffer->size <= offset) {
 		return 0;
@@ -251,7 +260,7 @@ size_t mCircleBufferDump(const struct mCircleBuffer* buffer, void* output, size_
 	if (length > buffer->size - offset) {
 		length = buffer->size - offset;
 	}
-	size_t remaining = buffer->capacity - ((uintptr_t) data - (uintptr_t) buffer->data);
+	remaining = buffer->capacity - ((uintptr_t) data - (uintptr_t) buffer->data);
 	if (offset) {
 		if (remaining >= offset) {
 			data += offset;

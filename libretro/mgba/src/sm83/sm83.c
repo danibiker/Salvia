@@ -8,8 +8,8 @@
 #include <mgba/internal/sm83/isa-sm83.h>
 
 void SM83Init(struct SM83Core* cpu) {
-	cpu->master->init(cpu, cpu->master);
 	size_t i;
+	cpu->master->init(cpu, cpu->master);
 	for (i = 0; i < cpu->numComponents; ++i) {
 		if (cpu->components[i] && cpu->components[i]->init) {
 			cpu->components[i]->init(cpu, cpu->components[i]);
@@ -18,10 +18,10 @@ void SM83Init(struct SM83Core* cpu) {
 }
 
 void SM83Deinit(struct SM83Core* cpu) {
+	size_t i;
 	if (cpu->master->deinit) {
 		cpu->master->deinit(cpu->master);
 	}
-	size_t i;
 	for (i = 0; i < cpu->numComponents; ++i) {
 		if (cpu->components[i] && cpu->components[i]->deinit) {
 			cpu->components[i]->deinit(cpu->components[i]);
@@ -103,8 +103,9 @@ static void _SM83InstructionIRQ(struct SM83Core* cpu) {
 }
 
 static void _SM83Step(struct SM83Core* cpu) {
+	enum SM83ExecutionState state;
 	cpu->cycles += cpu->tMultiplier;
-	enum SM83ExecutionState state = cpu->executionState;
+	state = cpu->executionState;
 	cpu->executionState = SM83_CORE_IDLE_0;
 	switch (state) {
 	case SM83_CORE_FETCH:
@@ -149,9 +150,10 @@ static void _SM83Step(struct SM83Core* cpu) {
 }
 
 static inline bool _SM83TickInternal(struct SM83Core* cpu) {
+	int t;
 	bool running = true;
 	_SM83Step(cpu);
-	int t = cpu->tMultiplier;
+	t = cpu->tMultiplier;
 	if (cpu->cycles + t * 2 >= cpu->nextEvent) {
 		if (cpu->cycles >= cpu->nextEvent) {
 			cpu->irqh.processEvents(cpu);

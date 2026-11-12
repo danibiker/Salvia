@@ -26,9 +26,12 @@ static bool _BPSApplyPatch(struct Patch* patch, const void* restrict in, size_t 
 static size_t _decodeLength(struct VFile* vf, struct mCircleBuffer* buffer);
 
 bool loadPatchUPS(struct Patch* patch) {
+	char buffer[4];
+	size_t filesize;
+	uint32_t goodCrc32;
+	uint32_t crc;
 	patch->vf->seek(patch->vf, 0, SEEK_SET);
 
-	char buffer[4];
 	if (patch->vf->read(patch->vf, buffer, 4) != 4) {
 		return false;
 	}
@@ -41,15 +44,14 @@ bool loadPatchUPS(struct Patch* patch) {
 		return false;
 	}
 
-	size_t filesize = patch->vf->size(patch->vf);
+	filesize = patch->vf->size(patch->vf);
 
-	uint32_t goodCrc32;
 	patch->vf->seek(patch->vf, PATCH_CHECKSUM, SEEK_END);
 	if (patch->vf->read(patch->vf, &goodCrc32, 4) != 4) {
 		return false;
 	}
 
-	uint32_t crc = fileCrc32(patch->vf, filesize + PATCH_CHECKSUM);
+	crc = fileCrc32(patch->vf, filesize + PATCH_CHECKSUM);
 	if (crc != goodCrc32) {
 		return false;
 	}
@@ -68,6 +70,11 @@ size_t _UPSOutputSize(struct Patch* patch, size_t inSize) {
 }
 
 bool _UPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize, void* restrict out, size_t outSize) {
+	struct mCircleBuffer buffer;
+	size_t offset = 0;
+	size_t alreadyRead = 0;
+	uint8_t* buf;
+	uint32_t goodCrc32;
 	// TODO: Input checksum
 
 	size_t filesize = patch->vf->size(patch->vf);
@@ -77,16 +84,13 @@ bool _UPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize,
 		return false;
 	}
 
-	struct mCircleBuffer buffer;
 	memcpy(out, in, inSize > outSize ? outSize : inSize);
 
-	size_t offset = 0;
-	size_t alreadyRead = 0;
-	uint8_t* buf = out;
+	buf = out;
 	mCircleBufferInit(&buffer, BUFFER_SIZE);
 	while (alreadyRead < filesize + IN_CHECKSUM) {
-		offset += _decodeLength(patch->vf, &buffer);
 		int8_t byte;
+		offset += _decodeLength(patch->vf, &buffer);
 
 		while (true) {
 			if (!mCircleBufferSize(&buffer)) {
@@ -118,7 +122,6 @@ bool _UPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize,
 	}
 	mCircleBufferDeinit(&buffer);
 
-	uint32_t goodCrc32;
 	patch->vf->seek(patch->vf, OUT_CHECKSUM, SEEK_END);
 	if (patch->vf->read(patch->vf, &goodCrc32, 4) != 4) {
 		return false;
@@ -132,20 +135,29 @@ bool _UPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize,
 }
 
 bool _BPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize, void* restrict out, size_t outSize) {
-	patch->vf->seek(patch->vf, IN_CHECKSUM, SEEK_END);
 	uint32_t expectedInChecksum;
 	uint32_t expectedOutChecksum;
+	uint32_t inputChecksum;
+	uint32_t outputChecksum = 0;
+	ssize_t filesize;
+	size_t metadataLength;
+	size_t writeLocation = 0;
+	ssize_t readSourceLocation = 0;
+	ssize_t readTargetLocation = 0;
+	size_t readOffset;
+	uint8_t* writeBuffer;
+	const uint8_t* readBuffer;
+	patch->vf->seek(patch->vf, IN_CHECKSUM, SEEK_END);
 	patch->vf->read(patch->vf, &expectedInChecksum, sizeof(expectedInChecksum));
 	patch->vf->read(patch->vf, &expectedOutChecksum, sizeof(expectedOutChecksum));
 
-	uint32_t inputChecksum = doCrc32(in, inSize);
-	uint32_t outputChecksum = 0;
+	inputChecksum = doCrc32(in, inSize);
 
 	if (inputChecksum != expectedInChecksum) {
 		return false;
 	}
 
-	ssize_t filesize = patch->vf->size(patch->vf);
+	filesize = patch->vf->size(patch->vf);
 	patch->vf->seek(patch->vf, 4, SEEK_SET);
 	_decodeLength(patch->vf, NULL); // Discard input size
 	if (_decodeLength(patch->vf, NULL) != outSize) {
@@ -154,21 +166,17 @@ bool _BPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize,
 	if (inSize > (size_t) SSIZE_MAX || outSize > (size_t) SSIZE_MAX) {
 		return false;
 	}
-	size_t metadataLength = _decodeLength(patch->vf, NULL);
+	metadataLength = _decodeLength(patch->vf, NULL);
 	patch->vf->seek(patch->vf, metadataLength, SEEK_CUR); // Skip metadata
-	size_t writeLocation = 0;
-	ssize_t readSourceLocation = 0;
-	ssize_t readTargetLocation = 0;
-	size_t readOffset;
-	uint8_t* writeBuffer = out;
-	const uint8_t* readBuffer = in;
+	writeBuffer = out;
+	readBuffer = in;
 	while (patch->vf->seek(patch->vf, 0, SEEK_CUR) < filesize + IN_CHECKSUM) {
+		size_t i;
 		size_t command = _decodeLength(patch->vf, NULL);
 		size_t length = (command >> 2) + 1;
 		if (writeLocation + length > outSize) {
 			return false;
 		}
-		size_t i;
 		switch (command & 0x3) {
 		case 0x0:
 			// SourceRead

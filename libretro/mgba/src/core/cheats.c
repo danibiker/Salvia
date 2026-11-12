@@ -99,11 +99,13 @@ static void _patchMem(struct mCore* core, uint32_t address, int segment, int wid
 }
 
 static void _patchROM(struct mCheatDevice* device, struct mCheatSet* cheats) {
+	size_t i;
 	if (!device->p) {
 		return;
 	}
-	size_t i;
 	for (i = 0; i < mCheatPatchListSize(&cheats->romPatches); ++i) {
+		uint32_t patchKey;
+		struct mCheatPatchedMem* patchData;
 		struct mCheatPatch* patch = mCheatPatchListGetPointer(&cheats->romPatches, i);
 		int segment = -1;
 		if (patch->check && patch->segment < 0) {
@@ -123,8 +125,8 @@ static void _patchROM(struct mCheatDevice* device, struct mCheatSet* cheats) {
 		}
 		patch->segment = segment;
 
-		uint32_t patchKey = _patchMakeKey(patch);
-		struct mCheatPatchedMem* patchData = TableLookup(&device->unpatchedMemory, patchKey);
+		patchKey = _patchMakeKey(patch);
+		patchData = TableLookup(&device->unpatchedMemory, patchKey);
 		if (!patchData) {
 			patchData = malloc(sizeof(*patchData));
 			patchData->originalValue = _readMemSegment(device->p, patch->address, segment, patch->width);
@@ -143,17 +145,19 @@ static void _patchROM(struct mCheatDevice* device, struct mCheatSet* cheats) {
 }
 
 static void _unpatchROM(struct mCheatDevice* device, struct mCheatSet* cheats) {
+	size_t i;
 	if (!device->p) {
 		return;
 	}
-	size_t i;
 	for (i = 0; i < mCheatPatchListSize(&cheats->romPatches); ++i) {
+		uint32_t patchKey;
+		struct mCheatPatchedMem* patchData;
 		struct mCheatPatch* patch = mCheatPatchListGetPointer(&cheats->romPatches, i);
 		if (!patch->applied) {
 			continue;
 		}
-		uint32_t patchKey = _patchMakeKey(patch);
-		struct mCheatPatchedMem* patchData = TableLookup(&device->unpatchedMemory, patchKey);
+		patchKey = _patchMakeKey(patch);
+		patchData = TableLookup(&device->unpatchedMemory, patchKey);
 		--patchData->refs;
 		patchData->dirty = true;
 		if (patchData->refs <= 0) {
@@ -264,6 +268,7 @@ void mCheatRemoveSet(struct mCheatDevice* device, struct mCheatSet* cheats) {
 }
 
 bool mCheatParseFile(struct mCheatDevice* device, struct VFile* vf) {
+	size_t d;
 	char cheat[MAX_LINE_LENGTH];
 	struct mCheatSet* set = NULL;
 	struct mCheatSet* newSet;
@@ -345,7 +350,6 @@ bool mCheatParseFile(struct mCheatDevice* device, struct VFile* vf) {
 	if (set) {
 		mCheatAddSet(device, set);
 	}
-	size_t d;
 	for (d = 0; d < StringListSize(&directives); ++d) {
 		free(*StringListGetPointer(&directives, d));
 	}
@@ -362,6 +366,9 @@ bool mCheatParseLibretroFile(struct mCheatDevice* device, struct VFile* vf) {
 	bool startFound = false;
 
 	while (true) {
+		char* underscore;
+		char* underscore2;
+		char* eq;
 		ssize_t bytesRead = vf->readline(vf, cheat, sizeof(cheat));
 		if (bytesRead == 0) {
 			break;
@@ -375,11 +382,14 @@ bool mCheatParseLibretroFile(struct mCheatDevice* device, struct VFile* vf) {
 		if (strncmp(cheat, "cheat", 5) != 0) {
 			return false;
 		}
-		char* underscore = strchr(&cheat[5], '_');
+		underscore = strchr(&cheat[5], '_');
 		if (!underscore) {
 			if (!startFound && cheat[5] == 's') {
+				char* eq;
+				char* end;
+				unsigned long nCheats;
 				startFound = true;
-				char* eq = strchr(&cheat[6], '=');
+				eq = strchr(&cheat[6], '=');
 				if (!eq) {
 					return false;
 				}
@@ -391,8 +401,7 @@ bool mCheatParseLibretroFile(struct mCheatDevice* device, struct VFile* vf) {
 					++eq;
 				}
 
-				char* end;
-				unsigned long nCheats = strtoul(eq, &end, 10);
+				nCheats = strtoul(eq, &end, 10);
 				if (end[0] != '\0' && !isspace((unsigned) end[0])) {
 					return false;
 				}
@@ -412,13 +421,12 @@ bool mCheatParseLibretroFile(struct mCheatDevice* device, struct VFile* vf) {
 			}
 			return false;
 		}
-		char* underscore2;
 		i = strtoul(&cheat[5], &underscore2, 10);
 		if (underscore2 != underscore) {
 			return false;
 		}
 		++underscore;
-		char* eq = strchr(underscore, '=');
+		eq = strchr(underscore, '=');
 		if (!eq) {
 			return false;
 		}
@@ -441,9 +449,10 @@ bool mCheatParseLibretroFile(struct mCheatDevice* device, struct VFile* vf) {
 		} else if (strncmp(underscore, "enable", 6) == 0) {
 			set->enabled = strncmp(eq, "true\n", 5) == 0;
 		} else if (strncmp(underscore, "code", 4) == 0) {
-			parseQuotedString(eq, strlen(eq), parsed, sizeof(parsed));
-			char* cur = parsed;
+			char* cur;
 			char* next;
+			parseQuotedString(eq, strlen(eq), parsed, sizeof(parsed));
+			cur = parsed;
 			while ((next = strchr(cur, '+'))) {
 				next[0] = '\0';
 				mCheatAddLine(set, cur, 0);
@@ -469,6 +478,10 @@ bool mCheatParseEZFChtFile(struct mCheatDevice* device, struct VFile* vf) {
 
 	cheatName[MAX_LINE_LENGTH - 1] = '\0';
 	while (true) {
+		char* eq;
+		uint32_t gameptr = 0;
+		uint32_t hexval = 0;
+		int digit;
 		ssize_t bytesRead = vf->readline(vf, cheat, sizeof(cheat));
 		if (bytesRead == 0) {
 			break;
@@ -481,14 +494,16 @@ bool mCheatParseEZFChtFile(struct mCheatDevice* device, struct VFile* vf) {
 		}
 
 		if (cheat[0] == '[') {
+			char* end;
+			char* name;
 			if (strncmp(cheat, "[GameInfo]", 10) == 0) {
 				break;
 			}
-			char* end = strchr(cheat, ']');
+			end = strchr(cheat, ']');
 			if (!end) {
 				return false;
 			}
-			char* name = gbkToUtf8(&cheat[1], end - cheat - 1);
+			name = gbkToUtf8(&cheat[1], end - cheat - 1);
 			if (name) {
 				strncpy(cheatName, name, sizeof(cheatName) - 1);
 				free(name);
@@ -497,7 +512,7 @@ bool mCheatParseEZFChtFile(struct mCheatDevice* device, struct VFile* vf) {
 			continue;
 		}
 
-		char* eq = strchr(cheat, '=');
+		eq = strchr(cheat, '=');
 		if (!eq) {
 			continue;
 		}
@@ -514,9 +529,6 @@ bool mCheatParseEZFChtFile(struct mCheatDevice* device, struct VFile* vf) {
 		cheatName[cheatNameLength] = '\0';
 		++eq;
 
-		uint32_t gameptr = 0;
-		uint32_t hexval = 0;
-		int digit;
 		while (eq[0] != '\r' && eq[1] != '\n') {
 			if (cheat + bytesRead == eq || eq[0] == '\0') {
 				bytesRead = vf->readline(vf, cheat, sizeof(cheat));
@@ -579,20 +591,22 @@ bool mCheatParseEZFChtFile(struct mCheatDevice* device, struct VFile* vf) {
 }
 
 bool mCheatSaveFile(struct mCheatDevice* device, struct VFile* vf) {
+	size_t i;
+	size_t d;
 	static const char lineStart[3] = "# ";
 	static const char lineEnd = '\n';
 	struct StringList directives;
 	StringListInit(&directives, 4);
 
-	size_t i;
 	for (i = 0; i < mCheatSetsSize(&device->cheats); ++i) {
+		size_t d;
+		size_t c;
 		struct mCheatSet* set = *mCheatSetsGetPointer(&device->cheats, i);
 		set->dumpDirectives(set, &directives);
 		if (!set->enabled) {
 			static const char* disabledDirective = "!disabled\n";
 			vf->write(vf, disabledDirective, strlen(disabledDirective));
 		}
-		size_t d;
 		for (d = 0; d < StringListSize(&directives); ++d) {
 			char directive[64];
 			ssize_t len = snprintf(directive, sizeof(directive) - 1, "!%s\n", *StringListGetPointer(&directives, d));
@@ -606,14 +620,12 @@ bool mCheatSaveFile(struct mCheatDevice* device, struct VFile* vf) {
 			vf->write(vf, set->name, strlen(set->name));
 		}
 		vf->write(vf, &lineEnd, 1);
-		size_t c;
 		for (c = 0; c < StringListSize(&set->lines); ++c) {
 			const char* line = *StringListGetPointer(&set->lines, c);
 			vf->write(vf, line, strlen(line));
 			vf->write(vf, &lineEnd, 1);
 		}
 	}
-	size_t d;
 	for (d = 0; d < StringListSize(&directives); ++d) {
 		free(*StringListGetPointer(&directives, d));
 	}
@@ -640,6 +652,10 @@ void mCheatAutosave(struct mCheatDevice* device) {
 #endif
 
 void mCheatRefresh(struct mCheatDevice* device, struct mCheatSet* cheats) {
+	size_t elseLoc = 0;
+	size_t endLoc = 0;
+	size_t nCodes;
+	size_t i;
 	if (cheats->enabled) {
 		_patchROM(device, cheats);
 	}
@@ -651,10 +667,7 @@ void mCheatRefresh(struct mCheatDevice* device, struct mCheatSet* cheats) {
 		return;
 	}
 
-	size_t elseLoc = 0;
-	size_t endLoc = 0;
-	size_t nCodes = mCheatListSize(&cheats->list);
-	size_t i;
+	nCodes = mCheatListSize(&cheats->list);
 	for (i = 0; i < nCodes; ++i) {
 		struct mCheat* cheat = mCheatListGetPointer(&cheats->list, i);
 		int32_t value = 0;
@@ -742,7 +755,7 @@ void mCheatRefresh(struct mCheatDevice* device, struct mCheatSet* cheats) {
 				operationsRemaining = 1;
 				break;
 			case CHEAT_IF_AND:
-				condition = _readMem(device->p, address, cheat->width) & operand;
+				condition = !!(_readMem(device->p, address, cheat->width) & operand);
 				conditionRemaining = cheat->repeat;
 				negativeConditionRemaining = cheat->negativeRepeat;
 				operationsRemaining = 1;
@@ -800,9 +813,10 @@ void mCheatPressButton(struct mCheatDevice* device, bool down) {
 }
 
 void mCheatDeviceInit(void* cpu, struct mCPUComponent* component) {
-	UNUSED(cpu);
-	struct mCheatDevice* device = (struct mCheatDevice*) component;
+	struct mCheatDevice* device;
 	size_t i;
+	UNUSED(cpu);
+	device = (struct mCheatDevice*) component;
 	for (i = 0; i < mCheatSetsSize(&device->cheats); ++i) {
 		struct mCheatSet* cheats = *mCheatSetsGetPointer(&device->cheats, i);
 		if (cheats->add) {

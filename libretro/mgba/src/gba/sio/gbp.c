@@ -61,10 +61,11 @@ void GBASIOPlayerReset(struct GBASIOPlayer* gbp) {
 }
 
 bool GBASIOPlayerCheckScreen(const struct GBAVideo* video) {
+	uint32_t hash;
 	if (memcmp(video->palette, _logoPalette, sizeof(_logoPalette)) != 0) {
 		return false;
 	}
-	uint32_t hash = hash32(&video->renderer->vram[0x4000], 0x4000, 0);
+	hash = hash32(&video->renderer->vram[0x4000], 0x4000, 0);
 	return hash == _logoHash;
 }
 

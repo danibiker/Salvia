@@ -237,12 +237,13 @@ void sha1Buffer(const void* input, size_t len, uint8_t* result) {
 }
 
 bool sha1File(struct VFile* vf, uint8_t* result) {
+	ssize_t read;
+	ssize_t position;
 	struct SHA1Context ctx;
 	uint8_t buffer[2048];
 	sha1Init(&ctx);
 
-	ssize_t read;
-	ssize_t position = vf->seek(vf, 0, SEEK_CUR);
+	position = vf->seek(vf, 0, SEEK_CUR);
 	if (vf->seek(vf, 0, SEEK_SET) < 0) {
 		return false;
 	}

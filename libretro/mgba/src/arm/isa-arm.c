@@ -17,13 +17,15 @@
 static inline void _shiftLSL(struct ARMCore* cpu, uint32_t opcode) {
 	int rm = opcode & 0x0000000F;
 	if (opcode & 0x00000010) {
+		int32_t shiftVal;
+		int shift;
 		int rs = (opcode >> 8) & 0x0000000F;
 		++cpu->cycles;
-		int32_t shiftVal = cpu->gprs[rm];
+		shiftVal = cpu->gprs[rm];
 		if (rm == ARM_PC) {
 			shiftVal += 4;
 		}
-		int shift = cpu->gprs[rs] & 0xFF;
+		shift = cpu->gprs[rs] & 0xFF;
 		if (!shift) {
 			cpu->shifterOperand = shiftVal;
 			cpu->shifterCarryOut = cpu->cpsr.c;
@@ -52,13 +54,15 @@ static inline void _shiftLSL(struct ARMCore* cpu, uint32_t opcode) {
 static inline void _shiftLSR(struct ARMCore* cpu, uint32_t opcode) {
 	int rm = opcode & 0x0000000F;
 	if (opcode & 0x00000010) {
+		uint32_t shiftVal;
+		int shift;
 		int rs = (opcode >> 8) & 0x0000000F;
 		++cpu->cycles;
-		uint32_t shiftVal = cpu->gprs[rm];
+		shiftVal = cpu->gprs[rm];
 		if (rm == ARM_PC) {
 			shiftVal += 4;
 		}
-		int shift = cpu->gprs[rs] & 0xFF;
+		shift = cpu->gprs[rs] & 0xFF;
 		if (!shift) {
 			cpu->shifterOperand = shiftVal;
 			cpu->shifterCarryOut = cpu->cpsr.c;
@@ -87,13 +91,15 @@ static inline void _shiftLSR(struct ARMCore* cpu, uint32_t opcode) {
 static inline void _shiftASR(struct ARMCore* cpu, uint32_t opcode) {
 	int rm = opcode & 0x0000000F;
 	if (opcode & 0x00000010) {
+		int shiftVal;
+		int shift;
 		int rs = (opcode >> 8) & 0x0000000F;
 		++cpu->cycles;
-		int shiftVal =  cpu->gprs[rm];
+		shiftVal = cpu->gprs[rm];
 		if (rm == ARM_PC) {
 			shiftVal += 4;
 		}
-		int shift = cpu->gprs[rs] & 0xFF;
+		shift = cpu->gprs[rs] & 0xFF;
 		if (!shift) {
 			cpu->shifterOperand = shiftVal;
 			cpu->shifterCarryOut = cpu->cpsr.c;
@@ -122,14 +128,17 @@ static inline void _shiftASR(struct ARMCore* cpu, uint32_t opcode) {
 static inline void _shiftROR(struct ARMCore* cpu, uint32_t opcode) {
 	int rm = opcode & 0x0000000F;
 	if (opcode & 0x00000010) {
+		int shiftVal;
+		int shift;
+		int rotate;
 		int rs = (opcode >> 8) & 0x0000000F;
 		++cpu->cycles;
-		int shiftVal =  cpu->gprs[rm];
+		shiftVal = cpu->gprs[rm];
 		if (rm == ARM_PC) {
 			shiftVal += 4;
 		}
-		int shift = cpu->gprs[rs] & 0xFF;
-		int rotate = shift & 0x1F;
+		shift = cpu->gprs[rs] & 0xFF;
+		rotate = shift & 0x1F;
 		if (!shift) {
 			cpu->shifterOperand = shiftVal;
 			cpu->shifterCarryOut = cpu->cpsr.c;
@@ -284,15 +293,18 @@ ATTRIBUTE_NOINLINE static void _neutralS(struct ARMCore* cpu, int32_t d) {
 
 #define DEFINE_ALU_INSTRUCTION_EX_ARM(NAME, S_BODY, SHIFTER, BODY, DO_WRITE) \
 	DEFINE_INSTRUCTION_ARM(NAME, \
-		SHIFTER(cpu, opcode); \
 		int rd = (opcode >> 12) & 0xF; \
 		int rn = (opcode >> 16) & 0xF; \
-		int32_t n ATTRIBUTE_UNUSED = cpu->gprs[rn]; \
+		int32_t n ATTRIBUTE_UNUSED; \
+		SHIFTER(cpu, opcode); \
+		n = cpu->gprs[rn]; \
 		if (UNLIKELY(rn == ARM_PC && (opcode & 0x02000010) == 0x00000010)) { \
 			n += WORD_SIZE_ARM; \
 		} \
-		BODY; \
-		S_BODY; \
+		{ \
+			BODY; \
+			S_BODY; \
+		} \
 		if (DO_WRITE && rd == ARM_PC) { \
 			if (cpu->executionMode == MODE_ARM) { \
 				currentCycles += ARMWritePC(cpu); \
@@ -327,8 +339,10 @@ ATTRIBUTE_NOINLINE static void _neutralS(struct ARMCore* cpu, int32_t d) {
 		int rm = opcode & 0xF; \
 		if (rd != ARM_PC) { \
 			ARM_WAIT_ ## SIGNED ## MUL(cpu->gprs[rs], 0); \
-			BODY; \
-			S_BODY; \
+			{ \
+				BODY; \
+				S_BODY; \
+			} \
 		} \
 		currentCycles += cpu->memory.activeNonseqCycles32 - cpu->memory.activeSeqCycles32)
 
@@ -340,8 +354,10 @@ ATTRIBUTE_NOINLINE static void _neutralS(struct ARMCore* cpu, int32_t d) {
 		int rm = opcode & 0xF; \
 		if (rdHi != ARM_PC && rd != ARM_PC) { \
 			ARM_WAIT_ ## SIGNED ## MUL(cpu->gprs[rs], WAIT); \
-			BODY; \
-			S_BODY; \
+			{ \
+				BODY; \
+				S_BODY; \
+			} \
 		} \
 		currentCycles += cpu->memory.activeNonseqCycles32 - cpu->memory.activeSeqCycles32)
 
@@ -359,14 +375,16 @@ ATTRIBUTE_NOINLINE static void _neutralS(struct ARMCore* cpu, int32_t d) {
 		int rn = (opcode >> 16) & 0xF; \
 		int rd = (opcode >> 12) & 0xF; \
 		int32_t d ATTRIBUTE_UNUSED = cpu->gprs[rd]; \
+		int rm = opcode & 0xF; \
 		if (UNLIKELY(rd == ARM_PC)) { \
 			d += WORD_SIZE_ARM; \
 		} \
-		int rm = opcode & 0xF; \
 		UNUSED(rm); \
 		address = ADDRESS; \
 		ADDR_MODE_2_WRITEBACK_PRE_ ## LS (WRITEBACK); \
-		BODY; \
+		{ \
+			BODY; \
+		} \
 		ADDR_MODE_2_WRITEBACK_POST_ ## LS (WRITEBACK);)
 
 #define DEFINE_LOAD_STORE_INSTRUCTION_SHIFTER_ARM(NAME, SHIFTER, LS, BODY) \
@@ -564,16 +582,18 @@ DEFINE_LOAD_STORE_MODE_3_INSTRUCTION_ARM(STRH, STORE, cpu->memory.store16(cpu, a
 
 DEFINE_LOAD_STORE_T_INSTRUCTION_ARM(LDRBT, LOAD,
 	enum PrivilegeMode priv = cpu->privilegeMode;
+	int32_t r;
 	ARMSetPrivilegeMode(cpu, MODE_USER);
-	int32_t r = cpu->memory.load8(cpu, address, &currentCycles);
+	r = cpu->memory.load8(cpu, address, &currentCycles);
 	ARMSetPrivilegeMode(cpu, priv);
 	cpu->gprs[rd] = r;
 	ARM_LOAD_POST_BODY;)
 
 DEFINE_LOAD_STORE_T_INSTRUCTION_ARM(LDRT, LOAD,
 	enum PrivilegeMode priv = cpu->privilegeMode;
+	int32_t r;
 	ARMSetPrivilegeMode(cpu, MODE_USER);
-	int32_t r = cpu->memory.load32(cpu, address, &currentCycles);
+	r = cpu->memory.load32(cpu, address, &currentCycles);
 	ARMSetPrivilegeMode(cpu, priv);
 	cpu->gprs[rd] = r;
 	ARM_LOAD_POST_BODY;)

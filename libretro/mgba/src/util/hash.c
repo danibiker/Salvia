@@ -49,6 +49,8 @@ static FORCE_INLINE uint32_t fmix32(uint32_t h) {
 //-----------------------------------------------------------------------------
 
 uint32_t hash32(const void* key, size_t len, uint32_t seed) {
+	const uint8_t* tail;
+	uint32_t k1 = 0;
 	const uint8_t* data = (const uint8_t*) key;
 	const int nblocks = len / 4;
 
@@ -78,9 +80,8 @@ uint32_t hash32(const void* key, size_t len, uint32_t seed) {
 	//----------
 	// tail
 
-	const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+	tail = (const uint8_t*)(data + nblocks * 4);
 
-	uint32_t k1 = 0;
 
 	switch(len & 3) {
 	case 3:

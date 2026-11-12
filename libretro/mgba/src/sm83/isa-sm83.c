@@ -35,7 +35,9 @@ static inline void SM83WriteDE(struct SM83Core* cpu, uint16_t de) {
 #define DEFINE_INSTRUCTION_SM83(NAME, BODY) \
 	static void _SM83Instruction ## NAME (struct SM83Core* cpu) { \
 		UNUSED(cpu); \
-		BODY; \
+		{ \
+			BODY; \
+		} \
 	}
 
 DEFINE_INSTRUCTION_SM83(NOP,);

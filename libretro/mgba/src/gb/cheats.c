@@ -16,8 +16,9 @@ static void GBCheatDumpDirectives(struct mCheatSet* set, struct StringList* dire
 static bool GBCheatAddLine(struct mCheatSet*, const char* line, int type);
 
 static struct mCheatSet* GBCheatSetCreate(struct mCheatDevice* device, const char* name) {
+	struct mCheatSet* set;
 	UNUSED(device);
-	struct mCheatSet* set = malloc(sizeof(*set));
+	set = malloc(sizeof(*set));
 	mCheatSetInit(set, name);
 
 	set->deinit = NULL;
@@ -65,6 +66,8 @@ static bool GBCheatAddGameSharkLine(struct mCheatSet* cheats, const char* line) 
 }
 
 static bool GBCheatAddGameGenieLine(struct mCheatSet* cheats, const char* line) {
+	uint16_t address;
+	struct mCheatPatch* patch;
 	uint16_t op1;
 	uint16_t op2;
 	uint16_t op3 = 0x1000;
@@ -84,10 +87,10 @@ static bool GBCheatAddGameGenieLine(struct mCheatSet* cheats, const char* line) 
 	if (!lineNext || lineNext[0]) {
 		return false;
 	}
-	uint16_t address = (op1 & 0xF) << 8;
+	address = (op1 & 0xF) << 8;
 	address |= (op2 >> 4) & 0xFF;
 	address |= ((op2 & 0xF) ^ 0xF) << 12;
-	struct mCheatPatch* patch = mCheatPatchListAppend(&cheats->romPatches);
+	patch = mCheatPatchListAppend(&cheats->romPatches);
 	patch->address = address;
 	patch->value = op1 >> 4;
 	patch->applied = false;
@@ -107,6 +110,7 @@ static bool GBCheatAddGameGenieLine(struct mCheatSet* cheats, const char* line) 
 }
 
 static bool GBCheatAddVBALine(struct mCheatSet* cheats, const char* line) {
+	struct mCheat* cheat;
 	uint16_t address;
 	uint8_t value;
 	const char* lineNext = hex16(line, &address);
@@ -116,7 +120,7 @@ static bool GBCheatAddVBALine(struct mCheatSet* cheats, const char* line) {
 	if (!hex8(line, &value)) {
 		return false;
 	}
-	struct mCheat* cheat = mCheatListAppend(&cheats->list);
+	cheat = mCheatListAppend(&cheats->list);
 	cheat->type = CHEAT_ASSIGN;
 	cheat->width = 1;
 	cheat->address = address;
@@ -127,6 +131,11 @@ static bool GBCheatAddVBALine(struct mCheatSet* cheats, const char* line) {
 }
 
 bool GBCheatAddLine(struct mCheatSet* cheats, const char* line, int type) {
+	uint16_t op1;
+	uint8_t op2;
+	uint8_t op3;
+	bool codebreaker = false;
+	const char* lineNext;
 	switch (type) {
 	case GB_CHEAT_AUTODETECT:
 		break;
@@ -140,11 +149,7 @@ bool GBCheatAddLine(struct mCheatSet* cheats, const char* line, int type) {
 		return false;
 	}
 
-	uint16_t op1;
-	uint8_t op2;
-	uint8_t op3;
-	bool codebreaker = false;
-	const char* lineNext = hex16(line, &op1);
+	lineNext = hex16(line, &op1);
 	if (!lineNext) {
 		return GBCheatAddGameGenieLine(cheats, line);
 	}

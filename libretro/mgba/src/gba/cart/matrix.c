@@ -14,6 +14,9 @@
 #define MAPPING_MASK (GBA_MATRIX_MAPPINGS_MAX - 1)
 
 static void _remapMatrix(struct GBA* gba) {
+	int start;
+	int size;
+	int i;
 	if (gba->memory.matrix.vaddr & 0xFFFFE1FF) {
 		mLOG(GBA_MEM, ERROR, "Invalid Matrix mapping: %08X", gba->memory.matrix.vaddr);
 		return;
@@ -26,9 +29,8 @@ static void _remapMatrix(struct GBA* gba) {
 		mLOG(GBA_MEM, ERROR, "Invalid Matrix mapping end: %08X", gba->memory.matrix.vaddr + gba->memory.matrix.size);
 		return;
 	}
-	int start = gba->memory.matrix.vaddr >> 9;
-	int size = (gba->memory.matrix.size >> 9) & MAPPING_MASK;
-	int i;
+	start = gba->memory.matrix.vaddr >> 9;
+	size = (gba->memory.matrix.size >> 9) & MAPPING_MASK;
 	for (i = 0; i < size; ++i) {
 		gba->memory.matrix.mappings[(start + i) & MAPPING_MASK] = gba->memory.matrix.paddr + (i << 9);
 	}
@@ -98,6 +100,7 @@ void GBAMatrixWrite16(struct GBA* gba, uint32_t address, uint16_t value) {
 }
 
 void GBAMatrixSerialize(const struct GBA* gba, struct GBASerializedState* state) {
+	int i;
 	STORE_32(gba->memory.matrix.cmd, 0, &state->matrix.cmd);
 	STORE_32(gba->memory.matrix.paddr, 0, &state->matrix.paddr);
 	STORE_32(gba->memory.matrix.vaddr, 0, &state->matrix.vaddr);
@@ -107,19 +110,18 @@ void GBAMatrixSerialize(const struct GBA* gba, struct GBASerializedState* state)
 		mLOG(GBA_MEM, ERROR, "Matrix memory serialization is broken!");
 	}
 
-	int i;
 	for (i = 0; i < 16; ++i) {
 		STORE_32(gba->memory.matrix.mappings[i], i << 2, state->matrix2.mappings);
 	}
 }
 
 void GBAMatrixDeserialize(struct GBA* gba, const struct GBASerializedState* state) {
+	int i;
 	if (GBA_MATRIX_MAPPINGS_MAX != 16) {
 		mLOG(GBA_MEM, ERROR, "Matrix memory deserialization is broken!");
 	}
 	gba->memory.matrix.size = 0x200;
 
-	int i;
 	for (i = 0; i < 16; ++i) {
 		LOAD_32(gba->memory.matrix.mappings[i], i << 2, state->matrix2.mappings);
 		gba->memory.matrix.paddr = gba->memory.matrix.mappings[i];

@@ -147,8 +147,11 @@ void mLogFilterDeinit(struct mLogFilter* filter) {
 }
 
 static void _setFilterLevel(const char* key, const char* value, enum mCoreConfigLevel level, void* user) {
+	struct mLogFilter* filter;
+	char* end;
+	int ivalue;
 	UNUSED(level);
-	struct mLogFilter* filter = user;
+	filter = user;
 	key = strchr(key, '.');
 	if (!key || !key[1]) {
 		return;
@@ -157,8 +160,7 @@ static void _setFilterLevel(const char* key, const char* value, enum mCoreConfig
 		return;
 	}
 	++key;
-	char* end;
-	int ivalue = strtol(value, &end, 10);
+	ivalue = strtol(value, &end, 10);
 	if (ivalue == 0) {
 		ivalue = 0x80; // Zero is reserved
 	}
@@ -178,12 +180,13 @@ void mLogFilterLoad(struct mLogFilter* filter, const struct mCoreConfig* config)
 }
 
 void mLogFilterSave(const struct mLogFilter* filter, struct mCoreConfig* config) {
-	mCoreConfigSetIntValue(config, "logLevel", filter->defaultLevels);
 	int i;
+	mCoreConfigSetIntValue(config, "logLevel", filter->defaultLevels);
 	for (i = 0; i < _category; ++i) {
+		int levels;
 		char configName[128] = {0};
 		snprintf(configName, sizeof(configName) - 1, "logLevel.%s", mLogCategoryId(i));
-		int levels = mLogFilterLevels(filter, i);
+		levels = mLogFilterLevels(filter, i);
 		if (levels) {
 			mCoreConfigSetIntValue(config, configName, levels & ~0x80);
 		} else {
@@ -193,19 +196,21 @@ void mLogFilterSave(const struct mLogFilter* filter, struct mCoreConfig* config)
 }
 
 void mLogFilterSet(struct mLogFilter* filter, const char* category, int levels) {
+	int cat;
 	levels |= 0x80;
 	HashTableInsert(&filter->categories, category, (void*)(intptr_t) levels);
 	// Can't do this eagerly because not all categories are initialized immediately
-	int cat = mLogCategoryById(category);
+	cat = mLogCategoryById(category);
 	if (cat >= 0) {
 		TableInsert(&filter->levels, cat, (void*)(intptr_t) levels);
 	}
 }
 
 void mLogFilterReset(struct mLogFilter* filter, const char* category) {
+	int cat;
 	HashTableRemove(&filter->categories, category);
 	// Can't do this eagerly because not all categories are initialized immediately
-	int cat = mLogCategoryById(category);
+	cat = mLogCategoryById(category);
 	if (cat >= 0) {
 		TableRemove(&filter->levels, cat);
 	}
@@ -214,17 +219,18 @@ void mLogFilterReset(struct mLogFilter* filter, const char* category) {
 bool mLogFilterTest(const struct mLogFilter* filter, int category, enum mLogLevel level) {
 	int value = mLogFilterLevels(filter, category);
 	if (value) {
-		return value & level;
+		return !!(value & level);
 	}
-	return level & filter->defaultLevels;
+	return !!(level & filter->defaultLevels);
 }
 
 int mLogFilterLevels(const struct mLogFilter* filter , int category) {
+	const char* cat;
 	int value = (intptr_t) TableLookup(&filter->levels, category);
 	if (value) {
 		return value;
 	}
-	const char* cat = mLogCategoryId(category);
+	cat = mLogCategoryId(category);
 	if (cat) {
 		value = (intptr_t) HashTableLookup(&filter->categories, cat);
 	}
@@ -232,16 +238,17 @@ int mLogFilterLevels(const struct mLogFilter* filter , int category) {
 }
 
 void _mCoreStandardLog(struct mLogger* logger, int category, enum mLogLevel level, const char* format, va_list args) {
+	char buffer[MAX_LOG_BUF];
+	size_t length;
 	struct mStandardLogger* stdlog = (struct mStandardLogger*) logger;
 
 	if (!mLogFilterTest(logger->filter, category, level)) {
 		return;
 	}
 
-	char buffer[MAX_LOG_BUF];
 
 	// Prepare the string
-	size_t length = snprintf(buffer, sizeof(buffer), "%s: ", mLogCategoryName(category));
+	length = snprintf(buffer, sizeof(buffer), "%s: ", mLogCategoryName(category));
 	if (length < sizeof(buffer)) {
 		length += vsnprintf(buffer + length, sizeof(buffer) - length, format, args);
 	}

@@ -16,11 +16,12 @@ int GBAVideoRendererCleanOAM(struct GBAObj* oam, struct GBAVideoRendererSprite* 
 		LOAD_16LE(obj.b, 0, &oam[i].b);
 		LOAD_16LE(obj.c, 0, &oam[i].c);
 		if (GBAObjAttributesAIsTransformed(obj.a) || !GBAObjAttributesAIsDisable(obj.a)) {
+			int cycles;
+			int y;
 			int width = GBAVideoObjSizes[GBAObjAttributesAGetShape(obj.a) * 4 + GBAObjAttributesBGetSize(obj.b)][0];
 			int height = GBAVideoObjSizes[GBAObjAttributesAGetShape(obj.a) * 4 + GBAObjAttributesBGetSize(obj.b)][1];
 			int32_t x = (uint32_t) GBAObjAttributesBGetX(obj.b) << 23;
 			x >>= 23;
-			int cycles;
 			if (GBAObjAttributesAIsTransformed(obj.a)) {
 				height <<= GBAObjAttributesAGetDoubleSize(obj.a);
 				width <<= GBAObjAttributesAGetDoubleSize(obj.a);
@@ -43,7 +44,7 @@ int GBAVideoRendererCleanOAM(struct GBAObj* oam, struct GBAVideoRendererSprite* 
 			if (GBAObjAttributesBGetX(obj.b) >= GBA_VIDEO_HORIZONTAL_PIXELS && GBAObjAttributesBGetX(obj.b) + width < 512) {
 				continue;
 			}
-			int y = GBAObjAttributesAGetY(obj.a) + offsetY;
+			y = GBAObjAttributesAGetY(obj.a) + offsetY;
 			if (y + height > 256) {
 				y -= 256;
 			}

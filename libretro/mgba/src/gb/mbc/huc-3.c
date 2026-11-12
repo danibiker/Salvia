@@ -9,6 +9,8 @@
 #include <mgba-util/vfs.h>
 
 static void _latchHuC3Rtc(struct mRTCSource* rtc, uint8_t* huc3Regs, time_t* rtcLastLatch) {
+	int minutes;
+	int days;
 	time_t t;
 	if (rtc) {
 		if (rtc->sample) {
@@ -26,7 +28,7 @@ static void _latchHuC3Rtc(struct mRTCSource* rtc, uint8_t* huc3Regs, time_t* rtc
 	}
 	*rtcLastLatch += t * 60;
 
-	int minutes = huc3Regs[GBHUC3_RTC_MINUTES_HI] << 8;
+	minutes = huc3Regs[GBHUC3_RTC_MINUTES_HI] << 8;
 	minutes |= huc3Regs[GBHUC3_RTC_MINUTES_MI] << 4;
 	minutes |= huc3Regs[GBHUC3_RTC_MINUTES_LO];
 	minutes += t % 1440;
@@ -42,7 +44,7 @@ static void _latchHuC3Rtc(struct mRTCSource* rtc, uint8_t* huc3Regs, time_t* rtc
 	huc3Regs[GBHUC3_RTC_MINUTES_MI] = (minutes >> 4) & 0xF;
 	huc3Regs[GBHUC3_RTC_MINUTES_HI] = (minutes >> 8) & 0xF;
 
-	int days = huc3Regs[GBHUC3_RTC_DAYS_LO];
+	days = huc3Regs[GBHUC3_RTC_DAYS_LO];
 	days |= huc3Regs[GBHUC3_RTC_DAYS_MI] << 4;
 	days |= huc3Regs[GBHUC3_RTC_DAYS_HI] << 8;
 
@@ -176,6 +178,7 @@ uint8_t _GBHuC3Read(struct GBMemory* memory, uint16_t address) {
 }
 
 void GBMBCHuC3Read(struct GB* gb) {
+	size_t i;
 	struct GBMBCHuC3SaveBuffer buffer;
 	struct VFile* vf = gb->sramVf;
 	if (!vf) {
@@ -186,7 +189,6 @@ void GBMBCHuC3Read(struct GB* gb) {
 		return;
 	}
 
-	size_t i;
 	for (i = 0; i < 0x80; ++i) {
 		gb->memory.mbcState.huc3.registers[i * 2] = buffer.regs[i] & 0xF;
 		gb->memory.mbcState.huc3.registers[i * 2 + 1] = buffer.regs[i] >> 4;
@@ -195,13 +197,13 @@ void GBMBCHuC3Read(struct GB* gb) {
 }
 
 void GBMBCHuC3Write(struct GB* gb) {
+	struct GBMBCHuC3SaveBuffer buffer;
+	size_t i;
 	struct VFile* vf = gb->sramVf;
 	if (!vf) {
 		return;
 	}
 
-	struct GBMBCHuC3SaveBuffer buffer;
-	size_t i;
 	for (i = 0; i < 0x80; ++i) {
 		buffer.regs[i] = gb->memory.mbcState.huc3.registers[i * 2] & 0xF;
 		buffer.regs[i] |= gb->memory.mbcState.huc3.registers[i * 2 + 1] << 4;

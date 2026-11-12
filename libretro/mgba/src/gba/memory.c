@@ -40,6 +40,7 @@ static const char GBA_ROM_WAITSTATES[] = { 4, 3, 2, 8 };
 static const char GBA_ROM_WAITSTATES_SEQ[] = { 2, 1, 4, 1, 8, 1 };
 
 void GBAMemoryInit(struct GBA* gba) {
+	int i;
 	struct ARMCore* cpu = gba->cpu;
 	cpu->memory.load32 = GBALoad32;
 	cpu->memory.load16 = GBALoad16;
@@ -60,7 +61,6 @@ void GBAMemoryInit(struct GBA* gba) {
 	gba->memory.romMask = 0;
 	gba->memory.hw.p = gba;
 
-	int i;
 	for (i = 0; i < 16; ++i) {
 		gba->memory.waitstatesNonseq16[i] = GBA_BASE_WAITSTATES[i];
 		gba->memory.waitstatesSeq16[i] = GBA_BASE_WAITSTATES_SEQ[i];
@@ -182,12 +182,13 @@ static void _analyzeForIdleLoop(struct GBA* gba, struct ARMCore* cpu, uint32_t a
 			switch (info.branchType) {
 			case ARM_BRANCH_NONE:
 				if (info.operandFormat & ARM_OPERAND_MEMORY_2) {
+					uint32_t loadAddress;
+					uint32_t offset = 0;
 					if (info.mnemonic == ARM_MN_STR || gba->taintedRegisters[info.memory.baseReg]) {
 						gba->idleDetectionStep = -1;
 						return;
 					}
-					uint32_t loadAddress = gba->cachedRegisters[info.memory.baseReg];
-					uint32_t offset = 0;
+					loadAddress = gba->cachedRegisters[info.memory.baseReg];
 					if (info.memory.format & ARM_MEMORY_IMMEDIATE_OFFSET) {
 						offset = info.memory.offset.immediate;
 					} else if (info.memory.format & ARM_MEMORY_REGISTER_OFFSET) {
@@ -474,6 +475,7 @@ uint32_t GBALoadBad(struct ARMCore* cpu) {
 }
 
 uint32_t GBALoad32(struct ARMCore* cpu, uint32_t address, int* cycleCounter) {
+	int rotate;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	struct GBAMemory* memory = &gba->memory;
 	uint32_t value = 0;
@@ -528,11 +530,12 @@ uint32_t GBALoad32(struct ARMCore* cpu, uint32_t address, int* cycleCounter) {
 		*cycleCounter += wait;
 	}
 	// Unaligned 32-bit loads are "rotated" so they make some semblance of sense
-	int rotate = (address & 3) << 3;
+	rotate = (address & 3) << 3;
 	return ROR(value, rotate);
 }
 
 uint32_t GBALoad16(struct ARMCore* cpu, uint32_t address, int* cycleCounter) {
+	int rotate;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	struct GBAMemory* memory = &gba->memory;
 	uint32_t value = 0;
@@ -643,7 +646,7 @@ uint32_t GBALoad16(struct ARMCore* cpu, uint32_t address, int* cycleCounter) {
 		*cycleCounter += wait;
 	}
 	// Unaligned 16-bit loads are "unpredictable", but the GBA rotates them, so we have to, too.
-	int rotate = (address & 1) << 3;
+	rotate = (address & 1) << 3;
 	return ROR(value, rotate);
 }
 
@@ -929,11 +932,12 @@ void GBAStore16(struct ARMCore* cpu, uint32_t address, int16_t value, int* cycle
 		break;
 	case GBA_REGION_ROM0:
 		if (IS_GPIO_REGISTER(address & 0xFFFFFE)) {
+			uint32_t reg;
 			if (!(memory->hw.devices & HW_GPIO)) {
 				mLOG(GBA_HW, WARN, "Write to GPIO address %08X on cartridge without GPIO", address);
 				break;
 			}
-			uint32_t reg = address & 0xFFFFFE;
+			reg = address & 0xFFFFFE;
 			GBAHardwareGPIOWrite(&memory->hw, reg, value);
 			break;
 		}
@@ -1482,6 +1486,9 @@ void GBAPatch8(struct ARMCore* cpu, uint32_t address, int8_t value, int8_t* old)
 	}
 
 uint32_t GBALoadMultiple(struct ARMCore* cpu, uint32_t address, int mask, enum LSMDirection direction, int* cycleCounter) {
+	uint32_t addressMisalign;
+	int region;
+	int wait;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	struct GBAMemory* memory = &gba->memory;
 	uint32_t value;
@@ -1500,12 +1507,12 @@ uint32_t GBALoadMultiple(struct ARMCore* cpu, uint32_t address, int mask, enum L
 		address += offset;
 	}
 
-	uint32_t addressMisalign = address & 0x3;
-	int region = address >> BASE_OFFSET;
+	addressMisalign = address & 0x3;
+	region = address >> BASE_OFFSET;
 	if (region < GBA_REGION_SRAM) {
 		address &= 0xFFFFFFFC;
 	}
-	int wait = memory->waitstatesSeq32[region] - memory->waitstatesNonseq32[region];
+	wait = memory->waitstatesSeq32[region] - memory->waitstatesNonseq32[region];
 
 	switch (region) {
 	case GBA_REGION_BIOS:
@@ -1603,6 +1610,9 @@ uint32_t GBALoadMultiple(struct ARMCore* cpu, uint32_t address, int mask, enum L
 	}
 
 uint32_t GBAStoreMultiple(struct ARMCore* cpu, uint32_t address, int mask, enum LSMDirection direction, int* cycleCounter) {
+	uint32_t addressMisalign;
+	int region;
+	int wait;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	struct GBAMemory* memory = &gba->memory;
 	uint32_t value;
@@ -1622,12 +1632,12 @@ uint32_t GBAStoreMultiple(struct ARMCore* cpu, uint32_t address, int mask, enum 
 		address += offset;
 	}
 
-	uint32_t addressMisalign = address & 0x3;
-	int region = address >> BASE_OFFSET;
+	addressMisalign = address & 0x3;
+	region = address >> BASE_OFFSET;
 	if (region < GBA_REGION_SRAM) {
 		address &= 0xFFFFFFFC;
 	}
-	int wait = memory->waitstatesSeq32[region] - memory->waitstatesNonseq32[region];
+	wait = memory->waitstatesSeq32[region] - memory->waitstatesNonseq32[region];
 
 	switch (region) {
 	case GBA_REGION_EWRAM:
@@ -1716,7 +1726,7 @@ void GBAAdjustWaitstates(struct GBA* gba, uint16_t parameters) {
 	memory->waitstatesSeq32[GBA_REGION_ROM1] = memory->waitstatesSeq32[GBA_REGION_ROM1_EX] = 2 * memory->waitstatesSeq16[GBA_REGION_ROM1] + 1;
 	memory->waitstatesSeq32[GBA_REGION_ROM2] = memory->waitstatesSeq32[GBA_REGION_ROM2_EX] = 2 * memory->waitstatesSeq16[GBA_REGION_ROM2] + 1;
 
-	memory->prefetch = prefetch;
+	memory->prefetch = !!(prefetch);
 
 	cpu->memory.activeSeqCycles32 = memory->waitstatesSeq32[memory->activeRegion];
 	cpu->memory.activeSeqCycles16 = memory->waitstatesSeq16[memory->activeRegion];
@@ -1725,9 +1735,11 @@ void GBAAdjustWaitstates(struct GBA* gba, uint16_t parameters) {
 	cpu->memory.activeNonseqCycles16 = memory->waitstatesNonseq16[memory->activeRegion];
 
 	if (memory->agbPrintBufferBackup) {
+		int phi;
+		uint32_t base;
 		_pristineCow(gba);
-		int phi = (parameters >> 11) & 3;
-		uint32_t base = memory->agbPrintBase;
+		phi = (parameters >> 11) & 3;
+		base = memory->agbPrintBase;
 		if (phi == 3) {
 			memcpy(&memory->rom[(AGB_PRINT_TOP | base) >> 2], memory->agbPrintBuffer, GBA_SIZE_AGB_PRINT);
 			STORE_16(memory->agbPrintProtect, AGB_PRINT_PROTECT | base, memory->rom);
@@ -1778,6 +1790,12 @@ void GBAAdjustEWRAMWaitstates(struct GBA* gba, uint16_t parameters) {
 }
 
 int32_t GBAMemoryStall(struct ARMCore* cpu, int32_t wait) {
+	int32_t previousLoads = 0;
+	uint32_t dist;
+	int32_t maxLoads = 8;
+	int32_t s;
+	int32_t stall;
+	int32_t loads = 1;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	struct GBAMemory* memory = &gba->memory;
 
@@ -1786,20 +1804,17 @@ int32_t GBAMemoryStall(struct ARMCore* cpu, int32_t wait) {
 		return wait;
 	}
 
-	int32_t previousLoads = 0;
 
 	// Don't prefetch too much if we're overlapping with a previous prefetch
-	uint32_t dist = (memory->lastPrefetchedPc - cpu->gprs[ARM_PC]);
-	int32_t maxLoads = 8;
+	dist = (memory->lastPrefetchedPc - cpu->gprs[ARM_PC]);
 	if (dist < 16) {
 		previousLoads = dist >> 1;
 		maxLoads -= previousLoads;
 	}
 
 	// Figure out how many sequential loads we can jam in
-	int32_t s = cpu->memory.activeSeqCycles16;
-	int32_t stall = s + 1;
-	int32_t loads = 1;
+	s = cpu->memory.activeSeqCycles16;
+	stall = s + 1;
 
 	while (stall < wait && loads < maxLoads) {
 		stall += s;
@@ -1902,28 +1917,30 @@ void _pristineCow(struct GBA* gba) {
 		return;
 	}
 #if !defined(FIXED_ROM_BUFFER) && !defined(__wii__)
-	void* newRom = anonymousMemoryMap(GBA_SIZE_ROM0);
-	memcpy(newRom, gba->memory.rom, gba->memory.romSize);
-	memset(((uint8_t*) newRom) + gba->memory.romSize, 0xFF, GBA_SIZE_ROM0 - gba->memory.romSize);
-	if (gba->cpu->memory.activeRegion == gba->memory.rom) {
-		gba->cpu->memory.activeRegion = newRom;
+	{
+		void* newRom = anonymousMemoryMap(GBA_SIZE_ROM0);
+		memcpy(newRom, gba->memory.rom, gba->memory.romSize);
+		memset(((uint8_t*) newRom) + gba->memory.romSize, 0xFF, GBA_SIZE_ROM0 - gba->memory.romSize);
+		if (gba->cpu->memory.activeRegion == gba->memory.rom) {
+			gba->cpu->memory.activeRegion = newRom;
+		}
+		if (gba->romVf) {
+			gba->romVf->unmap(gba->romVf, gba->memory.rom, gba->memory.romSize);
+		}
+		gba->memory.rom = newRom;
+		gba->memory.hw.gpioBase = &((uint16_t*) gba->memory.rom)[GPIO_REG_DATA >> 1];
 	}
-	if (gba->romVf) {
-		gba->romVf->unmap(gba->romVf, gba->memory.rom, gba->memory.romSize);
-	}
-	gba->memory.rom = newRom;
-	gba->memory.hw.gpioBase = &((uint16_t*) gba->memory.rom)[GPIO_REG_DATA >> 1];
 #endif
 	gba->isPristine = false;
 }
 
 void GBAPrintFlush(struct GBA* gba) {
+	char oolBuf[0x101];
+	size_t i;
 	if (!gba->memory.agbPrintBuffer) {
 		return;
 	}
 
-	char oolBuf[0x101];
-	size_t i;
 	for (i = 0; gba->memory.agbPrintCtx.get != gba->memory.agbPrintCtx.put && i < 0x100; ++i) {
 		int16_t value;
 		LOAD_16(value, gba->memory.agbPrintCtx.get & -2, gba->memory.agbPrintBuffer);

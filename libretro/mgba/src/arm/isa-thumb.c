@@ -293,9 +293,9 @@ DEFINE_LOAD_STORE_WITH_REGISTER_THUMB(STRH2, cpu->memory.store16(cpu, cpu->gprs[
 #define DEFINE_LOAD_STORE_MULTIPLE_THUMB(NAME, RN, LS, DIRECTION, PRE_BODY, WRITEBACK) \
 	DEFINE_INSTRUCTION_THUMB(NAME, \
 		int rn = RN; \
-		UNUSED(rn); \
 		int rs = opcode & 0xFF; \
 		int32_t address = cpu->gprs[RN]; \
+		UNUSED(rn); \
 		PRE_BODY; \
 		address = cpu->memory. LS ## Multiple(cpu, address, rs, LSM_ ## DIRECTION, &currentCycles); \
 		WRITEBACK;)

@@ -46,10 +46,10 @@ static const struct mCoreFilter {
 };
 
 struct mCore* mCoreFindVF(struct VFile* vf) {
+	const struct mCoreFilter* filter;
 	if (!vf) {
 		return NULL;
 	}
-	const struct mCoreFilter* filter;
 	for (filter = &_filters[0]; filter->filter; ++filter) {
 		if (filter->filter(vf)) {
 			break;
@@ -65,10 +65,10 @@ struct mCore* mCoreFindVF(struct VFile* vf) {
 }
 
 enum mPlatform mCoreIsCompatible(struct VFile* vf) {
+	const struct mCoreFilter* filter;
 	if (!vf) {
 		return mPLATFORM_NONE;
 	}
-	const struct mCoreFilter* filter;
 	for (filter = &_filters[0]; filter->filter; ++filter) {
 		if (filter->filter(vf)) {
 			return filter->platform;
@@ -136,24 +136,27 @@ bool mCoreLoadFile(struct mCore* core, const char* path) {
 #ifdef FIXED_ROM_BUFFER
 	return mCorePreloadFile(core, path);
 #else
+	{
+		bool ret;
 #if defined(ENABLE_VFS) && defined(ENABLE_DIRECTORIES)
-	struct VFile* rom = mDirectorySetOpenPath(&core->dirs, path, core->isROM);
+		struct VFile* rom = mDirectorySetOpenPath(&core->dirs, path, core->isROM);
 #else
-	struct VFile* rom = VFileOpen(path, O_RDONLY);
-	if (rom && !core->isROM(rom)) {
-		rom->close(rom);
-		rom = NULL;
-	}
+		struct VFile* rom = VFileOpen(path, O_RDONLY);
+		if (rom && !core->isROM(rom)) {
+			rom->close(rom);
+			rom = NULL;
+		}
 #endif
-	if (!rom) {
-		return false;
-	}
+		if (!rom) {
+			return false;
+		}
 
-	bool ret = core->loadROM(core, rom);
-	if (!ret) {
-		rom->close(rom);
+		ret = core->loadROM(core, rom);
+		if (!ret) {
+			rom->close(rom);
+		}
+		return ret;
 	}
-	return ret;
 #endif
 }
 
@@ -165,13 +168,22 @@ bool mCorePreloadFile(struct mCore* core, const char* path) {
 	return mCorePreloadFileCB(core, path, NULL, NULL);
 }
 
-bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (cb)(size_t, size_t, void*), void* context) {
+bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (*cb)(size_t, size_t, void*), void* context) {
+	size_t chunkSize;
+	ssize_t read;
+	size_t total = 0;
+	bool ret;
 	struct VFile* vfm;
 	size_t size = vf->size(vf);
-
 #ifdef FIXED_ROM_BUFFER
 	extern uint32_t* romBuffer;
 	extern size_t romBufferSize;
+	uint8_t* buffer;
+#else
+	uint8_t buffer[0x4000];
+#endif
+
+#ifdef FIXED_ROM_BUFFER
 	if (size > romBufferSize) {
 		if (size - romBufferSize < romBufferSize / 2) {
 			// Some ROM hacks accidentally overflow the size a bit, but since those are broken
@@ -186,16 +198,12 @@ bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (cb)(size_t, si
 	vfm = VFileMemChunk(NULL, size);
 #endif
 
-	size_t chunkSize;
 #ifdef FIXED_ROM_BUFFER
-	uint8_t* buffer = (uint8_t*) romBuffer;
+	buffer = (uint8_t*) romBuffer;
 	chunkSize = 0x10000;
 #else
-	uint8_t buffer[0x4000];
 	chunkSize = sizeof(buffer);
 #endif
-	ssize_t read;
-	size_t total = 0;
 	vf->seek(vf, 0, SEEK_SET);
 	while ((read = vf->read(vf, buffer, chunkSize)) > 0) {
 #ifdef FIXED_ROM_BUFFER
@@ -213,14 +221,15 @@ bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (cb)(size_t, si
 		vfm->close(vfm);
 		return false;
 	}
-	bool ret = core->loadROM(core, vfm);
+	ret = core->loadROM(core, vfm);
 	if (!ret) {
 		vfm->close(vfm);
 	}
 	return ret;
 }
 
-bool mCorePreloadFileCB(struct mCore* core, const char* path, void (cb)(size_t, size_t, void*), void* context) {
+bool mCorePreloadFileCB(struct mCore* core, const char* path, void (*cb)(size_t, size_t, void*), void* context) {
+	bool ret;
 #if defined(ENABLE_VFS) && defined(ENABLE_DIRECTORIES)
 	struct VFile* rom = mDirectorySetOpenPath(&core->dirs, path, core->isROM);
 #else
@@ -234,7 +243,7 @@ bool mCorePreloadFileCB(struct mCore* core, const char* path, void (cb)(size_t, 
 		return false;
 	}
 
-	bool ret = mCorePreloadVFCB(core, rom, cb, context);
+	ret = mCorePreloadVFCB(core, rom, cb, context);
 	if (!ret) {
 		rom->close(rom);
 	}
@@ -451,11 +460,12 @@ void* mCoreGetMemoryBlock(struct mCore* core, uint32_t start, size_t* size) {
 }
 
 void* mCoreGetMemoryBlockMasked(struct mCore* core, uint32_t start, size_t* size, uint32_t mask) {
+	uint8_t* out;
 	const struct mCoreMemoryBlock* block = mCoreGetMemoryBlockInfo(core, start);
 	if (!block || !(block->flags & mask)) {
 		return NULL;
 	}
-	uint8_t* out = core->getMemoryBlock(core, block->id, size);
+	out = core->getMemoryBlock(core, block->id, size);
 	out += start - block->start;
 	*size -= start - block->start;
 	return out;

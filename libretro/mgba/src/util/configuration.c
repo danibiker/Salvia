@@ -134,7 +134,7 @@ void ConfigurationClearValue(struct Configuration* configuration, const char* se
 }
 
 bool ConfigurationHasSection(const struct Configuration* configuration, const char* section) {
-	return HashTableLookup(&configuration->sections, section);
+	return !!(HashTableLookup(&configuration->sections, section));
 }
 
 void ConfigurationDeleteSection(struct Configuration* configuration, const char* section) {
@@ -162,21 +162,23 @@ static char* _vfgets(char* stream, int size, void* user) {
 
 #ifdef ENABLE_VFS
 bool ConfigurationRead(struct Configuration* configuration, const char* path) {
+	bool res;
 	struct VFile* vf = VFileOpen(path, O_RDONLY);
 	if (!vf) {
 		return false;
 	}
-	bool res = ConfigurationReadVFile(configuration, vf);
+	res = ConfigurationReadVFile(configuration, vf);
 	vf->close(vf);
 	return res;
 }
 
 bool ConfigurationWrite(const struct Configuration* configuration, const char* path) {
+	bool res;
 	struct VFile* vf = VFileOpen(path, O_WRONLY | O_CREAT | O_TRUNC);
 	if (!vf) {
 		return false;
 	}
-	bool res = ConfigurationWriteVFile(configuration, vf);
+	res = ConfigurationWriteVFile(configuration, vf);
 	vf->close(vf);
 	return res;
 }
@@ -188,9 +190,10 @@ bool ConfigurationWriteSection(const struct Configuration* configuration, const 
 		return false;
 	}
 	if (section) {
-		currentSection = HashTableLookup(&configuration->sections, section);
 		char line[256];
-		size_t len = snprintf(line, sizeof(line), "[%s]\n", section);
+		size_t len;
+		currentSection = HashTableLookup(&configuration->sections, section);
+		len = snprintf(line, sizeof(line), "[%s]\n", section);
 		if (len >= sizeof(line)) {
 			len = sizeof(line) - 1;
 		}

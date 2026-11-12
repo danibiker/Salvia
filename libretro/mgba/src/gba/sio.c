@@ -46,6 +46,7 @@ static void _switchMode(struct GBASIO* sio) {
 		newMode = (enum GBASIOMode) (mode & 0xC);
 	}
 	if (newMode != sio->mode) {
+		int id = 0;
 		if (sio->mode != (enum GBASIOMode) -1) {
 			mLOG(GBA_SIO, DEBUG, "Switching mode from %s to %s", _modeName(sio->mode), _modeName(newMode));
 		}
@@ -54,7 +55,6 @@ static void _switchMode(struct GBASIO* sio) {
 			sio->driver->setMode(sio->driver, newMode);
 		}
 
-		int id = 0;
 		switch (newMode) {
 		case GBA_SIO_MULTI:
 			if (sio->driver && sio->driver->deviceId) {
@@ -141,13 +141,13 @@ void GBASIOWriteRCNT(struct GBASIO* sio, uint16_t value) {
 }
 
 static void _startTransfer(struct GBASIO* sio) {
+	int connected = 0;
 	if (sio->driver && sio->driver->start) {
 		if (!sio->driver->start(sio->driver)) {
 			// Transfer completion is handled internally to the driver
 			return;
 		}
 	}
-	int connected = 0;
 	if (sio->driver && sio->driver->connectedDevices) {
 		connected = sio->driver->connectedDevices(sio->driver);
 	}
@@ -156,13 +156,13 @@ static void _startTransfer(struct GBASIO* sio) {
 }
 
 void GBASIOWriteSIOCNT(struct GBASIO* sio, uint16_t value) {
+	int id = 0;
+	int connected = 0;
+	bool handled = false;
 	if ((value ^ sio->siocnt) & 0x3000) {
 		sio->siocnt = value & 0x3000;
 		_switchMode(sio);
 	}
-	int id = 0;
-	int connected = 0;
-	bool handled = false;
 	if (sio->driver) {
 		handled = sio->driver->handlesMode(sio->driver, sio->mode);
 		if (handled) {
@@ -239,12 +239,12 @@ void GBASIOWriteSIOCNT(struct GBASIO* sio, uint16_t value) {
 }
 
 uint16_t GBASIOWriteRegister(struct GBASIO* sio, uint32_t address, uint16_t value) {
+	bool handled = true;
 	int id = 0;
 	if (sio->driver && sio->driver->deviceId) {
 		id = sio->driver->deviceId(sio->driver);
 	}
 
-	bool handled = true;
 	switch (sio->mode) {
 	case GBA_SIO_JOYBUS:
 		switch (address) {
@@ -406,13 +406,14 @@ void GBASIONormal32FinishTransfer(struct GBASIO* sio, uint32_t data, uint32_t cy
 }
 
 static void _sioFinish(struct mTiming* timing, void* user, uint32_t cyclesLate) {
-	UNUSED(timing);
-	struct GBASIO* sio = user;
+	struct GBASIO* sio;
 	union {
 		uint16_t multi[4];
 		uint8_t normal8;
 		uint32_t normal32;
 	} data = {0};
+	UNUSED(timing);
+	sio = user;
 	switch (sio->mode) {
 	case GBA_SIO_MULTI:
 		if (sio->driver && sio->driver->finishMultiplayer) {

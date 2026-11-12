@@ -26,12 +26,13 @@ static int _applyBias(struct GBAAudio* audio, int sample);
 static void _sample(struct mTiming* timing, void* user, uint32_t cyclesLate);
 
 void GBAAudioInit(struct GBAAudio* audio, size_t samples) {
+	uint8_t* nr52;
 	audio->sampleEvent.context = audio;
 	audio->sampleEvent.name = "GBA Audio Sample";
 	audio->sampleEvent.callback = _sample;
 	audio->sampleEvent.priority = 0x18;
 	audio->psg.p = NULL;
-	uint8_t* nr52 = (uint8_t*) &audio->p->memory.io[GBA_REG(SOUNDCNT_X)];
+	nr52 = (uint8_t*) &audio->p->memory.io[GBA_REG(SOUNDCNT_X)];
 #ifdef __BIG_ENDIAN__
 	++nr52;
 #endif
@@ -47,6 +48,7 @@ void GBAAudioInit(struct GBAAudio* audio, size_t samples) {
 }
 
 void GBAAudioReset(struct GBAAudio* audio) {
+	int i;
 	GBAudioReset(&audio->psg);
 	mTimingDeschedule(&audio->p->timing, &audio->psg.frameEvent);
 	mTimingSchedule(&audio->p->timing, &audio->psg.frameEvent, 0);
@@ -64,7 +66,6 @@ void GBAAudioReset(struct GBAAudio* audio) {
 	audio->chB.internalSample = 0;
 	audio->chB.internalRemaining = 0;
 	memset(audio->chB.fifo, 0, sizeof(audio->chB.fifo));
-	int i;
 	for (i = 0; i < 8; ++i) {
 		audio->chA.samples[i] = 0;
 		audio->chB.samples[i] = 0;
@@ -150,8 +151,8 @@ void GBAAudioWriteSOUND2CNT_HI(struct GBAAudio* audio, uint16_t value) {
 
 void GBAAudioWriteSOUND3CNT_LO(struct GBAAudio* audio, uint16_t value) {
 	GBAAudioSample(audio, mTimingCurrentTime(&audio->p->timing));
-	audio->psg.ch3.size = GBAudioRegisterBankGetSize(value);
-	audio->psg.ch3.bank = GBAudioRegisterBankGetBank(value);
+	audio->psg.ch3.size = !!(GBAudioRegisterBankGetSize(value));
+	audio->psg.ch3.bank = !!(GBAudioRegisterBankGetBank(value));
 	GBAudioWriteNR30(&audio->psg, value);
 }
 
@@ -187,14 +188,14 @@ void GBAAudioWriteSOUNDCNT_LO(struct GBAAudio* audio, uint16_t value) {
 
 void GBAAudioWriteSOUNDCNT_HI(struct GBAAudio* audio, uint16_t value) {
 	audio->volume = GBARegisterSOUNDCNT_HIGetVolume(value);
-	audio->volumeChA = GBARegisterSOUNDCNT_HIGetVolumeChA(value);
-	audio->volumeChB = GBARegisterSOUNDCNT_HIGetVolumeChB(value);
-	audio->chARight = GBARegisterSOUNDCNT_HIGetChARight(value);
-	audio->chALeft = GBARegisterSOUNDCNT_HIGetChALeft(value);
-	audio->chATimer = GBARegisterSOUNDCNT_HIGetChATimer(value);
-	audio->chBRight = GBARegisterSOUNDCNT_HIGetChBRight(value);
-	audio->chBLeft = GBARegisterSOUNDCNT_HIGetChBLeft(value);
-	audio->chBTimer = GBARegisterSOUNDCNT_HIGetChBTimer(value);
+	audio->volumeChA = !!(GBARegisterSOUNDCNT_HIGetVolumeChA(value));
+	audio->volumeChB = !!(GBARegisterSOUNDCNT_HIGetVolumeChB(value));
+	audio->chARight = !!(GBARegisterSOUNDCNT_HIGetChARight(value));
+	audio->chALeft = !!(GBARegisterSOUNDCNT_HIGetChALeft(value));
+	audio->chATimer = !!(GBARegisterSOUNDCNT_HIGetChATimer(value));
+	audio->chBRight = !!(GBARegisterSOUNDCNT_HIGetChBRight(value));
+	audio->chBLeft = !!(GBARegisterSOUNDCNT_HIGetChBLeft(value));
+	audio->chBTimer = !!(GBARegisterSOUNDCNT_HIGetChBTimer(value));
 	if (GBARegisterSOUNDCNT_HIIsChAReset(value)) {
 		audio->chA.fifoWrite = 0;
 		audio->chA.fifoRead = 0;
@@ -207,7 +208,7 @@ void GBAAudioWriteSOUNDCNT_HI(struct GBAAudio* audio, uint16_t value) {
 
 void GBAAudioWriteSOUNDCNT_X(struct GBAAudio* audio, uint16_t value) {
 	GBAAudioSample(audio, mTimingCurrentTime(&audio->p->timing));
-	audio->enable = GBAudioEnableGetEnable(value);
+	audio->enable = !!(GBAudioEnableGetEnable(value));
 	GBAudioWriteNR52(&audio->psg, value);
 	if (!audio->enable) {
 		int i;
@@ -225,10 +226,11 @@ void GBAAudioWriteSOUNDCNT_X(struct GBAAudio* audio, uint16_t value) {
 }
 
 void GBAAudioWriteSOUNDBIAS(struct GBAAudio* audio, uint16_t value) {
+	int32_t oldSampleInterval;
 	int32_t timestamp = mTimingCurrentTime(&audio->p->timing);
 	GBAAudioSample(audio, timestamp);
 	audio->soundbias = value;
-	int32_t oldSampleInterval = audio->sampleInterval;
+	oldSampleInterval = audio->sampleInterval;
 	audio->sampleInterval = 0x200 >> GBARegisterSOUNDBIASGetResolution(value);
 	if (oldSampleInterval != audio->sampleInterval) {
 		timestamp -= audio->lastSample;
@@ -290,6 +292,10 @@ uint32_t GBAAudioWriteFIFO(struct GBAAudio* audio, int address, uint32_t value) 
 }
 
 void GBAAudioSampleFIFO(struct GBAAudio* audio, int fifoId, int32_t cycles) {
+	int fifoSize;
+	int32_t until;
+	int bits;
+	int i;
 	struct GBAAudioFIFO* channel;
 	if (fifoId == 0) {
 		channel = &audio->chA;
@@ -299,7 +305,6 @@ void GBAAudioSampleFIFO(struct GBAAudio* audio, int fifoId, int32_t cycles) {
 		mLOG(GBA_AUDIO, ERROR, "Bad FIFO write to address 0x%03x", fifoId);
 		return;
 	}
-	int fifoSize;
 	if (channel->fifoWrite >= channel->fifoRead) {
 		fifoSize = channel->fifoWrite - channel->fifoRead;
 	} else {
@@ -323,14 +328,13 @@ void GBAAudioSampleFIFO(struct GBAAudio* audio, int fifoId, int32_t cycles) {
 			channel->fifoRead = 0;
 		}
 	}
-	int32_t until = mTimingUntil(&audio->p->timing, &audio->sampleEvent) - 1;
-	int bits = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
+	until = mTimingUntil(&audio->p->timing, &audio->sampleEvent) - 1;
+	bits = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
 	until += 1 << (9 - GBARegisterSOUNDBIASGetResolution(audio->soundbias));
 	until >>= 9 - GBARegisterSOUNDBIASGetResolution(audio->soundbias);
 	if (UNLIKELY(bits < until)) {
 		until = bits;
 	}
-	int i;
 	for (i = bits - until; i < bits; ++i) {
 		channel->samples[i] = channel->internalSample;
 	}
@@ -351,11 +355,12 @@ static int _applyBias(struct GBAAudio* audio, int sample) {
 }
 
 void GBAAudioSample(struct GBAAudio* audio, int32_t timestamp) {
+	int maxSample;
+	int sample;
 	timestamp -= audio->lastSample;
 	timestamp -= audio->sampleIndex * audio->sampleInterval; // TODO: This can break if the interval changes between samples
 
-	int maxSample = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
-	int sample;
+	maxSample = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
 	for (sample = audio->sampleIndex; timestamp >= audio->sampleInterval && sample < maxSample; ++sample, timestamp -= audio->sampleInterval) {
 		int16_t sampleLeft = 0;
 		int16_t sampleRight = 0;
@@ -399,10 +404,11 @@ void GBAAudioSample(struct GBAAudio* audio, int32_t timestamp) {
 }
 
 static void _sample(struct mTiming* timing, void* user, uint32_t cyclesLate) {
+	int samples;
 	struct GBAAudio* audio = user;
 	GBAAudioSample(audio, mTimingCurrentTime(&audio->p->timing) - cyclesLate);
 
-	int samples = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
+	samples = 2 << GBARegisterSOUNDBIASGetResolution(audio->soundbias);
 	memset(audio->chA.samples, audio->chA.samples[samples - 1], sizeof(audio->chA.samples));
 	memset(audio->chB.samples, audio->chB.samples[samples - 1], sizeof(audio->chB.samples));
 
@@ -431,6 +437,13 @@ static void _sample(struct mTiming* timing, void* user, uint32_t cyclesLate) {
 }
 
 void GBAAudioSerialize(const struct GBAAudio* audio, struct GBASerializedState* state) {
+	size_t i;
+	int readA;
+	int readB;
+	int fifoSizeA;
+	int fifoSizeB;
+	GBASerializedAudioFlags flags = 0;
+	GBASerializedAudioFlags2 flags2 = 0;
 	GBAudioPSGSerialize(&audio->psg, &state->audio.psg, &state->audio.flags);
 
 	STORE_32(audio->chA.internalSample, 0, &state->audio.internalA);
@@ -438,15 +451,14 @@ void GBAAudioSerialize(const struct GBAAudio* audio, struct GBASerializedState* 
 	memcpy(state->samples.chA, audio->chA.samples, sizeof(audio->chA.samples));
 	memcpy(state->samples.chB, audio->chB.samples, sizeof(audio->chB.samples));
 
-	size_t i;
 	for (i = 0; i < GBA_MAX_SAMPLES; ++i) {
 		STORE_16(audio->currentSamples[i].left, 0, &state->currentSamples[i].left);
 		STORE_16(audio->currentSamples[i].right, 0, &state->currentSamples[i].right);
 	}
 	STORE_32(audio->lastSample, 0, &state->audio.lastSample);
 
-	int readA = audio->chA.fifoRead;
-	int readB = audio->chB.fifoRead;
+	readA = audio->chA.fifoRead;
+	readB = audio->chB.fifoRead;
 	for (i = 0; i < GBA_AUDIO_FIFO_SIZE; ++i) {
 		STORE_32(audio->chA.fifo[readA], i << 2, state->audio.fifoA);
 		STORE_32(audio->chB.fifo[readB], i << 2, state->audio.fifoB);
@@ -460,28 +472,24 @@ void GBAAudioSerialize(const struct GBAAudio* audio, struct GBASerializedState* 
 		}
 	}
 
-	int fifoSizeA;
 	if (audio->chA.fifoWrite >= audio->chA.fifoRead) {
 		fifoSizeA = audio->chA.fifoWrite - audio->chA.fifoRead;
 	} else {
 		fifoSizeA = GBA_AUDIO_FIFO_SIZE - audio->chA.fifoRead + audio->chA.fifoWrite;
 	}
 
-	int fifoSizeB;
 	if (audio->chB.fifoWrite >= audio->chB.fifoRead) {
 		fifoSizeB = audio->chB.fifoWrite - audio->chB.fifoRead;
 	} else {
 		fifoSizeB = GBA_AUDIO_FIFO_SIZE - audio->chB.fifoRead + audio->chB.fifoWrite;
 	}
 
-	GBASerializedAudioFlags flags = 0;
 	flags = GBASerializedAudioFlagsSetFIFOSamplesA(flags, fifoSizeA);
 	flags = GBASerializedAudioFlagsSetFIFOSamplesB(flags, fifoSizeB);
 	flags = GBASerializedAudioFlagsSetFIFOInternalSamplesA(flags, audio->chA.internalRemaining);
 	flags = GBASerializedAudioFlagsSetFIFOInternalSamplesB(flags, audio->chB.internalRemaining);
 	STORE_16(flags, 0, &state->audio.gbaFlags);
 
-	GBASerializedAudioFlags2 flags2 = 0;
 	flags2 = GBASerializedAudioFlags2SetSampleIndex(flags2, audio->sampleIndex);
 	// This flag was introduced in 0.11 and will only ever be 0, 1 or 2, so we
 	// add 1 and use a non-zero value to mark its presence in the state file
@@ -493,9 +501,15 @@ void GBAAudioSerialize(const struct GBAAudio* audio, struct GBASerializedState* 
 }
 
 void GBAAudioDeserialize(struct GBAAudio* audio, const struct GBASerializedState* state) {
+	uint16_t reg;
+	size_t i;
+	int readA = 0;
+	int readB = 0;
+	GBASerializedAudioFlags flags;
+	GBASerializedAudioFlags2 flags2;
+	uint32_t when;
 	GBAudioPSGDeserialize(&audio->psg, &state->audio.psg, &state->audio.flags);
 
-	uint16_t reg;
 	LOAD_16(reg, GBA_REG_SOUND1CNT_X, state->io);
 	GBAIOWrite(audio->p, GBA_REG_SOUND1CNT_X, reg & 0x7FFF);
 	LOAD_16(reg, GBA_REG_SOUND2CNT_HI, state->io);
@@ -510,15 +524,12 @@ void GBAAudioDeserialize(struct GBAAudio* audio, const struct GBASerializedState
 	memcpy(audio->chA.samples, state->samples.chA, sizeof(audio->chA.samples));
 	memcpy(audio->chB.samples, state->samples.chB, sizeof(audio->chB.samples));
 
-	size_t i;
 	for (i = 0; i < GBA_MAX_SAMPLES; ++i) {
 		LOAD_16(audio->currentSamples[i].left, 0, &state->currentSamples[i].left);
 		LOAD_16(audio->currentSamples[i].right, 0, &state->currentSamples[i].right);
 	}
 	LOAD_32(audio->lastSample, 0, &state->audio.lastSample);
 
-	int readA = 0;
-	int readB = 0;
 	for (i = 0; i < GBA_AUDIO_FIFO_SIZE; ++i) {
 		LOAD_32(audio->chA.fifo[readA], i << 2, state->audio.fifoA);
 		LOAD_32(audio->chB.fifo[readB], i << 2, state->audio.fifoB);
@@ -528,14 +539,12 @@ void GBAAudioDeserialize(struct GBAAudio* audio, const struct GBASerializedState
 	audio->chA.fifoRead = 0;
 	audio->chB.fifoRead = 0;
 
-	GBASerializedAudioFlags flags;
 	LOAD_16(flags, 0, &state->audio.gbaFlags);
 	audio->chA.fifoWrite = GBASerializedAudioFlagsGetFIFOSamplesA(flags);
 	audio->chB.fifoWrite = GBASerializedAudioFlagsGetFIFOSamplesB(flags);
 	audio->chA.internalRemaining = GBASerializedAudioFlagsGetFIFOInternalSamplesA(flags);
 	audio->chB.internalRemaining = GBASerializedAudioFlagsGetFIFOInternalSamplesB(flags);
 
-	GBASerializedAudioFlags2 flags2;
 	LOAD_32(flags2, 0, &state->audio.gbaFlags2);
 	audio->sampleIndex = GBASerializedAudioFlags2GetSampleIndex(flags2);
 	// This flag was introduced in 0.11 and will only ever be 0, 1 or 2, so we
@@ -547,7 +556,6 @@ void GBAAudioDeserialize(struct GBAAudio* audio, const struct GBASerializedState
 		audio->chB.dmaSource = GBASerializedAudioFlags2GetChBSource(flags2) - 1;
 	}
 
-	uint32_t when;
 	LOAD_32(when, 0, &state->audio.nextSample);
 	if (state->versionMagic < 0x01000007) {
 		audio->lastSample = when - SAMPLE_INTERVAL;

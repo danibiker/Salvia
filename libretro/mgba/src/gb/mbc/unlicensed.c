@@ -8,8 +8,9 @@
 #include <mgba/internal/gb/gb.h>
 
 void _GBWisdomTree(struct GB* gb, uint16_t address, uint8_t value) {
+	int bank;
 	UNUSED(value);
-	int bank = address & 0x3F;
+	bank = address & 0x3F;
 	switch (address >> 14) {
 	case 0x0:
 		GBMBCSwitchBank0(gb, bank * 2);

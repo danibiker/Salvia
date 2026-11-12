@@ -10,6 +10,7 @@ DEFINE_VECTOR(mBitmapCacheSet, struct mBitmapCache);
 DEFINE_VECTOR(mTileCacheSet, struct mTileCache);
 
 void mCacheSetInit(struct mCacheSet* cache, size_t nMaps, size_t nBitmaps, size_t nTiles) {
+	size_t i;
 	mMapCacheSetInit(&cache->maps, nMaps);
 	mMapCacheSetResize(&cache->maps, nMaps);
 	mBitmapCacheSetInit(&cache->bitmaps, nBitmaps);
@@ -17,7 +18,6 @@ void mCacheSetInit(struct mCacheSet* cache, size_t nMaps, size_t nBitmaps, size_
 	mTileCacheSetInit(&cache->tiles, nTiles);
 	mTileCacheSetResize(&cache->tiles, nTiles);
 
-	size_t i;
 	for (i = 0; i < nMaps; ++i) {
 		mMapCacheInit(mMapCacheSetGetPointer(&cache->maps, i));
 	}

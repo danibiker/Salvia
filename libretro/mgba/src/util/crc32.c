@@ -103,9 +103,10 @@ uint32_t doCrc32(const void* buf, size_t size) {
 #ifndef HAVE_CRC32
 uint32_t crc32(uint32_t crc, const void* buf, size_t size) {
 	const uint8_t* p = buf;
+	size_t i;
 
 	crc = ~crc;
-	for (size_t i = 0; i < size; ++i) {
+	for (i = 0; i < size; ++i) {
 		crc = crc32Table[(crc ^ p[i]) & 0xFF] ^ (crc >> 8);
 	}
 
@@ -114,13 +115,13 @@ uint32_t crc32(uint32_t crc, const void* buf, size_t size) {
 #endif
 
 uint32_t fileCrc32(struct VFile* vf, size_t endOffset) {
+	uint32_t crc = 0;
 	uint8_t buffer[BUFFER_SIZE];
 	size_t blocksize;
 	size_t alreadyRead = 0;
 	if (vf->seek(vf, 0, SEEK_SET) < 0) {
 		return 0;
 	}
-	uint32_t crc = 0;
 	while (alreadyRead < endOffset) {
 		size_t toRead = sizeof(buffer);
 		if (toRead + alreadyRead > endOffset) {

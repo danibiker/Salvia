@@ -68,7 +68,7 @@ void GBMBCSwitchHalfBank(struct GB* gb, int half, int bank) {
 	size_t bankStart = bank * GB_SIZE_CART_HALFBANK;
 	bool isFlash = false;
 	if (gb->memory.mbcType == GB_MBC6) {
-		isFlash = half ? gb->memory.mbcState.mbc6.flashBank1 : gb->memory.mbcState.mbc6.flashBank0;
+		isFlash = !!(half ? gb->memory.mbcState.mbc6.flashBank1 : gb->memory.mbcState.mbc6.flashBank0);
 	}
 	if (isFlash) {
 		if (bankStart + GB_SIZE_CART_HALFBANK > GB_SIZE_MBC6_FLASH) {
@@ -213,6 +213,7 @@ static bool _isWisdomTree(const uint8_t* mem, size_t size) {
 }
 
 static enum GBMemoryBankControllerType _detectUnlMBC(const uint8_t* mem, size_t size) {
+	uint32_t secondaryLogo;
 	const struct GBCartridge* cart = (const struct GBCartridge*) &mem[0x100];
 
 	switch (cart->type) {
@@ -223,7 +224,7 @@ static enum GBMemoryBankControllerType _detectUnlMBC(const uint8_t* mem, size_t 
 		break;
 	}
 
-	uint32_t secondaryLogo = doCrc32(&mem[0x184], 0x30);
+	secondaryLogo = doCrc32(&mem[0x184], 0x30);
 	switch (secondaryLogo) {
 	case 0x4fdab691:
 		return GB_UNL_HITEK;
@@ -655,17 +656,18 @@ void GBMBCRTCRead(struct GB* gb) {
 }
 
 void GBMBCRTCWrite(struct GB* gb) {
+	uint8_t rtcRegs[5];
+	time_t rtcLastLatch;
+	struct GBMBCRTCSaveBuffer rtcBuffer;
 	struct VFile* vf = gb->sramVf;
 	if (!vf) {
 		return;
 	}
 
-	uint8_t rtcRegs[5];
 	memcpy(rtcRegs, gb->memory.rtcRegs, sizeof(rtcRegs));
-	time_t rtcLastLatch = gb->memory.rtcLastLatch;
+	rtcLastLatch = gb->memory.rtcLastLatch;
 	_GBMBCLatchRTC(gb->memory.rtc, rtcRegs, &rtcLastLatch);
 
-	struct GBMBCRTCSaveBuffer rtcBuffer;
 	STORE_32LE(rtcRegs[0], 0, &rtcBuffer.sec);
 	STORE_32LE(rtcRegs[1], 0, &rtcBuffer.min);
 	STORE_32LE(rtcRegs[2], 0, &rtcBuffer.hour);

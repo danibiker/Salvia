@@ -84,19 +84,23 @@ void GBATimerInit(struct GBA* gba) {
 }
 
 void GBATimerUpdateRegister(struct GBA* gba, int timer, int32_t cyclesLate) {
+	int prescaleBits;
+	int32_t currentTime;
+	int32_t tickMask;
+	int32_t tickIncrement;
 	struct GBATimer* currentTimer = &gba->timers[timer];
 	if (!GBATimerFlagsIsEnable(currentTimer->flags) || GBATimerFlagsIsCountUp(currentTimer->flags)) {
 		return;
 	}
 
 	// Align timer
-	int prescaleBits = GBATimerFlagsGetPrescaleBits(currentTimer->flags);
-	int32_t currentTime = mTimingCurrentTime(&gba->timing) - cyclesLate;
-	int32_t tickMask = (1 << prescaleBits) - 1;
+	prescaleBits = GBATimerFlagsGetPrescaleBits(currentTimer->flags);
+	currentTime = mTimingCurrentTime(&gba->timing) - cyclesLate;
+	tickMask = (1 << prescaleBits) - 1;
 	currentTime &= ~tickMask;
 
 	// Update register
-	int32_t tickIncrement = currentTime - currentTimer->lastEvent;
+	tickIncrement = currentTime - currentTimer->lastEvent;
 	currentTimer->lastEvent = currentTime;
 	tickIncrement >>= prescaleBits;
 	tickIncrement += gba->memory.io[GBA_REG_TMCNT_LO(timer) >> 1];
@@ -118,19 +122,21 @@ void GBATimerWriteTMCNT_LO(struct GBA* gba, int timer, uint16_t reload) {
 }
 
 void GBATimerWriteTMCNT_HI(struct GBA* gba, int timer, uint16_t control) {
+	const unsigned prescaleTable[4] = { 0, 6, 8, 10 };
+	unsigned prescaleBits;
+	GBATimerFlags oldFlags;
+	bool reschedule = false;
 	struct GBATimer* currentTimer = &gba->timers[timer];
 	GBATimerUpdateRegister(gba, timer, 0);
 
-	const unsigned prescaleTable[4] = { 0, 6, 8, 10 };
-	unsigned prescaleBits = prescaleTable[control & 0x0003];
+	prescaleBits = prescaleTable[control & 0x0003];
 
-	GBATimerFlags oldFlags = currentTimer->flags;
+	oldFlags = currentTimer->flags;
 	currentTimer->flags = GBATimerFlagsSetPrescaleBits(currentTimer->flags, prescaleBits);
 	currentTimer->flags = GBATimerFlagsTestFillCountUp(currentTimer->flags, timer > 0 && (control & 0x0004));
-	currentTimer->flags = GBATimerFlagsTestFillDoIrq(currentTimer->flags, control & 0x0040);
-	currentTimer->flags = GBATimerFlagsTestFillEnable(currentTimer->flags, control & 0x0080);
+	currentTimer->flags = GBATimerFlagsTestFillDoIrq(currentTimer->flags, !!(control & 0x0040));
+	currentTimer->flags = GBATimerFlagsTestFillEnable(currentTimer->flags, !!(control & 0x0080));
 
-	bool reschedule = false;
 	if (GBATimerFlagsIsEnable(oldFlags) != GBATimerFlagsIsEnable(currentTimer->flags)) {
 		reschedule = true;
 		if (GBATimerFlagsIsEnable(currentTimer->flags)) {

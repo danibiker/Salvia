@@ -17,6 +17,7 @@ MGBA_EXPORT const uint32_t GBSavestateMagic = 0x00400000;
 MGBA_EXPORT const uint32_t GBSavestateVersion = 0x00000003;
 
 void GBSerialize(struct GB* gb, struct GBSerializedState* state) {
+	GBSerializedCpuFlags flags = 0;
 	STORE_32LE(GBSavestateMagic + GBSavestateVersion, 0, &state->versionMagic);
 	STORE_32LE(gb->romCrc32, 0, &state->romCrc32);
 	STORE_32LE(gb->timing.masterCycles, 0, &state->masterCycles);
@@ -48,7 +49,6 @@ void GBSerialize(struct GB* gb, struct GBSerializedState* state) {
 	state->cpu.bus = gb->cpu->bus;
 	state->cpu.executionState = gb->cpu->executionState;
 
-	GBSerializedCpuFlags flags = 0;
 	flags = GBSerializedCpuFlagsSetCondition(flags, gb->cpu->condition);
 	flags = GBSerializedCpuFlagsSetIrqPending(flags, gb->cpu->irqPending);
 	flags = GBSerializedCpuFlagsSetDoubleSpeed(flags, gb->doubleSpeed);
@@ -70,6 +70,11 @@ void GBSerialize(struct GB* gb, struct GBSerializedState* state) {
 }
 
 bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
+	bool canSgb;
+	GBSerializedVideoFlags videoFlags;
+	bool differentBios;
+	GBSerializedCpuFlags flags;
+	uint32_t when;
 	bool error = false;
 	int32_t check;
 	uint32_t ucheck;
@@ -85,7 +90,7 @@ bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 	} else if (ucheck < GBSavestateMagic + GBSavestateVersion) {
 		mLOG(GB_STATE, WARN, "Old savestate: expected %08X, got %08X, continuing anyway", GBSavestateMagic + GBSavestateVersion, ucheck);
 	}
-	bool canSgb = ucheck >= GBSavestateMagic + 2;
+	canSgb = ucheck >= GBSavestateMagic + 2;
 
 	if (gb->memory.rom && memcmp(state->title, ((struct GBCartridge*) &gb->memory.rom[0x100])->titleLong, sizeof(state->title))) {
 		LOAD_32LE(ucheck, 0, &state->versionMagic);
@@ -123,7 +128,7 @@ bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 		error = true;
 	}
 
-	GBSerializedVideoFlags videoFlags = state->video.flags;
+	videoFlags = state->video.flags;
 	if (check16 >= GB_VIDEO_VERTICAL_PIXELS && GBSerializedVideoFlagsGetMode(videoFlags) != 1) {
 		mLOG(GB_STATE, WARN, "Savestate is corrupted: video y is in vblank but mode is not vblank");
 		error = true;
@@ -142,7 +147,7 @@ bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 	if (ucheck16 >= 0x40) {
 		mLOG(GB_STATE, WARN, "Savestate is corrupted: OCPS is out of range");
 	}
-	bool differentBios = !gb->biosVf || gb->model != state->model;
+	differentBios = !gb->biosVf || gb->model != state->model;
 	if (state->io[GB_REG_BANK] == 0xFF) {
 		if (differentBios) {
 			mLOG(GB_STATE, WARN, "Incompatible savestate, please restart with correct BIOS in %s mode", GBModelToName(state->model));
@@ -174,20 +179,18 @@ bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 	gb->cpu->bus = state->cpu.bus;
 	gb->cpu->executionState = state->cpu.executionState;
 
-	GBSerializedCpuFlags flags;
 	LOAD_32LE(flags, 0, &state->cpu.flags);
-	gb->cpu->condition = GBSerializedCpuFlagsGetCondition(flags);
-	gb->cpu->irqPending = GBSerializedCpuFlagsGetIrqPending(flags);
+	gb->cpu->condition = !!(GBSerializedCpuFlagsGetCondition(flags));
+	gb->cpu->irqPending = !!(GBSerializedCpuFlagsGetIrqPending(flags));
 	gb->doubleSpeed = GBSerializedCpuFlagsGetDoubleSpeed(flags);
 	gb->cpu->tMultiplier = 2 - gb->doubleSpeed;
-	gb->cpu->halted = GBSerializedCpuFlagsGetHalted(flags);
-	gb->cpuBlocked = GBSerializedCpuFlagsGetBlocked(flags);
+	gb->cpu->halted = !!(GBSerializedCpuFlagsGetHalted(flags));
+	gb->cpuBlocked = !!(GBSerializedCpuFlagsGetBlocked(flags));
 
 	LOAD_32LE(gb->cpu->cycles, 0, &state->cpu.cycles);
 	LOAD_32LE(gb->cpu->nextEvent, 0, &state->cpu.nextEvent);
 	gb->timing.root = NULL;
 
-	uint32_t when;
 	LOAD_32LE(when, 0, &state->cpu.eiPending);
 	if (GBSerializedCpuFlagsIsEiPending(flags)) {
 		mTimingSchedule(&gb->timing, &gb->eiPending, when);
@@ -231,10 +234,10 @@ bool GBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 
 // TODO: Reorganize SGB into its own file
 void GBSGBSerialize(struct GB* gb, struct GBSerializedState* state) {
+	GBSerializedSGBFlags flags = 0;
 	state->sgb.command = gb->video.sgbCommandHeader;
 	state->sgb.bits = gb->sgbBit;
 
-	GBSerializedSGBFlags flags = 0;
 	flags = GBSerializedSGBFlagsSetP1Bits(flags, gb->currentSgbBits);
 	flags = GBSerializedSGBFlagsSetRenderMode(flags, gb->video.renderer->sgbRenderMode);
 	flags = GBSerializedSGBFlagsSetBufferIndex(flags, gb->video.sgbBufferIndex);
@@ -264,17 +267,17 @@ void GBSGBSerialize(struct GB* gb, struct GBSerializedState* state) {
 }
 
 void GBSGBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
+	GBSerializedSGBFlags flags;
 	gb->video.sgbCommandHeader = state->sgb.command;
 	gb->sgbBit = state->sgb.bits;
 
-	GBSerializedSGBFlags flags;
 	LOAD_32LE(flags, 0, &state->sgb.flags);
 	gb->currentSgbBits = GBSerializedSGBFlagsGetP1Bits(flags);
 	gb->video.renderer->sgbRenderMode = GBSerializedSGBFlagsGetRenderMode(flags);
 	gb->video.sgbBufferIndex = GBSerializedSGBFlagsGetBufferIndex(flags);
 	gb->sgbControllers = GBSerializedSGBFlagsGetReqControllers(flags);
 	gb->sgbCurrentController = GBSerializedSGBFlagsGetCurrentController(flags);
-	gb->sgbIncrement = GBSerializedSGBFlagsGetIncrement(flags);
+	gb->sgbIncrement = !!(GBSerializedSGBFlagsGetIncrement(flags));
 
 	// Old versions of mGBA stored the increment bits here
 	if (gb->sgbBit > 129 && gb->sgbBit & 2) {
@@ -306,5 +309,8 @@ void GBSGBDeserialize(struct GB* gb, const struct GBSerializedState* state) {
 	memcpy(gb->video.renderer->sgbAttributeFiles, state->sgb.atfRam, sizeof(state->sgb.atfRam));
 	memcpy(gb->video.renderer->sgbAttributes, state->sgb.attributes, sizeof(state->sgb.attributes));
 
-	GBVideoWriteSGBPacket(&gb->video, (uint8_t[16]) { (SGB_ATRC_EN << 3) | 1, 0 });
+	{
+		uint8_t packet[16] = { (SGB_ATRC_EN << 3) | 1, 0 };
+		GBVideoWriteSGBPacket(&gb->video, packet);
+	}
 }

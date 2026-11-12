@@ -43,10 +43,11 @@
 
 #define MODE_2_LOOP(MOSAIC, COORD, BLEND, OBJWIN) \
 	for (outX = renderer->start, pixel = &renderer->row[outX]; outX < renderer->end; ++outX, ++pixel) { \
+		uint32_t current; \
 		x += background->dx; \
 		y += background->dy; \
 		\
-		uint32_t current = *pixel; \
+		current = *pixel; \
 		MOSAIC(COORD) \
 		if (pixelData && IS_WRITABLE(current)) { \
 			COMPOSITE_256_ ## OBJWIN (BLEND, 0); \
@@ -77,17 +78,19 @@
 	}
 
 void GBAVideoSoftwareRendererDrawBackgroundMode2(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background, int inY) {
+	uint8_t* screenBase;
+	uint8_t* charBase;
+	uint8_t mapData;
+	uint8_t pixelData = 0;
+	int outX;
+	uint32_t* pixel;
 	int sizeAdjusted = 0x8000 << background->size;
 
 	BACKGROUND_BITMAP_INIT;
 
-	uint8_t* screenBase = &((uint8_t*) renderer->d.vram)[background->screenBase];
-	uint8_t* charBase = &((uint8_t*) renderer->d.vram)[background->charBase];
-	uint8_t mapData;
-	uint8_t pixelData = 0;
+	screenBase = &((uint8_t*) renderer->d.vram)[background->screenBase];
+	charBase = &((uint8_t*) renderer->d.vram)[background->charBase];
 
-	int outX;
-	uint32_t* pixel;
 
 	if (!objwinSlowPath) {
 		if (!(flags & FLAG_TARGET_2)) {
@@ -105,17 +108,19 @@ void GBAVideoSoftwareRendererDrawBackgroundMode2(struct GBAVideoSoftwareRenderer
 }
 
 void GBAVideoSoftwareRendererDrawBackgroundMode3(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background, int inY) {
+	uint32_t color;
+	int outX;
+	uint32_t* pixel;
 	BACKGROUND_BITMAP_INIT;
 
-	uint32_t color = renderer->normalPalette[0];
+	color = renderer->normalPalette[0];
 	if (mosaicWait && localX >= 0 && localY >= 0 && (localX >> 8) < GBA_VIDEO_HORIZONTAL_PIXELS && (localY >> 8) < GBA_VIDEO_VERTICAL_PIXELS) {
 		LOAD_16(color, ((localX >> 8) + (localY >> 8) * GBA_VIDEO_HORIZONTAL_PIXELS) << 1, renderer->d.vram);
 		color = mColorFrom555(color);
 	}
 
-	int outX;
-	uint32_t* pixel;
 	for (outX = renderer->start, pixel = &renderer->row[outX]; outX < renderer->end; ++outX, ++pixel) {
+		uint32_t current;
 		BACKGROUND_BITMAP_ITERATE(GBA_VIDEO_HORIZONTAL_PIXELS, GBA_VIDEO_VERTICAL_PIXELS);
 
 		if (!mosaicWait) {
@@ -126,7 +131,7 @@ void GBAVideoSoftwareRendererDrawBackgroundMode3(struct GBAVideoSoftwareRenderer
 			--mosaicWait;
 		}
 
-		uint32_t current = *pixel;
+		current = *pixel;
 		if (!objwinSlowPath || (!(current & FLAG_OBJWIN)) != background->objwinOnly) {
 			unsigned mergedFlags = flags;
 			if (current & FLAG_OBJWIN) {
@@ -144,10 +149,12 @@ void GBAVideoSoftwareRendererDrawBackgroundMode3(struct GBAVideoSoftwareRenderer
 }
 
 void GBAVideoSoftwareRendererDrawBackgroundMode4(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background, int inY) {
-	BACKGROUND_BITMAP_INIT;
-
 	uint16_t color = 0;
 	uint32_t offset = 0;
+	int outX;
+	uint32_t* pixel;
+	BACKGROUND_BITMAP_INIT;
+
 	if (GBARegisterDISPCNTIsFrameSelect(renderer->dispcnt)) {
 		offset = 0xA000;
 	}
@@ -155,9 +162,8 @@ void GBAVideoSoftwareRendererDrawBackgroundMode4(struct GBAVideoSoftwareRenderer
 		color = ((uint8_t*)renderer->d.vram)[offset + (localX >> 8) + (localY >> 8) * GBA_VIDEO_HORIZONTAL_PIXELS];
 	}
 
-	int outX;
-	uint32_t* pixel;
 	for (outX = renderer->start, pixel = &renderer->row[outX]; outX < renderer->end; ++outX, ++pixel) {
+		uint32_t current;
 		BACKGROUND_BITMAP_ITERATE(GBA_VIDEO_HORIZONTAL_PIXELS, GBA_VIDEO_VERTICAL_PIXELS);
 
 		if (!mosaicWait) {
@@ -168,7 +174,7 @@ void GBAVideoSoftwareRendererDrawBackgroundMode4(struct GBAVideoSoftwareRenderer
 			--mosaicWait;
 		}
 
-		uint32_t current = *pixel;
+		current = *pixel;
 		if (color && IS_WRITABLE(current)) {
 			if (!objwinSlowPath) {
 				_compositeBlendNoObjwin(renderer, pixel, palette[color] | flags, current);
@@ -185,10 +191,13 @@ void GBAVideoSoftwareRendererDrawBackgroundMode4(struct GBAVideoSoftwareRenderer
 }
 
 void GBAVideoSoftwareRendererDrawBackgroundMode5(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background, int inY) {
+	uint32_t color;
+	uint32_t offset = 0;
+	int outX;
+	uint32_t* pixel;
 	BACKGROUND_BITMAP_INIT;
 
-	uint32_t color = renderer->normalPalette[0];
-	uint32_t offset = 0;
+	color = renderer->normalPalette[0];
 	if (GBARegisterDISPCNTIsFrameSelect(renderer->dispcnt)) {
 		offset = 0xA000;
 	}
@@ -197,9 +206,8 @@ void GBAVideoSoftwareRendererDrawBackgroundMode5(struct GBAVideoSoftwareRenderer
 		color = mColorFrom555(color);
 	}
 
-	int outX;
-	uint32_t* pixel;
 	for (outX = renderer->start, pixel = &renderer->row[outX]; outX < renderer->end; ++outX, ++pixel) {
+		uint32_t current;
 		BACKGROUND_BITMAP_ITERATE(160, 128);
 
 		if (!mosaicWait) {
@@ -210,7 +218,7 @@ void GBAVideoSoftwareRendererDrawBackgroundMode5(struct GBAVideoSoftwareRenderer
 			--mosaicWait;
 		}
 
-		uint32_t current = *pixel;
+		current = *pixel;
 		if (!objwinSlowPath || (!(current & FLAG_OBJWIN)) != background->objwinOnly) {
 			unsigned mergedFlags = flags;
 			if (current & FLAG_OBJWIN) {

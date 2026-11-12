@@ -11,9 +11,10 @@
 #include <mgba/internal/gb/video.h>
 
 void GBVideoCacheInit(struct mCacheSet* cache) {
-	mCacheSetInit(cache, 2, 0, 1);
 	mTileCacheSystemInfo sysconfig = 0;
-	mTileCacheConfiguration config = mTileCacheConfigurationFillShouldStore(0);
+	mTileCacheConfiguration config;
+	mCacheSetInit(cache, 2, 0, 1);
+	config = mTileCacheConfigurationFillShouldStore(0);
 	sysconfig = mTileCacheSystemInfoSetPaletteBPP(sysconfig, 1); // 2^(2^1) = 4 entries
 	sysconfig = mTileCacheSystemInfoSetPaletteCount(sysconfig, 4); // 16 palettes
 	sysconfig = mTileCacheSystemInfoSetMaxTiles(sysconfig, 1024);
@@ -25,13 +26,14 @@ void GBVideoCacheInit(struct mCacheSet* cache) {
 }
 
 void GBVideoCacheAssociate(struct mCacheSet* cache, struct GBVideo* video) {
+	size_t i;
+	mMapCacheSystemInfo sysconfig;
 	mCacheSetAssignVRAM(cache, video->vram);
 	video->renderer->cache = cache;
-	size_t i;
 	for (i = 0; i < 64; ++i) {
 		mCacheSetWritePalette(cache, i, mColorFrom555(video->palette[i]));
 	}
-	mMapCacheSystemInfo sysconfig = mMapCacheSystemInfoSetPaletteCount(0, 0);
+	sysconfig = mMapCacheSystemInfoSetPaletteCount(0, 0);
 	if (video->p->model >= GB_MODEL_CGB) {
 		sysconfig = mMapCacheSystemInfoSetPaletteCount(0, 2);
 	}
@@ -42,8 +44,9 @@ void GBVideoCacheAssociate(struct mCacheSet* cache, struct GBVideo* video) {
 }
 
 static void mapParserDMG0(struct mMapCache* cache, struct mMapCacheEntry* entry, void* vram) {
+	int map;
 	UNUSED(cache);
-	int map = *(uint8_t*) vram;
+	map = *(uint8_t*) vram;
 	entry->tileId = map;
 	entry->flags = mMapCacheEntryFlagsClearHMirror(entry->flags);
 	entry->flags = mMapCacheEntryFlagsClearVMirror(entry->flags);
@@ -51,8 +54,9 @@ static void mapParserDMG0(struct mMapCache* cache, struct mMapCacheEntry* entry,
 }
 
 static void mapParserDMG1(struct mMapCache* cache, struct mMapCacheEntry* entry, void* vram) {
+	int map;
 	UNUSED(cache);
-	int map = *(int8_t*) vram;
+	map = *(int8_t*) vram;
 	entry->tileId = map + 128;
 	entry->flags = mMapCacheEntryFlagsClearHMirror(entry->flags);
 	entry->flags = mMapCacheEntryFlagsClearVMirror(entry->flags);
@@ -60,9 +64,11 @@ static void mapParserDMG1(struct mMapCache* cache, struct mMapCacheEntry* entry,
 }
 
 static void mapParserCGB0(struct mMapCache* cache, struct mMapCacheEntry* entry, void* vram) {
+	int map;
+	uint8_t attr;
 	UNUSED(cache);
-	int map = *(uint8_t*) vram;
-	uint8_t attr = ((uint8_t*) vram)[0x2000];
+	map = *(uint8_t*) vram;
+	attr = ((uint8_t*) vram)[0x2000];
 	entry->tileId = map + GBObjAttributesGetBank(attr) * 512;
 	entry->flags = mMapCacheEntryFlagsSetHMirror(entry->flags, GBObjAttributesGetXFlip(attr));
 	entry->flags = mMapCacheEntryFlagsSetVMirror(entry->flags, GBObjAttributesGetYFlip(attr));
@@ -70,9 +76,11 @@ static void mapParserCGB0(struct mMapCache* cache, struct mMapCacheEntry* entry,
 }
 
 static void mapParserCGB1(struct mMapCache* cache, struct mMapCacheEntry* entry, void* vram) {
+	int map;
+	uint8_t attr;
 	UNUSED(cache);
-	int map = *(int8_t*) vram;
-	uint8_t attr = ((uint8_t*) vram)[0x2000];
+	map = *(int8_t*) vram;
+	attr = ((uint8_t*) vram)[0x2000];
 	entry->tileId = map + 128 + GBObjAttributesGetBank(attr) * 512;
 	entry->flags = mMapCacheEntryFlagsSetHMirror(entry->flags, GBObjAttributesGetXFlip(attr));
 	entry->flags = mMapCacheEntryFlagsSetVMirror(entry->flags, GBObjAttributesGetYFlip(attr));
@@ -80,16 +88,19 @@ static void mapParserCGB1(struct mMapCache* cache, struct mMapCacheEntry* entry,
 }
 
 void GBVideoCacheWriteVideoRegister(struct mCacheSet* cache, uint16_t address, uint8_t value) {
-	if (address != GB_REG_LCDC) {
-		return;
-	}
-	struct mMapCache* map = mMapCacheSetGetPointer(&cache->maps, 0);
-	struct mMapCache* window = mMapCacheSetGetPointer(&cache->maps, 1);
-
-	mMapCacheSystemInfo sysconfig = mMapCacheSystemInfoIsPaletteCount(map->sysConfig);
+	struct mMapCache* map;
+	struct mMapCache* window;
+	mMapCacheSystemInfo sysconfig;
 	int tileStart = 0;
 	int mapStart = GB_BASE_MAP;
 	int windowStart = GB_BASE_MAP;
+	if (address != GB_REG_LCDC) {
+		return;
+	}
+	map = mMapCacheSetGetPointer(&cache->maps, 0);
+	window = mMapCacheSetGetPointer(&cache->maps, 1);
+
+	sysconfig = mMapCacheSystemInfoIsPaletteCount(map->sysConfig);
 	if (GBRegisterLCDCIsTileMap(value)) {
 		mapStart += GB_SIZE_MAP;
 	}

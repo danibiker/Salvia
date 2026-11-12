@@ -16,7 +16,21 @@
 
 CXX_GUARD_START
 
-#ifdef _WIN32
+#if defined(_MSC_VER) && _MSC_VER < 1800 && !defined(__cplusplus)
+// MSVC 2010 and the Xbox 360 XDK compiler only implement C89: the missing C99
+// headers and functions live in src/platform/xbox360/msvc, which has to be on
+// the include path (see src/platform/xbox360/mgba/mgba.vcxproj)
+#define MGBA_MSVC_C89
+#endif
+
+#if defined(_XBOX) && !defined(__BIG_ENDIAN__)
+// Xbox 360 (PowerPC) is big endian, but its compiler doesn't say so
+#define __BIG_ENDIAN__ 1
+#endif
+
+#if defined(_XBOX)
+#include <xtl.h>
+#elif defined(_WIN32)
 #ifndef _CRT_NONSTDC_NO_WARNINGS
 #define _CRT_NONSTDC_NO_WARNINGS
 #endif
@@ -49,6 +63,10 @@ CXX_GUARD_START
 #include <string.h>
 #include <time.h>
 
+#ifdef MGBA_MSVC_C89
+#include "msvc-compat.h"
+#endif
+
 #if defined(_MSC_VER) || defined(__cplusplus)
 #define restrict __restrict
 #endif
@@ -58,14 +76,18 @@ CXX_GUARD_START
 #endif
 
 #ifdef _MSC_VER
+#ifndef _XBOX
 #include <Windows.h>
+#endif
 #include <sys/types.h>
 typedef intptr_t ssize_t;
 #define PATH_MAX MAX_PATH
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define ftruncate _chsize
+#ifndef snprintf
 #define snprintf _snprintf
+#endif
 #define strdup _strdup
 #define lseek _lseek
 #define O_ACCMODE (O_RDONLY|O_WRONLY|O_RDWR)
@@ -159,6 +181,15 @@ typedef intptr_t ssize_t;
 #define STORE_64LE(SRC, ADDR, ARR) *(uint64_t*) ((uintptr_t) (ARR) + (size_t) (ADDR)) = __builtin_bswap64(SRC)
 #define STORE_32LE(SRC, ADDR, ARR) *(uint32_t*) ((uintptr_t) (ARR) + (size_t) (ADDR)) = __builtin_bswap32(SRC)
 #define STORE_16LE(SRC, ADDR, ARR) *(uint16_t*) ((uintptr_t) (ARR) + (size_t) (ADDR)) = __builtin_bswap16(SRC)
+#elif defined(_MSC_VER) && (defined(_M_PPC) || defined(_XBOX))
+// Xbox 360: byte-reversed loads/stores (lwbrx/stwbrx...) through the XDK intrinsics
+#include <ppcintrinsics.h>
+#define LOAD_64LE(DEST, ADDR, ARR) DEST = __loaddoublewordbytereverse((ADDR), (ARR))
+#define LOAD_32LE(DEST, ADDR, ARR) DEST = __loadwordbytereverse((ADDR), (ARR))
+#define LOAD_16LE(DEST, ADDR, ARR) DEST = __loadshortbytereverse((ADDR), (ARR))
+#define STORE_64LE(SRC, ADDR, ARR) __storedoublewordbytereverse((SRC), (ADDR), (ARR))
+#define STORE_32LE(SRC, ADDR, ARR) __storewordbytereverse((SRC), (ADDR), (ARR))
+#define STORE_16LE(SRC, ADDR, ARR) __storeshortbytereverse((SRC), (ADDR), (ARR))
 #elif defined(__PPC__) || defined(__POWERPC__)
 #define LOAD_32LE(DEST, ADDR, ARR) { \
 	size_t _addr = (ADDR); \

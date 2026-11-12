@@ -182,8 +182,8 @@ bool mCoreLoadFile(struct mCore* core, const char* path);
 bool mCorePreloadVF(struct mCore* core, struct VFile* vf);
 bool mCorePreloadFile(struct mCore* core, const char* path);
 
-bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (cb)(size_t, size_t, void*), void* context);
-bool mCorePreloadFileCB(struct mCore* core, const char* path, void (cb)(size_t, size_t, void*), void* context);
+bool mCorePreloadVFCB(struct mCore* core, struct VFile* vf, void (*cb)(size_t, size_t, void*), void* context);
+bool mCorePreloadFileCB(struct mCore* core, const char* path, void (*cb)(size_t, size_t, void*), void* context);
 
 bool mCoreLoadSaveFile(struct mCore* core, const char* path, bool temporary);
 

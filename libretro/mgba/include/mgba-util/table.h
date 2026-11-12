@@ -73,7 +73,7 @@ void HashTableEnumerateBinary(const struct Table*, void (*handler)(const char* k
 void HashTableEnumerateCustom(const struct Table*, void (*handler)(void* key, void* value, void* user), void* user);
 const char* HashTableSearch(const struct Table* table, bool (*predicate)(const char* key, const void* value, const void* user), const void* user);
 const char* HashTableSearchPointer(const struct Table* table, const void* value);
-const char* HashTableSearchData(const struct Table* table, const void* value, size_t bytes);
+const char* HashTableSearchData(const struct Table* table, const void* value, const size_t bytes);
 const char* HashTableSearchString(const struct Table* table, const char* value);
 size_t HashTableSize(const struct Table*);
 

@@ -32,11 +32,12 @@ static ssize_t _vfmSize(struct VFile* vf);
 static bool _vfmSync(struct VFile* vf, void* buffer, size_t size);
 
 struct VFile* VFileFromMemory(void* mem, size_t size) {
+	struct VFileMem* vfm;
 	if (!mem || !size) {
 		return 0;
 	}
 
-	struct VFileMem* vfm = malloc(sizeof(struct VFileMem));
+	vfm = malloc(sizeof(struct VFileMem));
 	if (!vfm) {
 		return 0;
 	}
@@ -60,11 +61,12 @@ struct VFile* VFileFromMemory(void* mem, size_t size) {
 }
 
 struct VFile* VFileFromConstMemory(const void* mem, size_t size) {
+	struct VFileMem* vfm;
 	if (!mem || !size) {
 		return 0;
 	}
 
-	struct VFileMem* vfm = malloc(sizeof(struct VFileMem));
+	vfm = malloc(sizeof(struct VFileMem));
 	if (!vfm) {
 		return 0;
 	}

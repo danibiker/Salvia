@@ -18,7 +18,9 @@
 #define HASH_TABLE_MEMCMP_COMPARATOR(LIST, INDEX) LIST->list[(INDEX)].key == hash && LIST->list[(INDEX)].keylen == keylen && memcmp(LIST->list[(INDEX)].stringKey, key, LIST->list[(INDEX)].keylen) == 0
 #define HASH_TABLE_CUSTOM_COMPARATOR(LIST, INDEX) LIST->list[(INDEX)].key == hash && table->fn.equal(LIST->list[(INDEX)].stringKey, key)
 
-#define TABLE_LOOKUP_START(COMPARATOR, LIST) \
+/* C89: TABLE_LOOKUP_START opens a block so its declarations come first;
+ * TABLE_LOOKUP_END closes it. */
+#define TABLE_LOOKUP_START(COMPARATOR, LIST) { \
 	size_t i; \
 	for (i = 0; i < LIST->nEntries; ++i) { \
 		if (COMPARATOR(LIST, i)) { \
@@ -28,7 +30,7 @@
 #define TABLE_LOOKUP_END \
 			break; \
 		} \
-	}
+	} }
 
 struct TableTuple {
 	uint32_t key;
@@ -83,11 +85,11 @@ static void _removeItemFromList(struct Table* table, struct TableList* list, siz
 }
 
 static void _rebalance(struct Table* table) {
+	size_t i;
 	struct Table newTable;
 	TableInit(&newTable, table->tableSize * REBALANCE_THRESHOLD, NULL);
 	memcpy(&newTable.fn, &table->fn, sizeof(newTable.fn));
 	newTable.seed = table->seed * 134775813 + 1;
-	size_t i;
 	for (i = 0; i < table->tableSize; ++i) {
 		struct TableList* list = &table->table[i];
 		size_t j;
@@ -108,6 +110,7 @@ static void _rebalance(struct Table* table) {
 }
 
 void TableInit(struct Table* table, size_t initialSize, void (*deinitializer)(void*)) {
+	size_t i;
 	if (initialSize < 2) {
 		initialSize = TABLE_INITIAL_SIZE;
 	} else if (initialSize & (initialSize - 1)) {
@@ -116,12 +119,10 @@ void TableInit(struct Table* table, size_t initialSize, void (*deinitializer)(vo
 	table->tableSize = initialSize;
 	table->table = calloc(table->tableSize, sizeof(struct TableList));
 	table->size = 0;
-	table->fn = (struct TableFunctions) {
-		.deinitializer = deinitializer
-	};
+	memset(&table->fn, 0, sizeof(table->fn));
+	table->fn.deinitializer = deinitializer;
 	table->seed = 0;
 
-	size_t i;
 	for (i = 0; i < table->tableSize; ++i) {
 		table->table[i].listSize = LIST_INITIAL_SIZE;
 		table->table[i].nEntries = 0;
@@ -162,10 +163,10 @@ void* TableLookup(const struct Table* table, uint32_t key) {
 void TableInsert(struct Table* table, uint32_t key, void* value) {
 	struct TableList* list = _getList(table, key);
 	if (table->size >= table->tableSize * REBALANCE_THRESHOLD) {
+		size_t i;
 		struct Table newTable;
 		TableInit(&newTable, table->tableSize * REBALANCE_THRESHOLD, NULL);
 		memcpy(&newTable.fn, &table->fn, sizeof(newTable.fn));
-		size_t i;
 		for (i = 0; i < table->tableSize; ++i) {
 			struct TableList* list = &table->table[i];
 			size_t j;
@@ -296,13 +297,14 @@ void HashTableDeinit(struct Table* table) {
 }
 
 void* HashTableLookup(const struct Table* table, const char* key) {
+	const struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, strlen(key), table->seed);
 	} else {
 		hash = hash32(key, strlen(key), table->seed);
 	}
-	const struct TableList* list = _getConstList(table, hash);
+	list = _getConstList(table, hash);
 	TABLE_LOOKUP_START(HASH_TABLE_STRNCMP_COMPARATOR, list) {
 		return lookupResult->value;
 	} TABLE_LOOKUP_END;
@@ -310,13 +312,14 @@ void* HashTableLookup(const struct Table* table, const char* key) {
 }
 
 void* HashTableLookupBinary(const struct Table* table, const void* key, size_t keylen) {
+	const struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, keylen, table->seed);
 	} else {
 		hash = hash32(key, keylen, table->seed);
 	}
-	const struct TableList* list = _getConstList(table, hash);
+	list = _getConstList(table, hash);
 	TABLE_LOOKUP_START(HASH_TABLE_MEMCMP_COMPARATOR, list) {
 		return lookupResult->value;
 	} TABLE_LOOKUP_END;
@@ -333,13 +336,14 @@ void* HashTableLookupCustom(const struct Table* table, void* key) {
 }
 
 void HashTableInsert(struct Table* table, const char* key, void* value) {
+	struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, strlen(key), table->seed);
 	} else {
 		hash = hash32(key, strlen(key), table->seed);
 	}
-	struct TableList* list = _getList(table, hash);
+	list = _getList(table, hash);
 	if (table->size >= table->tableSize * REBALANCE_THRESHOLD) {
 		_rebalance(table);
 		if (table->fn.hash) {
@@ -368,13 +372,14 @@ void HashTableInsert(struct Table* table, const char* key, void* value) {
 }
 
 void HashTableInsertBinary(struct Table* table, const void* key, size_t keylen, void* value) {
+	struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, keylen, table->seed);
 	} else {
 		hash = hash32(key, keylen, table->seed);
 	}
-	struct TableList* list = _getList(table, hash);
+	list = _getList(table, hash);
 	if (table->size >= table->tableSize * REBALANCE_THRESHOLD) {
 		_rebalance(table);
 		if (table->fn.hash) {
@@ -430,13 +435,14 @@ void HashTableInsertCustom(struct Table* table, void* key, void* value) {
 }
 
 void HashTableInsertBinaryMoveKey(struct Table* table, void* key, size_t keylen, void* value) {
+	struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, keylen, table->seed);
 	} else {
 		hash = hash32(key, keylen, table->seed);
 	}
-	struct TableList* list = _getList(table, hash);
+	list = _getList(table, hash);
 	if (table->size >= table->tableSize * REBALANCE_THRESHOLD) {
 		_rebalance(table);
 		if (table->fn.hash) {
@@ -465,6 +471,7 @@ void HashTableInsertBinaryMoveKey(struct Table* table, void* key, size_t keylen,
 }
 
 void HashTableRemove(struct Table* table, const char* key) {
+	struct TableList* list;
 	uint32_t hash;
 
 	if (table->fn.hash) {
@@ -472,20 +479,21 @@ void HashTableRemove(struct Table* table, const char* key) {
 	} else {
 		hash = hash32(key, strlen(key), table->seed);
 	}
-	struct TableList* list = _getList(table, hash);
+	list = _getList(table, hash);
 	TABLE_LOOKUP_START(HASH_TABLE_STRNCMP_COMPARATOR, list) {
 		_removeItemFromList(table, list, i); // TODO: Move i out of the macro
 	} TABLE_LOOKUP_END;
 }
 
 void HashTableRemoveBinary(struct Table* table, const void* key, size_t keylen) {
+	struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, keylen, table->seed);
 	} else {
 		hash = hash32(key, keylen, table->seed);
 	}
-	struct TableList* list = _getList(table, hash);
+	list = _getList(table, hash);
 	TABLE_LOOKUP_START(HASH_TABLE_MEMCMP_COMPARATOR, list) {
 		_removeItemFromList(table, list, i); // TODO: Move i out of the macro
 	} TABLE_LOOKUP_END;
@@ -584,8 +592,9 @@ struct HashTableSearchParam {
 };
 
 static bool HashTableMemcmp(const char* key, const void* value, const void* user) {
+	const struct HashTableSearchParam* ref;
 	UNUSED(key);
-	const struct HashTableSearchParam* ref = user;
+	ref = user;
 	return memcmp(value, ref->value, ref->bytes) == 0;
 }
 
@@ -636,14 +645,16 @@ void* HashTableIteratorGetValue(const struct Table* table, const struct TableIte
 }
 
 bool HashTableIteratorLookup(const struct Table* table, struct TableIterator* iter, const char* key) {
+	uint32_t bucket;
+	const struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, strlen(key), table->seed);
 	} else {
 		hash = hash32(key, strlen(key), table->seed);
 	}
-	uint32_t bucket = hash & (table->tableSize - 1);
-	const struct TableList* list = &table->table[bucket];
+	bucket = hash & (table->tableSize - 1);
+	list = &table->table[bucket];
 	TABLE_LOOKUP_START(HASH_TABLE_STRNCMP_COMPARATOR, list) {
 		iter->bucket = bucket;
 		iter->entry = i;
@@ -653,14 +664,16 @@ bool HashTableIteratorLookup(const struct Table* table, struct TableIterator* it
 }
 
 bool HashTableIteratorLookupBinary(const struct Table* table, struct TableIterator* iter, const void* key, size_t keylen) {
+	uint32_t bucket;
+	const struct TableList* list;
 	uint32_t hash;
 	if (table->fn.hash) {
 		hash = table->fn.hash(key, keylen, table->seed);
 	} else {
 		hash = hash32(key, keylen, table->seed);
 	}
-	uint32_t bucket = hash & (table->tableSize - 1);
-	const struct TableList* list = &table->table[bucket];
+	bucket = hash & (table->tableSize - 1);
+	list = &table->table[bucket];
 	TABLE_LOOKUP_START(HASH_TABLE_MEMCMP_COMPARATOR, list) {
 		iter->bucket = bucket;
 		iter->entry = i;

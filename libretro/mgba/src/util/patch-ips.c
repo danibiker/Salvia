@@ -12,9 +12,9 @@ static size_t _IPSOutputSize(struct Patch* patch, size_t inSize);
 static bool _IPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize, void* restrict out, size_t outSize);
 
 bool loadPatchIPS(struct Patch* patch) {
+	char buffer[5];
 	patch->vf->seek(patch->vf, 0, SEEK_SET);
 
-	char buffer[5];
 	if (patch->vf->read(patch->vf, buffer, 5) != 5) {
 		return false;
 	}
@@ -44,11 +44,12 @@ size_t _IPSOutputSize(struct Patch* patch, size_t inSize) {
 }
 
 bool _IPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize, void* restrict out, size_t outSize) {
+	uint8_t* buf;
 	if (patch->vf->seek(patch->vf, 5, SEEK_SET) != 5) {
 		return false;
 	}
 	memcpy(out, in, inSize > outSize ? outSize : inSize);
-	uint8_t* buf = out;
+	buf = out;
 
 	while (true) {
 		uint32_t offset = 0;
@@ -67,12 +68,12 @@ bool _IPSApplyPatch(struct Patch* patch, const void* restrict in, size_t inSize,
 			return false;
 		}
 		if (!size) {
+			uint8_t byte;
 			// RLE chunk
 			if (patch->vf->read(patch->vf, &size, 2) != 2) {
 				return false;
 			}
 			size = (size >> 8) | (size << 8);
-			uint8_t byte;
 			if (patch->vf->read(patch->vf, &byte, 1) != 1) {
 				return false;
 			}

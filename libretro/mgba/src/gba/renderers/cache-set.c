@@ -11,9 +11,11 @@
 #include <mgba/internal/gba/video.h>
 
 void GBAVideoCacheInit(struct mCacheSet* cache) {
-	mCacheSetInit(cache, 4, 2, 4);
 	mTileCacheSystemInfo sysconfig = 0;
-	mTileCacheConfiguration config = mTileCacheConfigurationFillShouldStore(0);
+	mTileCacheConfiguration config;
+	mBitmapCacheSystemInfo bitConfig;
+	mCacheSetInit(cache, 4, 2, 4);
+	config = mTileCacheConfigurationFillShouldStore(0);
 	sysconfig = mTileCacheSystemInfoSetPaletteBPP(sysconfig, 2); // 2^(2^2) = 16 entries
 	sysconfig = mTileCacheSystemInfoSetPaletteCount(sysconfig, 4); // 16 palettes
 	sysconfig = mTileCacheSystemInfoSetMaxTiles(sysconfig, 2048);
@@ -32,7 +34,6 @@ void GBAVideoCacheInit(struct mCacheSet* cache) {
 	mTileCacheConfigureSystem(mTileCacheSetGetPointer(&cache->tiles, 3), sysconfig, 0x10000, 0x100);
 	mTileCacheConfigure(mTileCacheSetGetPointer(&cache->tiles, 3), config);
 
-	mBitmapCacheSystemInfo bitConfig;
 	bitConfig = mBitmapCacheSystemInfoSetEntryBPP(0, 4);
 	bitConfig = mBitmapCacheSystemInfoClearUsesPalette(bitConfig);
 	bitConfig = mBitmapCacheSystemInfoSetHeight(bitConfig, 160);
@@ -58,9 +59,9 @@ void GBAVideoCacheInit(struct mCacheSet* cache) {
 }
 
 void GBAVideoCacheAssociate(struct mCacheSet* cache, struct GBAVideo* video) {
+	size_t i;
 	mCacheSetAssignVRAM(cache, video->vram);
 	video->renderer->cache = cache;
-	size_t i;
 	for (i = 0; i < GBA_SIZE_PALETTE_RAM / 2; ++i) {
 		mCacheSetWritePalette(cache, i, mColorFrom555(video->palette[i]));
 	}
@@ -92,6 +93,7 @@ static void mapParser2(struct mMapCache* cache, struct mMapCacheEntry* entry, vo
 }
 
 static void GBAVideoCacheWriteDISPCNT(struct mCacheSet* cache, uint16_t value) {
+	mBitmapCacheSystemInfo bitConfig;
 	mBitmapCacheSetGetPointer(&cache->bitmaps, 1)->buffer = GBARegisterDISPCNTGetFrameSelect(value);
 
 	switch (GBARegisterDISPCNTGetMode(value)) {
@@ -128,7 +130,6 @@ static void GBAVideoCacheWriteDISPCNT(struct mCacheSet* cache, uint16_t value) {
 		break;
 	}
 
-	mBitmapCacheSystemInfo bitConfig;
 	switch (GBARegisterDISPCNTGetMode(value)) {
 	case 3:
 		bitConfig = mBitmapCacheSystemInfoSetEntryBPP(0, 4);
@@ -152,15 +153,19 @@ static void GBAVideoCacheWriteDISPCNT(struct mCacheSet* cache, uint16_t value) {
 }
 
 static void GBAVideoCacheWriteBGCNT(struct mCacheSet* cache, size_t bg, uint16_t value) {
+	int tileStart;
+	bool p;
+	int size;
+	int tilesWide = 0;
+	int tilesHigh = 0;
+	mMapCacheSystemInfo sysconfig;
 	struct mMapCache* map = mMapCacheSetGetPointer(&cache->maps, bg);
 	map->context = (void*) (uintptr_t) value;
 
-	int tileStart = GBARegisterBGCNTGetCharBase(value) * 256;
-	bool p = GBARegisterBGCNTGet256Color(value);
-	int size = GBARegisterBGCNTGetSize(value);
-	int tilesWide = 0;
-	int tilesHigh = 0;
-	mMapCacheSystemInfo sysconfig = mMapCacheSystemInfoSetWriteAlign(0, 1);
+	tileStart = GBARegisterBGCNTGetCharBase(value) * 256;
+	p = !!(GBARegisterBGCNTGet256Color(value));
+	size = GBARegisterBGCNTGetSize(value);
+	sysconfig = mMapCacheSystemInfoSetWriteAlign(0, 1);
 	if (map->mapParser == mapParser0) {
 		map->tileCache = mTileCacheSetGetPointer(&cache->tiles, p);
 		sysconfig = mMapCacheSystemInfoSetPaletteBPP(sysconfig, 2 + p);

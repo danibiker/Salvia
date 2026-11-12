@@ -153,9 +153,13 @@ static inline void _compositeNoBlendNoObjwin(struct GBAVideoSoftwareRenderer* re
 	tileData >>= 8;
 
 // TODO: Remove UNUSEDs after implementing OBJWIN for modes 3 - 5
-#define PREPARE_OBJWIN                                                                            \
+// C89: the declarations of PREPARE_OBJWIN are split into PREPARE_OBJWIN_DECLS so
+// they can be placed with the other declarations at the start of the block.
+#define PREPARE_OBJWIN_DECLS                                                                      \
 	int objwinSlowPath = GBARegisterDISPCNTIsObjwinEnable(renderer->dispcnt);                     \
-	mColor* objwinPalette = renderer->normalPalette;                                             \
+	mColor* objwinPalette = renderer->normalPalette
+
+#define PREPARE_OBJWIN                                                                            \
 	if (renderer->d.highlightAmount && background->highlight) {                                   \
 		objwinPalette = renderer->highlightPalette;                                               \
 	}                                                                                             \
@@ -177,11 +181,17 @@ static inline void _compositeNoBlendNoObjwin(struct GBAVideoSoftwareRenderer* re
 	int mosaicWait = 0;                                                                                               \
 	int32_t localX;                                                                                                   \
 	int32_t localY;                                                                                                   \
+	uint32_t flags = background->flags;                                                                               \
+	uint32_t objwinFlags = background->objwinFlags;                                                                   \
+	bool variant = background->variant;                                                                               \
+	mColor* palette = renderer->normalPalette;                                                                       \
+	PREPARE_OBJWIN_DECLS;                                                                                             \
 	if (background->mosaic) {                                                                                         \
 		int mosaicV = GBAMosaicControlGetBgV(renderer->mosaic) + 1;                                                   \
+		int32_t startX;                                                                                               \
 		mosaicH = GBAMosaicControlGetBgH(renderer->mosaic) + 1;                                                       \
 		mosaicWait = (mosaicH - renderer->start + GBA_VIDEO_HORIZONTAL_PIXELS * mosaicH) % mosaicH;                   \
-		int32_t startX = renderer->start - (renderer->start % mosaicH);                                               \
+		startX = renderer->start - (renderer->start % mosaicH);                                                       \
 		--mosaicH;                                                                                                    \
 		localX = -(inY % mosaicV) * background->dmx;                                                                  \
 		localY = -(inY % mosaicV) * background->dmy;                                                                  \
@@ -191,10 +201,6 @@ static inline void _compositeNoBlendNoObjwin(struct GBAVideoSoftwareRenderer* re
 		localY += background->sy + startX * background->dy;                                                           \
 	}                                                                                                                 \
                                                                                                                       \
-	uint32_t flags = background->flags;                                                                               \
-	uint32_t objwinFlags = background->objwinFlags;                                                                   \
-	bool variant = background->variant;                                                                               \
-	mColor* palette = renderer->normalPalette;                                                                       \
 	if (renderer->d.highlightAmount && background->highlight) {                                                       \
 		palette = renderer->highlightPalette;                                                                         \
 	}                                                                                                                 \

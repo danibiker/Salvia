@@ -10,13 +10,15 @@
 #include <mgba/internal/arm/isa-thumb.h>
 
 void ARMSetPrivilegeMode(struct ARMCore* cpu, enum PrivilegeMode mode) {
+	enum RegisterBank newBank;
+	enum RegisterBank oldBank;
 	if (mode == cpu->privilegeMode) {
 		// Not switching modes after all
 		return;
 	}
 
-	enum RegisterBank newBank = ARMSelectBank(mode);
-	enum RegisterBank oldBank = ARMSelectBank(cpu->privilegeMode);
+	newBank = ARMSelectBank(mode);
+	oldBank = ARMSelectBank(cpu->privilegeMode);
 	if (newBank != oldBank) {
 		// Switch banked registers
 		if (mode == MODE_FIQ || cpu->privilegeMode == MODE_FIQ) {
@@ -45,9 +47,9 @@ void ARMSetPrivilegeMode(struct ARMCore* cpu, enum PrivilegeMode mode) {
 }
 
 void ARMInit(struct ARMCore* cpu) {
+	size_t i;
 	memset(cpu->cp, 0, sizeof(cpu->cp));
 	cpu->master->init(cpu, cpu->master);
-	size_t i;
 	for (i = 0; i < cpu->numComponents; ++i) {
 		if (cpu->components[i] && cpu->components[i]->init) {
 			cpu->components[i]->init(cpu, cpu->components[i]);
@@ -56,10 +58,10 @@ void ARMInit(struct ARMCore* cpu) {
 }
 
 void ARMDeinit(struct ARMCore* cpu) {
+	size_t i;
 	if (cpu->master->deinit) {
 		cpu->master->deinit(cpu->master);
 	}
-	size_t i;
 	for (i = 0; i < cpu->numComponents; ++i) {
 		if (cpu->components[i] && cpu->components[i]->deinit) {
 			cpu->components[i]->deinit(cpu->components[i]);
@@ -122,11 +124,12 @@ void ARMReset(struct ARMCore* cpu) {
 }
 
 void ARMRaiseIRQ(struct ARMCore* cpu) {
+	union PSR cpsr;
+	int instructionWidth;
 	if (cpu->cpsr.i) {
 		return;
 	}
-	union PSR cpsr = cpu->cpsr;
-	int instructionWidth;
+	cpsr = cpu->cpsr;
 	if (cpu->executionMode == MODE_THUMB) {
 		instructionWidth = WORD_SIZE_THUMB;
 	} else {
@@ -199,30 +202,33 @@ static const uint16_t conditionLut[16] = {
 };
 
 static inline void ARMStep(struct ARMCore* cpu) {
+	unsigned condition;
+	ARMInstruction instruction;
 	uint32_t opcode = cpu->prefetch[0];
 	cpu->prefetch[0] = cpu->prefetch[1];
 	cpu->gprs[ARM_PC] += WORD_SIZE_ARM;
 	LOAD_32(cpu->prefetch[1], cpu->gprs[ARM_PC] & cpu->memory.activeMask, cpu->memory.activeRegion);
 
-	unsigned condition = opcode >> 28;
+	condition = opcode >> 28;
 	if (condition != 0xE) {
 		unsigned flags = cpu->cpsr.flags >> 4;
-		bool conditionMet = conditionLut[condition] & (1 << flags);
+		bool conditionMet = !!(conditionLut[condition] & (1 << flags));
 		if (!conditionMet) {
 			cpu->cycles += ARM_PREFETCH_CYCLES;
 			return;
 		}
 	}
-	ARMInstruction instruction = _armTable[((opcode >> 16) & 0xFF0) | ((opcode >> 4) & 0x00F)];
+	instruction = _armTable[((opcode >> 16) & 0xFF0) | ((opcode >> 4) & 0x00F)];
 	instruction(cpu, opcode);
 }
 
 static inline void ThumbStep(struct ARMCore* cpu) {
+	ThumbInstruction instruction;
 	uint32_t opcode = cpu->prefetch[0];
 	cpu->prefetch[0] = cpu->prefetch[1];
 	cpu->gprs[ARM_PC] += WORD_SIZE_THUMB;
 	LOAD_16(cpu->prefetch[1], cpu->gprs[ARM_PC] & cpu->memory.activeMask, cpu->memory.activeRegion);
-	ThumbInstruction instruction = _thumbTable[opcode >> 6];
+	instruction = _thumbTable[opcode >> 6];
 	instruction(cpu, opcode);
 }
 

@@ -28,11 +28,12 @@ static void _freeCache(struct mMapCache* cache) {
 }
 
 static void _redoCacheSize(struct mMapCache* cache) {
+	size_t tiles;
 	if (!mMapCacheConfigurationIsShouldStore(cache->config)) {
 		return;
 	}
 
-	size_t tiles = mMapCacheTileCount(cache);
+	tiles = mMapCacheTileCount(cache);
 	cache->cache = anonymousMemoryMap(8 * 8 * sizeof(mColor) * tiles);
 	cache->status = anonymousMemoryMap(tiles * sizeof(*cache->status));
 }
@@ -47,6 +48,7 @@ void mMapCacheConfigure(struct mMapCache* cache, mMapCacheConfiguration config) 
 }
 
 void mMapCacheConfigureSystem(struct mMapCache* cache, mMapCacheSystemInfo config) {
+	size_t mapSize;
 	if (config == cache->sysConfig) {
 		return;
 	}
@@ -54,7 +56,7 @@ void mMapCacheConfigureSystem(struct mMapCache* cache, mMapCacheSystemInfo confi
 	cache->sysConfig = config;
 	_redoCacheSize(cache);
 
-	size_t mapSize = mMapCacheTileCount(cache);
+	mapSize = mMapCacheTileCount(cache);
 	cache->mapSize = mapSize << mMapCacheSystemInfoGetMapAlign(cache->sysConfig);
 }
 
@@ -70,16 +72,17 @@ void mMapCacheDeinit(struct mMapCache* cache) {
 
 void mMapCacheWriteVRAM(struct mMapCache* cache, uint32_t address) {
 	if (address >= cache->mapStart && address < cache->mapStart + cache->mapSize) {
+		uint32_t i;
 		uint32_t align = 1 << (mMapCacheSystemInfoGetWriteAlign(cache->sysConfig) - mMapCacheSystemInfoGetMapAlign(cache->sysConfig));
 		address -= cache->mapStart;
 		address >>= mMapCacheSystemInfoGetMapAlign(cache->sysConfig);
 
-		uint32_t i;
 		for (i = 0; i < align; ++i) {
+			struct mMapCacheEntry* status;
 			if (address + i >= (cache->mapSize >> mMapCacheSystemInfoGetMapAlign(cache->sysConfig))) {
 				break;
 			}
-			struct mMapCacheEntry* status = &cache->status[address + i];
+			status = &cache->status[address + i];
 			++status->vramVersion;
 			status->flags = mMapCacheEntryFlagsClearVramClean(status->flags);
 			status->tileStatus[mMapCacheEntryFlagsGetPaletteId(status->flags)].vramClean = 0;
@@ -129,13 +132,15 @@ static inline void _cleanTile(struct mMapCache* cache, const mColor* tile, mColo
 }
 
 uint32_t mMapCacheTileId(struct mMapCache* cache, unsigned x, unsigned y) {
+	unsigned xMajor;
+	unsigned yMajor;
 	int tilesWide = mMapCacheSystemInfoGetTilesWide(cache->sysConfig);
 	int tilesHigh = mMapCacheSystemInfoGetTilesHigh(cache->sysConfig);
 	int stride = 1 << mMapCacheSystemInfoGetMacroTileSize(cache->sysConfig);
 	x &= (1 << tilesWide) - 1;
 	y &= (1 << tilesHigh) - 1;
-	unsigned xMajor = x & ~(stride - 1);
-	unsigned yMajor = y >> mMapCacheSystemInfoGetMacroTileSize(cache->sysConfig);
+	xMajor = x & ~(stride - 1);
+	yMajor = y >> mMapCacheSystemInfoGetMacroTileSize(cache->sysConfig);
 	x &= stride - 1;
 	y &= stride - 1;
 	yMajor <<= tilesWide;
@@ -144,6 +149,9 @@ uint32_t mMapCacheTileId(struct mMapCache* cache, unsigned x, unsigned y) {
 }
 
 void mMapCacheCleanTile(struct mMapCache* cache, struct mMapCacheEntry* entry, unsigned x, unsigned y) {
+	unsigned tileId;
+	size_t stride;
+	mColor* mapOut;
 	size_t location = mMapCacheTileId(cache, x, y);
 	struct mMapCacheEntry* status = &cache->status[location];
 	const mColor* tile = NULL;
@@ -151,7 +159,7 @@ void mMapCacheCleanTile(struct mMapCache* cache, struct mMapCacheEntry* entry, u
 		status->flags = mMapCacheEntryFlagsFillVramClean(status->flags);
 		cache->mapParser(cache, status, &cache->vram[cache->mapStart + (location << mMapCacheSystemInfoGetMapAlign(cache->sysConfig))]);
 	}
-	unsigned tileId = status->tileId + cache->tileStart;
+	tileId = status->tileId + cache->tileStart;
 	if (tileId >= mTileCacheSystemInfoGetMaxTiles(cache->tileCache->sysConfig)) {
 		tileId = 0;
 	}
@@ -163,8 +171,8 @@ void mMapCacheCleanTile(struct mMapCache* cache, struct mMapCacheEntry* entry, u
 		tile = mTileCacheGetTile(cache->tileCache, tileId, mMapCacheEntryFlagsGetPaletteId(status->flags));
 	}
 
-	size_t stride = 8 << mMapCacheSystemInfoGetTilesWide(cache->sysConfig);
-	mColor* mapOut = &cache->cache[(y * stride + x) * 8];
+	stride = 8 << mMapCacheSystemInfoGetTilesWide(cache->sysConfig);
+	mapOut = &cache->cache[(y * stride + x) * 8];
 	_cleanTile(cache, tile, mapOut, status);
 	entry[location] = *status;
 }
@@ -193,22 +201,26 @@ void mMapCacheCleanRow(struct mMapCache* cache, unsigned y) {
 	int location = 0;
 	int x;
 	for (x = 0; x < tilesWide; ++x) {
+		struct mMapCacheEntry* status;
+		unsigned tileId;
+		const mColor* tile;
+		mColor* mapOut;
 		if (!(x & macroTile)) {
 			location = mMapCacheTileId(cache, x, y);
 		} else {
 			++location;
 		}
-		struct mMapCacheEntry* status = &cache->status[location];
+		status = &cache->status[location];
 		if (!mMapCacheEntryFlagsIsVramClean(status->flags)) {
 			status->flags = mMapCacheEntryFlagsFillVramClean(status->flags);
 			cache->mapParser(cache, status, &cache->vram[cache->mapStart + (location << mMapCacheSystemInfoGetMapAlign(cache->sysConfig))]);
 		}
-		unsigned tileId = status->tileId + cache->tileStart;
+		tileId = status->tileId + cache->tileStart;
 		if (tileId >= mTileCacheSystemInfoGetMaxTiles(cache->tileCache->sysConfig)) {
 			tileId = 0;
 		}
-		const mColor* tile = mTileCacheGetTile(cache->tileCache, tileId, mMapCacheEntryFlagsGetPaletteId(status->flags));
-		mColor* mapOut = &cache->cache[(y * stride + x) * 8];
+		tile = mTileCacheGetTile(cache->tileCache, tileId, mMapCacheEntryFlagsGetPaletteId(status->flags));
+		mapOut = &cache->cache[(y * stride + x) * 8];
 		_cleanTile(cache, tile, mapOut, status);
 	}
 }

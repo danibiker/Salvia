@@ -13,7 +13,9 @@
 	static void _ThumbDecode ## NAME (uint16_t opcode, struct ARMInstructionInfo* info) { \
 		UNUSED(opcode); \
 		info->mnemonic = ARM_MN_ ## MNEMONIC; \
-		BODY; \
+		{ \
+			BODY; \
+		} \
 	}
 
 #define DEFINE_IMMEDIATE_5_DECODER_DATA_THUMB(NAME, MNEMONIC) \
@@ -303,13 +305,14 @@ static const ThumbDecoder _thumbDecoderTable[0x400] = {
 };
 
 void ARMDecodeThumb(uint16_t opcode, struct ARMInstructionInfo* info) {
+	ThumbDecoder decoder;
 	memset(info, 0, sizeof(*info));
 	info->execMode = MODE_THUMB;
 	info->opcode = opcode;
 	info->branchType = ARM_BRANCH_NONE;
 	info->condition = ARM_CONDITION_AL;
 	info->sInstructionCycles = 1;
-	ThumbDecoder decoder = _thumbDecoderTable[opcode >> 6];
+	decoder = _thumbDecoderTable[opcode >> 6];
 	decoder(opcode, info);
 }
 

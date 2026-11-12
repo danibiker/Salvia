@@ -208,11 +208,14 @@ static const struct GBACartridgeOverride _overrides[] = {
 bool GBAOverrideFindConfig(const struct Configuration* config, struct GBACartridgeOverride* override) {
 	bool found = false;
 	if (config) {
+		const char* savetype;
+		const char* hardware;
+		const char* idleLoop;
 		char sectionName[16];
 		snprintf(sectionName, sizeof(sectionName), "override.%c%c%c%c", override->id[0], override->id[1], override->id[2], override->id[3]);
-		const char* savetype = ConfigurationGetValue(config, sectionName, "savetype");
-		const char* hardware = ConfigurationGetValue(config, sectionName, "hardware");
-		const char* idleLoop = ConfigurationGetValue(config, sectionName, "idleLoop");
+		savetype = ConfigurationGetValue(config, sectionName, "savetype");
+		hardware = ConfigurationGetValue(config, sectionName, "hardware");
+		idleLoop = ConfigurationGetValue(config, sectionName, "idleLoop");
 
 		if (savetype) {
 			if (strcasecmp(savetype, "SRAM") == 0) {
@@ -261,13 +264,13 @@ bool GBAOverrideFindConfig(const struct Configuration* config, struct GBACartrid
 }
 
 bool GBAOverrideFind(const struct Configuration* config, struct GBACartridgeOverride* override) {
+	bool found = false;
+	int i;
 	override->savetype = GBA_SAVEDATA_AUTODETECT;
 	override->hardware = HW_NO_OVERRIDE;
 	override->idleLoop = GBA_IDLE_LOOP_NONE;
 	override->vbaBugCompat = false;
-	bool found = false;
 
-	int i;
 	for (i = 0; _overrides[i].id[0]; ++i) {
 		if (memcmp(override->id, _overrides[i].id, sizeof(override->id)) == 0) {
 			*override = _overrides[i];
@@ -288,9 +291,9 @@ bool GBAOverrideFind(const struct Configuration* config, struct GBACartridgeOver
 }
 
 void GBAOverrideSave(struct Configuration* config, const struct GBACartridgeOverride* override) {
+	const char* savetype = 0;
 	char sectionName[16];
 	snprintf(sectionName, sizeof(sectionName), "override.%c%c%c%c", override->id[0], override->id[1], override->id[2], override->id[3]);
-	const char* savetype = 0;
 	switch (override->savetype) {
 	case GBA_SAVEDATA_SRAM:
 		savetype = "SRAM";
@@ -383,17 +386,14 @@ void GBAOverrideApply(struct GBA* gba, const struct GBACartridgeOverride* overri
 }
 
 void GBAOverrideApplyDefaults(struct GBA* gba, const struct Configuration* overrides) {
-	struct GBACartridgeOverride override = { .idleLoop = GBA_IDLE_LOOP_NONE };
+	struct GBACartridgeOverride override = {
+		{ 0 },
+		0,
+		0,
+		/* .idleLoop */ GBA_IDLE_LOOP_NONE,
+	};
 	const struct GBACartridge* cart = (const struct GBACartridge*) gba->memory.rom;
 	if (cart) {
-		if (gba->memory.unl.type == GBA_UNL_CART_MULTICART) {
-			override.savetype = GBA_SAVEDATA_SRAM;
-			GBAOverrideApply(gba, &override);
-			return;
-		}
-
-		memcpy(override.id, &cart->id, sizeof(override.id));
-
 		static const uint32_t pokemonTable[] = {
 			// Emerald
 			0x4881F3F8, // BPEJ
@@ -418,12 +418,20 @@ void GBAOverrideApplyDefaults(struct GBA* gba, const struct Configuration* overr
 			0xAEAC73E6, // AXVE rev 2
 			0xF0815EE7, // AXVE
 		};
-
 		bool isPokemon = false;
+		bool isKnownPokemon = false;
+		if (gba->memory.unl.type == GBA_UNL_CART_MULTICART) {
+			override.savetype = GBA_SAVEDATA_SRAM;
+			GBAOverrideApply(gba, &override);
+			return;
+		}
+
+		memcpy(override.id, &cart->id, sizeof(override.id));
+
+
 		isPokemon = isPokemon || !strncmp("pokemon red version", &((const char*) gba->memory.rom)[0x108], 20);
 		isPokemon = isPokemon || !strncmp("pokemon emerald version", &((const char*) gba->memory.rom)[0x108], 24);
 		isPokemon = isPokemon || !strncmp("AXVE", &((const char*) gba->memory.rom)[0xAC], 4);
-		bool isKnownPokemon = false;
 		if (isPokemon) {
 			size_t i;
 			for (i = 0; !isKnownPokemon && i < sizeof(pokemonTable) / sizeof(*pokemonTable); ++i) {

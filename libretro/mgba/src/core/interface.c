@@ -15,7 +15,8 @@ static void _rtcGenericSample(struct mRTCSource* source) {
 	switch (rtc->override) {
 	default:
 		if (rtc->custom->sample) {
-			return rtc->custom->sample(rtc->custom);
+			rtc->custom->sample(rtc->custom);
+			return;
 		}
 		break;
 	case RTC_NO_OVERRIDE:
@@ -48,15 +49,16 @@ static time_t _rtcGenericCallback(struct mRTCSource* source) {
 static void _rtcGenericSerialize(struct mRTCSource* source, struct mStateExtdataItem* item) {
 	struct mRTCGenericSource* rtc = (struct mRTCGenericSource*) source;
 	struct mRTCGenericState state = {
-		.type = rtc->override,
-		.padding = 0,
-		.value = rtc->value
+		/* .type */ rtc->override,
+		/* .padding */ 0,
+		/* .value */ rtc->value,
 	};
 	void* data;
 	if (rtc->override >= RTC_CUSTOM_START && rtc->custom->serialize) {
+		uint8_t* oldData;
 		rtc->custom->serialize(rtc->custom, item);
 		data = malloc(item->size + sizeof(state));
-		uint8_t* oldData = data;
+		oldData = data;
 		oldData += sizeof(state);
 		memcpy(oldData, item->data, item->size);
 		item->size += sizeof(state);
@@ -84,12 +86,11 @@ static bool _rtcGenericDeserialize(struct mRTCSource* source, const struct mStat
 		}
 		if (rtc->custom->deserialize) {
 			uint8_t* oldData = item->data;
+			struct mStateExtdataItem fakeItem;
 			oldData += sizeof(state);
-			struct mStateExtdataItem fakeItem = {
-				.size = item->size - sizeof(*state),
-				.data = oldData,
-				.clean = NULL
-			};
+			fakeItem.size = item->size - sizeof(*state);
+			fakeItem.data = oldData;
+			fakeItem.clean = NULL;
 			if (!rtc->custom->deserialize(rtc->custom, &fakeItem)) {
 				return false;
 			}
@@ -128,11 +129,12 @@ static void _mRumbleIntegratorSetRumble(struct mRumble* rumble, bool enable, uin
 }
 
 static void _mRumbleIntegratorIntegrate(struct mRumble* rumble, uint32_t period) {
+	struct mRumbleIntegrator* integrator;
 	if (!period) {
 		return;
 	}
 
-	struct mRumbleIntegrator* integrator = (struct mRumbleIntegrator*) rumble;
+	integrator = (struct mRumbleIntegrator*) rumble;
 	if (integrator->state) {
 		integrator->timeOn += period - integrator->totalTime;
 	}

@@ -32,11 +32,12 @@ void GBAUnlCartInit(struct GBA* gba) {
 }
 
 void GBAUnlCartDetect(struct GBA* gba) {
+	struct GBACartridge* cart;
 	if (!gba->memory.rom) {
 		return;
 	}
 
-	struct GBACartridge* cart = (struct GBACartridge*) gba->memory.rom;
+	cart = (struct GBACartridge*) gba->memory.rom;
 	if (GBAVFameDetect(&gba->memory.unl.vfame, gba->memory.rom, gba->memory.romSize, gba->romCrc32)) {
 		gba->memory.unl.type = GBA_UNL_CART_VFAME;
 		return;
@@ -153,13 +154,16 @@ void GBAUnlCartWriteROM(struct GBA* gba, uint32_t address, uint16_t value) {
 }
 
 static void _multicartSettle(struct mTiming* timing, void* context, uint32_t cyclesLate) {
+	struct GBA* gba;
+	size_t offset;
+	size_t size;
 	UNUSED(timing);
 	UNUSED(cyclesLate);
-	struct GBA* gba = context;
+	gba = context;
 	mLOG(GBA_MEM, INFO, "Switching to bank %i offset %i, size %i",
 	     gba->memory.unl.multi.bank, gba->memory.unl.multi.offset & 0x3F, gba->memory.unl.multi.size);
-	size_t offset = gba->memory.unl.multi.bank * (MULTI_BANK >> 2) + (gba->memory.unl.multi.offset & 0x3F) * (MULTI_BLOCK >> 2);
-	size_t size = gba->memory.unl.multi.size * MULTI_BLOCK;
+	offset = gba->memory.unl.multi.bank * (MULTI_BANK >> 2) + (gba->memory.unl.multi.offset & 0x3F) * (MULTI_BLOCK >> 2);
+	size = gba->memory.unl.multi.size * MULTI_BLOCK;
 	if (offset * 4 >= gba->memory.unl.multi.fullSize || offset * 4 + size > gba->memory.unl.multi.fullSize) {
 		mLOG(GBA_MEM, GAME_ERROR, "Bank switch was out of bounds, %07" PRIz "X + %" PRIz "X > %07" PRIz "X",
 		     offset * 4, size, gba->memory.unl.multi.fullSize);
@@ -205,20 +209,21 @@ void GBAUnlCartSerialize(const struct GBA* gba, struct GBASerializedState* state
 }
 
 void GBAUnlCartDeserialize(struct GBA* gba, const struct GBASerializedState* state) {
+	enum GBAUnlCartType type;
+	uint32_t when;
+	uint32_t offset;
+	size_t size;
+	GBASerializedMulticartFlags multiFlags;
 	GBASerializedUnlCartFlags flags;
 	struct GBAUnlCart* unl = &gba->memory.unl;
 
 	LOAD_32(flags, 0, &state->hw.unlCartFlags);
-	enum GBAUnlCartType type = GBASerializedUnlCartFlagsGetType(flags);
+	type = GBASerializedUnlCartFlagsGetType(flags);
 	if (type != unl->type) {
 		mLOG(GBA_STATE, WARN, "Save state expects different bootleg type; not restoring bootleg state");
 		return;
 	}
 
-	uint32_t when;
-	uint32_t offset;
-	size_t size;
-	GBASerializedMulticartFlags multiFlags;
 
 	switch (type) {
 	case GBA_UNL_CART_NONE:
@@ -233,7 +238,7 @@ void GBAUnlCartDeserialize(struct GBA* gba, const struct GBASerializedState* sta
 		unl->multi.bank = state->multicart.bank;
 		unl->multi.offset = state->multicart.offset;
 		unl->multi.size = state->multicart.size;
-		unl->multi.sramActive = state->multicart.sramActive;
+		unl->multi.sramActive = !!(state->multicart.sramActive);
 		unl->multi.unk = state->multicart.unk;
 		size = state->multicart.currentSize * MULTI_BLOCK;
 		LOAD_16(offset, 0, &state->multicart.currentOffset);
@@ -245,7 +250,7 @@ void GBAUnlCartDeserialize(struct GBA* gba, const struct GBASerializedState* sta
 			gba->memory.rom = unl->multi.rom + offset;
 		}
 		LOAD_32(multiFlags, 0, &state->multicart.flags);
-		unl->multi.locked = GBASerializedMulticartFlagsGetLocked(multiFlags);
+		unl->multi.locked = !!(GBASerializedMulticartFlagsGetLocked(multiFlags));
 		if (GBASerializedMulticartFlagsIsDustSettling(multiFlags)) {
 			LOAD_32(when, 0, &state->multicart.settleNextEvent);
 			mTimingSchedule(&gba->timing, &unl->multi.settle, when);

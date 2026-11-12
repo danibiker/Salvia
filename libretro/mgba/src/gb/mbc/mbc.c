@@ -12,6 +12,8 @@
 static void _GBMBC6MapChip(struct GB*, int half, uint8_t value);
 
 void _GBMBCLatchRTC(struct mRTCSource* rtc, uint8_t* rtcRegs, time_t* rtcLastLatch) {
+	time_t currentLatch;
+	int64_t diff;
 	time_t t;
 	if (rtc) {
 		if (rtc->sample) {
@@ -21,11 +23,10 @@ void _GBMBCLatchRTC(struct mRTCSource* rtc, uint8_t* rtcRegs, time_t* rtcLastLat
 	} else {
 		t = time(0);
 	}
-	time_t currentLatch = t;
+	currentLatch = t;
 	t -= *rtcLastLatch;
 	*rtcLastLatch = currentLatch;
 
-	int64_t diff;
 	diff = rtcRegs[0] + t % 60;
 	if (diff < 0) {
 		diff += 60;
@@ -165,11 +166,12 @@ void _GBMBC2(struct GB* gb, uint16_t address, uint8_t value) {
 }
 
 uint8_t _GBMBC2Read(struct GBMemory* memory, uint16_t address) {
+	int shift;
 	if (!memory->sramAccess) {
 		return 0xFF;
 	}
 	address &= 0x1FF;
-	int shift = (address & 1) * 4;
+	shift = (address & 1) * 4;
 	return (memory->sramBank[(address >> 1)] >> shift) | 0xF0;
 }
 
@@ -247,7 +249,7 @@ void _GBMBC5(struct GB* gb, uint16_t address, uint8_t value) {
 	case 0x5:
 		if (memory->mbcType == GB_MBC5_RUMBLE && memory->rumble) {
 			int32_t currentTime = mTimingCurrentTime(&gb->timing);
-			memory->rumble->setRumble(memory->rumble, (value >> 3) & 1, currentTime - memory->lastRumble);
+			memory->rumble->setRumble(memory->rumble, !!((value >> 3) & 1), currentTime - memory->lastRumble);
 			memory->lastRumble = currentTime;
 			value &= ~8;
 		}
@@ -435,6 +437,7 @@ uint8_t _GBMBC7Read(struct GBMemory* memory, uint16_t address) {
 }
 
 void _GBMBC7Write(struct GBMemory* memory, uint16_t address, uint8_t value) {
+	GBMBC7Field old;
 	struct GBMBC7State* mbc7 = &memory->mbcState.mbc7;
 	if (mbc7->access != 3) {
 		return;
@@ -456,7 +459,7 @@ void _GBMBC7Write(struct GBMemory* memory, uint16_t address, uint8_t value) {
 	case 0x80:
 		break;
 	}
-	GBMBC7Field old = memory->mbcState.mbc7.eeprom;
+	old = memory->mbcState.mbc7.eeprom;
 	value = GBMBC7FieldFillDO(value); // Hi-Z
 	if (!GBMBC7FieldIsCS(old) && GBMBC7FieldIsCS(value)) {
 		mbc7->state = GBMBC7_STATE_IDLE;
@@ -560,14 +563,16 @@ void _GBMBC7Write(struct GBMemory* memory, uint16_t address, uint8_t value) {
 }
 
 void _GBM161(struct GB* gb, uint16_t address, uint8_t value) {
+	struct GBM161State* m161;
+	int bank;
 	UNUSED(address);
 
-	struct GBM161State* m161 = &gb->memory.mbcState.m161;
+	m161 = &gb->memory.mbcState.m161;
 	if (m161->locked) {
 		return;
 	}
 
-	int bank = value & 0x7;
+	bank = value & 0x7;
 	m161->bank = bank;
 	m161->locked = true;
 

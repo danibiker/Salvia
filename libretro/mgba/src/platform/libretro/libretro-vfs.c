@@ -23,8 +23,8 @@ struct VFileRetro {
 
 void libretroVFSInit(retro_environment_t env) {
 	struct retro_vfs_interface_info info = {
-		.required_interface_version = 2,
-		.iface = NULL,
+		/* .required_interface_version */ 2,
+		/* .iface */ NULL,
 	};
 	if (!env(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &info)) {
 		info.required_interface_version = 1;
@@ -40,11 +40,12 @@ void libretroVFSInit(retro_environment_t env) {
 }
 
 static bool _vfrClose(struct VFile* vf) {
+	int ret;
 	struct VFileRetro* vfr = (struct VFileRetro*) vf;
 	if (vfr->mapped) {
 		vf->unmap(vf, vfr->mapped, vfr->mappedSize);
 	}
-	int ret = vfr->vfs->close(vfr->handle);
+	ret = vfr->vfs->close(vfr->handle);
 	free(vfr);
 	return ret == 0;
 }
@@ -79,17 +80,20 @@ static ssize_t _vfrWrite(struct VFile* vf, const void* buffer, size_t size) {
 }
 
 static void* _vfrMap(struct VFile* vf, size_t size, int flags) {
+	void* buffer;
+	int64_t position;
+	int64_t read;
 	struct VFileRetro* vfr = (struct VFileRetro*) vf;
 	if (vfr->mapped) {
 		return NULL;
 	}
-	void* buffer = malloc(size);
+	buffer = malloc(size);
 	if (!buffer) {
 		return NULL;
 	}
-	int64_t position = vfr->vfs->tell(vfr->handle);
+	position = vfr->vfs->tell(vfr->handle);
 	vfr->vfs->seek(vfr->handle, 0, RETRO_VFS_SEEK_POSITION_START);
-	int64_t read = vfr->vfs->read(vfr->handle, buffer, size);
+	read = vfr->vfs->read(vfr->handle, buffer, size);
 	vfr->vfs->seek(vfr->handle, position, RETRO_VFS_SEEK_POSITION_START);
 	if (read < 0) {
 		free(buffer);
@@ -137,9 +141,10 @@ static ssize_t _vfrSize(struct VFile* vf) {
 static bool _vfrSync(struct VFile* vf, void* buffer, size_t size) {
 	struct VFileRetro* vfr = (struct VFileRetro*) vf;
 	if (buffer && size) {
+		int64_t written;
 		int64_t position = vfr->vfs->tell(vfr->handle);
 		vfr->vfs->seek(vfr->handle, 0, RETRO_VFS_SEEK_POSITION_START);
-		int64_t written = vfr->vfs->write(vfr->handle, buffer, size);
+		written = vfr->vfs->write(vfr->handle, buffer, size);
 		vfr->vfs->seek(vfr->handle, position, RETRO_VFS_SEEK_POSITION_START);
 		if (written < 0 || (size_t) written != size) {
 			return false;
@@ -149,10 +154,12 @@ static bool _vfrSync(struct VFile* vf, void* buffer, size_t size) {
 }
 
 struct VFile* VFileOpenLibretro(const char* path, int flags) {
+	unsigned mode;
+	struct retro_vfs_file_handle* handle;
+	struct VFileRetro* vfr;
 	if (!_vfs || !path) {
 		return NULL;
 	}
-	unsigned mode;
 	switch (flags & O_ACCMODE) {
 	case O_RDONLY:
 		mode = RETRO_VFS_FILE_ACCESS_READ;
@@ -172,7 +179,7 @@ struct VFile* VFileOpenLibretro(const char* path, int flags) {
 	default:
 		return NULL;
 	}
-	struct retro_vfs_file_handle* handle = _vfs->open(path, mode, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+	handle = _vfs->open(path, mode, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 	if (!handle && (flags & O_CREAT) && (mode & RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING)) {
 		// UPDATE_EXISTING can't create; retry creating (file was absent, so nothing is discarded)
 		handle = _vfs->open(path, mode & ~RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING, RETRO_VFS_FILE_ACCESS_HINT_NONE);
@@ -180,7 +187,7 @@ struct VFile* VFileOpenLibretro(const char* path, int flags) {
 	if (!handle) {
 		return NULL;
 	}
-	struct VFileRetro* vfr = calloc(1, sizeof(*vfr));
+	vfr = calloc(1, sizeof(*vfr));
 	if (!vfr) {
 		_vfs->close(handle);
 		return NULL;

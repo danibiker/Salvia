@@ -10,7 +10,10 @@
 
 CXX_GUARD_START
 
-#ifdef _WIN32
+#if defined(_XBOX)
+// Xbox 360: xtl.h is already included by common.h; the XDK file API wants backslashes
+#define PATH_SEP "\\"
+#elif defined(_WIN32)
 #include <io.h>
 #include <windows.h>
 #define PATH_SEP "/" // Windows can handle slashes, and backslashes confuse some libraries

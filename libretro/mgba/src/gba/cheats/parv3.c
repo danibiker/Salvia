@@ -70,6 +70,7 @@ static void _parElseBlock(struct GBACheatSet* cheats) {
 }
 
 static bool _addPAR3Cond(struct GBACheatSet* cheats, uint32_t op1, uint32_t op2) {
+	struct mCheat* cheat;
 	enum GBAActionReplay3Condition condition = op1 & PAR3_COND;
 	int width = 1 << ((op1 & PAR3_WIDTH) >> PAR3_WIDTH_BASE);
 	if ((op1 & PAR3_ACTION) == PAR3_ACTION_DISABLE) {
@@ -78,7 +79,7 @@ static bool _addPAR3Cond(struct GBACheatSet* cheats, uint32_t op1, uint32_t op2)
 		return false;
 	}
 
-	struct mCheat* cheat = mCheatListAppend(&cheats->d.list);
+	cheat = mCheatListAppend(&cheats->d.list);
 	cheat->address = _parAddr(op1);
 	cheat->width = width;
 	cheat->operand = op2 & (0xFFFFFFFFU >> ((4 - width) * 8));
@@ -243,6 +244,8 @@ static bool _addPAR3Special(struct GBACheatSet* cheats, uint32_t op2) {
 }
 
 bool GBACheatAddProActionReplayRaw(struct GBACheatSet* cheats, uint32_t op1, uint32_t op2) {
+	int width;
+	struct mCheat* cheat;
 	if (cheats->incompletePatch) {
 		cheats->incompletePatch->value = op1;
 		cheats->incompletePatch = NULL;
@@ -293,8 +296,8 @@ bool GBACheatAddProActionReplayRaw(struct GBACheatSet* cheats, uint32_t op1, uin
 		return _addPAR3Cond(cheats, op1, op2);
 	}
 
-	int width = 1 << ((op1 & PAR3_WIDTH) >> PAR3_WIDTH_BASE);
-	struct mCheat* cheat = mCheatListAppend(&cheats->d.list);
+	width = 1 << ((op1 & PAR3_WIDTH) >> PAR3_WIDTH_BASE);
+	cheat = mCheatListAppend(&cheats->d.list);
 	cheat->address = _parAddr(op1);
 	cheat->operandOffset = 0;
 	cheat->addressOffset = 0;
@@ -370,6 +373,7 @@ bool GBACheatAddProActionReplayLine(struct GBACheatSet* cheats, const char* line
 }
 
 int GBACheatProActionReplayProbability(uint32_t op1, uint32_t op2) {
+	int width;
 	int probability = 0;
 	if (op2 == 0x001DC0DE) {
 		return 0x100;
@@ -378,8 +382,9 @@ int GBACheatProActionReplayProbability(uint32_t op1, uint32_t op2) {
 		return 0x100;
 	}
 	if (!op1) {
+		uint32_t address;
 		probability += 0x40;
-		uint32_t address = _parAddr(op2);
+		address = _parAddr(op2);
 		switch (op2 & 0xFE000000) {
 		case PAR3_OTHER_FILL_1:
 		case PAR3_OTHER_FILL_2:
@@ -409,7 +414,7 @@ int GBACheatProActionReplayProbability(uint32_t op1, uint32_t op2) {
 		}
 		return probability;
 	}
-	int width = ((op1 & PAR3_WIDTH) >> (PAR3_WIDTH_BASE - 3));
+	width = ((op1 & PAR3_WIDTH) >> (PAR3_WIDTH_BASE - 3));
 	if (op1 & PAR3_COND) {
 		probability += 0x20;
 		if (width >= 24) {

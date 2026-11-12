@@ -82,8 +82,10 @@ static void md5Step(uint32_t* buffer, const uint32_t* input) {
 	uint32_t E;
 
 	unsigned j;
+	unsigned i;
 
-	for (unsigned i = 0; i < 64; ++i) {
+	for (i = 0; i < 64; ++i) {
+		uint32_t temp;
 		switch (i / 16) {
 		case 0:
 			E = F(BB, CC, DD);
@@ -103,7 +105,7 @@ static void md5Step(uint32_t* buffer, const uint32_t* input) {
 			break;
 		}
 
-		uint32_t temp = DD;
+		temp = DD;
 		DD = CC;
 		CC = BB;
 		BB += rotateLeft(AA + E + K[i] + input[j], S[i]);
@@ -135,14 +137,15 @@ void md5Init(struct MD5Context* ctx) {
  * and save the result in the buffer. Also updates the overall size.
  */
 void md5Update(struct MD5Context* ctx, const void* input, size_t len) {
+	unsigned i;
 	uint32_t buffer[16];
 	unsigned offset = ctx->size & 0x3F;
 	const uint8_t* inputBuffer = input;
 	ctx->size += len;
 
 	// Copy each byte in input_buffer into the next space in our context input
-	unsigned i;
 	for (i = 0; i < len; ++i) {
+		unsigned j;
 		ctx->input[offset] = inputBuffer[i];
 
 		// If we've filled our context input, copy it into our local array input
@@ -154,7 +157,6 @@ void md5Update(struct MD5Context* ctx, const void* input, size_t len) {
 			continue;
 		}
 
-		unsigned j;
 		for (j = 0; j < 16; ++j) {
 			// Convert to little-endian
 			// The local variable `input` our 512-bit chunk separated into 32-bit words
@@ -171,6 +173,8 @@ void md5Update(struct MD5Context* ctx, const void* input, size_t len) {
  * and save the result of the final iteration into digest.
  */
 void md5Finalize(struct MD5Context* ctx) {
+	unsigned j;
+	unsigned i;
 	uint32_t input[16];
 	int offset = ctx->size & 0x3F;
 	unsigned paddingLength = offset < 56 ? 56 - offset : (56 + 64) - offset;
@@ -181,7 +185,6 @@ void md5Finalize(struct MD5Context* ctx) {
 
 	// Do a final update (internal to this function)
 	// Last two 32-bit words are the two halves of the size (converted from bytes to bits)
-	unsigned j;
 	for (j = 0; j < 14; ++j) {
 		LOAD_32LE(input[j], j * 4, ctx->input);
 	}
@@ -191,7 +194,6 @@ void md5Finalize(struct MD5Context* ctx) {
 	md5Step(ctx->buffer, input);
 
 	// Move the result into digest (convert from little-endian)
-	unsigned i;
 	for (i = 0; i < 4; ++i) {
 		STORE_32LE(ctx->buffer[i], i * 4, ctx->digest);
 	}
@@ -206,12 +208,13 @@ void md5Buffer(const void* input, size_t len, uint8_t* result) {
 }
 
 bool md5File(struct VFile* vf, uint8_t* result) {
+	ssize_t read;
+	ssize_t position;
 	struct MD5Context ctx;
 	uint8_t buffer[2048];
 	md5Init(&ctx);
 
-	ssize_t read;
-	ssize_t position = vf->seek(vf, 0, SEEK_CUR);
+	position = vf->seek(vf, 0, SEEK_CUR);
 	if (vf->seek(vf, 0, SEEK_SET) < 0) {
 		return false;
 	}

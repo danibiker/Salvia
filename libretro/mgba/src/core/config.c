@@ -12,7 +12,14 @@
 
 #include <sys/stat.h>
 
-#ifdef _WIN32
+// Salvia: libretro builds for Windows/Xbox 360 don't need the per-user config
+// directory or the portable.ini lookup (the frontend owns configuration and
+// saves), so they skip the Shell APIs and don't need shell32/shlwapi/ole32.
+#if defined(_WIN32) && !defined(_XBOX) && !defined(__LIBRETRO__)
+#define MGBA_CONFIG_WIN32_SHELL
+#endif
+
+#ifdef MGBA_CONFIG_WIN32_SHELL
 #include <windows.h>
 #include <shlwapi.h>
 #include <shlobj.h>
@@ -90,26 +97,28 @@ static bool _lookupCharValue(const struct mCoreConfig* config, const char* key, 
 }
 
 static bool _lookupBoolValue(const struct mCoreConfig* config, const char* key, bool* out) {
+	char* end;
+	long value;
 	const char* charValue = _lookupValue(config, key);
 	if (!charValue) {
 		return false;
 	}
-	char* end;
-	long value = strtol(charValue, &end, 10);
+	value = strtol(charValue, &end, 10);
 	if (*end) {
 		return false;
 	}
-	*out = value;
+	*out = !!(value);
 	return true;
 }
 
 static bool _lookupIntValue(const struct mCoreConfig* config, const char* key, int* out) {
+	char* end;
+	long value;
 	const char* charValue = _lookupValue(config, key);
 	if (!charValue) {
 		return false;
 	}
-	char* end;
-	long value = strtol(charValue, &end, 10);
+	value = strtol(charValue, &end, 10);
 	if (end == &charValue[1] && *end == 'x') {
 		value = strtol(charValue, &end, 16);
 	}
@@ -121,12 +130,13 @@ static bool _lookupIntValue(const struct mCoreConfig* config, const char* key, i
 }
 
 static bool _lookupUIntValue(const struct mCoreConfig* config, const char* key, unsigned* out) {
+	char* end;
+	unsigned long value;
 	const char* charValue = _lookupValue(config, key);
 	if (!charValue) {
 		return false;
 	}
-	char* end;
-	unsigned long value = strtoul(charValue, &end, 10);
+	value = strtoul(charValue, &end, 10);
 	if (*end) {
 		return false;
 	}
@@ -135,12 +145,13 @@ static bool _lookupUIntValue(const struct mCoreConfig* config, const char* key, 
 }
 
 static bool _lookupFloatValue(const struct mCoreConfig* config, const char* key, float* out) {
+	char* end;
+	float value;
 	const char* charValue = _lookupValue(config, key);
 	if (!charValue) {
 		return false;
 	}
-	char* end;
-	float value = strtof_u(charValue, &end);
+	value = strtof_u(charValue, &end);
 	if (*end) {
 		return false;
 	}
@@ -234,15 +245,20 @@ void mCoreConfigMakePortable(const struct mCoreConfig* config, const char* path)
 
 void mCoreConfigDirectory(char* out, size_t outLength) {
 	char portableDir[PATH_MAX];
+#ifdef MGBA_CONFIG_WIN32_SHELL
+	WCHAR wpath[MAX_PATH];
+	WCHAR wprojectName[MAX_PATH];
+	WCHAR* home;
+#endif
 	mCoreConfigPortablePath(portableDir, sizeof(portableDir));
 	if (portableDir[0]) {
 		strlcpy(out, portableDir, outLength);
 		return;
 	}
-#ifdef _WIN32
-	WCHAR wpath[MAX_PATH];
-	WCHAR wprojectName[MAX_PATH];
-	WCHAR* home;
+#if defined(_WIN32) && !defined(MGBA_CONFIG_WIN32_SHELL)
+	UNUSED(outLength);
+	out[0] = '\0';
+#elif defined(_WIN32)
 	MultiByteToWideChar(CP_UTF8, 0, projectName, -1, wprojectName, MAX_PATH);
 	SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, NULL, &home);
 	StringCchPrintfW(wpath, MAX_PATH, L"%ws\\%ws", home, wprojectName);
@@ -265,27 +281,32 @@ void mCoreConfigDirectory(char* out, size_t outLength) {
 	snprintf(out, outLength, "/%s", projectName);
 	FSUSER_CreateDirectory(sdmcArchive, fsMakePath(PATH_ASCII, out), 0);
 #elif defined(__HAIKU__)
-	char path[B_PATH_NAME_LENGTH];
-	find_directory(B_USER_SETTINGS_DIRECTORY, 0, false, path, B_PATH_NAME_LENGTH);
-	snprintf(out, outLength, "%s/%s", path, binaryName);
-	mkdir(out, 0755);
-#else
-	char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
-	if (xdgConfigHome && xdgConfigHome[0] == '/') {
-		snprintf(out, outLength, "%s/%s", xdgConfigHome, binaryName);
+	{
+		char path[B_PATH_NAME_LENGTH];
+		find_directory(B_USER_SETTINGS_DIRECTORY, 0, false, path, B_PATH_NAME_LENGTH);
+		snprintf(out, outLength, "%s/%s", path, binaryName);
 		mkdir(out, 0755);
-		return;
 	}
-	char* home = getenv("HOME");
-	snprintf(out, outLength, "%s/.config", home);
-	mkdir(out, 0755);
-	snprintf(out, outLength, "%s/.config/%s", home, binaryName);
-	mkdir(out, 0755);
+#else
+	{
+		char* home;
+		char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
+		if (xdgConfigHome && xdgConfigHome[0] == '/') {
+			snprintf(out, outLength, "%s/%s", xdgConfigHome, binaryName);
+			mkdir(out, 0755);
+			return;
+		}
+		home = getenv("HOME");
+		snprintf(out, outLength, "%s/.config", home);
+		mkdir(out, 0755);
+		snprintf(out, outLength, "%s/.config/%s", home, binaryName);
+		mkdir(out, 0755);
+	}
 #endif
 }
 
 void mCoreConfigPortableIniPath(char* out, size_t outLength) {
-#ifdef _WIN32
+#ifdef MGBA_CONFIG_WIN32_SHELL
 	wchar_t wpath[MAX_PATH];
 	GetModuleFileNameW(NULL, wpath, MAX_PATH);
 	PathRemoveFileSpecW(wpath);
@@ -297,7 +318,7 @@ void mCoreConfigPortableIniPath(char* out, size_t outLength) {
 	}
 	WideCharToMultiByte(CP_UTF8, 0, wpath, -1, out, outLength, 0, 0);
 	StringCchCatA(out, outLength, PATH_SEP "portable.ini");
-#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__)
+#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__) || defined(_WIN32)
 	UNUSED(outLength);
 	out[0] = '\0';
 #else
@@ -327,12 +348,12 @@ void mCoreConfigPortablePath(char* out, size_t outLength) {
 	if (portableIniPath[0]) {
 		portableIni = VFileOpen(portableIniPath, O_RDONLY);
 		if (portableIni) {
+			struct Configuration portableConfig;
 			// Start with the path that the portable.ini file exists in.
 			char iniDir[PATH_MAX];
 			separatePath(portableIniPath, iniDir, NULL, NULL);
 			strlcpy(out, iniDir, outLength);
 
-			struct Configuration portableConfig;
 			ConfigurationInit(&portableConfig);
 			if (ConfigurationReadVFile(&portableConfig, portableIni)) {
 				const char* path = ConfigurationGetValue(&portableConfig, "portable", "path");
@@ -356,7 +377,7 @@ void mCoreConfigPortablePath(char* out, size_t outLength) {
 bool mCoreConfigIsPortable(void) {
 	char portableDir[PATH_MAX];
 	mCoreConfigPortablePath(portableDir, sizeof(portableDir));
-	return portableDir[0];
+	return !!(portableDir[0]);
 }
 
 #endif
@@ -438,6 +459,7 @@ void mCoreConfigCopyValue(struct mCoreConfig* config, const struct mCoreConfig* 
 }
 
 void mCoreConfigMap(const struct mCoreConfig* config, struct mCoreOptions* opts) {
+	unsigned audioBuffers;
 	_lookupCharValue(config, "bios", &opts->bios);
 	_lookupCharValue(config, "shader", &opts->shader);
 	_lookupIntValue(config, "logLevel", &opts->logLevel);
@@ -446,7 +468,6 @@ void mCoreConfigMap(const struct mCoreConfig* config, struct mCoreOptions* opts)
 	_lookupIntValue(config, "rewindBufferCapacity", &opts->rewindBufferCapacity);
 	_lookupIntValue(config, "rewindBufferInterval", &opts->rewindBufferInterval);
 	_lookupFloatValue(config, "fpsTarget", &opts->fpsTarget);
-	unsigned audioBuffers;
 	if (_lookupUIntValue(config, "audioBuffers", &audioBuffers)) {
 		opts->audioBuffers = audioBuffers;
 	}

@@ -24,11 +24,13 @@ static void _cbStoreByteswap(uint8_t* buffer, uint32_t* op1, uint16_t* op2) {
 }
 
 static void _cbDecrypt(struct GBACheatSet* cheats, uint32_t* op1, uint16_t* op2) {
+	uint32_t master;
 	uint8_t buffer[6];
 	int i;
 
 	_cbLoadByteswap(buffer, *op1, *op2);
 	for (i = sizeof(cheats->cbTable) - 1; i >= 0; --i) {
+		uint8_t y2;
 		size_t offsetX = i >> 3;
 		size_t offsetY = cheats->cbTable[i] >> 3;
 		int bitX = i & 7;
@@ -43,7 +45,7 @@ static void _cbDecrypt(struct GBACheatSet* cheats, uint32_t* op1, uint16_t* op2)
 		buffer[offsetX] = x2;
 
 		// This can't be moved earlier due to pointer aliasing
-		uint8_t y2 = buffer[offsetY] & ~(1 << bitY);
+		y2 = buffer[offsetY] & ~(1 << bitY);
 		if (x) {
 			y2 |= 1 << bitY;
 		}
@@ -55,7 +57,7 @@ static void _cbDecrypt(struct GBACheatSet* cheats, uint32_t* op1, uint16_t* op2)
 	*op2 ^= cheats->cbSeeds[1];
 
 	_cbLoadByteswap(buffer, *op1, *op2);
-	uint32_t master = cheats->cbMaster;
+	master = cheats->cbMaster;
 	for (i = 0; i < 5; ++i) {
 		buffer[i] ^= (master >> 8) ^ buffer[i + 1];
 	}
@@ -84,6 +86,8 @@ static uint32_t _cbRand(struct GBACheatSet* cheats) {
 }
 
 static size_t _cbSwapIndex(struct GBACheatSet* cheats) {
+	uint32_t bit = 1;
+	uint32_t mask;
 	uint32_t roll = _cbRand(cheats);
 	uint32_t count = sizeof(cheats->cbTable);
 
@@ -95,7 +99,6 @@ static size_t _cbSwapIndex(struct GBACheatSet* cheats) {
 		return roll;
 	}
 
-	uint32_t bit = 1;
 
 	while (count < 0x10000000 && count < roll) {
 		count <<= 4;
@@ -107,7 +110,6 @@ static size_t _cbSwapIndex(struct GBACheatSet* cheats) {
 		bit <<= 1;
 	}
 
-	uint32_t mask;
 	while (true) {
 		mask = 0;
 		if (roll >= count) {
@@ -151,8 +153,8 @@ static size_t _cbSwapIndex(struct GBACheatSet* cheats) {
 }
 
 static void _cbReseed(struct GBACheatSet* cheats, uint32_t op1, uint16_t op2) {
-	cheats->cbRngState = (op2 & 0xFF) ^ 0x1111;
 	size_t i;
+	cheats->cbRngState = (op2 & 0xFF) ^ 0x1111;
 	// Populate the initial seed table
 	for (i = 0; i < sizeof(cheats->cbTable); ++i) {
 		cheats->cbTable[i] = i;
@@ -187,6 +189,8 @@ static void _cbReseed(struct GBACheatSet* cheats, uint32_t op1, uint16_t op2) {
 }
 
 bool GBACheatAddCodeBreaker(struct GBACheatSet* cheats, uint32_t op1, uint16_t op2) {
+	enum GBACodeBreakerType type;
+	struct mCheat* cheat = NULL;
 	char line[14] = "XXXXXXXX XXXX";
 	snprintf(line, sizeof(line), "%08X %04X", op1, op2);
 
@@ -194,8 +198,7 @@ bool GBACheatAddCodeBreaker(struct GBACheatSet* cheats, uint32_t op1, uint16_t o
 		_cbDecrypt(cheats, &op1, &op2);
 	}
 
-	enum GBACodeBreakerType type = op1 >> 28;
-	struct mCheat* cheat = NULL;
+	type = op1 >> 28;
 
 	if (cheats->incompleteCheat != COMPLETE) {
 		struct mCheat* incompleteCheat = mCheatListGetPointer(&cheats->d.list, cheats->incompleteCheat);

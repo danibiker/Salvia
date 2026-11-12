@@ -12,17 +12,17 @@
 #define DIGIMON_SAPPHIRE_CHINESE_CRC32 0x793A328F
 
 static const uint8_t ADDRESS_REORDERING[][3][16] = {
-	[VFAME_STANDARD] = {
+	/* [VFAME_STANDARD] */ {
 		{ 15, 14, 9, 1, 8, 10, 7, 3, 5, 11, 4, 0, 13, 12, 2, 6 },
 		{ 15, 7, 13, 5, 11, 6, 0, 9, 12, 2, 10, 14, 3, 1, 8, 4 },
 		{ 15, 0, 3, 12, 2, 4, 14, 13, 1, 8, 6, 7, 9, 5, 11, 10 }
 	},
-	[VFAME_GEORGE] = {
+	/* [VFAME_GEORGE] */ {
 		{ 15, 7, 13, 1, 11, 10, 14, 9, 12, 2, 4, 0, 3, 5, 8, 6 },
 		{ 15, 14, 3, 12, 8, 4, 0, 13, 5, 11, 6, 7, 9, 1, 2, 10 },
 		{ 15, 0, 9, 5, 2, 6, 7, 3, 1, 8, 10, 14, 13, 12, 11, 4 }
 	},
-	[VFAME_ALTERNATE] = {
+	/* [VFAME_ALTERNATE] */ {
 		{ 15, 0, 13, 5, 8, 4, 7, 3, 1, 2, 10, 14, 9, 12, 11, 6 },
 		{ 15, 7, 9, 1, 2, 6, 14, 13, 12, 11, 4, 0, 3, 5, 8, 10 },
 		{ 15, 14, 3, 12, 11, 10, 0, 9, 5, 8, 6, 7, 13, 1, 2, 4 }
@@ -30,17 +30,17 @@ static const uint8_t ADDRESS_REORDERING[][3][16] = {
 };
 
 static const uint8_t VALUE_REORDERING[][3][8] = {
-	[VFAME_STANDARD] = {
+	/* [VFAME_STANDARD] */ {
 		{ 5, 4, 3, 2, 1, 0, 7, 6 },
 		{ 3, 2, 1, 0, 7, 6, 5, 4 },
 		{ 1, 0, 7, 6, 5, 4, 3, 2 }
 	},
-	[VFAME_GEORGE] = {
+	/* [VFAME_GEORGE] */ {
 		{ 3, 0, 7, 2, 1, 4, 5, 6 },
 		{ 1, 4, 3, 0, 5, 6, 7, 2 },
 		{ 5, 2, 1, 6, 7, 0, 3, 4 }
 	},
-	[VFAME_ALTERNATE] = {
+	/* [VFAME_ALTERNATE] */ {
 		{ 5, 4, 7, 2, 1, 0, 3, 6 },
 		{ 1, 2, 3, 0, 5, 6, 7, 4 },
 		{ 3, 0, 1, 6, 7, 4, 5, 2 }
@@ -61,13 +61,13 @@ static uint32_t _modifySramAddress(enum GBAVFameCartType type, uint32_t address,
 static int _reorderBits(uint32_t value, const uint8_t* reordering, int reorderLength);
 
 bool GBAVFameDetect(struct GBAVFameCart* cart, uint32_t* rom, size_t romSize, uint32_t crc32) {
+	bool detected = false;
 	// The initialisation code is also present & run in the dumps of Digimon Ruby & Sapphire from hacked/deprotected reprint carts,
 	// which would break if run in "proper" VFame mode so we need to exclude those..
 	if (romSize == 0x2000000) { // the deprotected dumps are 32MB but no real VF games are this size
 		return false;
 	}
 
-	bool detected = false;
 
 	// Most games have the same init sequence in the same place
 	// but LOTR/Mo Jie Qi Bing doesn't, probably because it's based on the Kiki KaiKai engine, so just detect based on its title
@@ -148,8 +148,8 @@ uint32_t GBAVFameGetPatternValue(uint32_t address, int bits) {
 // when you read from a ROM location outside the actual ROM data or its mirror, it returns a value based on some 16-bit transformation of the address
 // which the game relies on to run
 static uint32_t _getPatternValue(uint32_t addr) {
-	addr &= 0x1FFFFF;
 	uint32_t value = 0;
+	addr &= 0x1FFFFF;
 	switch (addr & 0x1F0000) {
 	case 0x000000:
 	case 0x010000:
@@ -300,15 +300,17 @@ static int _reorderBits(uint32_t value, const uint8_t* reordering, int reorderLe
 
 	int x;
 	for (x = reorderLength; x > 0; x--) {
+		unsigned destinationPlace;
+		uint32_t newMask;
 		uint8_t reorderPlace = reordering[reorderLength - x]; // get the reorder position
 
 		uint32_t mask = 1 << reorderPlace; // move the bit to the position we want
 		uint32_t val = value & mask; // AND it with the original value
 		val >>= reorderPlace; // move the bit back, so we have the correct 0 or 1
 
-		unsigned destinationPlace = x - 1;
+		destinationPlace = x - 1;
 
-		uint32_t newMask = 1 << destinationPlace;
+		newMask = 1 << destinationPlace;
 		if (val == 1) {
 			retval |= newMask;
 		} else {

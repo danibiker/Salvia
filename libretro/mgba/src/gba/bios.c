@@ -151,9 +151,9 @@ static void _RegisterRamReset(struct GBA* gba) {
 		cpu->memory.store16(cpu, GBA_BASE_IO | GBA_REG_IME, 0, 0);
 	}
 	if (registers & 0x9C) {
+		int i;
 		gba->video.renderer->reset(gba->video.renderer);
 		gba->video.renderer->writeVideoRegister(gba->video.renderer, GBA_REG_DISPCNT, gba->memory.io[GBA_REG(DISPCNT)]);
-		int i;
 		for (i = GBA_REG_BG0CNT; i < GBA_REG_SOUND1CNT_LO; i += 2) {
 			gba->video.renderer->writeVideoRegister(gba->video.renderer, i, gba->memory.io[i >> 1]);
 		}
@@ -243,13 +243,15 @@ static void _ObjAffineSet(struct GBA* gba) {
 }
 
 static void _MidiKey2Freq(struct GBA* gba) {
+	enum mMemoryAccessSource oldAccess;
+	uint32_t key;
 	struct ARMCore* cpu = gba->cpu;
 
 	int oldRegion = gba->memory.activeRegion;
 	gba->memory.activeRegion = GBA_REGION_BIOS;
-	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
+	oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_SYSTEM;
-	uint32_t key = cpu->memory.load32(cpu, cpu->gprs[0] + 4, 0);
+	key = cpu->memory.load32(cpu, cpu->gprs[0] + 4, 0);
 	cpu->memory.accessSource = oldAccess;
 	gba->memory.activeRegion = oldRegion;
 
@@ -257,6 +259,7 @@ static void _MidiKey2Freq(struct GBA* gba) {
 }
 
 static void _Div(struct GBA* gba, int32_t num, int32_t denom) {
+	int loops;
 	struct ARMCore* cpu = gba->cpu;
 	if (denom == 0) {
 		if (num == 0 || num == -1 || num == 1) {
@@ -281,7 +284,7 @@ static void _Div(struct GBA* gba, int32_t num, int32_t denom) {
 		cpu->gprs[1] = result.rem;
 		cpu->gprs[3] = abs(result.quot);
 	}
-	int loops = clz32(denom) - clz32(num);
+	loops = clz32(denom) - clz32(num);
 	if (loops < 1) {
 		loops = 1;
 	}
@@ -289,11 +292,13 @@ static void _Div(struct GBA* gba, int32_t num, int32_t denom) {
 }
 
 static int16_t _ArcTan(int32_t i, int32_t* r1, int32_t* r3, uint32_t* cycles) {
+	int32_t a;
+	int32_t b;
 	uint32_t currentCycles = 37;
 	currentCycles += _mulWait(i * i);
-	int32_t a = -((i * i) >> 14);
+	a = -((i * i) >> 14);
 	currentCycles += _mulWait(0xA9 * a);
-	int32_t b = ((0xA9 * a) >> 14) + 0x390;
+	b = ((0xA9 * a) >> 14) + 0x390;
 	currentCycles += _mulWait(b * a);
 	b = ((b * a) >> 14) + 0x91C;
 	currentCycles += _mulWait(b * a);
@@ -353,27 +358,30 @@ static int16_t _ArcTan2(int32_t x, int32_t y, int32_t* r1, uint32_t* cycles) {
 }
 
 static int32_t _Sqrt(uint32_t x, uint32_t* cycles) {
+	int32_t currentCycles = 15;
+	uint32_t lower;
+	uint32_t upper;
+	uint32_t bound = 1;
 	if (!x) {
 		*cycles = 53;
 		return 0;
 	}
-	int32_t currentCycles = 15;
-	uint32_t lower;
-	uint32_t upper = x;
-	uint32_t bound = 1;
+	upper = x;
 	while (bound < upper) {
 		upper >>= 1;
 		bound <<= 1;
 		currentCycles += 6;
 	}
 	while (true) {
+		uint32_t accum = 0;
+		uint32_t oldBound;
 		currentCycles += 6;
 		upper = x;
-		uint32_t accum = 0;
 		lower = bound;
 		while (true) {
+			uint32_t oldLower;
 			currentCycles += 5;
-			uint32_t oldLower = lower;
+			oldLower = lower;
 			if (lower <= upper >> 1) {
 				lower <<= 1;
 			}
@@ -393,7 +401,7 @@ static int32_t _Sqrt(uint32_t x, uint32_t* cycles) {
 			}
 			lower >>= 1;
 		}
-		uint32_t oldBound = bound;
+		oldBound = bound;
 		bound += accum;
 		bound >>= 1;
 		if (bound >= oldBound) {
@@ -406,6 +414,7 @@ static int32_t _Sqrt(uint32_t x, uint32_t* cycles) {
 }
 
 void GBASwi16(struct ARMCore* cpu, int immediate) {
+	bool useStall = false;
 	struct GBA* gba = (struct GBA*) cpu->master;
 	mLOG(GBA_BIOS, DEBUG, "SWI: %02X r0: %08X r1: %08X r2: %08X r3: %08X",
 	    immediate, cpu->gprs[0], cpu->gprs[1], cpu->gprs[2], cpu->gprs[3]);
@@ -424,7 +433,6 @@ void GBASwi16(struct ARMCore* cpu, int immediate) {
 		return;
 	}
 
-	bool useStall = false;
 	switch (immediate) {
 	case GBA_SWI_SOFT_RESET:
 		ARMRaiseSWI(cpu);
@@ -626,21 +634,23 @@ uint32_t GBAChecksum(uint32_t* memory, size_t size) {
 }
 
 static void _unLz77(struct GBA* gba, int width) {
+	int remaining;
+	int blockheader = 0;
+	int blocksRemaining = 0;
+	uint32_t disp;
+	int bytes;
+	int byte;
+	int halfword = 0;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t source = cpu->gprs[0];
 	uint32_t dest = cpu->gprs[1];
 	int cycles = 20;
 	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_DECOMPRESS;
-	int remaining = (cpu->memory.load32(cpu, source, &cycles) & 0xFFFFFF00) >> 8;
+	remaining = (cpu->memory.load32(cpu, source, &cycles) & 0xFFFFFF00) >> 8;
 	// We assume the signature byte (0x10) is correct
-	int blockheader = 0; // Some compilers warn if this isn't set, even though it's trivially provably always set
+	 // Some compilers warn if this isn't set, even though it's trivially provably always set
 	source += 4;
-	int blocksRemaining = 0;
-	uint32_t disp;
-	int bytes;
-	int byte;
-	int halfword = 0;
 	while (remaining > 0) {
 		cycles += 14;
 		if (blocksRemaining) {
@@ -719,14 +729,25 @@ DECL_BIT(HuffmanNode, RTerm, 6);
 DECL_BIT(HuffmanNode, LTerm, 7);
 
 static void _unHuffman(struct GBA* gba) {
+	uint32_t header;
+	int remaining;
+	unsigned bits;
+	int treesize;
+	int block = 0;
+	uint32_t treeBase;
+	uint32_t nPointer;
+	HuffmanNode node;
+	int bitsRemaining;
+	int readBits;
+	int bitsSeen = 0;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t source = cpu->gprs[0] & 0xFFFFFFFC;
 	uint32_t dest = cpu->gprs[1];
 	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_DECOMPRESS;
-	uint32_t header = cpu->memory.load32(cpu, source, 0);
-	int remaining = header >> 8;
-	unsigned bits = header & 0xF;
+	header = cpu->memory.load32(cpu, source, 0);
+	remaining = header >> 8;
+	bits = header & 0xF;
 	if (bits == 0) {
 		mLOG(GBA_BIOS, GAME_ERROR, "Invalid Huffman bits");
 		bits = 8;
@@ -737,15 +758,10 @@ static void _unHuffman(struct GBA* gba) {
 		return;
 	}
 	// We assume the signature byte (0x20) is correct
-	int treesize = (cpu->memory.load8(cpu, source + 4, 0) << 1) + 1;
-	int block = 0;
-	uint32_t treeBase = source + 5;
+	treesize = (cpu->memory.load8(cpu, source + 4, 0) << 1) + 1;
+	treeBase = source + 5;
 	source += 5 + treesize;
-	uint32_t nPointer = treeBase;
-	HuffmanNode node;
-	int bitsRemaining;
-	int readBits;
-	int bitsSeen = 0;
+	nPointer = treeBase;
 	node = cpu->memory.load8(cpu, nPointer, 0);
 	while (remaining > 0) {
 		uint32_t bitstream = cpu->memory.load32(cpu, source, 0);
@@ -791,18 +807,21 @@ static void _unHuffman(struct GBA* gba) {
 }
 
 static void _unRl(struct GBA* gba, int width) {
+	int remaining;
+	int padding;
+	int blockheader;
+	int block;
+	uint32_t dest;
+	int halfword = 0;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t source = cpu->gprs[0];
 	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_DECOMPRESS;
-	int remaining = (cpu->memory.load32(cpu, source & 0xFFFFFFFC, 0) & 0xFFFFFF00) >> 8;
-	int padding = (4 - remaining) & 0x3;
+	remaining = (cpu->memory.load32(cpu, source & 0xFFFFFFFC, 0) & 0xFFFFFF00) >> 8;
+	padding = (4 - remaining) & 0x3;
 	// We assume the signature byte (0x30) is correct
-	int blockheader;
-	int block;
 	source += 4;
-	uint32_t dest = cpu->gprs[1];
-	int halfword = 0;
+	dest = cpu->gprs[1];
 	while (remaining > 0) {
 		blockheader = cpu->memory.load8(cpu, source, 0);
 		++source;
@@ -830,8 +849,9 @@ static void _unRl(struct GBA* gba, int width) {
 			// Uncompressed
 			blockheader++;
 			while (blockheader-- && remaining) {
+				int byte;
 				--remaining;
-				int byte = cpu->memory.load8(cpu, source, 0);
+				byte = cpu->memory.load8(cpu, source, 0);
 				++source;
 				if (width == 2) {
 					if (dest & 1) {
@@ -867,16 +887,18 @@ static void _unRl(struct GBA* gba, int width) {
 }
 
 static void _unFilter(struct GBA* gba, int inwidth, int outwidth) {
+	uint32_t header;
+	int remaining;
+	uint16_t halfword = 0;
+	uint16_t old = 0;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t source = cpu->gprs[0] & 0xFFFFFFFC;
 	uint32_t dest = cpu->gprs[1];
 	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_DECOMPRESS;
-	uint32_t header = cpu->memory.load32(cpu, source, 0);
-	int remaining = header >> 8;
+	header = cpu->memory.load32(cpu, source, 0);
+	remaining = header >> 8;
 	// We assume the signature nybble (0x8) is correct
-	uint16_t halfword = 0;
-	uint16_t old = 0;
 	source += 4;
 	while (remaining > 0) {
 		uint16_t new;
@@ -912,15 +934,23 @@ static void _unFilter(struct GBA* gba, int inwidth, int outwidth) {
 }
 
 static void _unBitPack(struct GBA* gba) {
+	unsigned sourceLen;
+	unsigned sourceWidth;
+	unsigned destWidth;
+	uint32_t bias;
+	uint8_t in = 0;
+	uint32_t out = 0;
+	int bitsRemaining = 0;
+	int bitsEaten = 0;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t source = cpu->gprs[0];
 	uint32_t dest = cpu->gprs[1];
 	uint32_t info = cpu->gprs[2];
 	enum mMemoryAccessSource oldAccess = cpu->memory.accessSource;
 	cpu->memory.accessSource = mACCESS_DECOMPRESS;
-	unsigned sourceLen = cpu->memory.load16(cpu, info, 0);
-	unsigned sourceWidth = cpu->memory.load8(cpu, info + 2, 0);
-	unsigned destWidth = cpu->memory.load8(cpu, info + 3, 0);
+	sourceLen = cpu->memory.load16(cpu, info, 0);
+	sourceWidth = cpu->memory.load8(cpu, info + 2, 0);
+	destWidth = cpu->memory.load8(cpu, info + 3, 0);
 	switch (sourceWidth) {
 	case 1:
 	case 2:
@@ -945,19 +975,16 @@ static void _unBitPack(struct GBA* gba) {
 		cpu->memory.accessSource = oldAccess;
 		return;
 	}
-	uint32_t bias = cpu->memory.load32(cpu, info + 4, 0);
-	uint8_t in = 0;
-	uint32_t out = 0;
-	int bitsRemaining = 0;
-	int bitsEaten = 0;
+	bias = cpu->memory.load32(cpu, info + 4, 0);
 	while (sourceLen > 0 || bitsRemaining) {
+		unsigned scaled;
 		if (!bitsRemaining) {
 			in = cpu->memory.load8(cpu, source, 0);
 			bitsRemaining = 8;
 			++source;
 			--sourceLen;
 		}
-		unsigned scaled = in & ((1 << sourceWidth) - 1);
+		scaled = in & ((1 << sourceWidth) - 1);
 		in >>= sourceWidth;
 		if (scaled || bias & 0x80000000) {
 			scaled += bias & 0x7FFFFFFF;

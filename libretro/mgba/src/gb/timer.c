@@ -11,9 +11,10 @@
 #include <mgba/internal/gb/serialize.h>
 
 void _GBTimerIRQ(struct mTiming* timing, void* context, uint32_t cyclesLate) {
+	struct GBTimer* timer;
 	UNUSED(timing);
 	UNUSED(cyclesLate);
-	struct GBTimer* timer = context;
+	timer = context;
 	timer->p->memory.io[GB_REG_TIMA] = timer->p->memory.io[GB_REG_TMA];
 	timer->p->memory.io[GB_REG_IF] |= (1 << GB_IRQ_TIMER);
 	GBUpdateIRQs(timer->p);
@@ -22,6 +23,7 @@ void _GBTimerIRQ(struct mTiming* timing, void* context, uint32_t cyclesLate) {
 static void _GBTimerDivIncrement(struct GBTimer* timer, uint32_t cyclesLate) {
 	int tMultiplier = 2 - timer->p->doubleSpeed;
 	while (timer->nextDiv >= GB_DMG_DIV_PERIOD * tMultiplier) {
+		unsigned timingFactor;
 		timer->nextDiv -= GB_DMG_DIV_PERIOD * tMultiplier;
 
 		// Make sure to trigger when the correct bit is a falling edge
@@ -31,7 +33,7 @@ static void _GBTimerDivIncrement(struct GBTimer* timer, uint32_t cyclesLate) {
 				mTimingSchedule(&timer->p->timing, &timer->irq, 7 * tMultiplier - ((timer->p->cpu->executionState * tMultiplier - cyclesLate) & (3 * tMultiplier)));
 			}
 		}
-		unsigned timingFactor = (0x200 << timer->p->doubleSpeed) - 1;
+		timingFactor = (0x200 << timer->p->doubleSpeed) - 1;
 		if ((timer->internalDiv & timingFactor) == timingFactor) {
 			GBAudioUpdateFrame(&timer->p->audio);
 		}
@@ -41,12 +43,13 @@ static void _GBTimerDivIncrement(struct GBTimer* timer, uint32_t cyclesLate) {
 }
 
 void _GBTimerUpdate(struct mTiming* timing, void* context, uint32_t cyclesLate) {
+	int divsToGo;
+	int timaToGo = INT_MAX;
 	struct GBTimer* timer = context;
 	timer->nextDiv += cyclesLate;
 	_GBTimerDivIncrement(timer, cyclesLate);
 	// Batch div increments
-	int divsToGo = 16 - (timer->internalDiv & 15);
-	int timaToGo = INT_MAX;
+	divsToGo = 16 - (timer->internalDiv & 15);
 	if (timer->timaPeriod) {
 		timaToGo = timer->timaPeriod - (timer->internalDiv & (timer->timaPeriod - 1));
 	}
@@ -72,10 +75,11 @@ void GBTimerReset(struct GBTimer* timer) {
 }
 
 void GBTimerDivReset(struct GBTimer* timer) {
+	int tMultiplier;
 	timer->nextDiv -= mTimingUntil(&timer->p->timing, &timer->event);
 	mTimingDeschedule(&timer->p->timing, &timer->event);
 	_GBTimerDivIncrement(timer, 0);
-	int tMultiplier = 2 - timer->p->doubleSpeed;
+	tMultiplier = 2 - timer->p->doubleSpeed;
 	if (((timer->internalDiv << 1) | ((timer->nextDiv >> (4 - timer->p->doubleSpeed)) & 1)) & timer->timaPeriod) {
 		++timer->p->memory.io[GB_REG_TIMA];
 		if (!timer->p->memory.io[GB_REG_TIMA]) {
@@ -121,25 +125,27 @@ uint8_t GBTimerUpdateTAC(struct GBTimer* timer, GBRegisterTAC tac) {
 }
 
 void GBTimerSerialize(const struct GBTimer* timer, struct GBSerializedState* state) {
+	GBSerializedTimerFlags flags;
 	STORE_32LE(timer->nextDiv, 0, &state->timer.nextDiv);
 	STORE_32LE(timer->internalDiv, 0, &state->timer.internalDiv);
 	STORE_32LE(timer->timaPeriod, 0, &state->timer.timaPeriod);
 	STORE_32LE(timer->event.when - mTimingCurrentTime(&timer->p->timing), 0, &state->timer.nextEvent);
 	STORE_32LE(timer->irq.when - mTimingCurrentTime(&timer->p->timing), 0, &state->timer.nextIRQ);
-	GBSerializedTimerFlags flags = GBSerializedTimerFlagsSetIrqPending(0, mTimingIsScheduled(&timer->p->timing, &timer->irq));
+	flags = GBSerializedTimerFlagsSetIrqPending(0, mTimingIsScheduled(&timer->p->timing, &timer->irq));
 	state->timer.flags = flags;
 }
 
 void GBTimerDeserialize(struct GBTimer* timer, const struct GBSerializedState* state) {
+	uint32_t when;
+	GBSerializedTimerFlags flags;
 	LOAD_32LE(timer->nextDiv, 0, &state->timer.nextDiv);
 	LOAD_32LE(timer->internalDiv, 0, &state->timer.internalDiv);
 	LOAD_32LE(timer->timaPeriod, 0, &state->timer.timaPeriod);
 
-	uint32_t when;
 	LOAD_32LE(when, 0, &state->timer.nextEvent);
 	mTimingSchedule(&timer->p->timing, &timer->event, when);
 
-	GBSerializedTimerFlags flags = state->timer.flags;
+	flags = state->timer.flags;
 
 	LOAD_32LE(when, 0, &state->timer.nextIRQ);
 	if (GBSerializedTimerFlagsIsIrqPending(flags)) {

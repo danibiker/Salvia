@@ -211,7 +211,7 @@ void _rtcReadPins(struct GBACartridgeHardware* hw) {
 		}
 	} else {
 		if (hw->rtc.sckEdge && !(hw->pinState & 1)) {
-			hw->rtc.sioOutput = _rtcOutput(hw);
+			hw->rtc.sioOutput = !!(_rtcOutput(hw));
 			++hw->rtc.bitsRead;
 			if (hw->rtc.bitsRead == 8) {
 				--hw->rtc.bytesRemaining;
@@ -277,6 +277,7 @@ void _rtcProcessByte(struct GBACartridgeHardware* hw) {
 }
 
 unsigned _rtcOutput(struct GBACartridgeHardware* hw) {
+	unsigned output;
 	uint8_t outputByte = 0xFF;
 	switch (RTCCommandDataGetCommand(hw->rtc.command)) {
 	case RTC_CONTROL:
@@ -290,7 +291,7 @@ unsigned _rtcOutput(struct GBACartridgeHardware* hw) {
 	case RTC_RESET:
 		break;
 	}
-	unsigned output = (outputByte >> hw->rtc.bitsRead) & 1;
+	output = (outputByte >> hw->rtc.bitsRead) & 1;
 	if (hw->rtc.bitsRead == 0) {
 		mLOG(GBA_HW, DEBUG, "RTC output byte %02X", outputByte);
 	}
@@ -298,6 +299,7 @@ unsigned _rtcOutput(struct GBACartridgeHardware* hw) {
 }
 
 void _rtcUpdateClock(struct GBACartridgeHardware* hw) {
+	struct tm date;
 	time_t t;
 	struct mRTCSource* rtc = hw->p->rtcSource;
 	if (rtc) {
@@ -311,7 +313,6 @@ void _rtcUpdateClock(struct GBACartridgeHardware* hw) {
 	hw->rtc.lastLatch = t;
 	t -= hw->rtc.offset;
 
-	struct tm date;
 	localtime_r(&t, &date);
 	hw->rtc.time[0] = _rtcBCD(date.tm_year - 100);
 	hw->rtc.time[1] = _rtcBCD(date.tm_mon + 1);
@@ -342,18 +343,20 @@ void GBAHardwareInitGyro(struct GBACartridgeHardware* hw) {
 }
 
 void _gyroReadPins(struct GBACartridgeHardware* hw) {
+	bool doOutput;
 	struct mRotationSource* gyro = hw->p->rotationSource;
 	if (!gyro || !gyro->readGyroZ) {
 		return;
 	}
 
 	// Write bit on falling edge
-	bool doOutput = hw->gyroEdge && !(hw->pinState & 2);
+	doOutput = hw->gyroEdge && !(hw->pinState & 2);
 	if (hw->pinState & 1) {
+		int32_t sample;
 		if (gyro->sample) {
 			gyro->sample(gyro);
 		}
-		int32_t sample = gyro->readGyroZ(gyro);
+		sample = gyro->readGyroZ(gyro);
 
 		// Normalize to ~12 bits, focused on 0x700
 		hw->gyroSample = (sample >> 21) + 0x700; // Crop off an extra bit so that we can't go negative
@@ -376,12 +379,13 @@ void GBAHardwareInitRumble(struct GBACartridgeHardware* hw) {
 }
 
 void _rumbleReadPins(struct GBACartridgeHardware* hw) {
+	int32_t currentTime;
 	struct mRumble* rumble = hw->p->rumble;
 	if (!rumble) {
 		return;
 	}
 
-	int32_t currentTime = mTimingCurrentTime(&hw->p->timing);
+	currentTime = mTimingCurrentTime(&hw->p->timing);
 	rumble->setRumble(rumble, !!(hw->pinState & 8), currentTime - hw->p->lastRumble);
 	hw->p->lastRumble = currentTime;
 }
@@ -396,6 +400,7 @@ void GBAHardwareInitLight(struct GBACartridgeHardware* hw) {
 }
 
 void _lightReadPins(struct GBACartridgeHardware* hw) {
+	bool sendBit;
 	if (hw->pinState & 4) {
 		// Boktai chip select
 		return;
@@ -419,7 +424,7 @@ void _lightReadPins(struct GBACartridgeHardware* hw) {
 	}
 	hw->lightEdge = !(hw->pinState & 1);
 
-	bool sendBit = hw->lightCounter >= hw->lightSample;
+	sendBit = hw->lightCounter >= hw->lightSample;
 	_outputPins(hw, (sendBit << 3) | (hw->pinState & 0x7));
 	mLOG(GBA_HW, DEBUG, "[SOLAR] Output %u with pins %u", hw->lightCounter, hw->pinState);
 }
@@ -444,16 +449,19 @@ void GBAHardwareTiltWrite(struct GBACartridgeHardware* hw, uint32_t address, uin
 		break;
 	case 0x8100:
 		if (value == 0xAA && hw->tiltState == 1) {
+			struct mRotationSource* rotationSource;
+			int32_t x;
+			int32_t y;
 			hw->tiltState = 0;
-			struct mRotationSource* rotationSource = hw->p->rotationSource;
+			rotationSource = hw->p->rotationSource;
 			if (!rotationSource || !rotationSource->readTiltX || !rotationSource->readTiltY) {
 				return;
 			}
 			if (rotationSource->sample) {
 				rotationSource->sample(rotationSource);
 			}
-			int32_t x = rotationSource->readTiltX(rotationSource);
-			int32_t y = rotationSource->readTiltY(rotationSource);
+			x = rotationSource->readTiltX(rotationSource);
+			y = rotationSource->readTiltY(rotationSource);
 			// Normalize to ~12 bits, focused on 0x3A0
 			hw->tiltX = 0x3A0 - (x >> 22);
 			hw->tiltY = 0x3A0 - (y >> 22);
@@ -487,6 +495,8 @@ uint8_t GBAHardwareTiltRead(struct GBACartridgeHardware* hw, uint32_t address) {
 // == Serialization
 
 void GBAHardwareSerialize(const struct GBACartridgeHardware* hw, struct GBASerializedState* state) {
+	GBASerializedHWFlags3 flags3 = 0;
+	GBASerializedHWFlags2 flags2 = 0;
 	GBASerializedHWFlags1 flags1 = 0;
 	flags1 = GBASerializedHWFlags1SetReadWrite(flags1, hw->readWrite);
 	state->hw.writeLatch = hw->writeLatch;
@@ -494,7 +504,6 @@ void GBAHardwareSerialize(const struct GBACartridgeHardware* hw, struct GBASeria
 	state->hw.pinDirection = hw->direction;
 	state->hw.devices = hw->devices;
 
-	GBASerializedHWFlags3 flags3 = 0;
 	flags3 = GBASerializedHWFlags3SetRtcSioOutput(flags3, hw->rtc.sioOutput);
 	state->hw.flags3 = flags3;
 
@@ -516,7 +525,6 @@ void GBAHardwareSerialize(const struct GBACartridgeHardware* hw, struct GBASeria
 	flags1 = GBASerializedHWFlags1SetLightCounter(flags1, hw->lightCounter);
 	STORE_16(flags1, 0, &state->hw.flags1);
 
-	GBASerializedHWFlags2 flags2 = 0;
 	flags2 = GBASerializedHWFlags2SetTiltState(flags2, hw->tiltState);
 
 	// GBP/SIO stuff is only here for legacy reasons
@@ -528,6 +536,7 @@ void GBAHardwareSerialize(const struct GBACartridgeHardware* hw, struct GBASeria
 }
 
 void GBAHardwareDeserialize(struct GBACartridgeHardware* hw, const struct GBASerializedState* state) {
+	uint32_t when;
 	GBASerializedHWFlags1 flags1;
 	LOAD_16(flags1, 0, &state->hw.flags1);
 	hw->readWrite = GBASerializedHWFlags1GetReadWrite(flags1);
@@ -549,31 +558,30 @@ void GBAHardwareDeserialize(struct GBACartridgeHardware* hw, const struct GBASer
 		}
 	}
 
-	hw->rtc.sioOutput = GBASerializedHWFlags3GetRtcSioOutput(state->hw.flags3);
+	hw->rtc.sioOutput = !!(GBASerializedHWFlags3GetRtcSioOutput(state->hw.flags3));
 
 	LOAD_32(hw->rtc.bytesRemaining, 0, &state->hw.rtcBytesRemaining);
 	LOAD_32(hw->rtc.bitsRead, 0, &state->hw.rtcBitsRead);
 	LOAD_32(hw->rtc.bits, 0, &state->hw.rtcBits);
 	LOAD_32(hw->rtc.commandActive, 0, &state->hw.rtcCommandActive);
-	hw->rtc.sckEdge = GBASerializedHWFlags1GetRtcSckEdge(flags1);
+	hw->rtc.sckEdge = !!(GBASerializedHWFlags1GetRtcSckEdge(flags1));
 	LOAD_32(hw->rtc.command, 0, &state->hw.rtcCommand);
 	LOAD_32(hw->rtc.control, 0, &state->hw.rtcControl);
 	memcpy(hw->rtc.time, state->hw.time, sizeof(hw->rtc.time));
 
 	LOAD_16(hw->gyroSample, 0, &state->hw.gyroSample);
-	hw->gyroEdge = GBASerializedHWFlags1GetGyroEdge(flags1);
+	hw->gyroEdge = !!(GBASerializedHWFlags1GetGyroEdge(flags1));
 	LOAD_16(hw->tiltX, 0, &state->hw.tiltSampleX);
 	LOAD_16(hw->tiltY, 0, &state->hw.tiltSampleY);
 	hw->tiltState = GBASerializedHWFlags2GetTiltState(state->hw.flags2);
 	hw->lightCounter = GBASerializedHWFlags1GetLightCounter(flags1);
 	hw->lightSample = state->hw.lightSample;
-	hw->lightEdge = GBASerializedHWFlags1GetLightEdge(flags1);
+	hw->lightEdge = !!(GBASerializedHWFlags1GetLightEdge(flags1));
 
 	// GBP/SIO stuff is only here for legacy reasons
 	hw->p->sio.gbp.inputsPosted = GBASerializedHWFlags2GetGbpInputsPosted(state->hw.flags2);
 	hw->p->sio.gbp.txPosition = GBASerializedHWFlags2GetGbpTxPosition(state->hw.flags2);
 
-	uint32_t when;
 	LOAD_32(when, 0, &state->hw.sioNextEvent);
 	if (hw->devices & HW_GB_PLAYER) {
 		GBASIOSetDriver(&hw->p->sio, &hw->p->sio.gbp.d);

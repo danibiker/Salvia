@@ -159,6 +159,7 @@ static bool _GBCoreInit(struct mCore* core) {
 }
 
 static void _GBCoreDeinit(struct mCore* core) {
+	struct GBCore* gbcore;
 	SM83Deinit(core->cpu);
 	GBDestroy(core->board);
 	mappedMemoryFree(core->cpu, sizeof(struct SM83Core));
@@ -172,7 +173,7 @@ static void _GBCoreDeinit(struct mCore* core) {
 	}
 #endif
 
-	struct GBCore* gbcore = (struct GBCore*) core;
+	gbcore = (struct GBCore*) core;
 	free(gbcore->debuggerPlatform);
 	if (gbcore->cheatDevice) {
 		mCheatDeviceDestroy(gbcore->cheatDevice);
@@ -200,9 +201,11 @@ static void _GBCoreSetSync(struct mCore* core, struct mCoreSync* sync) {
 }
 
 static void _GBCoreLoadConfig(struct mCore* core, const struct mCoreConfig* config) {
+	struct GB* gb;
+	int color;
 	UNUSED(config);
 
-	struct GB* gb = core->board;
+	gb = core->board;
 	if (core->opts.mute) {
 		gb->audio.masterVolume = 0;
 	} else {
@@ -210,7 +213,6 @@ static void _GBCoreLoadConfig(struct mCore* core, const struct mCoreConfig* conf
 	}
 	gb->video.frameskip = core->opts.frameskip;
 
-	int color;
 	if (mCoreConfigGetIntValue(config, "gb.pal[0]", &color)) {
 		GBVideoSetPalette(&gb->video, 0, color);
 	}
@@ -506,10 +508,10 @@ static bool _GBCoreLoadTemporarySave(struct mCore* core, struct VFile* vf) {
 }
 
 static bool _GBCoreLoadPatch(struct mCore* core, struct VFile* vf) {
+	struct Patch patch;
 	if (!vf) {
 		return false;
 	}
-	struct Patch patch;
 	if (!loadPatch(vf, &patch)) {
 		return false;
 	}
@@ -566,6 +568,7 @@ static void _GBCoreChecksum(const struct mCore* core, void* data, enum mCoreChec
 }
 
 static void _GBCoreReset(struct mCore* core) {
+	size_t i;
 	struct GBCore* gbcore = (struct GBCore*) core;
 	struct GB* gb = (struct GB*) core->board;
 	if (gbcore->renderer.outputBuffer) {
@@ -573,6 +576,7 @@ static void _GBCoreReset(struct mCore* core) {
 	}
 
 	if (gb->memory.rom) {
+		const struct GBCartridge* cart;
 		int doColorOverride = GB_COLORS_NONE;
 		mCoreConfigGetIntValue(&core->config, "gb.colors", &doColorOverride);
 
@@ -581,7 +585,7 @@ static void _GBCoreReset(struct mCore* core) {
 			mCoreConfigGetIntValue(&core->config, "useCgbColors", &doColorOverride);
 		}
 
-		const struct GBCartridge* cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
+		cart = (const struct GBCartridge*) &gb->memory.rom[0x100];
 		if (!gbcore->hasOverride) {
 			gbcore->override.headerCrc32 = doCrc32(cart, sizeof(*cart));
 			gbcore->hasOverride = GBOverrideFind(gbcore->overrides, &gbcore->override) || (doColorOverride && GBOverrideColorFind(&gbcore->override, doColorOverride));
@@ -643,8 +647,8 @@ static void _GBCoreReset(struct mCore* core) {
 			}
 		}
 		if (!found) {
-			GBDetectModel(gb);
 			const char* configPath = NULL;
+			GBDetectModel(gb);
 
 			switch (gb->model) {
 			case GB_MODEL_DMG:
@@ -715,7 +719,6 @@ static void _GBCoreReset(struct mCore* core) {
 		memcpy(gbcore->memoryBlocks, _GBCMemoryBlocks, sizeof(_GBCMemoryBlocks));
 	}
 
-	size_t i;
 	for (i = 0; i < sizeof(gbcore->memoryBlocks) / sizeof(*gbcore->memoryBlocks); ++i) {
 		if (gbcore->memoryBlocks[i].id == GB_REGION_CART_BANK0) {
 			gbcore->memoryBlocks[i].size = gb->memory.romSize;
@@ -1237,13 +1240,14 @@ static size_t _GBCoreSavedataClone(struct mCore* core, void** sram) {
 }
 
 static bool _GBCoreSavedataRestore(struct mCore* core, const void* sram, size_t size, bool writeback) {
+	struct VFile* vf;
 	struct GB* gb = core->board;
 	if (!writeback) {
 		struct VFile* vf = VFileMemChunk(sram, size);
 		GBSavedataMask(gb, vf, true);
 		return true;
 	}
-	struct VFile* vf = gb->sramVf;
+	vf = gb->sramVf;
 	if (vf) {
 		vf->seek(vf, 0, SEEK_SET);
 		return vf->write(vf, sram, size) > 0;

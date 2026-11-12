@@ -11,6 +11,7 @@
 CXX_GUARD_START
 
 #include <mgba/core/log.h>
+#include <mgba/gb/interface.h>
 
 mLOG_DECLARE_CATEGORY(GB_MBC);
 

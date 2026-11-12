@@ -194,11 +194,11 @@ void GBACartEReaderInit(struct GBACartEReader* ereader) {
 }
 
 void GBACartEReaderDeinit(struct GBACartEReader* ereader) {
+	int i;
 	if (ereader->dots) {
 		mappedMemoryFree(ereader->dots, EREADER_DOTCODE_SIZE);
 		ereader->dots = NULL;
 	}
-	int i;
 	for (i = 0; i < EREADER_CARDS_MAX; ++i) {
 		if (!ereader->cards[i].data) {
 			continue;
@@ -252,8 +252,8 @@ void GBACartEReaderWriteFlash(struct GBACartEReader* ereader, uint32_t address, 
 }
 
 uint16_t GBACartEReaderRead(struct GBACartEReader* ereader, uint32_t address) {
-	address &= 0x700FF;
 	uint16_t value;
+	address &= 0x700FF;
 	switch (address >> 17) {
 	case 0:
 		return ereader->registerUnk;
@@ -323,9 +323,10 @@ static void _eReaderAlignment(uint8_t* origin) {
 }
 
 static void _eReaderAddress(uint8_t* origin, int a) {
-	origin[EREADER_DOTCODE_STRIDE * 7 + 2] = 1;
-	uint16_t addr = EREADER_ADDRESS_CODES[a];
+	uint16_t addr;
 	int i;
+	origin[EREADER_DOTCODE_STRIDE * 7 + 2] = 1;
+	addr = EREADER_ADDRESS_CODES[a];
 	for (i = 0; i < 16; ++i) {
 		origin[EREADER_DOTCODE_STRIDE * (16 + i) + 2] = (addr >> (15 - i)) & 1;
 	}
@@ -364,12 +365,6 @@ static void _eReaderReedSolomon(const uint8_t* input, uint8_t* output) {
 }
 
 void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t size) {
-	if (!ereader->dots) {
-		ereader->dots = anonymousMemoryMap(EREADER_DOTCODE_SIZE);
-	}
-	ereader->scanX = -24;
-	memset(ereader->dots, 0, EREADER_DOTCODE_SIZE);
-
 	uint8_t blockRS[44][0x10];
 	uint8_t block0[0x30] = {0};
 	bool parsed = false;
@@ -377,6 +372,16 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 	bool reducedHeader = false;
 	size_t blocks;
 	int base;
+	const uint8_t* cdata;
+	size_t i;
+	size_t blockId = 0;
+	size_t byteOffset = 0;
+	if (!ereader->dots) {
+		ereader->dots = anonymousMemoryMap(EREADER_DOTCODE_SIZE);
+	}
+	ereader->scanX = -24;
+	memset(ereader->dots, 0, EREADER_DOTCODE_SIZE);
+
 	switch (size) {
 	// Raw sizes
 	case 2076:
@@ -414,8 +419,7 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 		return;
 	}
 
-	const uint8_t* cdata = data;
-	size_t i;
+	cdata = data;
 	if (bitmap) {
 		size_t x;
 		for (i = 0; i < 40; ++i) {
@@ -447,6 +451,8 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 	}
 	if (parsed) {
 		if (reducedHeader) {
+			unsigned dataChecksum = 0;
+			int j;
 			memcpy(&block0[0x10], DUMMY_HEADER_FIXED, sizeof(DUMMY_HEADER_FIXED));
 			block0[0x0D] = cdata[0x0];
 			block0[0x0C] = cdata[0x1];
@@ -463,12 +469,10 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 			for (i = 0; i < 12; ++i) {
 				block0[0x2E] ^= cdata[i];
 			}
-			unsigned dataChecksum = 0;
-			int j;
 			for (i = 1; i < (size + 36) / 48; ++i) {
+				unsigned fragmentChecksum = 0;
 				const uint8_t* block = &cdata[i * 48 - 36];
 				_eReaderReedSolomon(block, blockRS[i]);
-				unsigned fragmentChecksum = 0;
 				for (j = 0; j < 0x30; j += 2) {
 					uint16_t halfword;
 					fragmentChecksum ^= block[j];
@@ -491,22 +495,23 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 			}
 		}
 	}
-	size_t blockId = 0;
-	size_t byteOffset = 0;
 	for (i = 0; i < blocks; ++i) {
+		const uint8_t* blockData;
+		uint8_t parsedBlockData[104];
+		int b;
+		int y;
 		uint8_t block[1040];
 		uint8_t* origin = &ereader->dots[35 * i + 200];
 		_eReaderAlignment(&origin[EREADER_DOTCODE_STRIDE * 2]);
 		_eReaderAlignment(&origin[EREADER_DOTCODE_STRIDE * 37]);
 
-		const uint8_t* blockData;
-		uint8_t parsedBlockData[104];
 		if (parsed) {
+			const uint8_t* header;
+			int j;
 			memset(parsedBlockData, 0, sizeof(*parsedBlockData));
-			const uint8_t* header = BLOCK_HEADER[size == 1344 ? 0 : 1];
+			header = BLOCK_HEADER[size == 1344 ? 0 : 1];
 			parsedBlockData[0] = header[(2 * i) % 0x18];
 			parsedBlockData[1] = header[(2 * i) % 0x18 + 1];
-			int j;
 			for (j = 2; j < 104; ++j) {
 				if (byteOffset >= 0x40) {
 					break;
@@ -532,7 +537,6 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 		} else {
 			blockData = &cdata[i * 104];
 		}
-		int b;
 		for (b = 0; b < 104; ++b) {
 			const int* nybble5;
 			nybble5 = EREADER_NYBBLE_5BIT[blockData[b] >> 4];
@@ -550,7 +554,6 @@ void GBACartEReaderScan(struct GBACartEReader* ereader, const void* data, size_t
 		}
 
 		b = 0;
-		int y;
 		for (y = 0; y < 3; ++y) {
 			memcpy(&origin[EREADER_DOTCODE_STRIDE * (4 + y) + 7], &block[b], 26);
 			b += 26;
@@ -731,10 +734,10 @@ void _eReaderReadData(struct GBACartEReader* ereader) {
 
 
 void _eReaderScanCard(struct GBACartEReader* ereader) {
+	int i;
 	if (ereader->dots) {
 		memset(ereader->dots, 0, EREADER_DOTCODE_SIZE);
 	}
-	int i;
 	for (i = 0; i < EREADER_CARDS_MAX; ++i) {
 		if (!ereader->cards[i].data) {
 			continue;

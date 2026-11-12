@@ -51,6 +51,7 @@ static void _breakWindow(struct GBAVideoSoftwareRenderer* softwareRenderer, stru
 static void _breakWindowInner(struct GBAVideoSoftwareRenderer* softwareRenderer, struct WindowN* win);
 
 void GBAVideoSoftwareRendererCreate(struct GBAVideoSoftwareRenderer* renderer) {
+	int i;
 	memset(renderer, 0, sizeof(*renderer));
 	renderer->d.init = GBAVideoSoftwareRendererInit;
 	renderer->d.reset = GBAVideoSoftwareRendererReset;
@@ -80,7 +81,6 @@ void GBAVideoSoftwareRendererCreate(struct GBAVideoSoftwareRenderer* renderer) {
 	renderer->d.highlightBG[1] = false;
 	renderer->d.highlightBG[2] = false;
 	renderer->d.highlightBG[3] = false;
-	int i;
 	for (i = 0; i < 128; ++i) {
 		renderer->d.highlightOBJ[i] = false;
 	}
@@ -91,11 +91,12 @@ void GBAVideoSoftwareRendererCreate(struct GBAVideoSoftwareRenderer* renderer) {
 }
 
 static void GBAVideoSoftwareRendererInit(struct GBAVideoRenderer* renderer) {
+	struct GBAVideoSoftwareRenderer* softwareRenderer;
+	int y;
 	GBAVideoSoftwareRendererReset(renderer);
 
-	struct GBAVideoSoftwareRenderer* softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
+	softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
 
-	int y;
 	for (y = 0; y < GBA_VIDEO_VERTICAL_PIXELS; ++y) {
 		mColor* row = &softwareRenderer->outputBuffer[softwareRenderer->outputBufferStride * y];
 		int x;
@@ -128,10 +129,15 @@ static void GBAVideoSoftwareRendererReset(struct GBAVideoRenderer* renderer) {
 	softwareRenderer->bldb = 0;
 	softwareRenderer->bldy = 0;
 
-	softwareRenderer->winN[0] = (struct WindowN) { .control = { .priority = 0 } };
-	softwareRenderer->winN[1] = (struct WindowN) { .control = { .priority = 1 } };
-	softwareRenderer->objwin = (struct WindowControl) { .priority = 2 };
-	softwareRenderer->winout = (struct WindowControl) { .priority = 3 };
+	/* C89: compound literals replaced by memset + member assignments */
+	memset(&softwareRenderer->winN[0], 0, sizeof(softwareRenderer->winN[0]));
+	softwareRenderer->winN[0].control.priority = 0;
+	memset(&softwareRenderer->winN[1], 0, sizeof(softwareRenderer->winN[1]));
+	softwareRenderer->winN[1].control.priority = 1;
+	memset(&softwareRenderer->objwin, 0, sizeof(softwareRenderer->objwin));
+	softwareRenderer->objwin.priority = 2;
+	memset(&softwareRenderer->winout, 0, sizeof(softwareRenderer->winout));
+	softwareRenderer->winout.priority = 3;
 	softwareRenderer->oamDirty = 1;
 	softwareRenderer->oamMax = 0;
 
@@ -196,7 +202,7 @@ static uint16_t GBAVideoSoftwareRendererWriteVideoRegister(struct GBAVideoRender
 		GBAVideoSoftwareRendererUpdateDISPCNT(softwareRenderer);
 		break;
 	case GBA_REG_STEREOCNT:
-		softwareRenderer->stereo = value & 1;
+		softwareRenderer->stereo = !!(value & 1);
 		break;
 	case GBA_REG_BG0CNT:
 		value &= 0xDFFF;
@@ -421,6 +427,7 @@ static void GBAVideoSoftwareRendererWriteOAM(struct GBAVideoRenderer* renderer, 
 }
 
 static void GBAVideoSoftwareRendererWritePalette(struct GBAVideoRenderer* renderer, uint32_t address, uint16_t value) {
+	int highlightAmount;
 	struct GBAVideoSoftwareRenderer* softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
 	mColor color = mColorFrom555(value);
 	softwareRenderer->normalPalette[address >> 1] = color;
@@ -429,7 +436,7 @@ static void GBAVideoSoftwareRendererWritePalette(struct GBAVideoRenderer* render
 	} else if (softwareRenderer->blendEffect == BLEND_DARKEN) {
 		softwareRenderer->variantPalette[address >> 1] = _darken(color, softwareRenderer->bldy);
 	}
-	int highlightAmount = renderer->highlightAmount >> 4;
+	highlightAmount = renderer->highlightAmount >> 4;
 	if (highlightAmount) {
 		softwareRenderer->highlightPalette[address >> 1] = mColorMix5Bit(0x10 - highlightAmount, softwareRenderer->normalPalette[address >> 1], highlightAmount, renderer->highlightColor);
 		softwareRenderer->highlightVariantPalette[address >> 1] = mColorMix5Bit(0x10 - highlightAmount, softwareRenderer->variantPalette[address >> 1], highlightAmount, renderer->highlightColor);
@@ -445,7 +452,10 @@ static void GBAVideoSoftwareRendererWritePalette(struct GBAVideoRenderer* render
 
 static void _breakWindow(struct GBAVideoSoftwareRenderer* softwareRenderer, struct WindowN* win) {
 	if (win->h.end > GBA_VIDEO_HORIZONTAL_PIXELS || win->h.end < win->h.start) {
-		struct WindowN splits[2] = { *win, *win };
+		struct WindowN splits[2];
+		// C89/MSVC: no aggregate initializers made of struct values
+		splits[0] = *win;
+		splits[1] = *win;
 		splits[0].h.start = 0;
 		splits[1].h.end = GBA_VIDEO_HORIZONTAL_PIXELS;
 		_breakWindowInner(softwareRenderer, &splits[0]);
@@ -486,8 +496,9 @@ static void _breakWindowInner(struct GBAVideoSoftwareRenderer* softwareRenderer,
 						--softwareRenderer->nWindows;
 					}
 				} else {
+					int nextWindow;
 					++activeWindow;
-					int nextWindow = softwareRenderer->nWindows;
+					nextWindow = softwareRenderer->nWindows;
 					++softwareRenderer->nWindows;
 					for (; nextWindow > activeWindow; --nextWindow) {
 						softwareRenderer->windows[nextWindow] = softwareRenderer->windows[nextWindow - 1];
@@ -559,6 +570,12 @@ static void GBAVideoSoftwareRendererPrepareWindow(struct GBAVideoSoftwareRendere
 }
 
 static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* renderer, int y) {
+	bool dirty;
+	mColor* row;
+	int spriteLayers;
+	int w;
+	unsigned priority;
+	int x;
 	struct GBAVideoSoftwareRenderer* softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
 
 	if (y == GBA_VIDEO_VERTICAL_PIXELS - 1) {
@@ -567,7 +584,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
 		softwareRenderer->nextY = y + 1;
 	}
 
-	bool dirty = softwareRenderer->scanlineDirty[y >> 5] & (1U << (y & 0x1F));
+	dirty = !!(softwareRenderer->scanlineDirty[y >> 5] & (1U << (y & 0x1F)));
 	if (memcmp(softwareRenderer->nextIo, softwareRenderer->cache[y].io, sizeof(softwareRenderer->nextIo))) {
 		memcpy(softwareRenderer->cache[y].io, softwareRenderer->nextIo, sizeof(softwareRenderer->nextIo));
 		dirty = true;
@@ -610,7 +627,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
 
 	CLEAN_SCANLINE(softwareRenderer, y);
 
-	mColor* row = &softwareRenderer->outputBuffer[softwareRenderer->outputBufferStride * y];
+	row = &softwareRenderer->outputBuffer[softwareRenderer->outputBufferStride * y];
 	if (GBARegisterDISPCNTIsForcedBlank(softwareRenderer->dispcnt)) {
 		int x;
 		for (x = 0; x < GBA_VIDEO_HORIZONTAL_PIXELS; ++x) {
@@ -621,10 +638,8 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
 
 	GBAVideoSoftwareRendererPreprocessBuffer(softwareRenderer);
 	softwareRenderer->spriteCyclesRemaining = GBARegisterDISPCNTIsHblankIntervalFree(softwareRenderer->dispcnt) ? OBJ_HBLANK_FREE_LENGTH : OBJ_LENGTH;
-	int spriteLayers = GBAVideoSoftwareRendererPreprocessSpriteLayer(softwareRenderer, y);
+	spriteLayers = GBAVideoSoftwareRendererPreprocessSpriteLayer(softwareRenderer, y);
 
-	int w;
-	unsigned priority;
 	softwareRenderer->end = 0;
 	for (w = 0; w < softwareRenderer->nWindows; ++w) {
 		softwareRenderer->start = softwareRenderer->end;
@@ -704,7 +719,6 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
 		DIRTY_SCANLINE(softwareRenderer, y);
 	}
 
-	int x;
 	if (softwareRenderer->stereo) {
 		for (x = 0; x < GBA_VIDEO_HORIZONTAL_PIXELS; x += 4) {
 			row[x] = softwareRenderer->row[x] & (M_COLOR_RED | M_COLOR_BLUE);
@@ -732,6 +746,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
 }
 
 static void GBAVideoSoftwareRendererFinishFrame(struct GBAVideoRenderer* renderer) {
+	int i;
 	struct GBAVideoSoftwareRenderer* softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
 
 	softwareRenderer->nextY = 0;
@@ -757,7 +772,6 @@ static void GBAVideoSoftwareRendererFinishFrame(struct GBAVideoRenderer* rendere
 		softwareRenderer->bg[3].enabled = ENABLED_MAX;
 	}
 
-	int i;
 	for (i = 0; i < 2; ++i) {
 		struct WindowN* win = &softwareRenderer->winN[i];
 		if (win->v.end >= GBA_VIDEO_VERTICAL_PIXELS && win->v.end < VIDEO_VERTICAL_TOTAL_PIXELS) {
@@ -811,10 +825,10 @@ static void _enableBg(struct GBAVideoSoftwareRenderer* renderer, int bg, bool ac
 }
 
 static void GBAVideoSoftwareRendererUpdateDISPCNT(struct GBAVideoSoftwareRenderer* renderer) {
-	_enableBg(renderer, 0, GBARegisterDISPCNTGetBg0Enable(renderer->dispcnt));
-	_enableBg(renderer, 1, GBARegisterDISPCNTGetBg1Enable(renderer->dispcnt));
-	_enableBg(renderer, 2, GBARegisterDISPCNTGetBg2Enable(renderer->dispcnt));
-	_enableBg(renderer, 3, GBARegisterDISPCNTGetBg3Enable(renderer->dispcnt));
+	_enableBg(renderer, 0, !!(GBARegisterDISPCNTGetBg0Enable(renderer->dispcnt)));
+	_enableBg(renderer, 1, !!(GBARegisterDISPCNTGetBg1Enable(renderer->dispcnt)));
+	_enableBg(renderer, 2, !!(GBARegisterDISPCNTGetBg2Enable(renderer->dispcnt)));
+	_enableBg(renderer, 3, !!(GBARegisterDISPCNTGetBg3Enable(renderer->dispcnt)));
 }
 
 static void GBAVideoSoftwareRendererWriteBGCNT(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* bg, uint16_t value) {
@@ -892,6 +906,7 @@ void GBAVideoSoftwareRendererStepWindow(struct GBAVideoSoftwareRenderer* softwar
 }
 
 void GBAVideoSoftwareRendererPreprocessBuffer(struct GBAVideoSoftwareRenderer* softwareRenderer) {
+	int w;
 	int x;
 	for (x = 0; x < GBA_VIDEO_HORIZONTAL_PIXELS; x += 4) {
 		softwareRenderer->spriteLayer[x] = FLAG_UNWRITTEN;
@@ -929,9 +944,9 @@ void GBAVideoSoftwareRendererPreprocessBuffer(struct GBAVideoSoftwareRenderer* s
 	}
 	softwareRenderer->forceTarget1 = false;
 
-	int w;
 	x = 0;
 	for (w = 0; w < softwareRenderer->nWindows; ++w) {
+		int end;
 		// TOOD: handle objwin on backdrop
 		uint32_t backdrop = FLAG_UNWRITTEN | FLAG_PRIORITY | FLAG_IS_BACKGROUND;
 		if (!softwareRenderer->target1Bd || softwareRenderer->blendEffect == BLEND_NONE || softwareRenderer->blendEffect == BLEND_ALPHA || !GBAWindowControlIsBlendEnable(softwareRenderer->windows[w].control.packed)) {
@@ -939,7 +954,7 @@ void GBAVideoSoftwareRendererPreprocessBuffer(struct GBAVideoSoftwareRenderer* s
 		} else {
 			backdrop |= softwareRenderer->variantPalette[0];
 		}
-		int end = softwareRenderer->windows[w].endX;
+		end = softwareRenderer->windows[w].endX;
 		for (; x & 3; ++x) {
 			softwareRenderer->row[x] = backdrop;
 		}
@@ -965,13 +980,14 @@ void GBAVideoSoftwareRendererPostprocessBuffer(struct GBAVideoSoftwareRenderer* 
 	if ((softwareRenderer->forceTarget1 || softwareRenderer->bg[0].target1 || softwareRenderer->bg[1].target1 || softwareRenderer->bg[2].target1 || softwareRenderer->bg[3].target1) && softwareRenderer->target2Bd) {
 		x = 0;
 		for (w = 0; w < softwareRenderer->nWindows; ++w) {
+			int end;
 			uint32_t backdrop = 0;
 			if (!softwareRenderer->target1Bd || softwareRenderer->blendEffect == BLEND_NONE || softwareRenderer->blendEffect == BLEND_ALPHA || !GBAWindowControlIsBlendEnable(softwareRenderer->windows[w].control.packed)) {
 				backdrop |= softwareRenderer->normalPalette[0];
 			} else {
 				backdrop |= softwareRenderer->variantPalette[0];
 			}
-			int end = softwareRenderer->windows[w].endX;
+			end = softwareRenderer->windows[w].endX;
 			for (; x < end; ++x) {
 				uint32_t color = softwareRenderer->row[x];
 				if (color & FLAG_TARGET_1) {
@@ -986,8 +1002,8 @@ void GBAVideoSoftwareRendererPostprocessBuffer(struct GBAVideoSoftwareRenderer* 
 			int end = softwareRenderer->windows[w].endX;
 			uint32_t mask = FLAG_REBLEND | FLAG_IS_BACKGROUND;
 			uint32_t match = FLAG_REBLEND;
-			bool objBlend = GBAWindowControlIsBlendEnable(softwareRenderer->objwin.packed);
-			bool winBlend = GBAWindowControlIsBlendEnable(softwareRenderer->windows[w].control.packed);
+			bool objBlend = !!(GBAWindowControlIsBlendEnable(softwareRenderer->objwin.packed));
+			bool winBlend = !!(GBAWindowControlIsBlendEnable(softwareRenderer->windows[w].control.packed));
 			if (GBARegisterDISPCNTIsObjwinEnable(softwareRenderer->dispcnt) && objBlend != winBlend) {
 				mask |= FLAG_OBJWIN;
 				if (objBlend) {
@@ -1020,14 +1036,16 @@ int GBAVideoSoftwareRendererPreprocessSpriteLayer(struct GBAVideoSoftwareRendere
 	int w;
 	int spriteLayers = 0;
 	if (GBARegisterDISPCNTIsObjEnable(renderer->dispcnt) && !renderer->d.disableOBJ) {
+		int mosaicV;
+		int mosaicY;
+		int lastIndex = 0;
+		int i;
 		if (renderer->oamDirty) {
 			renderer->oamMax = GBAVideoRendererCleanOAM(renderer->d.oam->obj, renderer->sprites, renderer->objOffsetY);
 			renderer->oamDirty = false;
 		}
-		int mosaicV = GBAMosaicControlGetObjV(renderer->mosaic) + 1;
-		int mosaicY = y - (y % mosaicV);
-		int lastIndex = 0;
-		int i;
+		mosaicV = GBAMosaicControlGetObjV(renderer->mosaic) + 1;
+		mosaicY = y - (y % mosaicV);
 		for (i = 0; i < renderer->oamMax; ++i) {
 			struct GBAVideoRendererSprite* sprite = &renderer->sprites[i];
 			int localY = y;
@@ -1050,6 +1068,7 @@ int GBAVideoSoftwareRendererPreprocessSpriteLayer(struct GBAVideoSoftwareRendere
 				}
 			}
 			for (w = 0; w < renderer->nWindows; ++w) {
+				int drawn;
 				renderer->currentWindow = renderer->windows[w].control;
 				renderer->start = renderer->end;
 				renderer->end = renderer->windows[w].endX;
@@ -1058,7 +1077,7 @@ int GBAVideoSoftwareRendererPreprocessSpriteLayer(struct GBAVideoSoftwareRendere
 					continue;
 				}
 
-				int drawn = GBAVideoSoftwareRendererPreprocessSprite(renderer, &sprite->obj, sprite->index, localY);
+				drawn = GBAVideoSoftwareRendererPreprocessSprite(renderer, &sprite->obj, sprite->index, localY);
 				spriteLayers |= drawn << GBAObjAttributesCGetPriority(sprite->obj.c);
 			}
 			renderer->spriteCyclesRemaining -= sprite->cycles;
@@ -1068,6 +1087,7 @@ int GBAVideoSoftwareRendererPreprocessSpriteLayer(struct GBAVideoSoftwareRendere
 }
 
 static void _updatePalettes(struct GBAVideoSoftwareRenderer* renderer) {
+	unsigned highlightAmount;
 	int i;
 	if (renderer->blendEffect == BLEND_BRIGHTEN) {
 		for (i = 0; i < 512; ++i) {
@@ -1082,7 +1102,7 @@ static void _updatePalettes(struct GBAVideoSoftwareRenderer* renderer) {
 			renderer->variantPalette[i] = renderer->normalPalette[i];
 		}
 	}
-	unsigned highlightAmount = renderer->d.highlightAmount >> 4;
+	highlightAmount = renderer->d.highlightAmount >> 4;
 
 	if (highlightAmount) {
 		for (i = 0; i < 512; ++i) {
@@ -1093,11 +1113,12 @@ static void _updatePalettes(struct GBAVideoSoftwareRenderer* renderer) {
 }
 
 void _updateFlags(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background) {
+	uint32_t objwinFlags;
 	uint32_t flags = (background->priority << OFFSET_PRIORITY) | (background->index << OFFSET_INDEX) | FLAG_IS_BACKGROUND;
 	if (background->target2) {
 		flags |= FLAG_TARGET_2;
 	}
-	uint32_t objwinFlags = flags;
+	objwinFlags = flags;
 	if (renderer->blendEffect == BLEND_ALPHA) {
 		if (renderer->blda == 0x10 && renderer->bldb == 0) {
 			flags &= ~FLAG_TARGET_2;

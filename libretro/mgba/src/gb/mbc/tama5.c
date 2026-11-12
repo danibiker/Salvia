@@ -16,18 +16,19 @@ static const uint8_t _tama6RTCMask[32] = {
 };
 
 static const int _daysToMonth[] = {
-	[ 1] = 0,
-	[ 2] = 31,
-	[ 3] = 31 + 28,
-	[ 4] = 31 + 28 + 31,
-	[ 5] = 31 + 28 + 31 + 30,
-	[ 6] = 31 + 28 + 31 + 30 + 31,
-	[ 7] = 31 + 28 + 31 + 30 + 31 + 30,
-	[ 8] = 31 + 28 + 31 + 30 + 31 + 30 + 31,
-	[ 9] = 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31,
-	[10] = 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30,
-	[11] = 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31,
-	[12] = 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30,
+	0,
+	/* [ 1] */ 0,
+	/* [ 2] */ 31,
+	/* [ 3] */ 31 + 28,
+	/* [ 4] */ 31 + 28 + 31,
+	/* [ 5] */ 31 + 28 + 31 + 30,
+	/* [ 6] */ 31 + 28 + 31 + 30 + 31,
+	/* [ 7] */ 31 + 28 + 31 + 30 + 31 + 30,
+	/* [ 8] */ 31 + 28 + 31 + 30 + 31 + 30 + 31,
+	/* [ 9] */ 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31,
+	/* [10] */ 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30,
+	/* [11] */ 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31,
+	/* [12] */ 31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30,
 };
 
 static int _tama6DMYToDayOfYear(int day, int month, int year) {
@@ -74,6 +75,16 @@ static int _tama6DayOfYearToDayOfMonth(int day, int year) {
 }
 
 static void _latchTAMA6Rtc(struct mRTCSource* rtc, struct GBTAMA5State* tama5, time_t* rtcLastLatch) {
+	time_t currentLatch;
+	uint8_t* timerRegs;
+	bool is24hour;
+	int64_t diff;
+	int day;
+	int month;
+	int year;
+	int leapYear;
+	int dayOfWeek;
+	int dayInYear;
 	time_t t;
 	if (rtc) {
 		if (rtc->sample) {
@@ -83,16 +94,15 @@ static void _latchTAMA6Rtc(struct mRTCSource* rtc, struct GBTAMA5State* tama5, t
 	} else {
 		t = time(0);
 	}
-	time_t currentLatch = t;
+	currentLatch = t;
 	t -= *rtcLastLatch;
 	*rtcLastLatch = currentLatch;
 	if (!t || tama5->disabled) {
 		return;
 	}
 
-	uint8_t* timerRegs = tama5->rtcTimerPage;
-	bool is24hour = tama5->rtcAlarmPage[GBTAMA6_RTC_PA1_24_HOUR];
-	int64_t diff;
+	timerRegs = tama5->rtcTimerPage;
+	is24hour = !!(tama5->rtcAlarmPage[GBTAMA6_RTC_PA1_24_HOUR]);
 	diff = timerRegs[GBTAMA6_RTC_PA0_SECOND_1] + timerRegs[GBTAMA6_RTC_PA0_SECOND_10] * 10 + t % 60;
 	if (diff < 0) {
 		diff += 60;
@@ -136,12 +146,12 @@ static void _latchTAMA6Rtc(struct mRTCSource* rtc, struct GBTAMA5State* tama5, t
 	t /= 24;
 	t += diff / 24;
 
-	int day = timerRegs[GBTAMA6_RTC_PA0_DAY_1] + timerRegs[GBTAMA6_RTC_PA0_DAY_10] * 10;
-	int month = timerRegs[GBTAMA6_RTC_PA0_MONTH_1] + timerRegs[GBTAMA6_RTC_PA0_MONTH_10] * 10;
-	int year = timerRegs[GBTAMA6_RTC_PA0_YEAR_1] + timerRegs[GBTAMA6_RTC_PA0_YEAR_10] * 10;
-	int leapYear = tama5->rtcAlarmPage[GBTAMA6_RTC_PA1_LEAP_YEAR];
-	int dayOfWeek = timerRegs[GBTAMA6_RTC_PA0_WEEK];
-	int dayInYear = _tama6DMYToDayOfYear(day, month, leapYear);
+	day = timerRegs[GBTAMA6_RTC_PA0_DAY_1] + timerRegs[GBTAMA6_RTC_PA0_DAY_10] * 10;
+	month = timerRegs[GBTAMA6_RTC_PA0_MONTH_1] + timerRegs[GBTAMA6_RTC_PA0_MONTH_10] * 10;
+	year = timerRegs[GBTAMA6_RTC_PA0_YEAR_1] + timerRegs[GBTAMA6_RTC_PA0_YEAR_10] * 10;
+	leapYear = tama5->rtcAlarmPage[GBTAMA6_RTC_PA1_LEAP_YEAR];
+	dayOfWeek = timerRegs[GBTAMA6_RTC_PA0_WEEK];
+	dayInYear = _tama6DMYToDayOfYear(day, month, leapYear);
 	diff = dayInYear + t;
 	while (diff <= 0) {
 		// Previous year
@@ -193,10 +203,12 @@ void _GBTAMA5(struct GB* gb, uint16_t address, uint8_t value) {
 		} else {
 			value &= 0xF;
 			if (tama5->reg < GBTAMA5_MAX) {
+				uint8_t address;
+				uint8_t out;
 				mLOG(GB_MBC, DEBUG, "TAMA5 write: %02X:%X", tama5->reg, value);
 				tama5->registers[tama5->reg] = value;
-				uint8_t address = ((tama5->registers[GBTAMA5_ADDR_HI] << 4) & 0x10) | tama5->registers[GBTAMA5_ADDR_LO];
-				uint8_t out = (tama5->registers[GBTAMA5_WRITE_HI] << 4) | tama5->registers[GBTAMA5_WRITE_LO];
+				address = ((tama5->registers[GBTAMA5_ADDR_HI] << 4) & 0x10) | tama5->registers[GBTAMA5_ADDR_LO];
+				out = (tama5->registers[GBTAMA5_WRITE_HI] << 4) | tama5->registers[GBTAMA5_WRITE_LO];
 				switch (tama5->reg) {
 				case GBTAMA5_BANK_LO:
 				case GBTAMA5_BANK_HI:
@@ -374,6 +386,7 @@ uint8_t _GBTAMA5Read(struct GBMemory* memory, uint16_t address) {
 
 
 void GBMBCTAMA5Read(struct GB* gb) {
+	size_t i;
 	struct GBMBCTAMA5SaveBuffer buffer;
 	struct VFile* vf = gb->sramVf;
 	if (!vf) {
@@ -385,7 +398,6 @@ void GBMBCTAMA5Read(struct GB* gb) {
 		return;
 	}
 
-	size_t i;
 	for (i = 0; i < 0x8; ++i) {
 		gb->memory.mbcState.tama5.rtcTimerPage[i * 2] = buffer.rtcTimerPage[i] & 0xF;
 		gb->memory.mbcState.tama5.rtcTimerPage[i * 2 + 1] = buffer.rtcTimerPage[i] >> 4;
@@ -410,13 +422,13 @@ void GBMBCTAMA5Read(struct GB* gb) {
 }
 
 void GBMBCTAMA5Write(struct GB* gb) {
+	struct GBMBCTAMA5SaveBuffer buffer = {0};
+	size_t i;
 	struct VFile* vf = gb->sramVf;
 	if (!vf) {
 		return;
 	}
 
-	struct GBMBCTAMA5SaveBuffer buffer = {0};
-	size_t i;
 	for (i = 0; i < 8; ++i) {
 		buffer.rtcTimerPage[i] = gb->memory.mbcState.tama5.rtcTimerPage[i * 2] & 0xF;
 		buffer.rtcTimerPage[i] |= gb->memory.mbcState.tama5.rtcTimerPage[i * 2 + 1] << 4;

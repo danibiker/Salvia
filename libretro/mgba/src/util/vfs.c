@@ -13,7 +13,7 @@
 #ifdef __3DS__
 #include <mgba-util/platform/3ds/3ds-vfs.h>
 #endif
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #include <shlwapi.h>
 #include <windows.h>
 #endif
@@ -25,87 +25,95 @@ struct VFile* VFileOpenLibretro(const char* path, int flags);
 #ifdef ENABLE_VFS
 struct VFile* VFileOpen(const char* path, int flags) {
 #ifdef __LIBRETRO__
-	struct VFile* vfLibretro = VFileOpenLibretro(path, flags);
-	if (vfLibretro) {
-		return vfLibretro;
+	{
+		struct VFile* vfLibretro = VFileOpenLibretro(path, flags);
+		if (vfLibretro) {
+			return vfLibretro;
+		}
 	}
 #endif
 #ifdef ENABLE_VFS_FILE
-	const char* chflags;
-	switch (flags & O_ACCMODE) {
-	case O_WRONLY:
-		if (flags & O_APPEND) {
-			chflags = "ab";
-		} else {
-			chflags = "wb";
+	{
+		const char* chflags;
+		switch (flags & O_ACCMODE) {
+		case O_WRONLY:
+			if (flags & O_APPEND) {
+				chflags = "ab";
+			} else {
+				chflags = "wb";
+			}
+			break;
+		case O_RDWR:
+			if (flags & O_APPEND) {
+				chflags = "a+b";
+			} else if (flags & O_TRUNC) {
+				chflags = "w+b";
+			} else {
+				chflags = "r+b";
+			}
+			break;
+		case O_RDONLY:
+			chflags = "rb";
+			break;
 		}
-		break;
-	case O_RDWR:
-		if (flags & O_APPEND) {
-			chflags = "a+b";
-		} else if (flags & O_TRUNC) {
-			chflags = "w+b";
-		} else {
-			chflags = "r+b";
-		}
-		break;
-	case O_RDONLY:
-		chflags = "rb";
-		break;
+		return VFileFOpen(path, chflags);
 	}
-	return VFileFOpen(path, chflags);
 #elif defined(PSP2)
-	int sceFlags = SCE_O_RDONLY;
-	switch (flags & O_ACCMODE) {
-	case O_WRONLY:
-		sceFlags = SCE_O_WRONLY;
-		break;
-	case O_RDWR:
-		sceFlags = SCE_O_RDWR;
-		break;
-	case O_RDONLY:
-		sceFlags = SCE_O_RDONLY;
-		break;
-	}
+	{
+		int sceFlags = SCE_O_RDONLY;
+		switch (flags & O_ACCMODE) {
+		case O_WRONLY:
+			sceFlags = SCE_O_WRONLY;
+			break;
+		case O_RDWR:
+			sceFlags = SCE_O_RDWR;
+			break;
+		case O_RDONLY:
+			sceFlags = SCE_O_RDONLY;
+			break;
+		}
 
-	if (flags & O_APPEND) {
-		sceFlags |= SCE_O_APPEND;
+		if (flags & O_APPEND) {
+			sceFlags |= SCE_O_APPEND;
+		}
+		if (flags & O_TRUNC) {
+			sceFlags |= SCE_O_TRUNC;
+		}
+		if (flags & O_CREAT) {
+			sceFlags |= SCE_O_CREAT;
+		}
+		return VFileOpenSce(path, sceFlags, 0666);
 	}
-	if (flags & O_TRUNC) {
-		sceFlags |= SCE_O_TRUNC;
-	}
-	if (flags & O_CREAT) {
-		sceFlags |= SCE_O_CREAT;
-	}
-	return VFileOpenSce(path, sceFlags, 0666);
 #elif defined(ENABLE_VFS_3DS)
-	int ctrFlags = FS_OPEN_READ;
-	switch (flags & O_ACCMODE) {
-	case O_WRONLY:
-		ctrFlags = FS_OPEN_WRITE;
-		break;
-	case O_RDWR:
-		ctrFlags = FS_OPEN_READ | FS_OPEN_WRITE;
-		break;
-	case O_RDONLY:
-		ctrFlags = FS_OPEN_READ;
-		break;
-	}
+	{
+		int ctrFlags = FS_OPEN_READ;
+		switch (flags & O_ACCMODE) {
+		case O_WRONLY:
+			ctrFlags = FS_OPEN_WRITE;
+			break;
+		case O_RDWR:
+			ctrFlags = FS_OPEN_READ | FS_OPEN_WRITE;
+			break;
+		case O_RDONLY:
+			ctrFlags = FS_OPEN_READ;
+			break;
+		}
 
-	if (flags & O_CREAT) {
-		ctrFlags |= FS_OPEN_CREATE;
+		if (flags & O_CREAT) {
+			ctrFlags |= FS_OPEN_CREATE;
+		}
+		struct VFile* vf = VFileOpen3DS(&sdmcArchive, path, ctrFlags);
+		if (!vf) {
+			return 0;
+		}
+		if (flags & O_TRUNC) {
+			vf->truncate(vf, 0);
+		}
+		if (flags & O_APPEND) {
+			vf->seek(vf, vf->size(vf), SEEK_SET);
+		}
+		return vf;
 	}
-	struct VFile* vf = VFileOpen3DS(&sdmcArchive, path, ctrFlags);
-	if (!vf) {
-		return 0;
-	}
-	if (flags & O_TRUNC) {
-		vf->truncate(vf, 0);
-	}
-	if (flags & O_APPEND) {
-		vf->seek(vf, vf->size(vf), SEEK_SET);
-	}
-	return vf;
 #elif defined(ENABLE_VFS_FD)
 	return VFileOpenFD(path, flags);
 #else
@@ -179,11 +187,13 @@ ssize_t VFileRead16LE(struct VFile* vf, void* hword) {
 }
 
 void separatePath(const char* path, char* dirname, char* basename, char* extension) {
+	const char* dotPoint;
+	const char* separatorPoint;
 	if (!path) {
 		return;
 	}
-	const char* dotPoint = strrchr(path, '.');
-	const char* separatorPoint = strnrstr(path, PATH_SEP, strlen(path));
+	dotPoint = strrchr(path, '.');
+	separatorPoint = strnrstr(path, PATH_SEP, strlen(path));
 	if (separatorPoint) {
 		if (dirname) {
 			ptrdiff_t len = separatorPoint - path;
@@ -214,8 +224,9 @@ void separatePath(const char* path, char* dirname, char* basename, char* extensi
 	}
 	if (extension) {
 		if (dotPoint) {
+			size_t len;
 			++dotPoint;
-			size_t len = strlen(dotPoint);
+			len = strlen(dotPoint);
 			if (PATH_MAX <= len) {
 				len = PATH_MAX - 1;
 			}
@@ -229,7 +240,13 @@ void separatePath(const char* path, char* dirname, char* basename, char* extensi
 
 bool isAbsolute(const char* path) {
 	// XXX: Is this robust?
-#ifdef _WIN32
+#if defined(_XBOX)
+	// Xbox 360 paths are always "device:\..." (game:, usb0:, hdd1:...)
+	return strchr(path, ':') != NULL;
+#elif defined(_WIN32) && defined(__LIBRETRO__)
+	// Same answer as PathIsRelativeW without linking shlwapi into the frontend
+	return path[0] == '\\' || path[0] == '/' || (isalpha((unsigned char) path[0]) && path[1] == ':');
+#elif defined(_WIN32)
 	WCHAR wpath[PATH_MAX];
 	MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX);
 	return !PathIsRelativeW(wpath);
@@ -239,16 +256,18 @@ bool isAbsolute(const char* path) {
 }
 
 void makeAbsolute(const char* path, const char* base, char* out) {
+	char buf[PATH_MAX];
+#if defined(_WIN32) && !defined(_XBOX)
+	WCHAR wbuf[PATH_MAX];
+	WCHAR wout[PATH_MAX];
+#endif
 	if (isAbsolute(path)) {
 		strncpy(out, path, PATH_MAX);
 		return;
 	}
 
-	char buf[PATH_MAX];
 	snprintf(buf, sizeof(buf), "%s" PATH_SEP "%s", base, path);
-#ifdef _WIN32
-	WCHAR wbuf[PATH_MAX];
-	WCHAR wout[PATH_MAX];
+#if defined(_WIN32) && !defined(_XBOX)
 	MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, PATH_MAX);
 	if (GetFullPathNameW(wbuf, PATH_MAX, wout, NULL)) {
 		WideCharToMultiByte(CP_UTF8, 0, wout, -1, out, PATH_MAX, 0, 0);
@@ -263,7 +282,7 @@ void makeAbsolute(const char* path, const char* base, char* out) {
 }
 
 bool upDirectory(char* path) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 	WCHAR wbuf[PATH_MAX];
 	WCHAR vol[PATH_MAX];
 	MultiByteToWideChar(CP_UTF8, 0, path, -1, wbuf, PATH_MAX);
@@ -282,7 +301,7 @@ bool upDirectory(char* path) {
 			// Trailing slash
 			continue;
 		}
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 		end[1] = '\0';
 		MultiByteToWideChar(CP_UTF8, 0, path, -1, wbuf, PATH_MAX);
 		if (wcsncmp(wbuf, vol, PATH_MAX) == 0) {

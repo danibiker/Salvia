@@ -46,8 +46,9 @@
 			BACKGROUND_DRAW_PIXEL_16(BLEND, OBJWIN, 0); \
 		} \
 	} else { \
+		int end; \
 		tileData >>= 4 * (0x8 - mod8); \
-		int end = renderer->end - 8; \
+		end = renderer->end - 8; \
 		if (end < -1) { \
 			end = -1; \
 		} \
@@ -175,8 +176,9 @@
 	}
 
 #define DRAW_BACKGROUND_MODE_0_TILE_SUFFIX_256(BLEND, OBJWIN) \
+	int end2; \
 	charBase = (background->charBase + (GBA_TEXT_MAP_TILE(mapData) << 6)) + (localY << 3); \
-	int end2 = end - 4; \
+	end2 = end - 4; \
 	if (!GBA_TEXT_MAP_HFLIP(mapData)) { \
 		int shift = inX & 0x3; \
 		if (LIKELY(charBase < 0x10000)) { \
@@ -222,11 +224,12 @@
 	}
 
 #define DRAW_BACKGROUND_MODE_0_TILE_PREFIX_256(BLEND, OBJWIN) \
+	int end; \
 	charBase = (background->charBase + (GBA_TEXT_MAP_TILE(mapData) << 6)) + (localY << 3); \
 	if (UNLIKELY(charBase >= 0x10000)) { \
 		return; \
 	} \
-	int end = mod8 - 4; \
+	end = mod8 - 4; \
 	pixel = &renderer->row[outX]; \
 	if (!GBA_TEXT_MAP_HFLIP(mapData)) { \
 		if (end > 0) { \
@@ -424,14 +427,16 @@
 	} \
 	\
 	if (inX & 0x7) { \
+		int mod8; \
+		int end; \
 		localX = tileX * 8 + inX; \
 		BACKGROUND_TEXT_SELECT_CHARACTER; \
 		localY = inY & 0x7; \
 		if (GBA_TEXT_MAP_VFLIP(mapData)) { \
 			localY = 7 - localY; \
 		} \
-		int mod8 = inX & 0x7; \
-		int end = outX + 0x8 - mod8; \
+		mod8 = inX & 0x7; \
+		end = outX + 0x8 - mod8; \
 		if (end > renderer->end) { \
 			end = renderer->end; \
 		} \
@@ -442,7 +447,9 @@
 			mLOG(GBA_VIDEO, FATAL, "Out of bounds background draw!"); \
 			return; \
 		} \
-		DRAW_BACKGROUND_MODE_0_TILE_SUFFIX_ ## BPP (BLEND, OBJWIN) \
+		{ \
+			DRAW_BACKGROUND_MODE_0_TILE_SUFFIX_ ## BPP (BLEND, OBJWIN) \
+		} \
 		outX = end; \
 		if (tileX < tileEnd) { \
 			++tileX; \
@@ -462,18 +469,21 @@
 	localX = (tileX * 8 + inX) & 0x1FF; \
 	DRAW_BACKGROUND_MODE_0_TILES_ ## BPP (BLEND, OBJWIN) \
 	if (length & 0x7) { \
+		int mod8; \
 		localX = tileX * 8 + inX; \
 		BACKGROUND_TEXT_SELECT_CHARACTER; \
 		localY = inY & 0x7; \
 		if (GBA_TEXT_MAP_VFLIP(mapData)) { \
 			localY = 7 - localY; \
 		} \
-		int mod8 = length & 0x7; \
+		mod8 = length & 0x7; \
 		if (VIDEO_CHECKS && UNLIKELY(outX + mod8 != renderer->end)) { \
 			mLOG(GBA_VIDEO, FATAL, "Invariant doesn't hold in background draw!"); \
 			return; \
 		} \
-		DRAW_BACKGROUND_MODE_0_TILE_PREFIX_ ## BPP (BLEND, OBJWIN) \
+		{ \
+			DRAW_BACKGROUND_MODE_0_TILE_PREFIX_ ## BPP (BLEND, OBJWIN) \
+		} \
 	} \
 	if (VIDEO_CHECKS && UNLIKELY(&renderer->row[outX] != pixel)) { \
 		mLOG(GBA_VIDEO, FATAL, "Background draw ended in the wrong place! Diff: %" PRIXPTR, &renderer->row[outX] - pixel); \
@@ -484,16 +494,36 @@
 	}
 
 void GBAVideoSoftwareRendererDrawBackgroundMode0(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoftwareBackground* background, int y) {
+	int inY;
+	uint16_t mapData;
+	unsigned yBase;
+	int localX;
+	int localY;
+	unsigned xBase;
+	uint32_t flags;
+	uint32_t objwinFlags;
+	bool variant;
+	uint32_t screenBase;
+	uint32_t charBase;
+	mColor* palette;
+	int outX;
+	uint32_t tileData;
+	uint32_t current;
+	int pixelData;
+	int paletteData;
+	int tileX;
+	int tileEnd;
+	uint16_t* vram;
 	int inX = (renderer->start + background->x - background->offsetX) & 0x1FF;
 	int length = renderer->end - renderer->start;
+	PREPARE_OBJWIN_DECLS;
 	if (background->mosaic) {
 		int mosaicV = GBAMosaicControlGetBgV(renderer->mosaic) + 1;
 		y -= y % mosaicV;
 	}
-	int inY = y + background->y - background->offsetY;
-	uint16_t mapData;
+	inY = y + background->y - background->offsetY;
 
-	unsigned yBase = inY & 0xF8;
+	yBase = inY & 0xF8;
 	if (background->size == 2) {
 		yBase += inY & 0x100;
 	} else if (background->size == 3) {
@@ -501,18 +531,13 @@ void GBAVideoSoftwareRendererDrawBackgroundMode0(struct GBAVideoSoftwareRenderer
 	}
 	yBase = (background->screenBase >> 1) + (yBase << 2);
 
-	int localX;
-	int localY;
 
-	unsigned xBase;
 
-	uint32_t flags = background->flags;
-	uint32_t objwinFlags = background->objwinFlags;
-	bool variant = background->variant;
+	flags = background->flags;
+	objwinFlags = background->objwinFlags;
+	variant = background->variant;
 
-	uint32_t screenBase;
-	uint32_t charBase;
-	mColor* palette = renderer->normalPalette;
+	palette = renderer->normalPalette;
 	if (renderer->d.highlightAmount && background->highlight) {
 		palette = renderer->highlightPalette;
 	}
@@ -524,15 +549,10 @@ void GBAVideoSoftwareRendererDrawBackgroundMode0(struct GBAVideoSoftwareRenderer
 	}
 	PREPARE_OBJWIN;
 
-	int outX = renderer->start;
+	outX = renderer->start;
 
-	uint32_t tileData;
-	uint32_t current;
-	int pixelData;
-	int paletteData;
-	int tileX;
-	int tileEnd = ((length + inX) >> 3) - (inX >> 3);
-	uint16_t* vram = renderer->d.vram;
+	tileEnd = ((length + inX) >> 3) - (inX >> 3);
+	vram = renderer->d.vram;
 
 	if (background->yCache != inY >> 3) {
 		localX = 0;

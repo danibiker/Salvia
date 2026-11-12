@@ -94,12 +94,14 @@ void mCoreSyncSetVideoSync(struct mCoreSync* sync, bool wait) {
 }
 
 bool mCoreSyncProduceAudio(struct mCoreSync* sync, const struct mAudioBuffer* buf) {
+	size_t produced;
+	size_t producedNew;
 	if (!sync) {
 		return true;
 	}
 
-	size_t produced = mAudioBufferAvailable(buf);
-	size_t producedNew = produced;
+	produced = mAudioBufferAvailable(buf);
+	producedNew = produced;
 	while (sync->audioWait && sync->audioHighWater && producedNew >= sync->audioHighWater) {
 		ConditionWait(&sync->audioRequiredCond, &sync->audioBufferMutex);
 		produced = producedNew;

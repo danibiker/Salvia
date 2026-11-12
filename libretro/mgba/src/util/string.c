@@ -76,11 +76,14 @@ bool startswith(const char* restrict s1, const char* restrict start) {
 }
 
 uint32_t utf16Char(const uint16_t** unicode, size_t* length) {
+	uint32_t unichar;
+	uint16_t highSurrogate;
+	uint16_t lowSurrogate;
 	if (*length < 2) {
 		*length = 0;
 		return 0;
 	}
-	uint32_t unichar = **unicode;
+	unichar = **unicode;
 	++*unicode;
 	*length -= 2;
 	if (unichar < 0xD800 || unichar >= 0xE000) {
@@ -90,8 +93,8 @@ uint32_t utf16Char(const uint16_t** unicode, size_t* length) {
 		*length = 0;
 		return 0;
 	}
-	uint16_t highSurrogate = unichar;
-	uint16_t lowSurrogate = **unicode;
+	highSurrogate = unichar;
+	lowSurrogate = **unicode;
 	++*unicode;
 	*length -= 2;
 	if (highSurrogate >= 0xDC00) {
@@ -125,10 +128,15 @@ static const uint8_t _utf8len[0x40] = {
 };
 
 uint32_t utf8Char(const char** unicode, size_t* length) {
+	unsigned char byte;
+	uint32_t unichar;
+	static const int tops[4] = { 0xC0, 0xE0, 0xF0, 0xF8 };
+	size_t numBytes;
+	size_t i;
 	if (length && *length == 0) {
 		return 0;
 	}
-	unsigned char byte = **unicode;
+	byte = **unicode;
 	if (length) {
 		--*length;
 	}
@@ -136,9 +144,7 @@ uint32_t utf8Char(const char** unicode, size_t* length) {
 	if (!(byte & 0x80)) {
 		return byte;
 	}
-	uint32_t unichar;
-	static const int tops[4] = { 0xC0, 0xE0, 0xF0, 0xF8 };
-	size_t numBytes = _utf8len[byte >> 2];
+	numBytes = _utf8len[byte >> 2];
 	unichar = byte & ~tops[numBytes - 1];
 	if (numBytes == 0) {
 		return 0xFFFD;
@@ -147,7 +153,6 @@ uint32_t utf8Char(const char** unicode, size_t* length) {
 		*length = 0;
 		return 0xFFFD;
 	}
-	size_t i;
 	for (i = 1; i < numBytes; ++i) {
 		unichar <<= 6;
 		byte = **unicode;
@@ -236,17 +241,20 @@ int utfcmp(const uint16_t* utf16, const char* utf8, size_t utf16Length, size_t u
 }
 
 char* utf16to8(const uint16_t* utf16, size_t length) {
+	char* newUTF8;
 	char* utf8 = 0;
 	char* offset = 0;
 	char buffer[4];
 	size_t utf8TotalBytes = 0;
 	size_t utf8Length = 0;
 	while (true) {
+		uint32_t unichar;
+		size_t bytes;
 		if (length == 0) {
 			break;
 		}
-		uint32_t unichar = utf16Char(&utf16, &length);
-		size_t bytes = toUtf8(unichar, buffer);
+		unichar = utf16Char(&utf16, &length);
+		bytes = toUtf8(unichar, buffer);
 		utf8Length += bytes;
 		if (utf8Length < utf8TotalBytes) {
 			memcpy(offset, buffer, bytes);
@@ -260,9 +268,10 @@ char* utf16to8(const uint16_t* utf16, size_t length) {
 			memcpy(utf8, buffer, bytes);
 			offset = utf8 + bytes;
 		} else if (utf8Length >= utf8TotalBytes) {
+			char* newUTF8;
 			ptrdiff_t o = offset - utf8;
 			utf8TotalBytes *= 2;
-			char* newUTF8 = realloc(utf8, utf8TotalBytes);
+			newUTF8 = realloc(utf8, utf8TotalBytes);
 			offset = o + newUTF8;
 			if (!newUTF8) {
 				free(utf8);
@@ -274,7 +283,7 @@ char* utf16to8(const uint16_t* utf16, size_t length) {
 		}
 	}
 
-	char* newUTF8 = realloc(utf8, utf8Length + 1);
+	newUTF8 = realloc(utf8, utf8Length + 1);
 	if (!newUTF8) {
 		free(utf8);
 		return 0;
@@ -284,6 +293,7 @@ char* utf16to8(const uint16_t* utf16, size_t length) {
 }
 
 char* latin1ToUtf8(const char* latin1, size_t length) {
+	char* newUTF8;
 	char* utf8 = NULL;
 	char* utf8Offset = NULL;
 	size_t offset;
@@ -319,7 +329,7 @@ char* latin1ToUtf8(const char* latin1, size_t length) {
 		}
 	}
 
-	char* newUTF8 = realloc(utf8, utf8Length + 1);
+	newUTF8 = realloc(utf8, utf8Length + 1);
 	if (!newUTF8) {
 		free(utf8);
 		return 0;
@@ -331,6 +341,7 @@ char* latin1ToUtf8(const char* latin1, size_t length) {
 extern const uint16_t gbkUnicodeTable[];
 
 char* gbkToUtf8(const char* gbk, size_t length) {
+	char* newUTF8;
 	char* utf8 = NULL;
 	char* utf8Offset = NULL;
 	size_t offset;
@@ -339,10 +350,11 @@ char* gbkToUtf8(const char* gbk, size_t length) {
 	size_t utf8TotalBytes = 0;
 	size_t utf8Length = 0;
 	for (offset = 0; offset < length; ++offset) {
+		unsigned unichar = 0xFFFD;
+		size_t bytes;
 		if (length == 0) {
 			break;
 		}
-		unsigned unichar = 0xFFFD;
 		if (!gbk1 && !(gbk[offset] & 0x80)) {
 			unichar = gbk[offset];
 		} else if (gbk1) {
@@ -361,7 +373,7 @@ char* gbkToUtf8(const char* gbk, size_t length) {
 			continue;
 		}
 
-		size_t bytes = toUtf8(unichar, buffer);
+		bytes = toUtf8(unichar, buffer);
 		utf8Length += bytes;
 		if (!utf8) {
 			utf8 = malloc(length);
@@ -388,7 +400,7 @@ char* gbkToUtf8(const char* gbk, size_t length) {
 		}
 	}
 
-	char* newUTF8 = realloc(utf8, utf8Length + 1);
+	newUTF8 = realloc(utf8, utf8Length + 1);
 	if (!newUTF8) {
 		free(utf8);
 		return 0;
@@ -459,9 +471,10 @@ const char* hex32(const char* line, uint32_t* out) {
 	uint32_t value = 0;
 	int i;
 	for (i = 0; i < 8; ++i, ++line) {
+		int nybble;
 		char digit = *line;
 		value <<= 4;
-		int nybble = hexDigit(digit);
+		nybble = hexDigit(digit);
 		if (nybble < 0) {
 			return 0;
 		}
@@ -475,9 +488,10 @@ const char* hex24(const char* line, uint32_t* out) {
 	uint32_t value = 0;
 	int i;
 	for (i = 0; i < 6; ++i, ++line) {
+		int nybble;
 		char digit = *line;
 		value <<= 4;
-		int nybble = hexDigit(digit);
+		nybble = hexDigit(digit);
 		if (nybble < 0) {
 			return 0;
 		}
@@ -488,13 +502,14 @@ const char* hex24(const char* line, uint32_t* out) {
 }
 
 const char* hex16(const char* line, uint16_t* out) {
+	int i;
 	uint16_t value = 0;
 	*out = 0;
-	int i;
 	for (i = 0; i < 4; ++i, ++line) {
+		int nybble;
 		char digit = *line;
 		value <<= 4;
-		int nybble = hexDigit(digit);
+		nybble = hexDigit(digit);
 		if (nybble < 0) {
 			return 0;
 		}
@@ -505,13 +520,14 @@ const char* hex16(const char* line, uint16_t* out) {
 }
 
 const char* hex12(const char* line, uint16_t* out) {
+	int i;
 	uint16_t value = 0;
 	*out = 0;
-	int i;
 	for (i = 0; i < 3; ++i, ++line) {
+		int nybble;
 		char digit = *line;
 		value <<= 4;
-		int nybble = hexDigit(digit);
+		nybble = hexDigit(digit);
 		if (nybble < 0) {
 			return 0;
 		}
@@ -522,13 +538,14 @@ const char* hex12(const char* line, uint16_t* out) {
 }
 
 const char* hex8(const char* line, uint8_t* out) {
+	int i;
 	uint8_t value = 0;
 	*out = 0;
-	int i;
 	for (i = 0; i < 2; ++i, ++line) {
+		int nybble;
 		char digit = *line;
 		value <<= 4;
-		int nybble = hexDigit(digit);
+		nybble = hexDigit(digit);
 		if (nybble < 0) {
 			return 0;
 		}
@@ -539,10 +556,12 @@ const char* hex8(const char* line, uint8_t* out) {
 }
 
 const char* hex4(const char* line, uint8_t* out) {
+	char digit;
+	int nybble;
 	uint8_t value = 0;
 	*out = 0;
-	char digit = *line;
-	int nybble = hexDigit(digit);
+	digit = *line;
+	nybble = hexDigit(digit);
 	if (nybble < 0) {
 		return 0;
 	}
@@ -552,10 +571,11 @@ const char* hex4(const char* line, uint8_t* out) {
 }
 
 void rtrim(char* string) {
+	char* end;
 	if (!*string) {
 		return;
 	}
-	char* end = string + strlen(string) - 1;
+	end = string + strlen(string) - 1;
 	while (isspace((int) *end) && end >= string) {
 		*end = '\0';
 		--end;
@@ -563,11 +583,11 @@ void rtrim(char* string) {
 }
 
 ssize_t parseQuotedString(const char* unparsed, ssize_t unparsedLen, char* parsed, ssize_t parsedLen) {
-	memset(parsed, 0, parsedLen);
 	bool escaped = false;
 	char start = '\0';
 	ssize_t len = 0;
 	ssize_t i;
+	memset(parsed, 0, parsedLen);
 	for (i = 0; i < unparsedLen && len < parsedLen; ++i) {
 		if (i == 0) {
 			switch (unparsed[0]) {

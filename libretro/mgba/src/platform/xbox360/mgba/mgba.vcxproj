@@ -1,0 +1,423 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    mGBA (libretro/mgba) como libreria estatica de libretro para Salvia.
+
+    El proyecto original se compila con CMake (BUILD_LIBRETRO=ON). Esta lista de
+    ficheros es la del objetivo mgba_libretro de CMakeLists.txt (LIBRETRO_CORE_SRC +
+    RETRO_SRC + CORE_VFS_SRC) para Windows, quitando lo que el nucleo libretro no
+    enlaza nunca (desensambladores, lockstep, fifo, sfo, text-codec, export de
+    imagenes...) y anadiendo:
+      - ..\version.c          : sustituye al version.c que genera CMake.
+      - ..\msvc\msvc-compat.c : snprintf/vsnprintf C99 para MSVC 2010 / XDK.
+      - ..\..\windows\memory.c : anonymousMemoryMap con VirtualAlloc (Win32 y 360).
+      - VFile por stdio (vfs-file.c, ENABLE_VFS_FILE), como las consolas: no hace
+        falta dirent ni las APIs anchas de Windows, y funciona igual en Xbox 360.
+
+    El codigo de mGBA es C99/C11 y Visual Studio 2010 (y el compilador del XDK)
+    solo entienden C89. Los fuentes ya estan convertidos (declaraciones al principio
+    de bloque, inicializadores posicionales, sin literales compuestos, bool con
+    !!(...)) y lo que falta de C99 esta en ..\msvc (stdbool.h, inttypes.h,
+    msvc-compat.h). Ver ..\README_SALVIA.md.
+
+    Notas:
+      - CompileAs = CompileAsC: el XDK compila los .c como C++ si no se le dice.
+      - ObjectFileName = $(IntDir)%(Directory): mGBA tiene muchos ficheros con el
+        mismo nombre (core.c, video.c, memory.c, serialize.c...) y sin esto los
+        .obj se pisan sin avisar.
+      - crc32=mgba_crc32: Salvia enlaza zlib, que tambien exporta crc32.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{AF13E487-5C5B-4DD4-ADFF-BC97E68A8D9C}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>mgba</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!-- Salida: mgba.lib en $(ProjectDir)<Configuracion>\<Plataforma>\, como vba-next. -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+    <TargetName>mgba</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+    <TargetName>mgba</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+    <TargetName>mgba</TargetName>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(ProjectDir)$(Configuration)\$(Platform)\obj\</IntDir>
+    <TargetName>mgba</TargetName>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>MaxSpeed</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>MaxSpeed</Optimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\arm\arm.c" />
+    <ClCompile Include="..\..\..\arm\decoder-arm.c" />
+    <ClCompile Include="..\..\..\arm\decoder-thumb.c" />
+    <ClCompile Include="..\..\..\arm\isa-arm.c" />
+    <ClCompile Include="..\..\..\arm\isa-thumb.c" />
+    <ClCompile Include="..\..\..\core\bitmap-cache.c" />
+    <ClCompile Include="..\..\..\core\cache-set.c" />
+    <ClCompile Include="..\..\..\core\cheats.c" />
+    <ClCompile Include="..\..\..\core\config.c" />
+    <ClCompile Include="..\..\..\core\core.c" />
+    <ClCompile Include="..\..\..\core\interface.c" />
+    <ClCompile Include="..\..\..\core\log.c" />
+    <ClCompile Include="..\..\..\core\map-cache.c" />
+    <ClCompile Include="..\..\..\core\serialize.c" />
+    <ClCompile Include="..\..\..\core\sync.c" />
+    <ClCompile Include="..\..\..\core\tile-cache.c" />
+    <ClCompile Include="..\..\..\core\timing.c" />
+    <ClCompile Include="..\..\..\gb\audio.c" />
+    <ClCompile Include="..\..\..\gb\cheats.c" />
+    <ClCompile Include="..\..\..\gb\core.c" />
+    <ClCompile Include="..\..\..\gb\gb.c" />
+    <ClCompile Include="..\..\..\gb\io.c" />
+    <ClCompile Include="..\..\..\gb\mbc.c" />
+    <ClCompile Include="..\..\..\gb\mbc\huc-3.c" />
+    <ClCompile Include="..\..\..\gb\mbc\licensed.c" />
+    <ClCompile Include="..\..\..\gb\mbc\mbc.c" />
+    <ClCompile Include="..\..\..\gb\mbc\pocket-cam.c" />
+    <ClCompile Include="..\..\..\gb\mbc\tama5.c" />
+    <ClCompile Include="..\..\..\gb\mbc\unlicensed.c" />
+    <ClCompile Include="..\..\..\gb\memory.c" />
+    <ClCompile Include="..\..\..\gb\overrides.c" />
+    <ClCompile Include="..\..\..\gb\renderers\cache-set.c" />
+    <ClCompile Include="..\..\..\gb\renderers\software.c" />
+    <ClCompile Include="..\..\..\gb\serialize.c" />
+    <ClCompile Include="..\..\..\gb\sio.c" />
+    <ClCompile Include="..\..\..\gb\timer.c" />
+    <ClCompile Include="..\..\..\gb\video.c" />
+    <ClCompile Include="..\..\..\gba\audio.c" />
+    <ClCompile Include="..\..\..\gba\bios.c" />
+    <ClCompile Include="..\..\..\gba\cart\ereader.c" />
+    <ClCompile Include="..\..\..\gba\cart\gpio.c" />
+    <ClCompile Include="..\..\..\gba\cart\matrix.c" />
+    <ClCompile Include="..\..\..\gba\cart\unlicensed.c" />
+    <ClCompile Include="..\..\..\gba\cart\vfame.c" />
+    <ClCompile Include="..\..\..\gba\cheats.c" />
+    <ClCompile Include="..\..\..\gba\cheats\codebreaker.c" />
+    <ClCompile Include="..\..\..\gba\cheats\gameshark.c" />
+    <ClCompile Include="..\..\..\gba\cheats\parv3.c" />
+    <ClCompile Include="..\..\..\gba\core.c" />
+    <ClCompile Include="..\..\..\gba\dma.c" />
+    <ClCompile Include="..\..\..\gba\gba.c" />
+    <ClCompile Include="..\..\..\gba\hle-bios.c" />
+    <ClCompile Include="..\..\..\gba\io.c" />
+    <ClCompile Include="..\..\..\gba\memory.c" />
+    <ClCompile Include="..\..\..\gba\overrides.c" />
+    <ClCompile Include="..\..\..\gba\renderers\cache-set.c" />
+    <ClCompile Include="..\..\..\gba\renderers\common.c" />
+    <ClCompile Include="..\..\..\gba\renderers\software-bg.c" />
+    <ClCompile Include="..\..\..\gba\renderers\software-mode0.c" />
+    <ClCompile Include="..\..\..\gba\renderers\software-obj.c" />
+    <ClCompile Include="..\..\..\gba\renderers\video-software.c" />
+    <ClCompile Include="..\..\..\gba\savedata.c" />
+    <ClCompile Include="..\..\..\gba\serialize.c" />
+    <ClCompile Include="..\..\..\gba\sio.c" />
+    <ClCompile Include="..\..\..\gba\sio\gbp.c" />
+    <ClCompile Include="..\..\..\gba\timer.c" />
+    <ClCompile Include="..\..\..\gba\video.c" />
+    <ClCompile Include="..\..\libretro\libretro-audio.c" />
+    <ClCompile Include="..\..\libretro\libretro-vfs.c" />
+    <ClCompile Include="..\..\libretro\libretro.c" />
+    <ClCompile Include="..\..\windows\memory.c" />
+    <ClCompile Include="..\msvc\msvc-compat.c" />
+    <ClCompile Include="..\version.c" />
+    <ClCompile Include="..\..\..\sm83\isa-sm83.c" />
+    <ClCompile Include="..\..\..\sm83\sm83.c" />
+    <ClCompile Include="..\..\..\third-party\inih\ini.c" />
+    <ClCompile Include="..\..\..\util\audio-buffer.c" />
+    <ClCompile Include="..\..\..\util\circle-buffer.c" />
+    <ClCompile Include="..\..\..\util\configuration.c" />
+    <ClCompile Include="..\..\..\util\crc32.c" />
+    <ClCompile Include="..\..\..\util\formatting.c" />
+    <ClCompile Include="..\..\..\util\gbk-table.c" />
+    <ClCompile Include="..\..\..\util\geometry.c" />
+    <ClCompile Include="..\..\..\util\hash.c" />
+    <ClCompile Include="..\..\..\util\image.c" />
+    <ClCompile Include="..\..\..\util\md5.c" />
+    <ClCompile Include="..\..\..\util\patch-ips.c" />
+    <ClCompile Include="..\..\..\util\patch-ups.c" />
+    <ClCompile Include="..\..\..\util\patch.c" />
+    <ClCompile Include="..\..\..\util\sha1.c" />
+    <ClCompile Include="..\..\..\util\string.c" />
+    <ClCompile Include="..\..\..\util\table.c" />
+    <ClCompile Include="..\..\..\util\vector.c" />
+    <ClCompile Include="..\..\..\util\vfs.c" />
+    <ClCompile Include="..\..\..\util\vfs\vfs-file.c" />
+    <ClCompile Include="..\..\..\util\vfs\vfs-mem.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\..\include\mgba-util\audio-buffer.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\circle-buffer.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\common.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\configuration.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\crc32.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\dllexports.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\formatting.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\geometry.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\hash.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\image.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\macros.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\math.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\md5.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\memory.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\patch.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\patch\ips.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\patch\ups.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\sha1.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\string.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\table.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\vector.h" />
+    <ClInclude Include="..\..\..\..\include\mgba-util\vfs.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\bitmap-cache.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\cache-set.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\cheats.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\config.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\core.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\cpu.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\interface.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\log.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\map-cache.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\serialize.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\sync.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\tile-cache.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\timing.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\core\version.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\gb\core.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\gb\interface.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\gba\core.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\gba\interface.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\arm.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\decoder-inlines.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\decoder.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\isa-arm.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\isa-inlines.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\isa-thumb.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\arm\macros.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\defines.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\audio.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\cheats.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\gb.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\input.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\io.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\mbc.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\memory.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\overrides.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\renderers\cache-set.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\renderers\software.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\serialize.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\sio.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\timer.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gb\video.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\audio.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\bios.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\cart\ereader.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\cart\gpio.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\cart\matrix.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\cart\unlicensed.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\cheats.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\dma.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\gba.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\input.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\io.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\memory.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\overrides.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\cache-set.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\common.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\video-software.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\savedata.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\serialize.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\sharkport.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\sio.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\sio\gbp.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\timer.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\video.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\sm83\isa-sm83.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\sm83\sm83.h" />
+    <ClInclude Include="..\..\..\gb\mbc\mbc-private.h" />
+    <ClInclude Include="..\..\..\gba\cheats\gameshark.h" />
+    <ClInclude Include="..\..\..\gba\cheats\parv3.h" />
+    <ClInclude Include="..\..\..\gba\hle-bios.h" />
+    <ClInclude Include="..\..\..\gba\renderers\software-private.h" />
+    <ClInclude Include="..\..\libretro\libretro-audio.h" />
+    <ClInclude Include="..\..\libretro\libretro-vfs.h" />
+    <ClInclude Include="..\..\libretro\libretro.h" />
+    <ClInclude Include="..\..\libretro\libretro_core_options.h" />
+    <ClInclude Include="..\..\libretro\libretro_core_options_intl.h" />
+    <ClInclude Include="..\..\libretro\retro_inline.h" />
+    <ClInclude Include="..\msvc\inttypes.h" />
+    <ClInclude Include="..\msvc\msvc-compat.h" />
+    <ClInclude Include="..\msvc\stdbool.h" />
+    <ClInclude Include="..\..\..\third-party\inih\ini.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README_SALVIA.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

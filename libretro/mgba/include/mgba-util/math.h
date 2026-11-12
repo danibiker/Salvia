@@ -93,10 +93,11 @@ static inline unsigned ctz32(uint32_t bits) {
 }
 
 static inline uint32_t toPow2(uint32_t bits) {
+	unsigned lz;
 	if (!bits) {
 		return 0;
 	}
-	unsigned lz = clz32(bits - 1);
+	lz = clz32(bits - 1);
 	return 1 << (32 - lz);
 }
 

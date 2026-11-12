@@ -45,8 +45,9 @@ static void GBACheatDumpDirectives(struct mCheatSet*, struct StringList* directi
 static bool GBACheatAddLine(struct mCheatSet*, const char* line, int type);
 
 static struct mCheatSet* GBACheatSetCreate(struct mCheatDevice* device, const char* name) {
+	struct GBACheatSet* set;
 	UNUSED(device);
-	struct GBACheatSet* set = malloc(sizeof(*set));
+	set = malloc(sizeof(*set));
 	mCheatSetInit(&set->d, name);
 	set->incompleteCheat = -1;
 	set->incompletePatch = 0;
@@ -100,13 +101,13 @@ static void GBACheatRemoveSet(struct mCheatSet* cheats, struct mCheatDevice* dev
 }
 
 static bool GBACheatAddAutodetect(struct GBACheatSet* set, uint32_t op1, uint32_t op2) {
+	int nextProbability;
+	int maxProbability = INT_MIN;
 	uint32_t o1 = op1;
 	uint32_t o2 = op2;
 	char line[18] = "XXXXXXXX XXXXXXXX";
 	snprintf(line, sizeof(line), "%08X %08X", op1, op2);
 
-	int nextProbability;
-	int maxProbability = INT_MIN;
 	switch (set->gsaVersion) {
 	case 0:
 		// Try to detect GameShark version
@@ -203,6 +204,11 @@ bool GBACheatAddVBALine(struct GBACheatSet* cheats, const char* line) {
 }
 
 bool GBACheatAddLine(struct mCheatSet* set, const char* line, int type) {
+	uint32_t op1;
+	uint16_t op2;
+	uint16_t op3;
+	const char* lineNext;
+	uint32_t realOp2;
 	struct GBACheatSet* cheats = (struct GBACheatSet*) set;
 	switch (type) {
 	case GBA_CHEAT_AUTODETECT:
@@ -219,10 +225,7 @@ bool GBACheatAddLine(struct mCheatSet* set, const char* line, int type) {
 		return false;
 	}
 
-	uint32_t op1;
-	uint16_t op2;
-	uint16_t op3;
-	const char* lineNext = hex32(line, &op1);
+	lineNext = hex32(line, &op1);
 	if (!lineNext) {
 		return false;
 	}
@@ -243,7 +246,7 @@ bool GBACheatAddLine(struct mCheatSet* set, const char* line, int type) {
 	if (!lineNext) {
 		return false;
 	}
-	uint32_t realOp2 = op2;
+	realOp2 = op2;
 	realOp2 <<= 16;
 	realOp2 |= op3;
 	return GBACheatAddAutodetect(cheats, op1, realOp2);
@@ -302,6 +305,7 @@ static void GBACheatParseDirectives(struct mCheatSet* set, const struct StringLi
 }
 
 static void GBACheatDumpDirectives(struct mCheatSet* set, struct StringList* directives) {
+	char** directive;
 	struct GBACheatSet* cheats = (struct GBACheatSet*) set;
 
 	// TODO: Check previous directives
@@ -311,7 +315,6 @@ static void GBACheatDumpDirectives(struct mCheatSet* set, struct StringList* dir
 	}
 	StringListClear(directives);
 
-	char** directive;
 	switch (cheats->gsaVersion) {
 	case 1:
 		directive = StringListAppend(directives);

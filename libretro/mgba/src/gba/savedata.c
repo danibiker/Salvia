@@ -118,11 +118,13 @@ void GBASavedataMask(struct GBASavedata* savedata, struct VFile* vf, bool writeb
 }
 
 void GBASavedataUnmask(struct GBASavedata* savedata) {
+	enum GBASavedataType type;
+	struct VFile* vf;
 	if (!savedata->realVf || savedata->vf == savedata->realVf) {
 		return;
 	}
-	enum GBASavedataType type = savedata->type;
-	struct VFile* vf = savedata->vf;
+	type = savedata->type;
+	vf = savedata->vf;
 	GBASavedataDeinit(savedata);
 	savedata->vf = savedata->realVf;
 	savedata->mapMode = MAP_WRITE;
@@ -193,13 +195,16 @@ size_t GBASavedataSize(const struct GBASavedata* savedata) {
 
 bool GBASavedataLoad(struct GBASavedata* savedata, struct VFile* in) {
 	if (savedata->data) {
+		ssize_t size;
 		if (!in || savedata->type == GBA_SAVEDATA_FORCE_NONE) {
 			return false;
 		}
-		ssize_t size = GBASavedataSize(savedata);
+		size = GBASavedataSize(savedata);
 		in->seek(in, 0, SEEK_SET);
 		return in->read(in, savedata->data, size) == size;
 	} else if (savedata->vf) {
+		ssize_t fsize;
+		ssize_t pos;
 		off_t read = 0;
 		uint8_t buffer[2048];
 		savedata->vf->seek(savedata->vf, 0, SEEK_SET);
@@ -211,8 +216,8 @@ bool GBASavedataLoad(struct GBASavedata* savedata, struct VFile* in) {
 			} while (read == sizeof(buffer));
 		}
 		memset(buffer, 0xFF, sizeof(buffer));
-		ssize_t fsize = savedata->vf->size(savedata->vf);
-		ssize_t pos = savedata->vf->seek(savedata->vf, 0, SEEK_CUR);
+		fsize = savedata->vf->size(savedata->vf);
+		pos = savedata->vf->seek(savedata->vf, 0, SEEK_CUR);
 		while (fsize - pos >= (ssize_t) sizeof(buffer)) {
 			savedata->vf->write(savedata->vf, buffer, sizeof(buffer));
 			pos = savedata->vf->seek(savedata->vf, 0, SEEK_CUR);
@@ -265,6 +270,8 @@ void GBASavedataForceType(struct GBASavedata* savedata, enum GBASavedataType typ
 }
 
 void GBASavedataInitFlash(struct GBASavedata* savedata) {
+	int32_t flashSize = GBA_SIZE_FLASH512;
+	off_t end;
 	if (savedata->type == GBA_SAVEDATA_AUTODETECT) {
 		savedata->type = GBA_SAVEDATA_FLASH512;
 	}
@@ -272,11 +279,9 @@ void GBASavedataInitFlash(struct GBASavedata* savedata) {
 		mLOG(GBA_SAVE, WARN, "Can't re-initialize savedata");
 		return;
 	}
-	int32_t flashSize = GBA_SIZE_FLASH512;
 	if (savedata->type == GBA_SAVEDATA_FLASH1M) {
 		flashSize = GBA_SIZE_FLASH1M;
 	}
-	off_t end;
 	if (!savedata->vf) {
 		end = 0;
 		savedata->data = anonymousMemoryMap(GBA_SIZE_FLASH1M);
@@ -297,17 +302,17 @@ void GBASavedataInitFlash(struct GBASavedata* savedata) {
 }
 
 void GBASavedataInitEEPROM(struct GBASavedata* savedata) {
+	int32_t eepromSize = GBA_SIZE_EEPROM512;
+	off_t end;
 	if (savedata->type == GBA_SAVEDATA_AUTODETECT) {
 		savedata->type = GBA_SAVEDATA_EEPROM512;
 	} else if (savedata->type != GBA_SAVEDATA_EEPROM512 && savedata->type != GBA_SAVEDATA_EEPROM) {
 		mLOG(GBA_SAVE, WARN, "Can't re-initialize savedata");
 		return;
 	}
-	int32_t eepromSize = GBA_SIZE_EEPROM512;
 	if (savedata->type == GBA_SAVEDATA_EEPROM) {
 		eepromSize = GBA_SIZE_EEPROM;
 	}
-	off_t end;
 	if (!savedata->vf) {
 		end = 0;
 		savedata->data = anonymousMemoryMap(GBA_SIZE_EEPROM);
@@ -325,13 +330,13 @@ void GBASavedataInitEEPROM(struct GBASavedata* savedata) {
 }
 
 void GBASavedataInitSRAM(struct GBASavedata* savedata) {
+	off_t end;
 	if (savedata->type == GBA_SAVEDATA_AUTODETECT) {
 		savedata->type = GBA_SAVEDATA_SRAM;
 	} else {
 		mLOG(GBA_SAVE, WARN, "Can't re-initialize savedata");
 		return;
 	}
-	off_t end;
 	if (!savedata->vf) {
 		end = 0;
 		savedata->data = anonymousMemoryMap(GBA_SIZE_SRAM);
@@ -350,13 +355,13 @@ void GBASavedataInitSRAM(struct GBASavedata* savedata) {
 }
 
 void GBASavedataInitSRAM512(struct GBASavedata* savedata) {
+	off_t end;
 	if (savedata->type == GBA_SAVEDATA_AUTODETECT) {
 		savedata->type = GBA_SAVEDATA_SRAM512;
 	} else {
 		mLOG(GBA_SAVE, WARN, "Can't re-initialize savedata");
 		return;
 	}
-	off_t end;
 	if (!savedata->vf) {
 		end = 0;
 		savedata->data = anonymousMemoryMap(GBA_SIZE_SRAM512);
@@ -529,8 +534,9 @@ void GBASavedataWriteEEPROM(struct GBASavedata* savedata, uint16_t value, uint32
 		} else if (writeSize == 1) {
 			savedata->command = EEPROM_COMMAND_NULL;
 		} else if ((savedata->writeAddress >> 3) < GBA_SIZE_EEPROM) {
+			uint8_t current;
 			_ensureEeprom(savedata, savedata->writeAddress >> 3);
-			uint8_t current = savedata->data[savedata->writeAddress >> 3];
+			current = savedata->data[savedata->writeAddress >> 3];
 			current &= ~(1 << (0x7 - (savedata->writeAddress & 0x7)));
 			current |= (value & 0x1) << (0x7 - (savedata->writeAddress & 0x7));
 			savedata->dirty |= mSAVEDATA_DIRT_NEW;
@@ -567,6 +573,7 @@ uint16_t GBASavedataReadEEPROM(struct GBASavedata* savedata) {
 	}
 	--savedata->readBitsRemaining;
 	if (savedata->readBitsRemaining < 64) {
+		uint8_t data;
 		int step = 63 - savedata->readBitsRemaining;
 		uint32_t address = (savedata->readAddress + step) >> 3;
 		_ensureEeprom(savedata, address);
@@ -574,7 +581,7 @@ uint16_t GBASavedataReadEEPROM(struct GBASavedata* savedata) {
 			mLOG(GBA_SAVE, GAME_ERROR, "Reading beyond end of EEPROM: %08X", address);
 			return 0xFF;
 		}
-		uint8_t data = savedata->data[address] >> (0x7 - (step & 0x7));
+		data = savedata->data[address] >> (0x7 - (step & 0x7));
 		if (!savedata->readBitsRemaining) {
 			savedata->command = EEPROM_COMMAND_NULL;
 		}
@@ -604,20 +611,21 @@ void GBASavedataClean(struct GBASavedata* savedata, uint32_t frameCount) {
 }
 
 void GBASavedataRTCWrite(struct GBASavedata* savedata) {
+	struct GBASavedataRTCBuffer buffer;
+	size_t size;
+	int bank = 0;
 	if (!(savedata->p->memory.hw.devices & HW_RTC) || !savedata->vf || savedata->mapMode == MAP_READ) {
 		return;
 	}
 
-	struct GBASavedataRTCBuffer buffer;
 
 	memcpy(&buffer.time, savedata->p->memory.hw.rtc.time, 7);
 	buffer.control = savedata->p->memory.hw.rtc.control;
 	STORE_64LE(savedata->p->memory.hw.rtc.lastLatch, 0, &buffer.lastLatch);
 
-	size_t size = GBASavedataSize(savedata);
+	size = GBASavedataSize(savedata);
 	savedata->vf->seek(savedata->vf, size & ~0xFF, SEEK_SET);
 
-	int bank = 0;
 	if ((savedata->vf->size(savedata->vf) & 0xFF) != sizeof(buffer)) {
 		// Writing past the end of the file can invalidate the file mapping
 		if (savedata->type == GBA_SAVEDATA_FLASH1M) {
@@ -642,13 +650,15 @@ static uint8_t _unBCD(uint8_t byte) {
 }
 
 void GBASavedataRTCRead(struct GBASavedata* savedata) {
+	struct GBASavedataRTCBuffer buffer;
+	size_t size;
+	time_t rtcTime;
 	if (!savedata->vf) {
 		return;
 	}
 
-	struct GBASavedataRTCBuffer buffer;
 
-	size_t size = GBASavedataSize(savedata) & ~0xFF;
+	size = GBASavedataSize(savedata) & ~0xFF;
 	savedata->vf->seek(savedata->vf, size, SEEK_SET);
 	size = savedata->vf->read(savedata->vf, &buffer, sizeof(buffer));
 	if (size < sizeof(buffer)) {
@@ -665,45 +675,48 @@ void GBASavedataRTCRead(struct GBASavedata* savedata) {
 	}
 	LOAD_64LE(savedata->p->memory.hw.rtc.lastLatch, 0, &buffer.lastLatch);
 
-	time_t rtcTime;
 
 #ifndef PSP2
-	struct tm date;
-	date.tm_year = _unBCD(savedata->p->memory.hw.rtc.time[0]) + 100;
-	date.tm_mon = _unBCD(savedata->p->memory.hw.rtc.time[1]) - 1;
-	date.tm_mday = _unBCD(savedata->p->memory.hw.rtc.time[2]);
-	date.tm_hour = _unBCD(savedata->p->memory.hw.rtc.time[4]);
-	date.tm_min = _unBCD(savedata->p->memory.hw.rtc.time[5]);
-	date.tm_sec = _unBCD(savedata->p->memory.hw.rtc.time[6]);
-	date.tm_isdst = -1;
-	rtcTime = mktime(&date);
+	{
+		struct tm date;
+		date.tm_year = _unBCD(savedata->p->memory.hw.rtc.time[0]) + 100;
+		date.tm_mon = _unBCD(savedata->p->memory.hw.rtc.time[1]) - 1;
+		date.tm_mday = _unBCD(savedata->p->memory.hw.rtc.time[2]);
+		date.tm_hour = _unBCD(savedata->p->memory.hw.rtc.time[4]);
+		date.tm_min = _unBCD(savedata->p->memory.hw.rtc.time[5]);
+		date.tm_sec = _unBCD(savedata->p->memory.hw.rtc.time[6]);
+		date.tm_isdst = -1;
+		rtcTime = mktime(&date);
+	}
 #else
-	struct SceDateTime date;
-	date.year = _unBCD(savedata->p->memory.hw.rtc.time[0]) + 2000;
-	date.month = _unBCD(savedata->p->memory.hw.rtc.time[1]);
-	date.day = _unBCD(savedata->p->memory.hw.rtc.time[2]);
-	date.hour = _unBCD(savedata->p->memory.hw.rtc.time[4]);
-	date.minute = _unBCD(savedata->p->memory.hw.rtc.time[5]);
-	date.second = _unBCD(savedata->p->memory.hw.rtc.time[6]);
-	date.microsecond = 0;
+	{
+		struct SceDateTime date;
+		struct SceRtcTick tick;
+		int res;
+		date.year = _unBCD(savedata->p->memory.hw.rtc.time[0]) + 2000;
+		date.month = _unBCD(savedata->p->memory.hw.rtc.time[1]);
+		date.day = _unBCD(savedata->p->memory.hw.rtc.time[2]);
+		date.hour = _unBCD(savedata->p->memory.hw.rtc.time[4]);
+		date.minute = _unBCD(savedata->p->memory.hw.rtc.time[5]);
+		date.second = _unBCD(savedata->p->memory.hw.rtc.time[6]);
+		date.microsecond = 0;
 
-	struct SceRtcTick tick;
-	int res;
-	res = sceRtcConvertDateTimeToTick(&date, &tick);
-	if (res < 0) {
-		mLOG(GBA_SAVE, ERROR, "sceRtcConvertDateTimeToTick %lx", res);
-	}
-	res = sceRtcConvertLocalTimeToUtc(&tick, &tick);
-	if (res < 0) {
-		mLOG(GBA_SAVE, ERROR, "sceRtcConvertUtcToLocalTime %lx", res);
-	}
-	res = sceRtcConvertTickToDateTime(&tick, &date);
-	if (res < 0) {
-		mLOG(GBA_SAVE, ERROR, "sceRtcConvertTickToDateTime %lx", res);
-	}
-	res = sceRtcConvertDateTimeToTime_t(&date, &rtcTime);
-	if (res < 0) {
-		mLOG(GBA_SAVE, ERROR, "sceRtcConvertDateTimeToTime_t %lx", res);
+		res = sceRtcConvertDateTimeToTick(&date, &tick);
+		if (res < 0) {
+			mLOG(GBA_SAVE, ERROR, "sceRtcConvertDateTimeToTick %lx", res);
+		}
+		res = sceRtcConvertLocalTimeToUtc(&tick, &tick);
+		if (res < 0) {
+			mLOG(GBA_SAVE, ERROR, "sceRtcConvertUtcToLocalTime %lx", res);
+		}
+		res = sceRtcConvertTickToDateTime(&tick, &date);
+		if (res < 0) {
+			mLOG(GBA_SAVE, ERROR, "sceRtcConvertTickToDateTime %lx", res);
+		}
+		res = sceRtcConvertDateTimeToTime_t(&date, &rtcTime);
+		if (res < 0) {
+			mLOG(GBA_SAVE, ERROR, "sceRtcConvertDateTimeToTime_t %lx", res);
+		}
 	}
 #endif
 
@@ -713,9 +726,9 @@ void GBASavedataRTCRead(struct GBASavedata* savedata) {
 }
 
 void GBASavedataSerialize(const struct GBASavedata* savedata, struct GBASerializedState* state) {
+	GBASerializedSavedataFlags flags = 0;
 	state->savedata.type = savedata->type;
 	state->savedata.command = savedata->command;
-	GBASerializedSavedataFlags flags = 0;
 	flags = GBASerializedSavedataFlagsSetFlashState(flags, savedata->flashState);
 	flags = GBASerializedSavedataFlagsTestFillFlashBank(flags, savedata->currentBank == &savedata->data[0x10000]);
 
@@ -733,12 +746,13 @@ void GBASavedataSerialize(const struct GBASavedata* savedata, struct GBASerializ
 }
 
 void GBASavedataDeserialize(struct GBASavedata* savedata, const struct GBASerializedState* state) {
+	GBASerializedSavedataFlags flags;
 	if (savedata->type != state->savedata.type) {
 		mLOG(GBA_SAVE, DEBUG, "Switching save types");
 		GBASavedataForceType(savedata, state->savedata.type);
 	}
 	savedata->command = state->savedata.command;
-	GBASerializedSavedataFlags flags = state->savedata.flags;
+	flags = state->savedata.flags;
 	savedata->flashState = GBASerializedSavedataFlagsGetFlashState(flags);
 	savedata->readBitsRemaining = state->savedata.readBitsRemaining;
 	LOAD_32(savedata->readAddress, 0, &state->savedata.readAddress);
@@ -777,9 +791,9 @@ void _flashSwitchBank(struct GBASavedata* savedata, int bank) {
 }
 
 void _flashErase(struct GBASavedata* savedata) {
+	size_t size = GBA_SIZE_FLASH512;
 	mLOG(GBA_SAVE, DEBUG, "Performing flash chip erase");
 	savedata->dirty |= mSAVEDATA_DIRT_NEW;
-	size_t size = GBA_SIZE_FLASH512;
 	if (savedata->type == GBA_SAVEDATA_FLASH1M) {
 		size = GBA_SIZE_FLASH1M;
 	}
@@ -787,9 +801,9 @@ void _flashErase(struct GBASavedata* savedata) {
 }
 
 void _flashEraseSector(struct GBASavedata* savedata, uint16_t sectorStart) {
+	size_t size = 0x1000;
 	mLOG(GBA_SAVE, DEBUG, "Performing flash sector erase at 0x%04x", sectorStart);
 	savedata->dirty |= mSAVEDATA_DIRT_NEW;
-	size_t size = 0x1000;
 	if (savedata->type == GBA_SAVEDATA_FLASH1M) {
 		mLOG(GBA_SAVE, DEBUG, "Performing unknown sector-size erase at 0x%04x", sectorStart);
 	}

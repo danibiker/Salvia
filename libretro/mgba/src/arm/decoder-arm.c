@@ -41,10 +41,12 @@
 	}
 
 #define ADDR_MODE_1_IMM \
-	int rotate = (opcode & 0x00000F00) >> 7; \
-	int immediate = opcode & 0x000000FF; \
-	info->op3.immediate = ROR(immediate, rotate); \
-	info->operandFormat |= ARM_OPERAND_IMMEDIATE_3;
+	{ \
+		int rotate = (opcode & 0x00000F00) >> 7; \
+		int immediate = opcode & 0x000000FF; \
+		info->op3.immediate = ROR(immediate, rotate); \
+		info->operandFormat |= ARM_OPERAND_IMMEDIATE_3; \
+	}
 
 #define ADDR_MODE_2_SHIFT(OP) \
 	info->memory.format |= ARM_MEMORY_REGISTER_OFFSET | ARM_MEMORY_SHIFTED_OFFSET; \
@@ -91,7 +93,9 @@
 	static void _ARMDecode ## NAME (uint32_t opcode, struct ARMInstructionInfo* info) { \
 		UNUSED(opcode); \
 		info->mnemonic = ARM_MN_ ## MNEMONIC; \
-		BODY; \
+		{ \
+			BODY; \
+		} \
 	}
 
 #define DEFINE_ALU_DECODER_EX_ARM(NAME, MNEMONIC, S, SHIFTER, OTHER_AFFECTED, SKIPPED) \
@@ -455,12 +459,13 @@ static const ARMDecoder _armDecoderTable[0x1000] = {
 };
 
 void ARMDecodeARM(uint32_t opcode, struct ARMInstructionInfo* info) {
+	ARMDecoder decoder;
 	memset(info, 0, sizeof(*info));
 	info->execMode = MODE_ARM;
 	info->opcode = opcode;
 	info->branchType = ARM_BRANCH_NONE;
 	info->condition = opcode >> 28;
 	info->sInstructionCycles = 1;
-	ARMDecoder decoder = _armDecoderTable[((opcode >> 16) & 0xFF0) | ((opcode >> 4) & 0x00F)];
+	decoder = _armDecoderTable[((opcode >> 16) & 0xFF0) | ((opcode >> 4) & 0x00F)];
 	decoder(opcode, info);
 }

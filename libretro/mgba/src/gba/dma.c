@@ -40,8 +40,8 @@ void GBADMAInit(struct GBA* gba) {
 }
 
 void GBADMAReset(struct GBA* gba) {
-	memset(gba->memory.dma, 0, sizeof(gba->memory.dma));
 	int i;
+	memset(gba->memory.dma, 0, sizeof(gba->memory.dma));
 	for (i = 0; i < 4; ++i) {
 		gba->memory.dma[i].count = 0x4000;
 		gba->memory.dma[i].latch = 0;
@@ -94,6 +94,7 @@ void GBADMAReload(struct GBA* gba, int dma) {
 }
 
 uint16_t GBADMAWriteCNT_HI(struct GBA* gba, int dma, uint16_t control) {
+	uint32_t width;
 	struct GBAMemory* memory = &gba->memory;
 	struct GBADMA* currentDma = &memory->dma[dma];
 	int wasEnabled = GBADMARegisterIsEnable(currentDma->reg);
@@ -104,7 +105,7 @@ uint16_t GBADMAWriteCNT_HI(struct GBA* gba, int dma, uint16_t control) {
 	}
 	currentDma->reg = control;
 
-	uint32_t width = 2 << GBADMARegisterGetWidth(currentDma->reg);
+	width = 2 << GBADMARegisterGetWidth(currentDma->reg);
 	if (currentDma->source >= GBA_BASE_ROM0 && currentDma->source < GBA_BASE_SRAM) {
 		currentDma->sourceOffset = width;
 	} else {
@@ -127,13 +128,16 @@ uint16_t GBADMAWriteCNT_HI(struct GBA* gba, int dma, uint16_t control) {
 		if (currentDma->nextDest & (width - 1)) {
 			mLOG(GBA_DMA, GAME_ERROR, "Misaligned DMA destination address: 0x%08X", currentDma->nextDest);
 		}
+		// C89/MSVC: no preprocessor directives inside the macro arguments
 #ifndef __LIBRETRO__
 		mLOG(GBA_DMA, INFO, "Starting DMA %i 0x%08X -> 0x%08X (%04X:%04X)", dma,
-#else
-		mLOG(GBA_DMA, DEBUG, "Starting DMA %i 0x%08X -> 0x%08X (%04X:%04X)", dma,
-#endif
 		     currentDma->nextSource, currentDma->nextDest,
 		     currentDma->reg, currentDma->count & 0xFFFF);
+#else
+		mLOG(GBA_DMA, DEBUG, "Starting DMA %i 0x%08X -> 0x%08X (%04X:%04X)", dma,
+		     currentDma->nextSource, currentDma->nextDest,
+		     currentDma->reg, currentDma->count & 0xFFFF);
+#endif
 
 		currentDma->nextSource &= -width;
 		currentDma->nextDest &= -width;
@@ -201,19 +205,23 @@ void GBADMARunDisplayStart(struct GBA* gba, int32_t cycles) {
 }
 
 void _dmaEvent(struct mTiming* timing, void* context, uint32_t cyclesLate) {
+	struct GBA* gba;
+	struct GBAMemory* memory;
+	struct GBADMA* dma;
 	UNUSED(timing);
 	UNUSED(cyclesLate);
-	struct GBA* gba = context;
-	struct GBAMemory* memory = &gba->memory;
-	struct GBADMA* dma = &memory->dma[memory->activeDMA];
+	gba = context;
+	memory = &gba->memory;
+	dma = &memory->dma[memory->activeDMA];
 	if (dma->nextCount == dma->count) {
 		dma->when = mTimingCurrentTime(&gba->timing);
 	}
 	if (dma->nextCount & 0xFFFFF) {
 		GBADMAService(gba, memory->activeDMA, dma);
 	} else {
+		bool noRepeat;
 		dma->nextCount = 0;
-		bool noRepeat = !GBADMARegisterIsRepeat(dma->reg);
+		noRepeat = !GBADMARegisterIsRepeat(dma->reg);
 		noRepeat |= GBADMARegisterGetTiming(dma->reg) == GBA_DMA_TIMING_NOW;
 		noRepeat |= memory->activeDMA == 3 && GBADMARegisterGetTiming(dma->reg) == GBA_DMA_TIMING_CUSTOM && gba->video.vcount == GBA_VIDEO_VERTICAL_PIXELS + 1;
 		if (noRepeat) {
@@ -261,6 +269,7 @@ void GBADMAUpdate(struct GBA* gba) {
 }
 
 void GBADMAService(struct GBA* gba, int number, struct GBADMA* info) {
+	int i;
 	struct GBAMemory* memory = &gba->memory;
 	struct ARMCore* cpu = gba->cpu;
 	uint32_t width = 2 << GBADMARegisterGetWidth(info->reg);
@@ -341,7 +350,6 @@ void GBADMAService(struct GBA* gba, int number, struct GBADMA* info) {
 	gba->performingDMA = 0;
 	cpu->memory.accessSource = oldAccess;
 
-	int i;
 	for (i = 0; i < 4; ++i) {
 		struct GBADMA* dma = &memory->dma[i];
 		if (GBADMARegisterIsEnable(dma->reg) && dma->nextCount) {
@@ -364,14 +372,17 @@ void GBADMAService(struct GBA* gba, int number, struct GBADMA* info) {
 void GBADMARecalculateCycles(struct GBA* gba) {
 	int i;
 	for (i = 0; i < 4; ++i) {
+		uint32_t width;
+		uint32_t sourceRegion;
+		uint32_t destRegion;
 		struct GBADMA* dma = &gba->memory.dma[i];
 		if (!GBADMARegisterIsEnable(dma->reg)) {
 			continue;
 		}
 
-		uint32_t width = GBADMARegisterGetWidth(dma->reg);
-		uint32_t sourceRegion = dma->nextSource >> BASE_OFFSET;
-		uint32_t destRegion = dma->nextDest >> BASE_OFFSET;
+		width = GBADMARegisterGetWidth(dma->reg);
+		sourceRegion = dma->nextSource >> BASE_OFFSET;
+		destRegion = dma->nextDest >> BASE_OFFSET;
 		if (width) {
 			dma->cycles = gba->memory.waitstatesSeq32[sourceRegion] + gba->memory.waitstatesSeq32[destRegion];
 		} else {
@@ -398,11 +409,12 @@ void GBADMASerialize(const struct GBA* gba, struct GBASerializedState* state) {
 }
 
 void GBADMADeserialize(struct GBA* gba, const struct GBASerializedState* state) {
+	int i;
 	uint32_t version;
 	LOAD_32(version, 0, &state->versionMagic);
 
-	int i;
 	for (i = 0; i < 4; ++i) {
+		uint32_t width;
 		LOAD_16(gba->memory.dma[i].reg, (GBA_REG_DMA0CNT_HI + i * 12), state->io);
 		LOAD_32(gba->memory.dma[i].nextSource, 0, &state->dma[i].nextSource);
 		LOAD_32(gba->memory.dma[i].nextDest, 0, &state->dma[i].nextDest);
@@ -424,7 +436,7 @@ void GBADMADeserialize(struct GBA* gba, const struct GBASerializedState* state) 
 			}
 		}
 
-		uint32_t width = 2 << GBADMARegisterGetWidth(gba->memory.dma[i].reg);
+		width = 2 << GBADMARegisterGetWidth(gba->memory.dma[i].reg);
 		if (gba->memory.dma[i].source >= GBA_BASE_ROM0 && gba->memory.dma[i].source < GBA_BASE_SRAM) {
 			gba->memory.dma[i].sourceOffset = width;
 		} else {

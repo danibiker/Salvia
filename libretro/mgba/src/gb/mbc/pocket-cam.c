@@ -73,21 +73,26 @@ uint8_t _GBPocketCamRead(struct GBMemory* memory, uint16_t address) {
 }
 
 void _GBPocketCamCapture(struct GBMemory* memory) {
-	if (!memory->cam) {
-		return;
-	}
 	const void* image = NULL;
 	size_t stride;
 	enum mColorFormat format;
+	struct GBPocketCamState* pocketCam;
+	size_t x, y;
+	if (!memory->cam) {
+		return;
+	}
 	memory->cam->requestImage(memory->cam, &image, &stride, &format);
 	if (!image) {
 		return;
 	}
 	memset(&memory->sram[0x100], 0, GBCAM_HEIGHT * GBCAM_WIDTH / 4);
-	struct GBPocketCamState* pocketCam = &memory->mbcState.pocketCam;
-	size_t x, y;
+	pocketCam = &memory->mbcState.pocketCam;
 	for (y = 0; y < GBCAM_HEIGHT; ++y) {
 		for (x = 0; x < GBCAM_WIDTH; ++x) {
+			uint16_t exposure;
+			int matrixEntry;
+			int coord;
+			uint16_t existing;
 			uint32_t gray;
 			uint32_t color;
 			switch (format) {
@@ -118,11 +123,11 @@ void _GBPocketCamCapture(struct GBMemory* memory) {
 				mLOG(GB_MBC, WARN, "Unsupported pixel format: %X", format);
 				return;
 			}
-			uint16_t exposure = (pocketCam->registers[2] << 8) | (pocketCam->registers[3]);
+			exposure = (pocketCam->registers[2] << 8) | (pocketCam->registers[3]);
 			gray = mColorConvert(color, format, mCOLOR_L8);
 			gray = (gray + 1) * exposure / 0x100;
 			// TODO: Additional processing
-			int matrixEntry = 3 * ((x & 3) + 4 * (y & 3));
+			matrixEntry = 3 * ((x & 3) + 4 * (y & 3));
 			if (gray < pocketCam->registers[matrixEntry + 6]) {
 				gray = 0x101;
 			} else if (gray < pocketCam->registers[matrixEntry + 7]) {
@@ -132,8 +137,7 @@ void _GBPocketCamCapture(struct GBMemory* memory) {
 			} else {
 				gray = 0;
 			}
-			int coord = (((x >> 3) & 0xF) * 8 + (y & 0x7)) * 2 + (y & ~0x7) * 0x20;
-			uint16_t existing;
+			coord = (((x >> 3) & 0xF) * 8 + (y & 0x7)) * 2 + (y & ~0x7) * 0x20;
 			LOAD_16LE(existing, coord + 0x100, memory->sram);
 			existing |= gray << (7 - (x & 7));
 			STORE_16LE(existing, coord + 0x100, memory->sram);

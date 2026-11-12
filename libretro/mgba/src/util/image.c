@@ -94,6 +94,7 @@ struct mImage* mImageCreate(unsigned width, unsigned height, enum mColorFormat f
 }
 
 struct mImage* mImageCreateWithStride(unsigned width, unsigned height, unsigned stride, enum mColorFormat format) {
+	struct mImage* image;
 	if (width < 1 || height < 1) {
 		return NULL;
 	}
@@ -102,7 +103,7 @@ struct mImage* mImageCreateWithStride(unsigned width, unsigned height, unsigned 
 		return NULL;
 	}
 
-	struct mImage* image = calloc(1, sizeof(struct mImage));
+	image = calloc(1, sizeof(struct mImage));
 	if (!image) {
 		return NULL;
 	}
@@ -139,11 +140,12 @@ struct mImage* mImageCreateFromConstBuffer(unsigned width, unsigned height, unsi
 
 #ifdef ENABLE_VFS
 struct mImage* mImageLoad(const char* path) {
+	struct mImage* image;
 	struct VFile* vf = VFileOpen(path, O_RDONLY);
 	if (!vf) {
 		return NULL;
 	}
-	struct mImage* image = mImageLoadVF(vf);
+	image = mImageLoadVF(vf);
 	vf->close(vf);
 	return image;
 }
@@ -268,11 +270,13 @@ struct mImage* mImageLoadVF(struct VFile* vf) {
 }
 
 struct mImage* mImageConvertToFormat(const struct mImage* image, enum mColorFormat format) {
+	struct mImage* newImage;
+	size_t x, y;
 	if (format == mCOLOR_PAL8) {
 		// Quantization shouldn't be handled here
 		return NULL;
 	}
-	struct mImage* newImage = calloc(1, sizeof(*newImage));
+	newImage = calloc(1, sizeof(*newImage));
 	newImage->width = image->width;
 	newImage->height = image->height;
 	newImage->format = format;
@@ -288,7 +292,6 @@ struct mImage* mImageConvertToFormat(const struct mImage* image, enum mColorForm
 	newImage->data = malloc(image->width * image->height * newImage->depth);
 
 	// TODO: Implement more specializations, e.g. alpha narrowing/widening, channel swapping
-	size_t x, y;
 	for (y = 0; y < newImage->height; ++y) {
 		uintptr_t src = (uintptr_t) ROW(image, y);
 		uintptr_t dst = (uintptr_t) ROW(newImage, y);
@@ -312,17 +315,18 @@ void mImageDestroy(struct mImage* image) {
 
 #ifdef ENABLE_VFS
 bool mImageSave(const struct mImage* image, const char* path, const char* format) {
+	char extension[PATH_MAX];
+	bool success;
 	struct VFile* vf = VFileOpen(path, O_WRONLY | O_CREAT | O_TRUNC);
 	if (!vf) {
 		return false;
 	}
 
-	char extension[PATH_MAX];
 	if (!format) {
 		separatePath(path, NULL, NULL, extension);
 		format = extension;
 	}
-	bool success = mImageSaveVF(image, vf, format);
+	success = mImageSaveVF(image, vf, format);
 	vf->close(vf);
 	return success;
 }
@@ -365,11 +369,12 @@ bool mImageSaveVF(const struct mImage* image, struct VFile* vf, const char* form
 }
 
 uint32_t mImageGetPixelRaw(const struct mImage* image, unsigned x, unsigned y) {
+	const void* pixel;
+	uint32_t color;
 	if (x >= image->width || y >= image->height) {
 		return 0;
 	}
-	const void* pixel = PIXEL(image, x, y);
-	uint32_t color;
+	pixel = PIXEL(image, x, y);
 	switch (image->depth) {
 	case 1:
 		color = *(const uint8_t*) pixel;
@@ -403,10 +408,11 @@ uint32_t mImageGetPixel(const struct mImage* image, unsigned x, unsigned y) {
 }
 
 void mImageSetPixelRaw(struct mImage* image, unsigned x, unsigned y, uint32_t color) {
+	void* pixel;
 	if (x >= image->width || y >= image->height) {
 		return;
 	}
-	void* pixel = PIXEL(image, x, y);
+	pixel = PIXEL(image, x, y);
 	switch (image->depth) {
 	case 1:
 		*(uint8_t*) pixel = color;
@@ -455,26 +461,28 @@ void mImageSetPaletteEntry(struct mImage* image, unsigned index, uint32_t color)
 	image->palette[index] = color;
 }
 
-#define COMPOSITE_BOUNDS_INIT(SOURCE, DEST) \
-	struct mRectangle dstRect = { \
-		.x = 0, \
-		.y = 0, \
-		.width = (DEST)->width, \
-		.height = (DEST)->height \
-	}; \
-	struct mRectangle srcRect = { \
-		.x = x, \
-		.y = y, \
-		.width = (SOURCE)->width, \
-		.height = (SOURCE)->height \
-	}; \
-	if (!mRectangleIntersection(&srcRect, &dstRect)) { \
-		return; \
-	} \
+/* C89: the declarations live in COMPOSITE_BOUNDS_DECLS, which has to be
+ * placed with the other declarations at the start of the function. */
+#define COMPOSITE_BOUNDS_DECLS \
+	struct mRectangle dstRect; \
+	struct mRectangle srcRect; \
 	int srcStartX; \
 	int srcStartY; \
 	int dstStartX; \
-	int dstStartY; \
+	int dstStartY
+
+#define COMPOSITE_BOUNDS_INIT(SOURCE, DEST) \
+	dstRect.x = 0; \
+	dstRect.y = 0; \
+	dstRect.width = (DEST)->width; \
+	dstRect.height = (DEST)->height; \
+	srcRect.x = x; \
+	srcRect.y = y; \
+	srcRect.width = (SOURCE)->width; \
+	srcRect.height = (SOURCE)->height; \
+	if (!mRectangleIntersection(&srcRect, &dstRect)) { \
+		return; \
+	} \
 	if (x < 0) { \
 		dstStartX = 0; \
 		srcStartX = -x; \
@@ -491,6 +499,7 @@ void mImageSetPaletteEntry(struct mImage* image, unsigned index, uint32_t color)
 	}
 
 void mImageBlit(struct mImage* image, const struct mImage* source, int x, int y) {
+	COMPOSITE_BOUNDS_DECLS;
 	if (image->format == mCOLOR_PAL8) {
 		// Can't blit to paletted image
 		return;
@@ -511,6 +520,7 @@ void mImageBlit(struct mImage* image, const struct mImage* source, int x, int y)
 }
 
 void mImageComposite(struct mImage* image, const struct mImage* source, int x, int y) {
+	COMPOSITE_BOUNDS_DECLS;
 	if (!mColorFormatHasAlpha(source->format)) {
 		mImageBlit(image, source, x, y);
 		return;
@@ -542,6 +552,8 @@ void mImageComposite(struct mImage* image, const struct mImage* source, int x, i
 }
 
 void mImageCompositeWithAlpha(struct mImage* image, const struct mImage* source, int x, int y, float alpha) {
+	int fixedAlpha;
+	COMPOSITE_BOUNDS_DECLS;
 	if (alpha >= 1 && alpha < 257.f / 256.f) {
 		mImageComposite(image, source, x, y);
 		return;
@@ -560,16 +572,17 @@ void mImageCompositeWithAlpha(struct mImage* image, const struct mImage* source,
 
 	COMPOSITE_BOUNDS_INIT(source, image);
 
-	int fixedAlpha = alpha * 0x200;
+	fixedAlpha = alpha * 0x200;
 
 	for (y = 0; y < srcRect.height; ++y) {
 		uintptr_t srcPixel = (uintptr_t) PIXEL(source, srcStartX, srcStartY + y);
 		uintptr_t dstPixel = (uintptr_t) PIXEL(image, dstStartX, dstStartY + y);
 		for (x = 0; x < srcRect.width; ++x, srcPixel += source->depth, dstPixel += image->depth) {
+			uint32_t alpha;
 			uint32_t color, colorB;
 			GET_PIXEL(color, srcPixel, source->depth);
 			color = mImageColorConvert(color, source, mCOLOR_ARGB8);
-			uint32_t alpha = (color >> 24) * fixedAlpha;
+			alpha = (color >> 24) * fixedAlpha;
 			alpha >>= 9;
 			if (alpha > 0xFF) {
 				alpha = 0xFF;
@@ -587,24 +600,24 @@ void mImageCompositeWithAlpha(struct mImage* image, const struct mImage* source,
 	}
 }
 
+#define FILL_BOUNDS_DECLS \
+	struct mRectangle dstRect; \
+	struct mRectangle srcRect; \
+	int dstStartX; \
+	int dstStartY
+
 #define FILL_BOUNDS_INIT(X, Y, W, H) \
-	struct mRectangle dstRect = { \
-		.x = 0, \
-		.y = 0, \
-		.width = painter->backing->width, \
-		.height = painter->backing->height \
-	}; \
-	struct mRectangle srcRect = { \
-		.x = (X), \
-		.y = (Y), \
-		.width = (W), \
-		.height = (H) \
-	}; \
+	dstRect.x = 0; \
+	dstRect.y = 0; \
+	dstRect.width = painter->backing->width; \
+	dstRect.height = painter->backing->height; \
+	srcRect.x = (X); \
+	srcRect.y = (Y); \
+	srcRect.width = (W); \
+	srcRect.height = (H); \
 	if (!mRectangleIntersection(&srcRect, &dstRect)) { \
 		return; \
 	} \
-	int dstStartX; \
-	int dstStartY; \
 	if ((X) < 0) { \
 		dstStartX = 0; \
 	} else { \
@@ -629,6 +642,7 @@ static void mPainterDrawPixel(struct mPainter* painter, unsigned x, unsigned y, 
 }
 
 static void mPainterFillRectangle(struct mPainter* painter, int x, int y, int width, int height) {
+	FILL_BOUNDS_DECLS;
 	FILL_BOUNDS_INIT(x, y, width, height);
 
 	if (!painter->blend || painter->fillColor >= 0xFF000000) {
@@ -689,18 +703,24 @@ void mPainterDrawRectangle(struct mPainter* painter, int x, int y, int width, in
 }
 
 void mPainterDrawLine(struct mPainter* painter, int x1, int y1, int x2, int y2) {
-	if (!painter->strokeWidth) {
-		return;
-	}
-	int dx = x2 - x1;
-	int dy = y2 - y1;
+	int dx;
+	int dy;
 	int x, y;
 	int xi = 1;
 	int yi = 1;
 	int residual;
+	int mx;
+	int my;
+	unsigned i;
+	uint32_t color;
+	if (!painter->strokeWidth) {
+		return;
+	}
+	dx = x2 - x1;
+	dy = y2 - y1;
 
-	int mx = dx;
-	int my = dy;
+	mx = dx;
+	my = dy;
 	if (mx < 0) {
 		mx = -mx;
 	}
@@ -717,8 +737,7 @@ void mPainterDrawLine(struct mPainter* painter, int x1, int y1, int x2, int y2) 
 		dy = -dy;
 	}
 
-	unsigned i;
-	uint32_t color = painter->strokeColor;
+	color = painter->strokeColor;
 
 	if (mx > my) {
 		residual = 2 * dy - dx;
@@ -772,18 +791,28 @@ static void _drawCircle2x2(struct mPainter* painter, int x, int y, uint32_t colo
 }
 
 void mPainterDrawCircle(struct mPainter* painter, int x, int y, int diameter) {
+	int radius;
+	int offset;
+	int stroke;
+	int dx = 1;
+	int residual0;
+	int dy0;
+	int offx = 0;
+	int offy;
+	int y0;
+	int residual1;
+	int dy1;
+	int y1;
+	int i;
 	if (diameter < 1) {
 		return;
 	}
-	int radius = diameter / 2;
-	int offset = (diameter ^ 1) & 1;
-	int stroke = painter->strokeWidth;
-	int dx = 1;
-	int residual0 = 1 - radius;
-	int dy0 = -2 * radius;
-	int offx = 0;
-	int offy;
-	int y0 = radius;
+	radius = diameter / 2;
+	offset = (diameter ^ 1) & 1;
+	stroke = painter->strokeWidth;
+	residual0 = 1 - radius;
+	dy0 = -2 * radius;
+	y0 = radius;
 	if (stroke > radius) {
 		// Clamp stroke
 		stroke = radius;
@@ -796,10 +825,9 @@ void mPainterDrawCircle(struct mPainter* painter, int x, int y, int diameter) {
 		mPainterDrawPixel(painter, x + radius, y + radius, painter->fillColor);
 	}
 
-	int residual1 = 1 - radius + stroke;
-	int dy1 = -2 * (radius - stroke);
-	int y1 = radius - stroke;
-	int i;
+	residual1 = 1 - radius + stroke;
+	dy1 = -2 * (radius - stroke);
+	y1 = radius - stroke;
 
 	if (!offset) {
 		// Draw central axes
@@ -882,6 +910,7 @@ void mPainterDrawCircle(struct mPainter* painter, int x, int y, int diameter) {
 }
 
 void mPainterDrawMask(struct mPainter* painter, const struct mImage* mask, int x, int y) {
+	COMPOSITE_BOUNDS_DECLS;
 	if (!painter->fill) {
 		return;
 	}
@@ -914,14 +943,14 @@ void mPainterDrawMask(struct mPainter* painter, const struct mImage* mask, int x
 }
 
 uint32_t mColorConvert(uint32_t color, enum mColorFormat from, enum mColorFormat to) {
-	if (from == to) {
-		return color;
-	}
-
 	uint32_t r = 0;
 	uint32_t g = 0;
 	uint32_t b = 0;
 	uint32_t a = 0xFF;
+	if (from == to) {
+		return color;
+	}
+
 
 	switch (from) {
 	case mCOLOR_ARGB8:
