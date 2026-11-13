@@ -16144,8 +16144,9 @@ typedef INT16_TYPE LogEst;
 #   define SQLITE_PTRSIZE __SIZEOF_POINTER__
 # elif defined(i386)     || defined(__i386__)   || defined(_M_IX86) ||    \
        defined(_M_ARM)   || defined(__arm__)    || defined(__x86)   ||    \
-      (defined(__APPLE__) && defined(__ppc__)) ||                         \
-      (defined(__TOS_AIX__) && !defined(__64BIT__))
+       defined(_M_PPC)   || defined(__PPC__)    || defined(__ppc__) ||    \
+       defined(_XBOX)    || defined(__TOS_AIX__) && !defined(__64BIT__) ||  \
+      (defined(__APPLE__) && defined(__ppc__))
 #   define SQLITE_PTRSIZE 4
 # else
 #   define SQLITE_PTRSIZE 8
@@ -18640,6 +18641,12 @@ SQLITE_PRIVATE int sqlite3PCacheIsDirty(PCache *pCache);
 #    define SQLITE_MUTEX_PTHREADS
 #  elif SQLITE_OS_WIN
 #    define SQLITE_MUTEX_W32
+#  elif defined(_XBOX)
+     /* Xbox 360 (XDK): SQLITE_OS_WIN=0 y SQLITE_OS_OTHER=1, por lo que sin esta
+     ** rama los mutexes caerian en la implementacion NOOP (sin exclusion mutua).
+     ** Se usa una implementacion propia (mas abajo) basada en CRITICAL_SECTION
+     ** del kernel de la Xbox 360, disponibles via <xtl.h>/<windows.h> del XDK. */
+#    define SQLITE_MUTEX_XBOX
 #  else
 #    define SQLITE_MUTEX_NOOP
 #  endif
@@ -31467,11 +31474,7 @@ SQLITE_PRIVATE sqlite3_mutex_methods const *sqlite3DefaultMutex(void){
 /*
 ** Include the primary Windows SDK header file.
 */
-#ifdef _XBOX
-#include <xtl.h>
-#else
 #include "windows.h"
-#endif
 
 #ifdef __CYGWIN__
 # include <sys/cygwin.h>
@@ -31859,7 +31862,299 @@ SQLITE_PRIVATE sqlite3_mutex_methods const *sqlite3DefaultMutex(void){
 
 #endif /* SQLITE_MUTEX_W32 */
 
-/************** End of mutex_w32.c *******************************************/
+/************** Begin file mutex_xbox.c **************************************/
+/*
+** 2026 Xbox 360 support (Salvia project)
+**
+** The author disclaims copyright to this source code.  In place of
+** a legal notice, here is a blessing:
+**
+**    May you do good and not evil.
+**    May you find forgiveness for yourself and forgive others.
+**    May you share freely, never taking more than you give.
+**
+*************************************************************************
+**
+** This file contains the C code that implements mutexes for the
+** Xbox 360 (XDK).  The XDK does not provide SRWLOCK (that API is
+** Vista-and-later on Win32), so this implementation is built entirely
+** on CRITICAL_SECTION objects, which are provided by the XDK kernel
+** (declared via <xtl.h> and the partial <windows.h> shipped with the
+** XDK) and which are recursive -- exactly the semantics SQLite needs
+** for both SQLITE_MUTEX_FAST and SQLITE_MUTEX_RECURSIVE.
+**
+** Only APIs already proven to work on this console are used:
+**   - InitializeCriticalSection / EnterCriticalSection /
+**     TryEnterCriticalSection / LeaveCriticalSection /
+**     DeleteCriticalSection
+**   - InterlockedCompareExchange (for the one-time initialization)
+**   - _ReadWriteBarrier() (compiler memory barrier, same as mutex_w32.c)
+*/
+#if SQLITE_OS_OTHER && defined(_XBOX) && defined(SQLITE_MUTEX_XBOX)
+
+/*
+** Include code that is common to all os_*.c files
+*/
+/* #include "os_common.h" */
+
+/* XDK headers: same pattern used by the rest of the Salvia project
+** (src/audio/audiobuffer.h, src/const/constant.h).  Note that the Xenon
+** compiler is case-sensitive for angle-bracket includes, so it must be
+** the lowercase <windows.h> shipped with the XDK. */
+#include <xtl.h>
+
+/*
+** The code in this file is only used if we are compiling threadsafe
+** on the Xbox 360.
+*/
+
+/*
+** Silence some harmless warning nuisance.
+*/
+#ifdef _MSC_VER
+#pragma warning(disable: 4166) /* no linkage linkage */
+#endif
+
+/*
+** Define the Xbox 360 mutex implementation
+*/
+struct sqlite3_mutex {
+  CRITICAL_SECTION cs;       /* Kernel critical section (recursive) */
+  int id;                    /* Mutex type */
+#ifdef SQLITE_DEBUG
+  volatile int nRef;         /* Number of entrances */
+  volatile DWORD owner;      /* Thread holding this mutex */
+#endif
+};
+
+#ifdef SQLITE_DEBUG
+/*
+** The sqlite3_mutex_held() and sqlite3_mutex_notheld() routines are
+** intended for use only inside assert() statements.
+*/
+static int xboxMutexHeld(sqlite3_mutex *p){
+  return p->nRef!=0 && p->owner==GetCurrentThreadId();
+}
+
+static int xboxMutexNotheld(sqlite3_mutex *p){
+  return p->nRef==0 || p->owner!=GetCurrentThreadId();
+}
+#endif
+
+/*
+** Try to provide a memory barrier operation, needed for initialization
+** and also for the xShmBarrier method of the VFS in cases when SQLite is
+** compiled without mutexes (SQLITE_THREADSAFE=0).
+*/
+SQLITE_PRIVATE void sqlite3MemoryBarrier(void){
+#if defined(SQLITE_MEMORY_BARRIER)
+  SQLITE_MEMORY_BARRIER;
+#elif defined(_MSC_VER)
+  _ReadWriteBarrier();
+#endif
+}
+
+/*
+** Initialize and deinitialize the mutex subsystem.
+**
+** The one-time initialization of the static mutexes is guarded with
+** an atomic compare-and-swap on a global flag, the same technique
+** winMutexInit() uses with the winMutex_lock variable.
+*/
+static long xboxMutex_lock = 0;
+
+/*
+** The array of static mutexes.  The first entry corresponds to mutex
+** id SQLITE_MUTEX_STATIC_MASTER (2), the last one to
+** SQLITE_MUTEX_STATIC_VFS3.  The union pads each entry to 128 bytes so
+** that adjacent mutexes never share a cache line, mirroring the layout
+** used by the unix implementation.
+*/
+static __declspec(align(128)) union staticXboxMutexes {
+  sqlite3_mutex m;
+  char spacer[128];
+} aXboxMutex[SQLITE_MUTEX_STATIC_VFS3 - 1] = { {0}, };
+
+static int xboxMutexInit(void){
+  /* If the mutex is not already initialized, initialize it. */
+  if( InterlockedCompareExchange(&xboxMutex_lock, 1, 0)==0 ){
+    int ii;
+    for(ii=0; ii<(int)ArraySize(aXboxMutex); ii++){
+      InitializeCriticalSection(&aXboxMutex[ii].m.cs);
+    }
+  }
+  return SQLITE_OK;
+}
+
+static int xboxMutexEnd(void){
+  /* The static mutexes can only be deinitialized if the mutex subsystem
+  ** was fully initialized first.  Reset the guard so a later
+  ** sqlite3_initialize() re-creates them. */
+  if( InterlockedCompareExchange(&xboxMutex_lock, 0, 1)==1 ){
+    int ii;
+    for(ii=0; ii<(int)ArraySize(aXboxMutex); ii++){
+      DeleteCriticalSection(&aXboxMutex[ii].m.cs);
+    }
+  }
+  return SQLITE_OK;
+}
+
+/*
+** The sqlite3_mutex_alloc() routine allocates a new mutex and returns
+** a pointer to it.  If it returns NULL that means that a mutex could
+** not be allocated.  SQLite will free the mutex with sqlite3_mutex_free()
+** when it is no longer needed.
+*/
+static sqlite3_mutex *xboxMutexAlloc(int iType){
+  struct sqlite3_mutex *p = 0;
+
+  assert( iType==SQLITE_MUTEX_FAST || iType==SQLITE_MUTEX_RECURSIVE
+       || iType>=SQLITE_MUTEX_STATIC_APP1
+  );
+  switch( iType ){
+    case SQLITE_MUTEX_FAST:
+    case SQLITE_MUTEX_RECURSIVE: {
+      p = sqlite3MallocZero( sizeof(*p) );
+      if( p ){
+        p->id = iType;
+        InitializeCriticalSection(&p->cs);
+      }
+      break;
+    }
+    default: {
+#ifdef SQLITE_ENABLE_API_ARMOR
+      if( iType-2<0 || iType-2>=ArraySize(aXboxMutex) ){
+        (void)SQLITE_MISUSE_BKPT;
+        return 0;
+      }
+#endif
+      assert( iType-2 >= 0 );
+      assert( iType-2 < ArraySize(aXboxMutex) );
+      p = &aXboxMutex[iType-2].m;
+      p->id = iType;
+#ifdef SQLITE_DEBUG
+      p->nRef = 0;
+      p->owner = 0;
+#endif
+      break;
+    }
+  }
+  assert( p==0 || p->id==iType );
+  return p;
+}
+
+/*
+** This routine deallocates a previously allocated mutex.  SQLite is
+** careful to deallocate every mutex that it allocates.
+*/
+static void xboxMutexFree(sqlite3_mutex *p){
+  assert( p );
+  assert( p->id==SQLITE_MUTEX_FAST || p->id==SQLITE_MUTEX_RECURSIVE );
+  assert( p==0 || p->nRef==0 );
+  assert( p==0 || p->owner==0 );
+  DeleteCriticalSection(&p->cs);
+  sqlite3_free(p);
+}
+
+/*
+** The sqlite3_mutex_enter() and sqlite3_mutex_try() routines attempt
+** to enter a mutex.  If another thread is already within the mutex,
+** sqlite3_mutex_enter() will block and sqlite3_mutex_try() will return
+** SQLITE_BUSY.  The sqlite3_mutex_try() interface returns SQLITE_OK
+** upon successful entry.  Mutexes created using SQLITE_MUTEX_RECURSIVE
+** can be entered multiple times by the same thread.  In such cases the,
+** mutex must be exited an equal number of times before another thread
+** can enter.  If the same thread tries to enter any other kind of mutex
+** more than once, the behavior is undefined.
+**
+** CRITICAL_SECTION on the Xbox 360 is recursive, so the same object
+** serves both SQLITE_MUTEX_FAST and SQLITE_MUTEX_RECURSIVE (for FAST the
+** recursive behavior is simply "undefined behavior" per the SQLite docs).
+*/
+static void xboxMutexEnter(sqlite3_mutex *p){
+  assert( p );
+#ifdef SQLITE_DEBUG
+  assert( p->id==SQLITE_MUTEX_RECURSIVE || xboxMutexNotheld(p) );
+#endif
+  EnterCriticalSection(&p->cs);
+#ifdef SQLITE_DEBUG
+  assert( p->nRef>0 || p->owner==0 );
+  p->owner = GetCurrentThreadId();
+  p->nRef++;
+#endif
+}
+
+static int xboxMutexTry(sqlite3_mutex *p){
+  int rc;
+  assert( p );
+#ifdef SQLITE_DEBUG
+  assert( p->id==SQLITE_MUTEX_RECURSIVE || xboxMutexNotheld(p) );
+#endif
+  /*
+  ** The sqlite3_mutex_try() routine is seldom used, and when it is
+  ** used it is merely an optimization.  So it is OK for it to always
+  ** fail.
+  */
+  if( TryEnterCriticalSection(&p->cs) ){
+#ifdef SQLITE_DEBUG
+    p->owner = GetCurrentThreadId();
+    p->nRef++;
+#endif
+    rc = SQLITE_OK;
+  }else{
+    rc = SQLITE_BUSY;
+  }
+  return rc;
+}
+
+/*
+** The sqlite3_mutex_leave() routine exits a mutex that was previously
+** entered by the same thread.  The behavior is undefined if the mutex
+** is not currently entered or is not currently allocated.  SQLite will
+** never do either.
+*/
+static void xboxMutexLeave(sqlite3_mutex *p){
+  assert( p );
+#ifdef SQLITE_DEBUG
+  assert( p->nRef>0 );
+  assert( p->owner==GetCurrentThreadId() );
+  p->nRef--;
+  if( p->nRef==0 ) p->owner = 0;
+  assert( p->nRef==0 || p->id==SQLITE_MUTEX_RECURSIVE );
+#endif
+  LeaveCriticalSection(&p->cs);
+}
+
+SQLITE_PRIVATE sqlite3_mutex_methods const *sqlite3DefaultMutex(void){
+  static const sqlite3_mutex_methods sMutex = {
+    xboxMutexInit,
+    xboxMutexEnd,
+    xboxMutexAlloc,
+    xboxMutexFree,
+    xboxMutexEnter,
+    xboxMutexTry,
+    xboxMutexLeave,
+#ifdef SQLITE_DEBUG
+    xboxMutexHeld,
+    xboxMutexNotheld
+#else
+    0,
+    0
+#endif
+  };
+  return &sMutex;
+}
+
+/*
+** Declare the sleep helper used by the "xbox" VFS.  It is defined at the
+** end of this file, together with the rest of the xbox VFS code, because
+** it depends on which OS layer was selected.
+*/
+SQLITE_API void sqlite3_win32_sleep(DWORD milliseconds);
+
+#endif /* SQLITE_OS_OTHER && defined(_XBOX) && defined(SQLITE_MUTEX_XBOX) */
+
+/************** End of mutex_xbox.c ******************************************/
 /************** Begin file malloc.c ******************************************/
 /*
 ** 2001 September 15
@@ -271176,9 +271471,11 @@ SQLITE_API int sqlite3_stmt_init(
 ** configuración al principio del fichero).                                 **
 **                                                                          **
 ** Notas de diseño:                                                         **
-**  * La consola es monoproceso (un único proceso), por lo que los bloqueos **
-**    de SQLite (SHARED/RESERVED/PENDING/EXCLUSIVE) se emulan en memoria,   **
-**    con la misma semántica que los bloqueos de rango de Windows.          **
+**  * Los bloqueos de SQLite (SHARED/RESERVED/PENDING/EXCLUSIVE) se emulan  **
+**    en memoria, con la misma semántica que los bloqueos de rango de       **
+**    Windows. La tabla de bloqueos es global y está protegida con el       **
+**    mutex estático SQLITE_MUTEX_STATIC_VFS1 de SQLite, de modo que es     **
+**    segura para hilos (la DB se accede desde varios threads).             **
 **  * No hay ficheros mapeados en memoria ni shm: WAL está desactivado      **
 **    (SQLITE_OMIT_WAL) y el modo journal "DELETE" es el predeterminado.    **
 **  * Las rutas admiten las unidades del XDK ("HDD:", "USB0:", "GAME:",     **
@@ -271195,8 +271492,29 @@ SQLITE_API int sqlite3_stmt_init(
 #include <errno.h>
 #include <io.h>          /* _fileno, _chsize_s y _commit: disponibles en el CRT del XDK */
 
-/* Función de retardo del kernel del XDK (igual que Sleep() de Win32). */
+/*
+** Función de retardo del kernel del XDK (igual que Sleep() de Win32).
+**
+** Cuando SQLITE_MUTEX_XBOX está definido, la sección de mutexes ya ha
+** incluido <xtl.h> + <windows.h>, donde Sleep() está declarada (así lo
+** usa src/io/sync.cpp en la consola), así que no hay que redeclararla.
+** Sin la sección de mutexes (p.ej. SQLITE_THREADSAFE=0) no hay
+** windows.h y hay que declararla a mano.
+*/
+#ifdef SQLITE_MUTEX_XBOX
+#else
 extern void Sleep(unsigned long dwMilliseconds);
+#endif
+
+/*
+** sqlite3_win32_sleep(): usada por la sección de mutexes. DWORD y
+** unsigned long son el mismo tipo (32 bits) tanto en el XDK como en
+** Win32, de modo que esta definición es compatible con la declaración
+** DWORD que hace la sección de mutexes.
+*/
+SQLITE_API void sqlite3_win32_sleep(unsigned long milliseconds){
+  Sleep(milliseconds);
+}
 
 /*
 ** Emulación de bloqueos en memoria. Una entrada por fichero (por ruta
@@ -271226,7 +271544,19 @@ typedef struct XboxFile {
 static XboxLock *xboxLockList = 0;
 
 /*
+** Mutex que protege xboxLockList y todas sus entradas. Se usa el mutex
+** estático SQLITE_MUTEX_STATIC_VFS1 de SQLite: sqlite3_mutex_alloc() es
+** idempotente e inicializa el subsistema de mutexes si hace falta. Con
+** SQLITE_THREADSAFE=0 todas las llamadas a mutex se convierten en no-ops
+** (ver mutex.h), así que el VFS sigue funcionando en monoproceso.
+*/
+static sqlite3_mutex *xboxLockMutex(void){
+  return sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_VFS1);
+}
+
+/*
 ** Busca (y opcionalmente crea) la entrada de bloqueo de una ruta.
+** ATENCION: debe llamarse con xboxLockMutex() adquirido.
 */
 static XboxLock *xboxLockFind(const char *zPath, int bCreate){
   XboxLock *p;
@@ -271249,6 +271579,7 @@ static XboxLock *xboxLockFind(const char *zPath, int bCreate){
 
 /*
 ** Elimina la entrada de bloqueo de la lista y la libera.
+** ATENCION: debe llamarse con xboxLockMutex() adquirido.
 */
 static void xboxLockDelete(XboxLock *pDel){
   XboxLock **pp = &xboxLockList;
@@ -271261,8 +271592,9 @@ static void xboxLockDelete(XboxLock *pDel){
 ** Libera TODAS las contribuciones de bloqueo de un handle (usado al cerrar
 ** o al liberar por completo). Si el fichero se queda sin bloqueos, se
 ** elimina su entrada de la tabla.
+** ATENCION: debe llamarse con xboxLockMutex() adquirido.
 */
-static void xboxLockRelease(XboxFile *pFile){
+static void xboxLockReleaseNoMutex(XboxFile *pFile){
   XboxLock *p;
   if( pFile->zPath==0 ) return;
   if( !(pFile->bShared || pFile->bReserved || pFile->bPending || pFile->bExclusive) ){
@@ -271285,20 +271617,31 @@ static void xboxLockRelease(XboxFile *pFile){
 }
 
 /*
+** Versión con mutex de xboxLockReleaseNoMutex (para llamadas externas,
+** p.ej. desde xboxClose()).
+*/
+static void xboxLockRelease(XboxFile *pFile){
+  sqlite3_mutex *m = xboxLockMutex();
+  sqlite3_mutex_enter(m);
+  xboxLockReleaseNoMutex(pFile);
+  sqlite3_mutex_leave(m);
+}
+
+/*
 ** sqlite3OsLock(): sube el nivel de bloqueo de un handle. Las contribuciones
 ** son aditivas y monotónicas, igual que en os_win.c: un handle que ya tiene
 ** SHARED lo conserva al subir a RESERVED/PENDING, y todos se liberan al
 ** volver a SHARED/NO_LOCK. En caso de conflicto el handle conserva el estado
 ** que tenía al entrar y se devuelve SQLITE_BUSY.
 */
-static int xboxLock(sqlite3_file *id, int eLock){
+static int xboxLockNoMutex(sqlite3_file *id, int eLock){
   XboxFile *p = (XboxFile*)id;
   XboxLock *l;
   int newShared = 0, newReserved = 0, newPending = 0;
   int rc = SQLITE_OK;
   if( p->zPath==0 ) return SQLITE_IOERR_LOCK;
   if( eLock==NO_LOCK ){
-    xboxLockRelease(p);
+    xboxLockReleaseNoMutex(p);
     return SQLITE_OK;
   }
   l = xboxLockFind(p->zPath, 1);
@@ -271352,10 +271695,22 @@ static int xboxLock(sqlite3_file *id, int eLock){
 }
 
 /*
+** Versión con mutex de xboxLockNoMutex.
+*/
+static int xboxLock(sqlite3_file *id, int eLock){
+  sqlite3_mutex *m = xboxLockMutex();
+  int rc;
+  sqlite3_mutex_enter(m);
+  rc = xboxLockNoMutex(id, eLock);
+  sqlite3_mutex_leave(m);
+  return rc;
+}
+
+/*
 ** sqlite3OsUnlock(): degrada el handle hasta el nivel indicado
 ** (SQLite usa NO_LOCK y SHARED_LOCK; la semántica es la de os_win.c).
 */
-static int xboxUnlock(sqlite3_file *id, int eLock){
+static int xboxUnlockNoMutex(sqlite3_file *id, int eLock){
   XboxFile *p = (XboxFile*)id;
   XboxLock *l;
   if( p->zPath==0 ) return SQLITE_OK;
@@ -271378,14 +271733,32 @@ static int xboxUnlock(sqlite3_file *id, int eLock){
 }
 
 /*
+** Versión con mutex de xboxUnlockNoMutex.
+*/
+static int xboxUnlock(sqlite3_file *id, int eLock){
+  sqlite3_mutex *m = xboxLockMutex();
+  int rc;
+  sqlite3_mutex_enter(m);
+  rc = xboxUnlockNoMutex(id, eLock);
+  sqlite3_mutex_leave(m);
+  return rc;
+}
+
+/*
 ** sqlite3OsCheckReservedLock(): 1 si hay algún bloqueo RESERVED/PENDING/
 ** EXCLUSIVE sobre el fichero.
 */
 static int xboxCheckReservedLock(sqlite3_file *id, int *pResOut){
   XboxFile *p = (XboxFile*)id;
-  XboxLock *l = p->zPath ? xboxLockFind(p->zPath, 0) : 0;
+  sqlite3_mutex *m = xboxLockMutex();
+  XboxLock *l;
+  int rc;
+  sqlite3_mutex_enter(m);
+  l = p->zPath ? xboxLockFind(p->zPath, 0) : 0;
   *pResOut = (l!=0 && (l->nReserved>0 || l->nPending>0 || l->nExclusive>0)) ? 1 : 0;
-  return SQLITE_OK;
+  rc = SQLITE_OK;
+  sqlite3_mutex_leave(m);
+  return rc;
 }
 
 /*
@@ -271651,12 +272024,12 @@ static int xboxRandomness(sqlite3_vfs *pVfs, int nByte, char *zBuf){
 }
 
 /*
-** sqlite3OsSleep(): microsegundos -> Sleep() del XDK (milisegundos).
+** sqlite3OsSleep(): microsegundos -> sqlite3_win32_sleep() (milisegundos).
 */
 static int xboxSleep(sqlite3_vfs *pVfs, int microseconds){
   int ms = (microseconds + 999) / 1000;
   (void)pVfs;
-  Sleep((unsigned long)ms);
+  sqlite3_win32_sleep((unsigned long)ms);
   return ms * 1000;
 }
 
