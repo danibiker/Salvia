@@ -285,6 +285,9 @@
     <ClCompile Include="..\..\..\gba\renderers\common.c">
       <Filter>src\gba\renderers</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\gba\renderers\d3d9.c">
+      <Filter>src\gba\renderers</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\gba\renderers\software-bg.c">
       <Filter>src\gba\renderers</Filter>
     </ClCompile>
@@ -635,6 +638,9 @@
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\common.h">
       <Filter>include\mgba\internal\gba\renderers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\d3d9.h">
+      <Filter>include\mgba\internal\gba\renderers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\video-software.h">
       <Filter>include\mgba\internal\gba\renderers</Filter>
     </ClInclude>
@@ -678,6 +684,9 @@
       <Filter>src\gba</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\gba\renderers\software-private.h">
+      <Filter>src\gba\renderers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\gba\renderers\d3d9-shaders.h">
       <Filter>src\gba\renderers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\libretro\libretro-audio.h">

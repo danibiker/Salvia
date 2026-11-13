@@ -1931,6 +1931,12 @@ static int  g_dupedSeguidos  = 0;
 static void retro_video_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
 	g_coreFrameDuped = (data == NULL);
+	#ifdef _XBOX
+		/* [2026-11-13] Lo que viene (los FPS, mensajes, la reticula) pinta en
+		 * el overlay, y el Present del juego no lo dejo bloqueado: ver
+		 * SDL_XBOX_SetOverlayDeferredLock en runGameLoop. */
+		SDL_XBOX_SyncOverlay();
+	#endif
 	#ifdef SALVIA_GPU_VIDEO
 		// Xbox y Windows: la GPU escala la textura nativa y aplica el shader.
 		hw_refresh(data, width, height, pitch);
@@ -2881,6 +2887,7 @@ inline void updateGame() {
 		}
 	}
 	retro_run();
+	gameMenu->drawLightgunCrosshair();
 
 	/* Ancla la FASE del muestreo del DRC.  A partir de aqui, el primer
 	 * lote de audio del frame siguiente recomputa el ratio, y los demas reusan
@@ -3087,11 +3094,6 @@ static int __declspec(noinline) runGameLoop() {
 			switch (gameMenu->getEmuStatus()){
 				case EMU_STARTED:
 					updateGame();
-					/* Despues de updateGame para quedar ENCIMA de los contadores de
-					 * FPS/memoria: el solape es un rect pequeno que sigue al raton y
-					 * los contadores se redibujan cada frame, asi que lo peor que
-					 * puede pasar es un parpadeo de un frame en ellos. */
-					gameMenu->drawLightgunCrosshair();
 					break;
 				case EMU_MENU:
 				case EMU_MENU_FILTER:
@@ -3127,7 +3129,18 @@ static int __declspec(noinline) runGameLoop() {
 				gameMenu->sync->note_flip(0.0);
 			} else {
 				const double flipIni = Constant::getTicks();
+#ifdef _XBOX
+				/* [2026-11-13] En el juego, el Present no espera a la GPU para
+				 * volver a bloquear el overlay: se bloquea en
+				 * retro_video_refresh (SDL_XBOX_SyncOverlay), cuando la GPU ya
+				 * ha tenido toda la emulacion del frame siguiente para
+				 * terminar.  Ver XBOX_DrawOverlay. */
+				SDL_XBOX_SetOverlayDeferredLock(gameMenu->getEmuStatus() == EMU_STARTED);
+#endif
 				salviaFlip(gameMenu->gameScreen);
+#ifdef _XBOX
+				SDL_XBOX_SetOverlayDeferredLock(0);
+#endif
 				const double flipEnd = Constant::getTicks();
 				gameMenu->sync->note_flip(flipEnd - flipIni);
 				gameMenu->sync->note_present(flipEnd);

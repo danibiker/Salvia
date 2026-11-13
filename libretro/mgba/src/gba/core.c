@@ -22,6 +22,9 @@
 #ifdef BUILD_GLES3
 #include <mgba/internal/gba/renderers/gl.h>
 #endif
+#ifdef BUILD_D3D9
+#include <mgba/internal/gba/renderers/d3d9.h>
+#endif
 #include <mgba/internal/gba/renderers/proxy.h>
 #include <mgba/internal/gba/renderers/video-software.h>
 #include <mgba/internal/gba/savedata.h>
@@ -208,6 +211,10 @@ struct GBACore {
 #ifdef BUILD_GLES3
 	struct GBAVideoGLRenderer glRenderer;
 #endif
+#ifdef BUILD_D3D9
+	struct GBAVideoD3D9Renderer* d3d9Renderer;
+	bool d3d9Active;
+#endif
 #ifndef MINIMAL_CORE
 	struct GBAVideoProxyRenderer vlProxy;
 	struct GBAVideoProxyRenderer proxyRenderer;
@@ -295,6 +302,10 @@ static bool _GBACoreInit(struct mCore* core) {
 #ifdef BUILD_GLES3
 	GBAVideoGLRendererCreate(&gbacore->glRenderer);
 	gbacore->glRenderer.outputTex = -1;
+#endif
+#ifdef BUILD_D3D9
+	gbacore->d3d9Renderer = NULL;
+	gbacore->d3d9Active = false;
 #endif
 
 #ifndef DISABLE_THREADING
@@ -467,8 +478,27 @@ static void _GBACoreReloadConfigOption(struct mCore* core, const char* option, c
 		return;
 	}
 #endif
+#ifdef BUILD_D3D9
+	if (strcmp("videoScale", option) == 0) {
+		int scale = 1;
+		if (config != &core->config) {
+			mCoreConfigCopyValue(&core->config, config, "videoScale");
+		}
+		if (gbacore->d3d9Active) {
+			mCoreConfigGetIntValue(config, "videoScale", &scale);
+			GBAVideoD3D9RendererSetScale(gbacore->d3d9Renderer, scale);
+		}
+		return;
+	}
+#endif
 	if (strcmp("hwaccelVideo", option) == 0) {
 		struct GBAVideoRenderer* renderer = NULL;
+#ifdef BUILD_D3D9
+		bool d3d9Value;
+		if (config != &core->config) {
+			mCoreConfigCopyValue(&core->config, config, "hwaccelVideo");
+		}
+#endif
 		if (gbacore->renderer.outputBuffer) {
 			renderer = &gbacore->renderer.d;
 		}
@@ -479,6 +509,16 @@ static void _GBACoreReloadConfigOption(struct mCore* core, const char* option, c
 			renderer = &gbacore->glRenderer.d;
 		} else {
 			gbacore->glRenderer.scale = 1;
+		}
+#endif
+#ifdef BUILD_D3D9
+		gbacore->d3d9Active = false;
+		if (gbacore->d3d9Renderer && mCoreConfigGetBoolValue(&core->config, "hwaccelVideo", &d3d9Value) && d3d9Value) {
+			int scale = 1;
+			mCoreConfigGetIntValue(&core->config, "videoScale", &scale);
+			GBAVideoD3D9RendererSetScale(gbacore->d3d9Renderer, scale);
+			renderer = GBAVideoD3D9RendererGetBase(gbacore->d3d9Renderer);
+			gbacore->d3d9Active = true;
 		}
 #endif
 #ifndef MINIMAL_CORE
@@ -515,6 +555,11 @@ static void _GBACoreBaseVideoSize(const struct mCore* core, unsigned* width, uns
 
 static void _GBACoreCurrentVideoSize(const struct mCore* core, unsigned* width, unsigned* height) {
 	int scale = 1;
+#ifdef BUILD_D3D9
+	if (((const struct GBACore*) core)->d3d9Active) {
+		scale = GBAVideoD3D9RendererGetScale(((const struct GBACore*) core)->d3d9Renderer);
+	}
+#endif
 #ifdef BUILD_GLES3
 	const struct GBACore* gbacore = (const struct GBACore*) core;
 	if (gbacore->glRenderer.outputTex != (unsigned) -1) {
@@ -529,6 +574,11 @@ static void _GBACoreCurrentVideoSize(const struct mCore* core, unsigned* width, 
 }
 
 static unsigned _GBACoreVideoScale(const struct mCore* core) {
+#ifdef BUILD_D3D9
+	if (((const struct GBACore*) core)->d3d9Active) {
+		return GBAVideoD3D9RendererGetScale(((const struct GBACore*) core)->d3d9Renderer);
+	}
+#endif
 #ifdef BUILD_GLES3
 	const struct GBACore* gbacore = (const struct GBACore*) core;
 	if (gbacore->glRenderer.outputTex != (unsigned) -1) {
@@ -754,6 +804,9 @@ static void _GBACoreReset(struct mCore* core) {
 #ifdef BUILD_GLES3
 	    || gbacore->glRenderer.outputTex != (unsigned) -1
 #endif
+#ifdef BUILD_D3D9
+	    || gbacore->d3d9Renderer
+#endif
 	) {
 		struct GBAVideoRenderer* renderer = NULL;
 		if (gbacore->renderer.outputBuffer) {
@@ -765,6 +818,16 @@ static void _GBACoreReset(struct mCore* core) {
 			renderer = &gbacore->glRenderer.d;
 		} else {
 			gbacore->glRenderer.scale = 1;
+		}
+#endif
+#ifdef BUILD_D3D9
+		gbacore->d3d9Active = false;
+		if (gbacore->d3d9Renderer && mCoreConfigGetBoolValue(&core->config, "hwaccelVideo", &value) && value) {
+			int scale = 1;
+			mCoreConfigGetIntValue(&core->config, "videoScale", &scale);
+			GBAVideoD3D9RendererSetScale(gbacore->d3d9Renderer, scale);
+			renderer = GBAVideoD3D9RendererGetBase(gbacore->d3d9Renderer);
+			gbacore->d3d9Active = true;
 		}
 #endif
 #ifndef DISABLE_THREADING
@@ -1658,6 +1721,30 @@ static void _GBACoreEndVideoLog(struct mCore* core) {
 		free(gbacore->vlProxy.logger);
 		gbacore->vlProxy.logger = NULL;
 	}
+}
+#endif
+
+#ifdef BUILD_D3D9
+void GBACoreSetD3D9Renderer(struct mCore* core, struct GBAVideoD3D9Renderer* renderer) {
+	struct GBACore* gbacore = (struct GBACore*) core;
+	struct GBA* gba = core->board;
+	if (gbacore->d3d9Renderer == renderer) {
+		return;
+	}
+	if (gbacore->d3d9Active) {
+		/* Don't leave the GBA drawing with a renderer that's going away */
+		if (gbacore->renderer.outputBuffer) {
+			GBAVideoAssociateRenderer(&gba->video, &gbacore->renderer.d);
+		} else {
+			GBAVideoAssociateRenderer(&gba->video, &gbacore->dummyRenderer);
+		}
+		gbacore->d3d9Active = false;
+	}
+	gbacore->d3d9Renderer = renderer;
+}
+
+bool GBACoreIsD3D9RendererActive(const struct mCore* core) {
+	return ((const struct GBACore*) core)->d3d9Active;
 }
 #endif
 

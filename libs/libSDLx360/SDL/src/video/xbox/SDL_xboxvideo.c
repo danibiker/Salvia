@@ -464,6 +464,9 @@ static LPDIRECT3DVERTEXBUFFER9 g_overlay_vb = NULL;
 static SDL_Surface* g_overlay_surface = NULL;
 static int g_overlay_enabled = 0;
 static int g_overlay_locked = 0;
+/* [2026-11-13] 1 = XBOX_DrawOverlay no vuelve a bloquear el overlay (ver
+ * alli y SDL_XBOX_SetOverlayDeferredLock) */
+static int g_overlay_defer_lock = 0;
 static int g_current_effect = 0;
 
 /* Overscan del overlay: desplaza los bordes del quad hacia adentro (positivo)
@@ -1598,8 +1601,19 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 
 	if (!g_overlay_enabled || !g_overlay_texture || !g_overlay_vb) return;
 
-	/* Unlock overlay texture so GPU can read it */
+	/* Unlock overlay texture so GPU can read it.
+	 *
+	 * [2026-11-13] Puede llegar aqui desbloqueada: en el juego no se vuelve a
+	 * bloquear al final de esta funcion (ver alli).  Entonces se bloquea y
+	 * desbloquea en el acto: el LockRect espera a que la GPU haya terminado
+	 * con el overlay del frame ANTERIOR (a estas alturas, nada), y el
+	 * UnlockRect es lo que vuelca a memoria lo que la CPU haya pintado
+	 * (D3DUSAGE_CPU_CACHED_MEMORY: "D3D ensures coherency with the GPU by
+	 * flushing the modified range at Unlock time", d3d9.h). */
+	if (!g_overlay_locked)
+		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
 	IDirect3DTexture9_UnlockRect(g_overlay_texture, 0);
+	g_overlay_locked = 0;
 
 	/* Enable alpha blending */
 	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ALPHABLENDENABLE, TRUE);
@@ -1637,10 +1651,26 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, g_current_sampler_filter);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, g_current_sampler_filter);
 
-	/* Re-lock overlay texture so the app can keep drawing to it */
-	IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
-	g_overlay_surface->pixels = d3dlr.pBits;
-	g_overlay_surface->pitch = d3dlr.Pitch;
+	/* Re-lock overlay texture so the app can keep drawing to it.
+	 *
+	 * [2026-11-13] Salvo durante el juego (SDL_XBOX_SetOverlayDeferredLock):
+	 * LockRect llama a BlockUntilNotBusy (doc del XDK), asi que aqui la CPU se
+	 * queda esperando a que la GPU termine TODO lo encolado hasta este quad
+	 * -- el frame entero del core, el quad del juego y el overlay -- antes del
+	 * Present.  Medido con mGBA por Direct3D (SetBlockCallback, bloqueos
+	 * D3DBLOCKTYPE_TEXTURE_LOCK fuera del core): 1,1 ms por frame a 1x, 1,9 a
+	 * 2x y 3,3 a 3x, y la CPU y la GPU iban por turnos.  En el juego el lock
+	 * se hace en SDL_XBOX_SyncOverlay, que Salvia llama cuando el core entrega
+	 * el frame (la GPU ha tenido toda la emulacion para terminar, asi que ya
+	 * no espera).  En los menus se sigue haciendo aqui: pintan el overlay
+	 * entero en cada frame, y sin esperar a la GPU la pintaban mientras la GPU
+	 * aun leia el anterior (franja negra arriba). */
+	if (!g_overlay_defer_lock) {
+		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
+		g_overlay_surface->pixels = d3dlr.pBits;
+		g_overlay_surface->pitch = d3dlr.Pitch;
+		g_overlay_locked = 1;
+	}
 }
 
 
@@ -1695,6 +1725,33 @@ SDL_Surface* SDL_XBOX_GetOverlay(void)
 	if (!g_overlay_surface)
 		XBOX_InitOverlay();
 	return g_overlay_surface;
+}
+
+/* [2026-11-13] Ver el final de XBOX_DrawOverlay.  Con defer = 1, el
+ * siguiente Present no vuelve a bloquear el overlay al dibujarlo, y quien lo
+ * pinte despues tiene que llamar antes a SDL_XBOX_SyncOverlay. */
+void SDL_XBOX_SetOverlayDeferredLock(int defer)
+{
+	g_overlay_defer_lock = defer;
+}
+
+/* [2026-11-13] Antes de pintar en un overlay cuyo Present fue diferido:
+ * espera a que la GPU haya terminado de leerlo (normalmente ya ha terminado)
+ * y lo deja bloqueado, como estaba antes.  Si ya lo esta, no hace nada. */
+void SDL_XBOX_SyncOverlay(void)
+{
+	D3DLOCKED_RECT d3dlr;
+
+	if (!g_overlay_texture || !g_overlay_surface || g_overlay_locked) return;
+
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+	if (!g_overlay_locked) {
+		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
+		g_overlay_surface->pixels = d3dlr.pBits;
+		g_overlay_surface->pitch = d3dlr.Pitch;
+		g_overlay_locked = 1;
+	}
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }
 
 void SDL_XBOX_SetOverlayEnabled(int enabled)

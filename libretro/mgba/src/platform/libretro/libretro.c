@@ -44,6 +44,11 @@ FS_Archive sdmcArchive;
 
 #include "libretro_core_options.h"
 
+#if defined(BUILD_D3D9) && defined(M_CORE_GBA)
+#include <mgba/internal/gba/renderers/d3d9.h>
+#define LIBRETRO_D3D9
+#endif
+
 #define GBA_AUDIO_CHUNK_FRAMES 1024
 #define GB_SAMPLES 512
 /* An alpha factor of 1/180 is *somewhat* equivalent
@@ -1179,6 +1184,154 @@ static void _updateGbPal(void) {
 }
 #endif
 
+#ifdef LIBRETRO_D3D9
+/* Direct3D renderer for GBA (src/gba/renderers/d3d9.c), for the Salvia
+ * frontend: it gives us its IDirect3DDevice9 (environment 30002) and shows
+ * the texture we hand it (30003) when video_refresh gets
+ * RETRO_HW_FRAME_BUFFER_VALID. */
+#define RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE 30002
+#define RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE 30003
+#define D3D9_MAX_SCALE 6
+
+struct salvia_d3d_texture {
+	void* texture;
+	unsigned width;
+	unsigned height;
+};
+
+static struct GBAVideoD3D9Renderer* d3d9Renderer = NULL;
+static void* d3d9Texture = NULL;
+static unsigned d3d9TextureWidth = 0;
+static unsigned d3d9TextureHeight = 0;
+static int d3d9Scale = 1;
+
+static void _d3d9SetTexture(void* texture, unsigned width, unsigned height) {
+	struct salvia_d3d_texture t;
+	if (texture == d3d9Texture && width == d3d9TextureWidth && height == d3d9TextureHeight) {
+		return;
+	}
+	t.texture = texture;
+	t.width = width;
+	t.height = height;
+	if (!environCallback(RETRO_ENVIRONMENT_SALVIA_SET_D3D_TEXTURE, &t) && texture) {
+		/* The frontend can't show it: back to software */
+		mCoreConfigSetIntValue(&core->config, "hwaccelVideo", 0);
+		core->reloadConfigOption(core, "hwaccelVideo", NULL);
+		texture = NULL;
+		width = 0;
+		height = 0;
+	}
+	d3d9Texture = texture;
+	d3d9TextureWidth = width;
+	d3d9TextureHeight = height;
+}
+
+/* The reason, in pieces: Salvia's log lines are 128 characters at most
+ * (longer ones come out empty) */
+static void _d3d9LogError(const char* what) {
+	const char* reason = GBAVideoD3D9RendererGetLastError();
+	if (!logCallback) {
+		return;
+	}
+	logCallback(RETRO_LOG_ERROR, "%s\n", what);
+	while (reason && *reason) {
+		size_t length = strcspn(reason, "\r\n");
+		size_t i;
+		for (i = 0; i < length; i += 100) {
+			logCallback(RETRO_LOG_ERROR, "  D3D9: %.*s\n", (int) (length - i < 100 ? length - i : 100), reason + i);
+		}
+		reason += length;
+		while (*reason == '\r' || *reason == '\n') {
+			++reason;
+		}
+	}
+}
+
+/* Reads mgba_gba_renderer / mgba_gba_render_scale. With `apply`, switches
+ * the running core (otherwise the next core->reset picks them up). */
+static void _loadD3D9Settings(bool apply) {
+	struct retro_variable var;
+	bool useD3D9 = false;
+	int scale = 1;
+	int oldScale = d3d9Scale;
+	bool wasActive;
+
+	if (core->platform(core) != mPLATFORM_GBA) {
+		return;
+	}
+	wasActive = GBACoreIsD3D9RendererActive(core);
+
+	var.key = "mgba_gba_renderer";
+	var.value = 0;
+	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		useD3D9 = strcmp(var.value, "direct3d") == 0;
+	}
+	var.key = "mgba_gba_render_scale";
+	var.value = 0;
+	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		scale = atoi(var.value);
+	}
+	if (scale < 1) {
+		scale = 1;
+	}
+	if (scale > D3D9_MAX_SCALE) {
+		scale = D3D9_MAX_SCALE;
+	}
+	d3d9Scale = scale;
+
+	if (useD3D9 && !d3d9Renderer) {
+		void* device = NULL;
+		char* systemDir = NULL;
+		if (environCallback(RETRO_ENVIRONMENT_SALVIA_GET_D3D_DEVICE, &device) && device) {
+			/* the compiled shaders are cached there */
+			if (!environCallback(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &systemDir)) {
+				systemDir = NULL;
+			}
+			d3d9Renderer = GBAVideoD3D9RendererCreate(device, scale, systemDir);
+		}
+		if (d3d9Renderer) {
+			GBACoreSetD3D9Renderer(core, d3d9Renderer);
+			if (logCallback) {
+				logCallback(RETRO_LOG_INFO, "Direct3D renderer ready, scale %i\n", GBAVideoD3D9RendererGetScale(d3d9Renderer));
+			}
+			if (GBAVideoD3D9RendererGetLastError()[0]) {
+				_d3d9LogError("Direct3D renderer running with problems:");
+			}
+		} else {
+			_d3d9LogError("Direct3D renderer not available, using the software renderer");
+		}
+	}
+	useD3D9 = useD3D9 && d3d9Renderer;
+
+	mCoreConfigSetIntValue(&core->config, "hwaccelVideo", useD3D9);
+	mCoreConfigSetIntValue(&core->config, "videoScale", scale);
+	if (!apply) {
+		return;
+	}
+	if (useD3D9 != wasActive || (useD3D9 && scale != oldScale)) {
+		/* The frontend lets go of the old texture before it's released (it
+		 * gets the new one at the end of retro_run) */
+		_d3d9SetTexture(NULL, 0, 0);
+	}
+	if (useD3D9 != wasActive) {
+		core->reloadConfigOption(core, "hwaccelVideo", NULL);
+	} else if (useD3D9 && scale != oldScale) {
+		core->reloadConfigOption(core, "videoScale", NULL);
+	}
+	if (useD3D9 != wasActive || scale != oldScale) {
+		struct retro_game_geometry geometry;
+		unsigned width, height;
+		core->currentVideoSize(core, &width, &height);
+		geometry.base_width = width;
+		geometry.base_height = height;
+		geometry.max_width = GBA_VIDEO_HORIZONTAL_PIXELS * D3D9_MAX_SCALE;
+		geometry.max_height = GBA_VIDEO_VERTICAL_PIXELS * D3D9_MAX_SCALE;
+		geometry.aspect_ratio = width / (float) height;
+		environCallback(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
+	}
+}
+#endif
+
 static void _reloadSettings(void) {
 	struct mCoreOptions opts = {
 		0,
@@ -1398,6 +1551,12 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
 	core->baseVideoSize(core, &width, &height);
 	info->geometry.max_width = width;
 	info->geometry.max_height = height;
+#ifdef LIBRETRO_D3D9
+	if (core->platform(core) == mPLATFORM_GBA) {
+		info->geometry.max_width = GBA_VIDEO_HORIZONTAL_PIXELS * D3D9_MAX_SCALE;
+		info->geometry.max_height = GBA_VIDEO_VERTICAL_PIXELS * D3D9_MAX_SCALE;
+	}
+#endif
 
 	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
 
@@ -1606,6 +1765,9 @@ void retro_run(void) {
 
 		_loadFrameskipSettings(NULL);
 		_loadAudioLowPassFilterSettings();
+#ifdef LIBRETRO_D3D9
+		_loadD3D9Settings(true);
+#endif
 
 #if defined(COLOR_16_BIT) && defined(COLOR_5_6_5)
 		_loadPostProcessingSettings();
@@ -1738,6 +1900,19 @@ void retro_run(void) {
 		}
 	}
 
+#ifdef LIBRETRO_D3D9
+	if (d3d9Renderer && GBACoreIsD3D9RendererActive(core)) {
+		unsigned texWidth, texHeight;
+		void* texture = GBAVideoD3D9RendererGetTexture(d3d9Renderer, &texWidth, &texHeight);
+		_d3d9SetTexture(texture, texWidth, texHeight);
+	} else if (d3d9Texture) {
+		_d3d9SetTexture(NULL, 0, 0);
+	}
+	if (d3d9Texture) {
+		/* The picture is already in the texture */
+		videoCallback(skipFrame ? NULL : RETRO_HW_FRAME_BUFFER_VALID, d3d9TextureWidth, d3d9TextureHeight, 0);
+	} else
+#endif
 	if (!skipFrame) {
 #if defined(COLOR_16_BIT) && defined(COLOR_5_6_5)
 		if (videoPostProcess) {
@@ -2108,6 +2283,10 @@ bool retro_load_game(const struct retro_game_info* game) {
 	_reloadSettings();
 	core->loadROM(core, rom);
 	deferredSetup = true;
+#ifdef LIBRETRO_D3D9
+	/* Before the deferred core->reset, which picks the renderer */
+	_loadD3D9Settings(false);
+#endif
 
 	environCallback(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &sysDir);
 
@@ -2175,8 +2354,18 @@ void retro_unload_game(void) {
 	if (!core) {
 		return;
 	}
+#ifdef LIBRETRO_D3D9
+	/* The frontend must stop sampling the texture before it goes away */
+	_d3d9SetTexture(NULL, 0, 0);
+#endif
 	mCoreConfigDeinit(&core->config);
 	core->deinit(core);
+#ifdef LIBRETRO_D3D9
+	if (d3d9Renderer) {
+		GBAVideoD3D9RendererDestroy(d3d9Renderer);
+		d3d9Renderer = NULL;
+	}
+#endif
 	mappedMemoryFree(data, dataSize);
 	data = 0;
 	mappedMemoryFree(savedata, GBA_SIZE_FLASH1M);

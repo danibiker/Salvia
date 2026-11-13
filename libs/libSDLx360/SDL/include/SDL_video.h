@@ -460,6 +460,13 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayOverflow(int overflow);
  */
 extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
 
+/* Xbox 360 [2026-11-13]: con defer = 1, el siguiente Present no espera a la
+ * GPU para volver a bloquear el overlay; antes de pintar otra vez en el hay
+ * que llamar a SDL_XBOX_SyncOverlay (que si ya esta bloqueado no hace nada).
+ * Salvia lo usa durante el juego; en los menus no se difiere. */
+extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayDeferredLock(int defer);
+extern DECLSPEC void SDLCALL SDL_XBOX_SyncOverlay(void);
+
 /* Rect de la imagen del juego en pixeles del overlay (ver la implementacion:
  * compone el aspect del quad del juego con el overscan del overlay). */
 extern void SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h);

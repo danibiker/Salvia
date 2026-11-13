@@ -118,8 +118,8 @@
       <CompileAs>CompileAsC</CompileAs>
       <WarningLevel>Level3</WarningLevel>
       <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;BUILD_D3D9;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -144,8 +144,8 @@
       <CompileAs>CompileAsC</CompileAs>
       <WarningLevel>Level3</WarningLevel>
       <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WIN32;BUILD_D3D9;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;$(DXSDK_DIR)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -169,7 +169,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <WarningLevel>Level3</WarningLevel>
       <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;BUILD_D3D9;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
@@ -192,7 +192,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <WarningLevel>Level3</WarningLevel>
       <DisableSpecificWarnings>4003;4018;4055;4057;4100;4127;4132;4146;4152;4200;4201;4204;4210;4214;4221;4232;4244;4245;4267;4305;4306;4307;4310;4334;4389;4701;4706;4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__LIBRETRO__;M_CORE_GBA;M_CORE_GB;MINIMAL_CORE=2;COLOR_16_BIT;COLOR_5_6_5;DISABLE_THREADING;MGBA_STANDALONE;ENABLE_VFS;ENABLE_VFS_FILE;HAVE_STRDUP;crc32=mgba_crc32;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_XBOX;__BIG_ENDIAN__;BUILD_D3D9;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\msvc;..\..\..\..\include;..\..\..;..\..\libretro;..\..\..\third-party\inih;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(Directory)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
@@ -270,6 +270,7 @@
     <ClCompile Include="..\..\..\gba\overrides.c" />
     <ClCompile Include="..\..\..\gba\renderers\cache-set.c" />
     <ClCompile Include="..\..\..\gba\renderers\common.c" />
+    <ClCompile Include="..\..\..\gba\renderers\d3d9.c" />
     <ClCompile Include="..\..\..\gba\renderers\software-bg.c" />
     <ClCompile Include="..\..\..\gba\renderers\software-mode0.c" />
     <ClCompile Include="..\..\..\gba\renderers\software-obj.c" />
@@ -388,6 +389,7 @@
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\overrides.h" />
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\cache-set.h" />
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\common.h" />
+    <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\d3d9.h" />
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\renderers\video-software.h" />
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\savedata.h" />
     <ClInclude Include="..\..\..\..\include\mgba\internal\gba\serialize.h" />
@@ -402,6 +404,7 @@
     <ClInclude Include="..\..\..\gba\cheats\gameshark.h" />
     <ClInclude Include="..\..\..\gba\cheats\parv3.h" />
     <ClInclude Include="..\..\..\gba\hle-bios.h" />
+    <ClInclude Include="..\..\..\gba\renderers\d3d9-shaders.h" />
     <ClInclude Include="..\..\..\gba\renderers\software-private.h" />
     <ClInclude Include="..\..\libretro\libretro-audio.h" />
     <ClInclude Include="..\..\libretro\libretro-vfs.h" />

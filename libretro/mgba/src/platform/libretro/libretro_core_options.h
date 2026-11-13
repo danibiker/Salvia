@@ -320,6 +320,40 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       },
       "Remove Known"
    },
+#ifdef BUILD_D3D9
+   {
+      "mgba_gba_renderer",
+      "GBA Renderer",
+      NULL,
+      "'Direct3D' draws Game Boy Advance games on the GPU (port of mGBA's OpenGL renderer) and can render them at a higher internal resolution: affine backgrounds and rotated/scaled sprites (Mode 7 style racing games, rotating maps, scaled bosses) become smooth instead of pixelated. It needs a Direct3D 9 frontend with shader model 3 and ignores 'Color Correction', 'Interframe Blending' and the LCD effects. Game Boy / Game Boy Color games always use the software renderer.",
+      NULL,
+      "video",
+      {
+         { "software", "Software" },
+         { "direct3d", "Direct3D" },
+         { NULL, NULL },
+      },
+      "software"
+   },
+   {
+      "mgba_gba_render_scale",
+      "GBA Direct3D Internal Resolution",
+      NULL,
+      "Internal resolution of the Direct3D renderer, as a multiple of 240x160. Higher values need more GPU time, especially on Xbox 360.",
+      NULL,
+      "video",
+      {
+         { "1", "1x (240x160)" },
+         { "2", "2x (480x320)" },
+         { "3", "3x (720x480)" },
+         { "4", "4x (960x640)" },
+         { "5", "5x (1200x800)" },
+         { "6", "6x (1440x960)" },
+         { NULL, NULL },
+      },
+      "3"
+   },
+#endif
    {
       "mgba_frameskip",
       "Frameskip",
