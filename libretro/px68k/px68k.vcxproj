@@ -54,6 +54,7 @@
     <ClCompile Include="libretro-common\file\file_path_io.c" />
     <ClCompile Include="libretro-common\file\retro_dirent.c" />
     <ClCompile Include="libretro-common\formats\zip\rzip_archive.c" />
+    <ClCompile Include="libretro-common\rthreads\rthreads.c" />
     <ClCompile Include="libretro-common\streams\file_stream.c" />
     <ClCompile Include="libretro-common\streams\file_stream_transforms.c" />
     <ClCompile Include="libretro-common\string\stdstring.c" />
@@ -65,7 +66,6 @@
     <ClCompile Include="libretro\fake.c" />
     <ClCompile Include="libretro\joystick.c" />
     <ClCompile Include="libretro\keyboard.c" />
-    <ClCompile Include="libretro\midi_shadow.c" />
     <ClCompile Include="libretro\mouse.c" />
     <ClCompile Include="libretro\peace.c" />
     <ClCompile Include="libretro\prop.c" />
@@ -108,8 +108,38 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="sc55.c" />
-    <ClCompile Include="sc55_libretro.c" />
+    <ClCompile Include="midi\midiemu\midiemu_libretro.c" />
+    <ClCompile Include="midi\midi_shadow.c" />
+    <ClCompile Include="midi\mt32emu\mt32emu_libretro.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Analog.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\BReverbModel.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\c_interface\c_interface.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Display.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\File.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\FileStream.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\LA32FloatWaveGenerator.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\LA32Ramp.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\LA32WaveGenerator.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\MidiStreamParser.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Part.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Partial.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\PartialManager.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Poly.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\ROMInfo.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\SampleRateConverter.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\sha1\sha1.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\InternalResampler.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\srctools\src\FIRResampler.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\srctools\src\IIR2xResampler.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\srctools\src\LinearResampler.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\srctools\src\ResamplerModel.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\srchelper\srctools\src\SincResampler.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Synth.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\Tables.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\TVA.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\TVF.cpp" />
+    <ClCompile Include="midi\mt32emu\munt\mt32emu\src\TVP.cpp" />
+    <ClCompile Include="midi\sc55\sc55.c" />
     <ClCompile Include="x68k\adpcm.c" />
     <ClCompile Include="x68k\bg.c" />
     <ClCompile Include="x68k\crtc.c" />
@@ -141,7 +171,6 @@
     <ClInclude Include="libretro-common\include\libretro.h" />
     <ClInclude Include="libretro\compiler.h" />
     <ClInclude Include="libretro\keytbl.inc" />
-    <ClInclude Include="libretro\midi_shadow.h" />
     <ClInclude Include="libretro_core_options.h" />
     <ClInclude Include="libretro_core_options_intl.h" />
   </ItemGroup>
@@ -361,7 +390,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;HAVE_MUSASHI;HAVE_CPU_RUNTIME;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;HAVE_MUSASHI;HAVE_CPU_RUNTIME;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline;MT32EMU_WITH_INTERNAL_RESAMPLER;MT32EMU_FASTER_MATH=1</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
@@ -369,7 +398,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)libretro-common/include;$(ProjectDir)libretro;$(ProjectDir)x68k;$(ProjectDir)fmgen;$(ProjectDir)m68000;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)libretro-common/include;$(ProjectDir)libretro;$(ProjectDir)x68k;$(ProjectDir)fmgen;$(ProjectDir)m68000;$(ProjectDir)midi\sc55;$(ProjectDir)midi\mt32emu;$(ProjectDir)midi\midiemu;$(ProjectDir)midi\mt32emu\munt\mt32emu\src;$(ProjectDir)midi\mt32emu\munt\mt32emu\src\srchelper;$(ProjectDir)midi\mt32emu\munt\mt32emu\src\srchelper\srctools\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -441,7 +470,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;HAVE_MUSASHI;HAVE_CPU_RUNTIME;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;HAVE_MUSASHI;HAVE_CPU_RUNTIME;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline;MT32EMU_WITH_INTERNAL_RESAMPLER;MT32EMU_FASTER_MATH=1</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
@@ -449,7 +478,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)libretro-common/include;$(ProjectDir)libretro;$(ProjectDir)x68k;$(ProjectDir)fmgen;$(ProjectDir)m68000;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)libretro-common/include;$(ProjectDir)libretro;$(ProjectDir)x68k;$(ProjectDir)fmgen;$(ProjectDir)m68000;$(ProjectDir)midi\sc55;$(ProjectDir)midi\mt32emu;$(ProjectDir)midi\midiemu;$(ProjectDir)midi\mt32emu\munt\mt32emu\src;$(ProjectDir)midi\mt32emu\munt\mt32emu\src\srchelper;$(ProjectDir)midi\mt32emu\munt\mt32emu\src\srchelper\srctools\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <CompileAs>Default</CompileAs>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>

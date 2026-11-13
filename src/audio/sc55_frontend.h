@@ -16,7 +16,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "../../libretro/px68k/sc55.h"
+#include "../../libretro/px68k/midi/sc55/sc55.h"
 #ifdef __cplusplus
 }
 #endif

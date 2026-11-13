@@ -3,6 +3,7 @@
 #include "midiemu_libretro.h"
 #include <stdio.h>
 #include <libretro.h>
+#include <compat/msvc.h>
 #include <string.h>
 
 #define MT32EMU_API_TYPE 1

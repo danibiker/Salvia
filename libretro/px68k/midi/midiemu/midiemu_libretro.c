@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <libretro.h>
+#include <compat/msvc.h>
 #include <rthreads/rthreads.h>
 #include "sc55.h"
 #include "midiemu_libretro.h"
@@ -37,6 +38,29 @@ static char attempted_content[PATH_MAX];
 #define MIDI_COMMAND_CAPACITY 2048
 #define MIDI_PCM_CAPACITY 8192
 #define MIDI_RENDER_MAX 1024
+
+/* Frames the worker keeps rendered ahead of the mixer.  With 0 it renders,
+ * each frame, what the previous frame consumed, which leaves it about one
+ * frame of slack.  On Xbox 360 the SC-55 takes ~94% of a hardware thread
+ * with 24 voices, so a slightly slower frame there was an audible gap; a
+ * 2048-frame lead (~46 ms at 44.1 kHz) absorbs it, at the cost of that much
+ * more MIDI latency.  The lead plus a full render block must fit in
+ * MIDI_PCM_CAPACITY. */
+#ifndef PX68K_MIDI_LEAD_FRAMES
+#ifdef _XBOX
+#define PX68K_MIDI_LEAD_FRAMES 2048
+#else
+#define PX68K_MIDI_LEAD_FRAMES 0
+#endif
+#endif
+/* With a lead the worker does not wait to be asked for audio: whenever no
+ * command is queued and the PCM ring is below midi_lead_target (the lead
+ * plus what the mixer took last time), it renders another block of this
+ * size.  Asking from the mixer allowed one block per emulated frame; with
+ * the SC-55 near a full hardware thread a 1024-frame block took longer
+ * than a frame, so the worker got a block every other frame and idled
+ * ~40% of the time while the music had gaps. */
+#define MIDI_LEAD_BLOCK 256
 
 enum
 {
@@ -73,6 +97,7 @@ static int midi_worker_paused;
 static int midi_runahead_active;
 static int midi_runahead_suppressed;
 static int midi_render_pending;
+static size_t midi_lead_target;   /* lead mode: frames the mixer wants ready */
 static int midi_worker_volume = 100;
 static void px68k_midiemu_render_sc55(int16_t *stereo, size_t frames, int volume);
 
@@ -96,20 +121,43 @@ static void midi_worker_main(void *userdata)
       struct midi_command command;
       int render_volume;
       slock_lock(midi_worker_lock);
+#if PX68K_MIDI_LEAD_FRAMES > 0
+      while (!midi_command_count && !midi_worker_stop &&
+            (midi_runahead_active || midi_pcm_count >= midi_lead_target))
+         scond_wait(midi_worker_wake, midi_worker_lock);
+#else
       while (!midi_command_count && !midi_worker_stop)
          scond_wait(midi_worker_wake, midi_worker_lock);
+#endif
       if (midi_worker_stop)
       {
          slock_unlock(midi_worker_lock);
          break;
       }
-      command = midi_commands[midi_command_read];
-      render_volume = midi_worker_volume;
-      memset(&midi_commands[midi_command_read], 0, sizeof(midi_commands[midi_command_read]));
-      midi_command_read = (midi_command_read + 1) % MIDI_COMMAND_CAPACITY;
-      midi_command_count--;
-      scond_broadcast(midi_worker_state);
-      slock_unlock(midi_worker_lock);
+#if PX68K_MIDI_LEAD_FRAMES > 0
+      if (!midi_command_count)
+      {
+         /* Nothing queued and the ring is short of the lead: top it up.
+          * Queued MIDI always goes first, so events are not held back by
+          * more than one block. */
+         const size_t want = midi_lead_target - midi_pcm_count;
+         memset(&command, 0, sizeof(command));
+         command.type = MIDI_COMMAND_RENDER;
+         command.frames = want > MIDI_LEAD_BLOCK ? MIDI_LEAD_BLOCK : want;
+         render_volume = midi_worker_volume;
+         slock_unlock(midi_worker_lock);
+      }
+      else
+#endif
+      {
+         command = midi_commands[midi_command_read];
+         render_volume = midi_worker_volume;
+         memset(&midi_commands[midi_command_read], 0, sizeof(midi_commands[midi_command_read]));
+         midi_command_read = (midi_command_read + 1) % MIDI_COMMAND_CAPACITY;
+         midi_command_count--;
+         scond_broadcast(midi_worker_state);
+         slock_unlock(midi_worker_lock);
+      }
 
       if (command.type == MIDI_COMMAND_BARRIER)
       {
@@ -189,6 +237,7 @@ static int midi_worker_start(void)
    midi_command_read = midi_command_write = midi_command_count = 0;
    midi_pcm_read = midi_pcm_write = midi_pcm_count = 0;
    midi_render_pending = 0;
+   midi_lead_target = 0;
    midi_runahead_active = 0;
    midi_worker_stop = midi_worker_paused = 0;
    midi_worker_volume = volume_percent;
@@ -641,7 +690,9 @@ void px68k_midiemu_mix(int16_t *stereo, size_t frames)
    if (midi_runahead_suppressed || !px68k_midiemu_enabled() || !stereo || !frames) return;
    if (midi_worker_running)
    {
+#if PX68K_MIDI_LEAD_FRAMES == 0
       struct midi_command command;
+#endif
       size_t count;
       slock_lock(midi_worker_lock);
       if (midi_runahead_active)
@@ -660,6 +711,13 @@ void px68k_midiemu_mix(int16_t *stereo, size_t frames)
       }
       midi_pcm_count -= count;
 
+#if PX68K_MIDI_LEAD_FRAMES > 0
+      /* The worker renders on its own up to this target (see
+       * MIDI_LEAD_BLOCK); wake it if the ring is below it. */
+      midi_lead_target = PX68K_MIDI_LEAD_FRAMES + frames;
+      if (midi_pcm_count < midi_lead_target && !midi_worker_stop)
+         scond_signal(midi_worker_wake);
+#else
       /* At most one render block may be queued or executing. Without this
        * limit, fast-forward can fill the command queue with stale render
        * requests until MIDI event submission blocks the emulation thread. */
@@ -673,6 +731,7 @@ void px68k_midiemu_mix(int16_t *stereo, size_t frames)
          if (!midi_queue_push_locked(&command))
             midi_render_pending = 0;
       }
+#endif
       slock_unlock(midi_worker_lock);
       return;
    }

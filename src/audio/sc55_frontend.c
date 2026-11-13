@@ -11,4 +11,4 @@
  * Se compila como C (CompileAsC en el vcxproj): el fuente es C89 y como C++ no
  * compila (declara por adelantado arrays static de punteros a funcion). */
 #include "sc55_frontend.h"
-#include "../../libretro/px68k/sc55.c"
+#include "../../libretro/px68k/midi/sc55/sc55.c"
