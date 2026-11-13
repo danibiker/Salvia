@@ -18,7 +18,7 @@
 #include "libretro/winx68k.h"
 #include "libretro/dosio.h"
 #include "libretro/zipdisk.h"
-#include "sc55_libretro.h"
+#include "midi/midiemu/midiemu_libretro.h"
 #include "libretro/dswin.h"
 #include "libretro/windraw.h"
 #include "libretro/joystick.h"
@@ -393,7 +393,7 @@ static void extract_directory(char *buf, const char *path, size_t size)
 
 /* BEGIN MIDI INTERFACE */
 #include "x68k/midi.h"
-#include "libretro/midi_shadow.h"
+#include "midi/midi_shadow.h"
 #include "libretro/mmsystem.h"
 static int libretro_supports_midi_output = 0;
 static struct retro_midi_interface midi_cb = { 0 };
@@ -401,17 +401,24 @@ static bool libretro_supports_option_categories = 0;
 
 /* While a setup is being re-created on load, don't record it as new input. */
 static bool midi_replaying;
+/* Run-Ahead must not send speculative MIDI to either internal or external
+ * destinations. The secondary instance remains suppressed after its restore. */
+static bool midi_runahead_active;
+static bool midi_runahead_secondary;
 
 /* 0 = off, 1 = re-create the synth setup, 2 = also switch back to the output
- * (internal SC-55 or external MIDI) that was in use when the state was saved. */
+ * (internal MIDI synthesizer or external MIDI) that was in use when the state was saved. */
 static int midi_restore_mode = 2;
+static int midi_emulation_selected = PX68K_MIDIEMU_DISABLED;
 
 /* Raw output: straight to whichever destination is active. */
 static void midi_emit_short(size_t msg)
 {
-   if (px68k_sc55_enabled())
+   if (midi_runahead_active || midi_runahead_secondary)
+      return;
+   if (px68k_midiemu_enabled())
    {
-      px68k_sc55_midi_short(msg);
+      px68k_midiemu_midi_short(msg);
       return;
    }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
@@ -431,9 +438,11 @@ static void midi_emit_short(size_t msg)
 
 static void midi_emit_long(const uint8_t *s, size_t len)
 {
-   if (px68k_sc55_enabled())
+   if (midi_runahead_active || midi_runahead_secondary)
+      return;
+   if (px68k_midiemu_enabled())
    {
-      px68k_sc55_midi_long(s, len);
+      px68k_midiemu_midi_long(s, len);
       return;
    }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
@@ -447,6 +456,8 @@ static void midi_emit_long(const uint8_t *s, size_t len)
 /* Called by the emulated MIDI board. */
 void midi_out_short_msg(size_t msg)
 {
+   if (midi_runahead_active || midi_runahead_secondary)
+      return;
    if (!midi_replaying)
       MIDIShadow_Short(msg);
    midi_emit_short(msg);
@@ -454,18 +465,20 @@ void midi_out_short_msg(size_t msg)
 
 void midi_out_long_msg(uint8_t *s, size_t len)
 {
+   if (midi_runahead_active || midi_runahead_secondary)
+      return;
    if (!midi_replaying)
       MIDIShadow_Long(s, len);
    midi_emit_long(s, len);
 }
 
-/* 0 = nothing audible, 1 = external MIDI interface, 2 = internal SC-55. */
+/* 0 = none, 1 = external MIDI, 2..4 = SC-55 / MT-32 / CM-32L. */
 static int midi_current_source(void)
 {
    if (!Config.MIDI_SW)
       return 0;
-   if (px68k_sc55_enabled())
-      return 2;
+   if (px68k_midiemu_enabled())
+      return midi_emulation_selected + 1;
    if (libretro_supports_midi_output && midi_cb.output_enabled())
       return 1;
    return 0;
@@ -481,18 +494,27 @@ static int midi_apply_saved_source(int saved)
    if (!Config.MIDI_SW || saved == 0 || saved == now)
       return 0;
 
-   if (saved == 2)
+   /* Older states used source 5 for CM-64. Restore that selection as CM-32L,
+    * since Munt's CM-64 option used the same LA module and ROMs. */
+   if (saved == 5)
+      saved = PX68K_MIDIEMU_CM32L + 1;
+
+   if (saved >= PX68K_MIDIEMU_SC55 + 1 && saved <= PX68K_MIDIEMU_CM32L + 1)
    {
-      px68k_sc55_configure(1, retro_system_directory, retro_content_directory);
-      if (!px68k_sc55_enabled())
-         return 0; /* ROMs not available here: stay on what we have */
+      int emulation = saved - 1;
+      px68k_midiemu_configure(emulation, retro_system_directory, retro_content_directory);
+      if (!px68k_midiemu_enabled())
+         return 0; /* Required ROMs are unavailable: stay on what we have. */
+      midi_emulation_selected = emulation;
    }
    else if (saved == 1)
    {
       if (!(libretro_supports_midi_output && midi_cb.output_enabled()))
          return 0;
-      px68k_sc55_configure(0, retro_system_directory, retro_content_directory);
+      px68k_midiemu_configure(PX68K_MIDIEMU_DISABLED, retro_system_directory, retro_content_directory);
    }
+   else
+      return 0;
 
    MIDI_ReopenOutput();
    return 1;
@@ -528,13 +550,13 @@ static void midi_restore_after_load(void)
 /* A non-NULL handle is required by x68k/midi.c before it will dispatch
  * MIDI bytes. Use a private sentinel for the internal synthesizer: no
  * external MIDI handle is involved in this case. */
-static int px68k_sc55_midi_handle;
+static int px68k_midiemu_midi_handle;
 
 int midi_out_open(void **phmo)
 {
-   if (px68k_sc55_enabled())
+   if (px68k_midiemu_enabled())
    {
-      if (phmo) *phmo = &px68k_sc55_midi_handle;
+      if (phmo) *phmo = &px68k_midiemu_midi_handle;
       return 0;
    }
    if (libretro_supports_midi_output && midi_cb.output_enabled())
@@ -1817,26 +1839,29 @@ static void update_variables(int running)
    }
 #endif
 
-   /* The internal SC-55 is an alternative MIDI destination, independent of
-    * RetroArch's external MIDI interface. Search the same roots as PrBoom and
-    * apply the SC-55-only gain independently of the PX68K audio volume. */
+   /* Internal MIDI emulation is an alternative MIDI destination, independent
+    * of RetroArch's external MIDI interface. */
    {
-      struct retro_variable sc55_var;
-      struct retro_variable sc55_volume_var;
-      int sc55_enabled = 0;
-      int sc55_volume = 100;
-      sc55_var.key = "px68k_sc55_emulation";
-      sc55_var.value = NULL;
-      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &sc55_var) && sc55_var.value &&
-            !strcmp(sc55_var.value, "enabled"))
-         sc55_enabled = 1;
-      sc55_volume_var.key = "px68k_sc55_volume";
-      sc55_volume_var.value = NULL;
-      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &sc55_volume_var) && sc55_volume_var.value)
-         sc55_volume = atoi(sc55_volume_var.value);
-      px68k_sc55_set_volume(sc55_volume);
-      px68k_sc55_configure(sc55_enabled, retro_system_directory, retro_content_directory);
-      if (sc55_enabled && px68k_sc55_enabled())
+      struct retro_variable emulation_var;
+      struct retro_variable volume_var;
+      int emulation = PX68K_MIDIEMU_DISABLED;
+      int volume = 100;
+      emulation_var.key = "px68k_midi_emulation";
+      emulation_var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &emulation_var) && emulation_var.value)
+      {
+         if (!strcmp(emulation_var.value, "sc55")) emulation = PX68K_MIDIEMU_SC55;
+         else if (!strcmp(emulation_var.value, "mt32")) emulation = PX68K_MIDIEMU_MT32;
+         else if (!strcmp(emulation_var.value, "cm32l")) emulation = PX68K_MIDIEMU_CM32L;
+      }
+      volume_var.key = "px68k_midiemu_volume";
+      volume_var.value = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &volume_var) && volume_var.value)
+         volume = atoi(volume_var.value);
+      midi_emulation_selected = emulation;
+      px68k_midiemu_set_volume(volume);
+      px68k_midiemu_configure(emulation, retro_system_directory, retro_content_directory);
+      if (emulation != PX68K_MIDIEMU_DISABLED && px68k_midiemu_enabled())
          Config.MIDI_SW = 1;
    }
 
@@ -1879,6 +1904,14 @@ static void update_variables(int running)
       else if (strcmp(var.value, "100Mhz (OC)") == 0)
          Config.clockmhz = 100;
    }
+
+   var.key = "px68k_bg_wait";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      BG_SpriteDefer = (strcmp(var.value, "disabled") != 0);
+   else
+      BG_SpriteDefer = 1;
 
    var.key = "px68k_ramsize";
    var.value = NULL;
@@ -2301,13 +2334,6 @@ static int SavestateContext(void)
    return RETRO_SAVESTATE_CONTEXT_NORMAL;
 }
 
-static bool UsingFastSavestates(void)
-{
-   int flags = SavestateContext();
-   return ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE) ||
-         ((flags == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY)));
-}
-
 /* Sized in a dry run: no allocation and no copying. The result is the size
  * of a normal (labelled, full-RAM) state, which is an upper bound for a fast
  * state, so one buffer size serves every context. */
@@ -2330,14 +2356,29 @@ bool retro_serialize(void *data, size_t size)
 {
    StateMem st;
    bool fast, ret;
+   int context;
 
    if (!data || size > 0xffffffffU)
       return false;
 
-   fast = UsingFastSavestates();
+   context = SavestateContext();
+   fast = (context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE ||
+         context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY);
+   /* Only same-instance run-ahead restores this core's worker. A second
+    * instance has its own worker and must not pause the primary instance. */
+   if (context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE)
+   {
+      midi_runahead_active = true;
+      px68k_midiemu_runahead_begin();
+   }
    PX68KSS_InitWrite(&st, data, (uint32_t)size, fast);
 
    ret = PX68KSS_SaveSM(&st, 0, 0, NULL, NULL, NULL) != 0;
+   if (!ret && context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE)
+   {
+      px68k_midiemu_runahead_end();
+      midi_runahead_active = false;
+   }
 
    /* Keep saved files deterministic. Fast states are never stored, so
     * skip clearing what can be megabytes of unused tail. */
@@ -2351,6 +2392,7 @@ bool retro_unserialize(const void *data, size_t size)
 {
    StateMem st;
    bool fast;
+   int context = RETRO_SAVESTATE_CONTEXT_NORMAL;
 
    if (!data || size > 0xffffffffU)
       return false;
@@ -2359,14 +2401,40 @@ bool retro_unserialize(const void *data, size_t size)
     * a state loaded for real. That is more reliable than the frontend's
     * context flag at the moment of the call. */
    fast = PX68KSS_IsFastState(data, size);
+   if (fast)
+      context = SavestateContext();
 
    if (!fast)
+   {
+      px68k_midiemu_state_load_begin();
       midi_output_panic();
+   }
 
    PX68KSS_InitRead(&st, data, (uint32_t)size);
 
    if (!PX68KSS_LoadSM(&st, 0, 0))
+   {
+      if (fast && context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE)
+      {
+         px68k_midiemu_runahead_end();
+         midi_runahead_active = false;
+      }
       return false;
+   }
+
+   if (fast)
+   {
+      if (context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE)
+      {
+         px68k_midiemu_runahead_end();
+         midi_runahead_active = false;
+      }
+      else if (context == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY)
+      {
+         midi_runahead_secondary = true;
+         px68k_midiemu_runahead_suppress();
+      }
+   }
 
    /* A real load: the MIDI destination still holds whatever it was last told,
     * so put it back to what the state was using. */
@@ -2560,6 +2628,9 @@ void retro_init(void)
    const char *save_dir        = NULL;
    const char *browse_dir      = NULL;
 
+   px68k_midiemu_runahead_reset();
+   midi_runahead_active = false;
+   midi_runahead_secondary = false;
    retro_system_conf[0] = 0;
    retro_browse_conf[0] = 0;
 
@@ -2567,6 +2638,7 @@ void retro_init(void)
       log_cb = log.log;
    else
       log_cb = NULL;
+   px68k_midiemu_set_log_callback(log_cb);
 
    /* if defined, use the system directory */
    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
@@ -2658,7 +2730,7 @@ void retro_deinit(void)
    CDROM_Cleanup();
 #endif
    MIDI_Cleanup();
-   px68k_sc55_shutdown();
+   px68k_midiemu_shutdown();
    WinX68k_Cleanup();
    WinDraw_Cleanup();
 
@@ -3008,6 +3080,7 @@ static void WinX68k_Exec(void)
             VLINE = ((vline - CRTC_VSTART) * CRTC_VStep) / 2;
          else
             VLINE = (uint32_t)-1;
+         BG_SpriteDeferTick();	/* show queued sprite RAM writes when due */
          if ((!(MFP[MFP_AER] & 0x40)) && (vline == CRTC_IntLine))
             MFP_Int(1);
          if (MFP[MFP_AER] & 0x10)
@@ -3107,6 +3180,8 @@ static void WinX68k_Exec(void)
          hsync     = 1;
       }
    } while (vline < VLINE_TOTAL);
+
+   BG_SpriteDeferFlush();	/* never carry queued sprite writes into the next frame */
 
    if (CRTC_Mode & 2)
    {
@@ -3295,7 +3370,7 @@ void retro_run(void)
    {
       raudio_callback(soundbuf, NULL, soundbuf_size << 2);
 
-      px68k_sc55_mix(soundbuf, (size_t)soundbuf_size);
+      px68k_midiemu_mix(soundbuf, (size_t)soundbuf_size);
    }
 
    if (libretro_supports_midi_output && midi_cb.output_enabled())

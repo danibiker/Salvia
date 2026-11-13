@@ -323,6 +323,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "10Mhz"
    },
    {
+      "px68k_bg_wait",
+      "BG/Sprite RAM Wait States",
+      NULL,
+      "Emulate the slow CPU access to the sprite RAM without changing the CPU speed. Sprite table changes made in the middle of the screen (raster sprite multiplexing) are shown a few lines later, as one block, like on real hardware. Fixes sprites that are cut off in Puyo Puyo.",
+      NULL,
+      "system",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL,       NULL },
+      },
+      "enabled"
+   },
+   {
       "px68k_ramsize",
       "RAM Size (Restart)",
       NULL,
@@ -1008,24 +1022,26 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "shift"
    },
    {
-      "px68k_sc55_emulation",
-      "Roland SC-55 Emulation",
+      "px68k_midi_emulation",
+      "Internal MIDI Synthesizer",
       NULL,
-      "Use the internal Roland SC-55 synthesizer instead of RetroArch MIDI output. Requires compatible SC-55 ROM files in the System Directory or PrBoom-compatible subfolders.",
+      "Select the internal MIDI synthesizer instead of RetroArch MIDI output. SC-55 uses Nuked-SC55 ROMs; MT-32 and CM-32L use compatible Munt ROMs in the System Directory or recognized subfolders.",
       NULL,
       "audio",
       {
          { "disabled", NULL },
-         { "enabled",  NULL },
+         { "sc55",     "Roland SC-55" },
+         { "mt32",     "Roland MT-32" },
+         { "cm32l",    "Roland CM-32L" },
          { NULL,       NULL },
       },
       "disabled"
    },
    {
-      "px68k_sc55_volume",
-      "SC-55 Emulation Volume",
+      "px68k_midiemu_volume",
+      "MIDI Emulation Volume",
       NULL,
-      "Adjust the volume of the internal Roland SC-55 synthesizer relative to the PX68K audio. 100% is the default level.",
+      "Adjust the volume of the active internal MIDI synthesizer relative to PX68K audio. 100% is the default level.",
       NULL,
       "audio",
       {
@@ -1092,7 +1108,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "px68k_midi_state_restore",
       "MIDI Restore On State Load",
       NULL,
-      "When a state is loaded, the MIDI synthesizer still holds whatever it was last sent. Choose what to restore so the music sounds as it did when the state was saved. 'Synth Setup' re-sends the sound standard (LA/GM/GS/XG), SysEx parameters and each channel's bank, program, volume, pan, effects and pitch bend. 'Setup And Output' also switches back to the internal SC-55 or external MIDI output that was in use at the time, when available. Has no effect on Run-Ahead.",
+      "When a state is loaded, the MIDI synthesizer still holds whatever it was last sent. Choose what to restore so the music sounds as it did when the state was saved. 'Synth Setup' re-sends the sound standard (LA/GM/GS/XG), SysEx parameters and each channel's bank, program, volume, pan, effects and pitch bend. 'Setup And Output' also switches back to the selected internal synthesizer or external MIDI output that was in use at the time, when available. Has no effect on Run-Ahead.",
       NULL,
       "audio",
       {
