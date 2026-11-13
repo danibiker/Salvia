@@ -18,11 +18,8 @@
 	 * (release) y las lecturas posteriores no se adelantan a el (acquire). */
 	#define SC55_BARRIER() __lwsync()
 	#define SC55_WIN32_THREADS 1
-	/* Hilo hardware de la 360 para la unidad*/
-	// El hilo 2 lo usa dosbox para obtener la maxima velocidad, y no tenemos otro tan rapido.
-	// Por tanto solo lo usamos en el caso de x68000. Para el resto de casos nos conformamos con el 4
-	//const int SALVIA_SC55_XBOX_HWTHREAD = (std::strcmp(EMU_LIB_NAME, "px68k") == 0) ? 2 : 4;
-	const int SALVIA_SC55_XBOX_HWTHREAD = 2;
+	/* Hilo hardware de la 360 para la unidad: rawMidiSynthXboxHwThread()
+	 * (el 2; ver rawmidisynth.h) */
 
 #elif defined(_WIN32)
 	#ifndef WIN32_LEAN_AND_MEAN
@@ -38,8 +35,6 @@
 
 
 
-#define SC55_STR2(x) #x
-#define SC55_STR(x) SC55_STR2(x)
 
 static inline size_t loadAcquire(const volatile size_t& v) { size_t x = v; SC55_BARRIER(); return x; }
 static inline void   storeRelease(volatile size_t& v, size_t x) { SC55_BARRIER(); v = x; }
@@ -61,7 +56,7 @@ static void* threadStart(Sc55Synth* s)
 	HANDLE h = CreateThread(NULL, 256 * 1024, Sc55SynthThread::proc, s, CREATE_SUSPENDED, NULL);
 	if (!h) return NULL;
 #ifdef _XBOX
-	XSetThreadProcessor(h, SALVIA_SC55_XBOX_HWTHREAD);
+	XSetThreadProcessor(h, rawMidiSynthXboxHwThread());
 #endif
 	SetThreadPriority(h, THREAD_PRIORITY_ABOVE_NORMAL);
 	ResumeThread(h);
@@ -240,15 +235,13 @@ bool Sc55Synth::open(const std::string& romDir, int outRate)
 		return false;
 	}
 
-	/* Fuera de la llamada: LOG_INFO es una macro y un #ifdef entre sus
-	 * argumentos no es valido (MSVC lo rechaza). */
 #ifdef _XBOX
-	const char* threadInfo = " en el hilo hardware " SC55_STR(SALVIA_SC55_XBOX_HWTHREAD);
+	LOG_INFO("MIDI SC-55: %s cargado de %s (%u Hz nativos -> %d Hz), hilo propio en el hilo hardware %d",
+		mk2 ? "SC-55mkII" : "SC-55", romDir.c_str(), m_nativeRate, (int)m_outRate, rawMidiSynthXboxHwThread());
 #else
-	const char* threadInfo = "";
+	LOG_INFO("MIDI SC-55: %s cargado de %s (%u Hz nativos -> %d Hz), hilo propio",
+		mk2 ? "SC-55mkII" : "SC-55", romDir.c_str(), m_nativeRate, (int)m_outRate);
 #endif
-	LOG_INFO("MIDI SC-55: %s cargado de %s (%u Hz nativos -> %d Hz), hilo propio%s",
-		mk2 ? "SC-55mkII" : "SC-55", romDir.c_str(), m_nativeRate, (int)m_outRate, threadInfo);
 	return true;
 }
 

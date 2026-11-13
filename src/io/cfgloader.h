@@ -46,6 +46,11 @@ public:
 	 * guardados en la configuracion. */
 	int sc55ListIndex;
 	std::string sc55RomDir;
+	/* Lo mismo para el Roland MT-32 y el CM-32L (Munt), detras del SC-55. */
+	int mt32ListIndex;
+	std::string mt32RomDir;
+	int cm32lListIndex;
+	std::string cm32lRomDir;
 
 	std::string saveCoreParams();
 	void loadCoreParams();

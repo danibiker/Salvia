@@ -212,6 +212,15 @@
     <ClCompile Include="src\db\sqlite3.c">
       <Filter>Source Files\db</Filter>
     </ClCompile>
+    <ClCompile Include="src\audio\mt32_frontend.cpp">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio\mt32_frontend2.cpp">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio\mt32synth.cpp">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">

@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <string>
 
+#include "rawmidisynth.h"
+
 /* Roland SC-55 para el sintetizador MIDI del frontend (Nuked-SC55: ejecuta el
  * firmware real de la unidad, H8 + sub-MCU + chip PCM).  Adaptado de
  * libretro/px68k/sc55_libretro.c.
@@ -34,7 +36,7 @@
 
 struct sc55;
 
-class Sc55Synth {
+class Sc55Synth : public RawMidiSynth {
 public:
 	Sc55Synth();
 	~Sc55Synth();

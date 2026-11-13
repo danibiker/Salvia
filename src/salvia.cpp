@@ -2235,6 +2235,10 @@ void applyMidiSoundfont(bool loadNow) {
 	    idx > 0 && (std::size_t)idx < cfg->soundfontFiles.size()) {
 		if (idx == cfg->sc55ListIndex)
 			path = std::string(MIDISYNTH_SC55_PREFIX) + cfg->sc55RomDir;   /* Roland SC-55 */
+		else if (idx == cfg->mt32ListIndex)
+			path = std::string(MIDISYNTH_MT32_PREFIX) + cfg->mt32RomDir;   /* Roland MT-32 */
+		else if (idx == cfg->cm32lListIndex)
+			path = std::string(MIDISYNTH_CM32L_PREFIX) + cfg->cm32lRomDir; /* Roland CM-32L */
 		else
 			path = cfg->configMain[cfg::libretrosystem].valueStr +
 			       Constant::getFileSep() + cfg->soundfontFiles[idx];

@@ -22,8 +22,8 @@ static const int video_bpp = 16;
 /* Final layout:
  *   core 0  Xbox 360 Dashboard                 ┐
  *   core 1  (Salvia & retro_run) | dynarec PSX ┘ same physical core
- *   core 2  PSX GPU helper thread | Roland SC-55 midi ┐
- *   core 3  idle                                      ┘ same physical core
+ *   core 2  PSX GPU helper thread | Roland SC-55 / MT-32 midi ┐
+ *   core 3  idle                                              ┘ same physical core
  *   core 4  IO & HTTP & SDL Sound thread & Xaudio2 & SDL_SYS_CreateThread ┐
  *   core 5  Xaudio2 & SDL_SYS_CreateThread                                ┘ same physical core
  */

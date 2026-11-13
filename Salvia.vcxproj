@@ -8033,6 +8033,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="libs\libretro-common\formats\mp3\rmp3.c" />
+    <ClCompile Include="src\audio\mt32synth.cpp" />
+    <ClCompile Include="src\audio\mt32_frontend.cpp" />
+    <ClCompile Include="src\audio\mt32_frontend2.cpp" />
     <ClCompile Include="src\cheats\cheatmanager.cpp" />
     <ClCompile Include="src\cheats\rdbreader.cpp" />
     <ClCompile Include="src\const\constant.cpp" />

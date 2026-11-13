@@ -8,6 +8,7 @@
 #include <io/fileio.h>
 #include <video/shaderpreset.h>
 #include <audio/sc55synth.h>
+#include <audio/mt32synth.h>
 
 #include <libretro/libretro.h>
 
@@ -28,6 +29,8 @@ const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 CfgLoader::CfgLoader(){
 	sc55ListIndex = -1;
+	mt32ListIndex = -1;
+	cm32lListIndex = -1;
 	emuCfgPos = 0;
 	idxRegion = 0;
 	idxIdioma = 0;
@@ -1081,6 +1084,22 @@ void CfgLoader::findAllSoundfonts(){
 	if (Sc55Synth::findRomSet(configMain[cfg::libretrosystem].valueStr, sc55RomDir, mk2)){
 		sc55ListIndex = (int)soundfontFiles.size();
 		soundfontFiles.push_back(mk2 ? "Roland SC-55mkII" : "Roland SC-55");
+	}
+
+	/* Roland MT-32 y CM-32L (Munt), igual: su par de ROMs (control + PCM) en
+	 * 'system' o en sus subcarpetas (ver Mt32Synth::findRomSet), detras del
+	 * SC-55. */
+	mt32ListIndex = -1;
+	mt32RomDir.clear();
+	if (Mt32Synth::findRomSet(configMain[cfg::libretrosystem].valueStr, Mt32Synth::MODEL_MT32, mt32RomDir)){
+		mt32ListIndex = (int)soundfontFiles.size();
+		soundfontFiles.push_back("Roland MT-32");
+	}
+	cm32lListIndex = -1;
+	cm32lRomDir.clear();
+	if (Mt32Synth::findRomSet(configMain[cfg::libretrosystem].valueStr, Mt32Synth::MODEL_CM32L, cm32lRomDir)){
+		cm32lListIndex = (int)soundfontFiles.size();
+		soundfontFiles.push_back("Roland CM-32L");
 	}
 }
 

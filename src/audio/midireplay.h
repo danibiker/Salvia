@@ -12,8 +12,8 @@
  * Si el sintetizador se cierra y se vuelve a abrir a media partida (apagar y
  * encender el sintetizador MIDI desde el menu), la instancia nueva arranca con
  * su estado por defecto y la cancion sigue sonando con los instrumentos
- * equivocados.  Lo usa MidiSynth con el Roland SC-55, que recibe el stream
- * crudo; con TinySoundFont ya se reaplica ChannelState.
+ * equivocados.  Lo usa MidiSynth con el Roland SC-55 y el MT-32 / CM-32L,
+ * que reciben el stream crudo; con TinySoundFont ya se reaplica ChannelState.
  *
  * Que se guarda:
  *   - los SysEx desde el ultimo reset (GM/GS/XG/MT-32), incluido el reset;

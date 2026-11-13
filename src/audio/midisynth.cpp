@@ -40,6 +40,7 @@
 #include "midisynth.h"
 #include "mt32map.h"
 #include "sc55synth.h"
+#include "mt32synth.h"
 
 /* Tope de voces simultaneas.  Se renderiza en el hilo de emulacion, asi que cada
  * voz sale del presupuesto de frame del core; en la 360 ademas cada muestra
@@ -50,6 +51,15 @@
 	#define MIDI_MAX_VOICES 96
 #endif
 
+/* Si path empieza por prefix, deja el resto en rest. */
+static bool stripPrefix(const std::string& path, const char* prefix, std::string& rest)
+{
+	const size_t n = strlen(prefix);
+	if (path.compare(0, n, prefix) != 0) return false;
+	rest = path.substr(n);
+	return true;
+}
+
 /* Cuantos bytes de datos lleva un mensaje de canal. */
 static inline uint8_t midiDataLen(uint8_t status)
 {
@@ -59,7 +69,7 @@ static inline uint8_t midiDataLen(uint8_t status)
 }
 
 MidiSynth::MidiSynth()
-	: m_tsf(0), m_sc55(0), m_sampleRate(44100), m_volumePct(100), m_hasDrumBank(false), m_sawData(false),
+	: m_tsf(0), m_raw(0), m_rawName(""), m_sampleRate(44100), m_volumePct(100), m_hasDrumBank(false), m_sawData(false),
 	  m_haveState(false), m_moduleOption(MODULE_AUTO), m_mt32(false),
 	  m_dbgBytes(0), m_dbgNotes(0)
 {
@@ -91,17 +101,30 @@ bool MidiSynth::open(const std::string& sf2Path, int coreSampleRate)
 
 	if (sf2Path.empty()) return false;
 
-	/* Roland SC-55 en vez de SoundFont */
-	if (sf2Path.compare(0, sizeof(MIDISYNTH_SC55_PREFIX) - 1, MIDISYNTH_SC55_PREFIX) == 0) {
-		Sc55Synth* sc55 = new Sc55Synth();
-		const int rate = (coreSampleRate > 0) ? coreSampleRate : 44100;
-		if (!sc55->open(sf2Path.substr(sizeof(MIDISYNTH_SC55_PREFIX) - 1), rate)) {
-			delete sc55;
-			return false;
-		}
-		m_sc55       = sc55;
+	/* Roland SC-55, MT-32 o CM-32L en vez de SoundFont */
+	const int rawRate = (coreSampleRate > 0) ? coreSampleRate : 44100;
+	RawMidiSynth* raw = 0;
+	const char* rawName = 0;
+	std::string romDir;
+	if (stripPrefix(sf2Path, MIDISYNTH_SC55_PREFIX, romDir)) {
+		rawName = "SC-55";
+		Sc55Synth* s = new Sc55Synth();
+		if (s->open(romDir, rawRate)) raw = s; else delete s;
+	} else if (stripPrefix(sf2Path, MIDISYNTH_MT32_PREFIX, romDir)) {
+		rawName = "MT-32";
+		Mt32Synth* s = new Mt32Synth();
+		if (s->open(romDir, Mt32Synth::MODEL_MT32, rawRate)) raw = s; else delete s;
+	} else if (stripPrefix(sf2Path, MIDISYNTH_CM32L_PREFIX, romDir)) {
+		rawName = "CM-32L";
+		Mt32Synth* s = new Mt32Synth();
+		if (s->open(romDir, Mt32Synth::MODEL_CM32L, rawRate)) raw = s; else delete s;
+	}
+	if (rawName) {
+		if (!raw) return false;
+		m_raw        = raw;
+		m_rawName    = rawName;
 		m_path       = sf2Path;
-		m_sampleRate = rate;
+		m_sampleRate = rawRate;
 		m_sawData    = false;
 		resetFraming();
 		setVolumePercent(m_volumePct);
@@ -109,13 +132,13 @@ bool MidiSynth::open(const std::string& sf2Path, int coreSampleRate)
 		/* Reabierto a media partida: la cancion ya mando sus resets, bancos,
 		 * programas y controladores y no los va a repetir.  Se le reenvian a la
 		 * unidad nueva; esperan en su cola hasta que termine de arrancar. */
-		if (!m_sc55Song.empty()) {
+		if (!m_rawSong.empty()) {
 			std::vector<uint8_t> replay;
-			m_sc55Song.build(replay);
+			m_rawSong.build(replay);
 			for (size_t i = 0; i < replay.size(); i++)
-				m_sc55->writeByte(replay[i]);
+				m_raw->writeByte(replay[i]);
 			m_sawData = true;   /* que render() la haga avanzar ya */
-			LOG_INFO("MIDI SC-55: restaurado el estado de la cancion en curso (%u bytes)", (unsigned)replay.size());
+			LOG_INFO("MIDI %s: restaurado el estado de la cancion en curso (%u bytes)", m_rawName, (unsigned)replay.size());
 		}
 		return true;
 	}
@@ -213,9 +236,9 @@ void MidiSynth::close()
 		tsf_close(m_tsf);
 		m_tsf = 0;
 	}
-	if (m_sc55) {
-		delete m_sc55;   /* para y espera al hilo de la unidad */
-		m_sc55 = 0;
+	if (m_raw) {
+		delete m_raw;    /* para y espera al hilo de la unidad */
+		m_raw = 0;
 	}
 	m_path.clear();
 	m_sawData     = false;
@@ -230,7 +253,7 @@ void MidiSynth::setSampleRate(int coreSampleRate)
 {
 	if (coreSampleRate <= 0) return;
 	m_sampleRate = coreSampleRate;
-	if (m_sc55) m_sc55->setOutputRate(coreSampleRate);
+	if (m_raw) m_raw->setOutputRate(coreSampleRate);
 	if (!m_tsf) return;
 	/* Solo reescribe la tasa de salida y la ganancia; las voces vivas se
 	 * reafinan solas en el siguiente bloque. */
@@ -243,7 +266,7 @@ void MidiSynth::setVolumePercent(int pct)
 	if (pct < 0)   pct = 0;
 	if (pct > 100) pct = 100;
 	m_volumePct = pct;
-	if (m_sc55) m_sc55->setVolumePercent(pct);
+	if (m_raw) m_raw->setVolumePercent(pct);
 	if (!m_tsf) return;
 	/* tsf_set_volume espera un FACTOR lineal (1.0 = 100%) y hace 1.0/factor por
 	 * dentro, asi que el cero hay que atajarlo antes de que divida. */
@@ -277,8 +300,8 @@ void MidiSynth::setMt32Active(bool on)
 void MidiSynth::panic()
 {
 	resetFraming();
-	if (m_sc55) {
-		m_sc55->panic();
+	if (m_raw) {
+		m_raw->panic();
 		m_sawData = false;
 		return;
 	}
@@ -296,10 +319,10 @@ void MidiSynth::panic()
 
 void MidiSynth::render(int16_t* interleavedStereo, int frames)
 {
-	if (m_sc55) {
+	if (m_raw) {
 		/* La unidad interpreta el stream MIDI ella misma: aqui solo se suma lo
 		 * que su hilo ya ha generado. */
-		m_sc55->mix(interleavedStereo, frames);
+		m_raw->mix(interleavedStereo, frames);
 		return;
 	}
 	if (!m_tsf || frames <= 0) return;
@@ -340,12 +363,12 @@ void MidiSynth::render(int16_t* interleavedStereo, int frames)
 
 void MidiSynth::writeByte(uint8_t b)
 {
-	if (m_sc55) {
+	if (m_raw) {
 		/* Bytes crudos: el firmware de la unidad hace su propia trama (running
-		 * status, SysEx GS, tiempo real...). */
+		 * status, SysEx GS / MT-32, tiempo real...). */
 		m_sawData = true;
-		m_sc55Song.feed(b);
-		m_sc55->writeByte(b);
+		m_rawSong.feed(b);
+		m_raw->writeByte(b);
 		return;
 	}
 	if (!m_tsf) return;

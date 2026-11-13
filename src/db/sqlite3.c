@@ -24,9 +24,6 @@
 */
 
 #include <math.h>
-#ifndef _HUGE
-double _HUGE = 1.7976931348623158e+308; // Valor de HUGE_VAL para VS2010
-#endif
 
 #ifndef SQLITE_AMALGAMATION
 #define SQLITE_CORE 1
