@@ -47,6 +47,7 @@ struct PadProfile {
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
+	hotkeyEnablerHidePress = true;
 	this->w = 0;
     this->h = 0;
     gestorCursor = new CursorGestor();
@@ -941,7 +942,10 @@ bool Joystick::pollKeys(int gameStatus){
 
 					if (sdlModifier == btn) {
 						//Detectamos pulsacion del habilitador de hotkeys
-						if (isDown){
+						if (!hotkeyEnablerHidePress){
+							hotkeySendToCore[p] = isDown ? 1 : 0;
+							LOG_DEBUG("Hotkey enabler pressed");
+						} else if (isDown){
 							//Marcamos el habilitador como pulsado
 							hotkeyEnabler[p] = 1;
 						} else if (hotkeyKeyPressed[p] == 1){
@@ -949,16 +953,19 @@ bool Joystick::pollKeys(int gameStatus){
 							//el habilitador de hotkeys estaba pulsado
 							LOG_DEBUG("Hotkey detectada");
 							hotkeyKeyPressed[p] = 0;
-						} else {
+							hotkeyEnabler[p] = 0;
+						} else if (hotkeyEnablerHidePress){
 							//En este caso marcamos que el boton asignado al habilitador de hotkeys deberia
 							//procesarse por el core normalmente
 							LOG_DEBUG("Hotkey enabler soltado pero sin hotkey pulsada. Deberia procesarse como pulsado");
 							hotkeySendToCore[p] = 1;
+							hotkeyEnabler[p] = 0;
 						}
 					} else if (hotkeyEnabler[p] == 1){
 						//Si hemos pulsado algun otro boton y se habia detectado la pulsacion del habilitador de hotkeys
 						LOG_DEBUG("Pulsacion de hotkey detectada");
 						hotkeyKeyPressed[p] = 1;
+						hotkeyEnabler[p] = 0;
 					}
                 }
                 break;

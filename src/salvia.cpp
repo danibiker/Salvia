@@ -2006,7 +2006,8 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 					// Disparo rapido: suprime el bit durante medio ciclo
 					if (inputs->rapidFire[port][i] && !inputs->turboPhaseOn) continue;
 					mask |= (int16_t)(1 << i);
-				} else if (inputs->mapperCore.getSdlBtn(port, i) == sdlModifier && gameMenu->joystick->hotkeySendToCore[port] == 1){
+				} else if (inputs->mapperCore.getSdlBtn(port, i) == sdlModifier && (
+					gameMenu->joystick->hotkeySendToCore[port] == 1 || (!gameMenu->joystick->hotkeyEnablerHidePress && inputs->getCoreAny(port, i))) ){
 					//Hemos detectado que el habilitador de hotkeys se ha soltado y no se habia pulsado 
 					//ningun boton con hotkey asignada, gracias a hotkeySendToCore. Asi que enviamos la pulsacion al core
 					//LOG_DEBUG("Hotkey enabler should be processed in the core");
@@ -2024,8 +2025,9 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 				}
 				//Si el boton es el modificador, solo lo enviamos al core si previamente se habia soltado
 				//y no se habia pulsado ninguna hotkey, segun el valor de hotkeySendToCore
-				return ( (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier && gameMenu->joystick->hotkeySendToCore[port] == 1) ||
-						inputs->getCoreAny(port, id)) ? 1 : 0;
+				return (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier && (
+					gameMenu->joystick->hotkeySendToCore[port] == 1 
+					|| (!gameMenu->joystick->hotkeyEnablerHidePress && inputs->getCoreAny(port, id))) ) ? 1 : 0;
 			}
 			return 0;
 		}

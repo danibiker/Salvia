@@ -109,6 +109,9 @@
       <Lib>
         <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       </Lib>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">

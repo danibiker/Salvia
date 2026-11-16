@@ -1934,6 +1934,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 void GestorMenus::poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick){
 	TipoKey type = KEY_JOY_BTN;
 	t_joy_state *input = &joystick->inputs;
+	menuHotkeys->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.hidehotkeypress"), &joystick->hotkeyEnablerHidePress));	
 
 	for (int i=0; i < HK_MAX; i++){
 		if (input->mapperHotkeys.getSdlHat(0, i) > -1){

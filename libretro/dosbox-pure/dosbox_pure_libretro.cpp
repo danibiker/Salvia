@@ -44,10 +44,6 @@
 
 #include <math.h>
 
-#if !defined(_HUGE)
-extern "C" double _HUGE = 1.7976931348623158e+308; // Valor de HUGE_VAL para VS2010
-#endif
-
 // RETROARCH AUDIO/VIDEO
 #if defined(GEKKO) || defined(MIYOO) // From RetroArch/config.def.h
 #define DBP_DEFAULT_SAMPLERATE 32000.0
