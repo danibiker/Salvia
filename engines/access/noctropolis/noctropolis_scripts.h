@@ -1,0 +1,96 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ACCESS_NOCTROPOLIS_NOCTROPOLIS_SCRIPTS_H
+#define ACCESS_NOCTROPOLIS_NOCTROPOLIS_SCRIPTS_H
+
+#include "access/scripts.h"
+
+namespace Access {
+
+namespace Noctropolis {
+
+class NoctropolisEngine;
+
+class NoctropolisScripts : public Scripts {
+public:
+	NoctropolisScripts(NoctropolisEngine *vm);
+
+	bool executeSpecial(int commandIndex, int param1, int param2) override;
+
+	void searchForSequence() override;
+
+protected:
+	virtual void setOpcodes() override;
+
+	void cmdJumpUse_v3();
+	void cmdJumpTalk_v3();
+	void cmdJumpGoto_v3();
+	void cmdSetVideo_v3();
+	void cmdDispAbout_v3();
+	void cmdFadeOut_v3();
+	void cmdEndObject_v3();
+	void cmdCharSpeak_v3();
+
+	void cmdDoTravel_Noct();
+	void cmdDigitalPlay();
+	void cmdFillSound();
+	void cmdPlayVid1();
+	void cmdCharWait();
+	void cmdUndoText();
+	void cmdResetAnim();
+	void cmdWalkTo();
+	void cmdWalkCheck();
+
+	void cmdSoundEnd();
+	void cmdFadeWhite();
+	void cmdGotoFrame();
+	void cmdPlayerScale();
+	void cmdRestoreBlock();
+	void cmdCopyScnBuf();
+	void cmdStilWalkTo();
+	void cmdStilWalkCheck();
+	void cmdStilOff();
+	void cmdStilOn();
+	void cmdReturnExit();
+	void cmdSetCoords();
+	void cmdSetStilCoords();
+	void cmdSetPlayerDir();
+	void cmdSetStilDir();
+	void cmdStilScale();
+	void cmdLockInterface();
+	void cmdUnlockInterface();
+	void cmdPlayerSpeak();
+	void cmdPlayerChoice();
+
+private:
+	void skipCommand(byte cmd);
+
+	Common::Point _askBase;
+	bool _keepAskPosition;
+
+};
+
+} // end namespace Noctropolis
+
+} // end namespace Access
+
+#endif // ACCESS_NOCTROPOLIS_NOCTROPOLIS_SCRIPTS_H

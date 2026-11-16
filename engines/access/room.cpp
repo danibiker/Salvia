@@ -1,0 +1,1240 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/scummsys.h"
+#include "common/memstream.h"
+#include "access/access.h"
+#include "access/resources.h"
+#include "access/room.h"
+#include "access/amazon/amazon_resources.h"
+#include "access/martian/martian_resources.h"
+#include "access/noctropolis/noctropolis_game.h"
+#include "access/noctropolis/noctropolis_player.h"
+
+namespace Access {
+
+Room::Room(AccessEngine *vm) : Manager(vm) {
+	_function = FN_NONE;
+	_roomFlag = 0;
+	_playField = nullptr;
+	_playFieldWidth = _playFieldHeight = 0;
+	_matrixSize = 0;
+	_tile = nullptr;
+	_conFlag = false;
+	_selectCommand = -1;
+	_palIntensity = 0;
+
+	for (int i = 0; i < 10; i++) {
+		_rMouse[i][0] = vm->_res->getRMouse(i, 0);
+		_rMouse[i][1] = vm->_res->getRMouse(i, 1);
+	}
+}
+
+Room::~Room() {
+	delete[] _playField;
+	delete[] _tile;
+}
+
+void Room::loadRoom(int roomNumber) {
+	loadRoomData(_vm->_res->ROOMTBL[roomNumber]._data.data());
+}
+
+void Room::freePlayField() {
+	delete[] _playField;
+	_playField = nullptr;
+}
+
+void Room::freeTileData() {
+	delete[] _tile;
+	_tile = nullptr;
+}
+
+void Room::clearCamera() {
+	_vm->_player->_scrollFlag = true;
+
+	_vm->_screen->_orgX1 = 48;
+	_vm->_screen->_orgY1 = 24;
+	_vm->_screen->_orgX2 = 274;
+	_vm->_screen->_orgY2 = 152;
+	_vm->_screen->_lColor = 0;
+	_vm->_screen->drawRect();
+
+	_vm->_events->_vbCount = 4;
+	while (!_vm->shouldQuit() && _vm->_events->_vbCount > 0)
+		_vm->_events->pollEventsAndWait();
+}
+
+void Room::takePicture() {
+	// aka specialFuncRoomNumber47
+	_vm->_events->pollEvents();
+	if (!_vm->_events->_leftButton) {
+		// WORKAROUND: The original doesn't reset player move direction here
+		// because it handles mouse/keyboard differently, but we need to reset
+		// after mouse-up, otherwise the next click anywhere not on a button
+		// will repeat the previous move.
+		_vm->_player->_move = NONE;
+		return;
+	}
+
+	Common::Array<Common::Rect> pictureCoords;
+	for (int i = 0; Martian::PICTURE_RANGE[i][0] != -1; i += 2) {
+		// PICTURE_RANGE is min/max X, min/max Y
+		pictureCoords.push_back(Common::Rect(Martian::PICTURE_RANGE[i][0], Martian::PICTURE_RANGE[i + 1][0],
+									Martian::PICTURE_RANGE[i][1], Martian::PICTURE_RANGE[i + 1][1]));
+	}
+
+	int result = _vm->_events->checkMouseBox1(pictureCoords);
+
+	if (result == 4) {
+		// Take picture button
+		_vm->_events->debounceLeft();
+		if (_vm->_inventory->_inv[44]._value != ITEM_IN_INVENTORY) {
+			Common::String msg = "YOU HAVE NO MORE FILM.";
+			_vm->_scripts->doCmdPrint_v1(msg);
+			return;
+		}
+
+		if ((_vm->_scrollCol < 35) || (_vm->_scrollRow >= 20)) {
+			Common::String msg = "THAT ISN'T INTERESTING ENOUGH TO WASTE FILM ON.";
+			_vm->_scripts->doCmdPrint_v1(msg);
+			return;
+		}
+
+		if (_vm->_flags[26] != 2) {
+			Common::String msg = "ALTHOUGH IT WOULD MAKE A NICE PICTURE, YOU MAY FIND SOMETHING MORE INTERESTING TO USE YOUR FILM ON.";
+			_vm->_scripts->doCmdPrint_v1(msg);
+			return;
+		}
+
+		Common::String msg = "THAT PHOTO MAY COME IN HANDY SOME DAY.";
+		_vm->_scripts->doCmdPrint_v1(msg);
+		_vm->_flags[8] = 1;
+		_vm->_pictureTaken++;
+		if (_vm->_pictureTaken == 16)
+			_vm->_inventory->_inv[44]._value = ITEM_USED;
+
+		_vm->_events->debounceLeft();
+		_vm->_sound->playSound(0);
+		clearCamera();
+		return;
+	} else if (result == 5) {
+		// Exit button
+		if (_vm->_flags[26] != 2) {
+			_vm->_video->closeVideo();
+			_vm->_video->_videoEnd = true;
+		}
+		_vm->_player->_roomNumber = 7;
+		_vm->_room->_function = FN_CLEAR1;
+		return;
+	} else if (result >= 0)
+		_vm->_player->_move = (Direction)(result + 1);
+
+	_vm->_player->_scrollFlag = false;
+	if (_vm->_player->_move == UP)
+		_vm->_player->scrollDown(2);
+	else if (_vm->_player->_move == DOWN)
+		_vm->_player->scrollUp(2);
+	else if (_vm->_player->_move == LEFT)
+		_vm->_player->scrollRight(2);
+	else if (_vm->_player->_move == RIGHT)
+		_vm->_player->scrollLeft(2);
+}
+
+void Room::doRoom() {
+	// In noctropolis the main loop here is called NoctRoomEngine::roomMainLoop()
+	bool reloadFlag = false;
+
+	// Noctropolis doesn't have an icon bar at the bottom, so never set arrow cursor
+	int mouseCursorArrowYThreshold = (_vm->gameIs(kGameMartianMemorandum)) ? 184 :
+		((_vm->gameIs(kGameAmazon)) ? 177 : 1000);
+
+	while (!_vm->shouldQuit()) {
+		if (!reloadFlag) {
+			_vm->_images.clear();
+			_vm->_newRects.clear();
+			_vm->_oldRects.clear();
+			_vm->_animation->clearTimers();
+			reloadRoom();
+		}
+
+		reloadFlag = false;
+		_vm->_startup = 8;
+		_function = FN_NONE;
+		_vm->_screen->_fadeIn = false;
+
+		while (!_vm->shouldQuit()) {
+			// NoctRoomEngine::ticker in Noctropolis
+			_vm->_images.clear();
+
+			// Poll for events - this can move the frame count forward thus
+			// trigger fade-in
+			_vm->_canSaveLoad = true;
+			_vm->_events->pollEventsAndWait();
+			_vm->_canSaveLoad = false;
+
+			if (_vm->_screen->_fadeIn) {
+				_vm->_events->showCursor();
+				_vm->_screen->fadeIn();
+				_vm->_screen->_fadeIn = false;
+			}
+
+			// FIXME: cont flag usage..
+			/*if (_vm->_scripts->_continuenceFlag) {
+				if (_vm->_scripts->_continuenceType == 3)
+					cmdExitContinuance();
+				else if (_vm->_scripts->_continuenceType == 1)
+					roomLoopContinuance();
+				else if (_vm->_scripts->_continuenceType != 2)
+					error("Room state error: unhandled script continuance type");
+				_vm->_scripts->_continuenceFlag = false;
+			} else*/
+			{
+				if ((_vm->gameIs(kGameMartianMemorandum)) && (_vm->_player->_roomNumber == 47)) {
+					takePicture();
+				} else {
+					_vm->_player->walk();
+					if (_vm->gameIs(kGameNoctropolis))
+						((Noctropolis::NoctropolisEngine *)_vm)->stilWalk();
+					_vm->_midi->midiRepeat();
+					_vm->_player->checkScroll();
+				}
+
+				_vm->_canSaveLoad = true;
+				doCommands();
+				_vm->_canSaveLoad = false;
+				if (_vm->shouldQuitOrRestart())
+					return;
+
+				// The code after this point is:
+				// DOROOMFLASHBACK jump point in Amazon
+				// NoctRoomEngine::afterDoCommandsTick in Noctropolis
+
+				if (_vm->gameIs(kGameNoctropolis)) {
+					// TODO: Need to check the
+					if (_vm->_flags[200] && !_vm->_timers[0x12]._flag) {
+						warning("TODO: Work out when to call DeadMeat1");
+					}
+				}
+
+				if (_function == FN_CLEAR1) {
+					if (_vm->gameIs(kGameNoctropolis))
+						_vm->_screen->fadeOut();
+					clearRoom();
+					break;
+				} else if (_function == FN_CLEAR2) {
+					clearRoom();
+					if (_vm->gameIs(kGameNoctropolis))
+						((Noctropolis::NoctropolisEngine *)_vm)->doTravel();
+					return;
+				} else if (_function == FN_RELOAD) {
+					reloadRoom1();
+					// WORKAROUND: This doesn't seem to restore the palette
+					// correctly in MM abduction scene (special 0)
+					if (_vm->gameIs(kGameMartianMemorandum))
+						_vm->_screen->setPalette();
+					reloadFlag = true;
+					break;
+				} else if (_function == FN_BREAK) {
+					break;
+				}
+
+
+				_vm->copyBF1BF2();
+				_vm->_newRects.clear();
+				_function = FN_NONE;
+				roomLoop();
+			}
+
+			// Back to NoctRoomEngine::roomMainLoop in Noctropolis..
+			//if (_vm->_scripts->_continuenceFlag)
+			//	continue;
+
+			_vm->_scripts->_continuenceType = 0;
+
+			if (_vm->_player->_scrollFlag) {
+				// TODO: Refactor a bit - the first 8 lines here are identical
+				// in both branches, but for now maintain original logic for
+				// ease of RE comparison
+
+				if (_function == FN_CLEAR1) {
+					clearRoom();
+					break;
+				} else {
+					_vm->plotList();
+					_vm->copyRects();
+
+					if (_vm->_events->_mousePos.y < mouseCursorArrowYThreshold)
+						_vm->_events->setCursor(_vm->_events->_normalMouse);
+					else
+						_vm->_events->setCursor(CURSOR_ARROW);
+
+					_vm->copyBF2Vid();
+				}
+			} else {
+				if (_vm->shouldQuitOrRestart())
+					return;
+
+				if (_function == FN_CLEAR1) {
+					clearRoom();
+					break;
+				} else {
+					_vm->plotList();
+
+					if (_vm->_events->_mousePos.y < mouseCursorArrowYThreshold)
+						_vm->_events->setCursor(_vm->_events->_normalMouse);
+					else
+						_vm->_events->setCursor(CURSOR_ARROW);
+
+					_vm->copyBlocks();
+				}
+			}
+
+			_vm->drawOverlays();
+		}
+	}
+}
+
+void Room::roomInit() {
+	_vm->_animation->clearTimers();
+	_vm->_scripts->_continuenceFlag = false;
+	_vm->_scripts->_continuenceType = 0;
+	_vm->_scripts->_sequence = INIT_ROOM_SCRIPT;
+	_vm->_scripts->searchForSequence();
+	_vm->_scripts->executeScript();
+}
+
+void Room::clearRoom() {
+	if (_vm->_midi->isMusicLoaded()) {
+		_vm->_midi->stopSong();
+		_vm->_midi->freeMusic();
+	}
+
+	_vm->_sound->freeSounds();
+	_vm->_animation->clearTimers();
+
+	_vm->_animation->freeAnimationData();
+	_vm->_scripts->freeScriptData();
+	_vm->freeCells();
+	freePlayField();
+	freeTileData();
+	_vm->_player->freeSprites();
+	_vm->_images.clear();
+}
+
+void Room::loadRoomData(const byte *roomData) {
+	// LoadRoom() in original games
+	RoomInfo roomInfo(roomData, _vm->getGameID(), _vm->isCD(), _vm->isDemo());
+
+	_roomFlag = roomInfo._roomFlag;
+	_palIntensity = roomInfo._palIntensity;
+
+	if (_vm->gameIs(kGameNoctropolis) && _roomFlag & kRoomFlagStiletto) {
+		// Load _vm->_screen->_stilPal
+		Resource *stilPal = _vm->_files->loadFile(0xfd, _palIntensity + 6);
+		const byte *stilPalData = stilPal->data();
+		assert(stilPal->_size >= 480 + 99);
+		memcpy(_vm->_screen->_stilPal, stilPalData + 480, 99);
+		delete stilPal;
+
+		Player *stil = ((Noctropolis::NoctropolisEngine *)_vm)->_stil;
+		((Noctropolis::NoctropolisPlayer *)stil)->loadAnimation(0xfd, 0);
+
+		for (int subFileNum = 1; subFileNum < 6; subFileNum++)
+			_vm->_objectsTable[0x6d + subFileNum] = new SpriteResource(_vm, 0xfd, subFileNum);
+	}
+
+	_vm->_establishFlag = false;
+	if (roomInfo._estIndex != -1) {
+		_vm->_establishFlag = true;
+		if (!_vm->_establishTable[roomInfo._estIndex]) {
+			_vm->_establishTable[roomInfo._estIndex] = true;
+			_vm->establish(0, roomInfo._estIndex);
+		}
+	}
+
+	// Original games call LoadPlayer1 here
+
+	_vm->_midi->freeMusic();
+	if (roomInfo._musicFile._fileNum != -1) {
+		_vm->_midi->loadMusic(roomInfo._musicFile);
+		_vm->_midi->midiPlay();
+		_vm->_midi->setLoop(true);
+	}
+
+	_vm->_scaleH1 = roomInfo._scaleH1;
+	_vm->_scaleH2 = roomInfo._scaleH2;
+	_vm->_scaleN1 = roomInfo._scaleN1;
+	_vm->_scaleT1 = ((_vm->_scaleH1 - _vm->_scaleH2) << 8) / _vm->_scaleN1;
+
+	if (roomInfo._playFieldFile._fileNum != -1) {
+		loadPlayField(roomInfo._playFieldFile);
+		setupRoom();
+
+		_vm->_scaleMaxY = _playFieldHeight << 4;
+	}
+
+	// Load cells
+	_vm->loadCells(roomInfo._cells);
+
+	// Load script data
+	_vm->_scripts->freeScriptData();
+	if (roomInfo._scriptFile._fileNum != -1) {
+		Resource *newScript = _vm->_files->loadFile(roomInfo._scriptFile);
+		_vm->_scripts->setScript(newScript);
+	}
+
+	// Load animation data
+	_vm->_animation->freeAnimationData();
+	if (roomInfo._animFile._fileNum != -1) {
+		_vm->_animation->loadAnimations(roomInfo._animFile._fileNum, roomInfo._animFile._subFile);
+	}
+
+	_vm->_scale = _vm->_scaleI = roomInfo._scaleI;
+	_vm->_screen->setScaleTable(_vm->_scale);
+	_vm->_player->_scrollThreshold = roomInfo._scrollThreshold;
+
+	// Handle loading scene palette data
+	if (roomInfo._paletteFile._fileNum != -1) {
+		_vm->_screen->_startColor = roomInfo._startColor;
+		_vm->_screen->_numColors = roomInfo._numColors;
+		_vm->_screen->loadPalette(roomInfo._paletteFile._fileNum,
+			roomInfo._paletteFile._subFile);
+	}
+
+	// Load extra cells
+	_vm->_extraCells.clear();
+	for (const auto &extraCell : roomInfo._extraCells)
+		_vm->_extraCells.push_back(extraCell);
+
+	// Load sounds for the scene
+	_vm->_sound->loadSounds(roomInfo._sounds);
+}
+
+void Room::roomLoop() {
+	_vm->_scripts->_continuenceType = 1;
+	_vm->_scripts->_continuenceFlag = false;
+	_vm->_scripts->_sequence = ROOM_SCRIPT;
+	_vm->_scripts->searchForSequence();
+	_vm->_scripts->executeScript();
+}
+
+void Room::cmdExitContinuance() {
+	_vm->_scripts->_continuenceType = 3;
+	_vm->_scripts->_continuenceFlag = false;
+	_vm->_scripts->executeScript();
+	if (!_vm->_scripts->_continuenceFlag) {
+		_vm->_boxSelect = false; // -1
+		warning("TODO: Room::cmdExitContinuance: check and clear double click.");
+		/*
+		if (DidDblClick) {
+			if (PrevSelectCommand != 0xff)
+				_SelectCommand = PrevSelectCommand;
+			DidDblClick = false;
+		}
+		*/
+		_vm->_scripts->_continuenceType = 2;
+		_vm->_scripts->_continuenceFlag = true;
+	}
+}
+
+void Room::roomLoopContinuance() {
+	_vm->_scripts->_continuenceType = 1;
+	_vm->_scripts->_continuenceFlag = false;
+	if (!_vm->_scripts->_endFlag)
+		_vm->_scripts->executeScript();
+}
+
+void Room::setupRoom() {
+	Screen &screen = *_vm->_screen;
+	screen.setScaleTable(_vm->_scale);
+	screen.setBufferScan();
+
+	if (_roomFlag != 2 || _vm->gameIs(kGameNoctropolis))
+		screen.setIconPalette();
+
+	if (screen._vWindowWidth == _playFieldWidth) {
+		_vm->_scrollX = 0;
+		_vm->_scrollCol = 0;
+	} else {
+		int xv = _vm->_player->_rawPlayer.x / TILE_WIDTH;
+		_vm->_scrollX = _vm->_player->_rawPlayer.x % TILE_WIDTH;
+		_vm->_scrollCol = MAX(xv - (screen._vWindowWidth / 2), 0);
+
+		int sx = _vm->_scrollCol + screen._vWindowWidth - _playFieldWidth;
+		if (sx >= 0) {
+			_vm->_scrollCol -= sx + 1;
+		}
+	}
+
+	if (screen._vWindowHeight == _playFieldHeight) {
+		_vm->_scrollY = 0;
+		_vm->_scrollRow = 0;
+	} else {
+		_vm->_scrollY = _vm->_player->_rawPlayer.y -
+			(_vm->_player->_rawPlayer.y / TILE_HEIGHT) * TILE_HEIGHT;
+		int yc = MAX((_vm->_player->_rawPlayer.y / TILE_HEIGHT) -
+			(screen._vWindowHeight / 2), 0);
+		_vm->_scrollRow = yc;
+
+		yc = yc + screen._vWindowHeight - _playFieldHeight;
+		if (yc >= 0) {
+			_vm->_scrollRow = _playFieldHeight - screen._vWindowHeight;
+			_vm->_scrollY = 0;
+		}
+	}
+}
+
+void Room::setWallCodes() {
+	_jetFrame.clear();
+	_jetFrame.resize(_plotter._walls.size());
+
+	_vm->_player->_rawXTemp = _vm->_player->_rawPlayer.x;
+	_vm->_player->_rawYTemp = _vm->_player->_rawPlayer.y;
+	codeWalls();
+}
+
+void Room::buildScreen() {
+	int scrollCol = _vm->_scrollCol;
+	int offset = 0;
+
+	// Clear current background buffer
+	_vm->_buffer1.clearBuffer();
+
+	// WORKAROUND: Original's use of '+ 1' would frequently cause memory overruns
+	int w = MIN(_vm->_screen->_vWindowWidth + 1, _playFieldWidth);
+
+	// Loop through drawing each column of tiles forming the background
+	for (int idx = 0; idx < w; offset += TILE_WIDTH, ++idx) {
+		buildColumn(_vm->_scrollCol, offset);
+		++_vm->_scrollCol;
+	}
+
+	_vm->_scrollCol = scrollCol;
+	_vm->copyBF1BF2();
+}
+
+void Room::buildColumn(int playX, int screenX) {
+	if (playX < 0 || playX >= _playFieldWidth)
+		return;
+
+	const uint16 *pSrc = _playField + _vm->_scrollRow *
+		_playFieldWidth + playX;
+
+	// WORKAROUND: Original's use of '+ 1' would frequently cause memory overruns
+	int h = MIN(_vm->_screen->_vWindowHeight + 1, _playFieldHeight - _vm->_scrollRow);
+
+	for (int y = 0; y < h; ++y) {
+		uint16 tileNum = *pSrc;
+		const byte *pTile = _tile + tileNum * TILE_WIDTH * TILE_HEIGHT;
+		byte *pDest = (byte *)_vm->_buffer1.getBasePtr(screenX, y * TILE_HEIGHT);
+
+		for (int tileY = 0; tileY < TILE_HEIGHT; ++tileY) {
+			Common::copy(pTile, pTile + TILE_WIDTH, pDest);
+			pTile += TILE_WIDTH;
+			pDest += _vm->_buffer1.pitch;
+		}
+
+		pSrc += _playFieldWidth;
+	}
+}
+
+void Room::buildRow(int playY, int screenY) {
+	if (playY < 0 || playY >= _playFieldHeight)
+		return;
+	assert(screenY <= (_vm->_screen->h - TILE_HEIGHT));
+
+	const uint16 *pSrc = _playField + playY * _playFieldWidth + _vm->_scrollCol;
+
+	// WORKAROUND: Original's use of '+ 1' would frequently cause memory overruns
+	int w = MIN(_vm->_screen->_vWindowWidth + 1, _playFieldWidth - _vm->_scrollCol);
+
+	for (int x = 0; x < w; ++x) {
+		uint16 tileNum = *pSrc;
+		byte *pTile = _tile + tileNum * TILE_WIDTH * TILE_HEIGHT;
+		byte *pDest = (byte *)_vm->_buffer1.getBasePtr(x * TILE_WIDTH, screenY);
+
+		for (int tileY = 0; tileY < TILE_HEIGHT; ++tileY) {
+			Common::copy(pTile, pTile + TILE_WIDTH, pDest);
+			pTile += TILE_WIDTH;
+			pDest += _vm->_buffer1.pitch;
+		}
+
+		++pSrc;
+	}
+}
+
+struct RoomHeader {
+	byte _tilesWidth;
+	byte _tilesHeight;
+	uint16 _tilesCount;
+	byte _tilesDisplayWidth;
+	byte _tilesDisplayHeight;
+	byte _unused1;
+	int16 _wallCount;
+	int16 _blockCount;
+};
+
+static void loadHeader(RoomHeader &hdr, Common::SeekableReadStream *stream, uint32 gameId) {
+	hdr._tilesWidth = stream->readByte();
+	hdr._tilesHeight = stream->readByte();
+	if (gameId == kGameNoctropolis) {
+		hdr._tilesCount = stream->readUint16LE();
+		hdr._tilesDisplayWidth = stream->readByte();
+		hdr._tilesDisplayHeight = stream->readByte();
+		hdr._unused1 = stream->readByte();
+		hdr._wallCount = stream->readUint16LE();
+		hdr._blockCount = stream->readUint16LE();
+		stream->skip(8);
+	} else {
+		hdr._tilesCount = stream->readByte();
+		hdr._tilesDisplayWidth = stream->readByte();
+		hdr._tilesDisplayHeight = stream->readByte();
+		hdr._unused1 = stream->readByte();
+		hdr._wallCount = stream->readUint16LE();
+		hdr._blockCount = stream->readUint16LE();
+		stream->skip(6);
+	}
+}
+
+void Room::loadPlayField(const FileIdent &file) {
+	Resource *playData = _vm->_files->loadFile(file);
+
+	RoomHeader header;
+	loadHeader(header, playData->_stream, _vm->getGameID());
+	Screen &screen = *_vm->_screen;
+
+	// Copy the new palette
+	screen.loadRawPalette(playData->_stream);
+	// WORKAROUND: Screen 46 in Noctropolis has a color 0 of (0, 0, 63) which
+	// causes the background to be blue?
+	if (_vm->gameIs(kGameNoctropolis) && file._fileNum == 46) {
+		screen.clearColor0();
+	}
+
+	// Copy off the tile data
+	int tileSize = (int)header._tilesCount * TILE_WIDTH * TILE_HEIGHT;
+	_tile = new byte[tileSize];
+	playData->_stream->read(_tile, tileSize);
+
+	// Copy off the playfield data
+	_matrixSize = (int)header._tilesWidth * header._tilesHeight;
+	_playField = new uint16[_matrixSize];
+	if (_vm->gameIs(kGameNoctropolis)) {
+		for (int i = 0; i < _matrixSize; i++) {
+			_playField[i] = playData->_stream->readUint16LE();
+		}
+	} else {
+		for (int i = 0; i < _matrixSize; i++) {
+			_playField[i] = playData->_stream->readByte();
+		}
+	}
+
+	// Load the plotter data
+	int numWalls = header._wallCount;
+	int numBlocks = header._blockCount;
+	_plotter.load(playData->_stream, numWalls, numBlocks);
+
+	_playFieldWidth = header._tilesWidth;
+	_playFieldHeight = header._tilesHeight;
+	screen._vWindowWidth = header._tilesDisplayWidth;
+	screen._vWindowBytesWide = screen._vWindowWidth << 4;
+	screen._bufferBytesWide = screen._vWindowBytesWide + 16;
+	screen._vWindowHeight = header._tilesDisplayHeight;
+	screen._vWindowLinesTall = screen._vWindowHeight << 4;
+
+	_vm->_screen->setBufferScan();
+	delete playData;
+}
+
+/*------------------------------------------------------------------------*/
+
+Plotter::Plotter() {
+	_delta = _blockIn = 0;
+}
+
+void Plotter::load(Common::SeekableReadStream *stream, int wallCount, int blockCount) {
+	// Load the wall count
+	_walls.resize(wallCount);
+
+	for (int i = 0; i < wallCount; ++i)
+		_walls[i].left = stream->readSint16LE();
+	for (int i = 0; i < wallCount; ++i)
+		_walls[i].top = stream->readSint16LE();
+	for (int i = 0; i < wallCount; ++i)
+		_walls[i].right = stream->readSint16LE();
+	for (int i = 0; i < wallCount; ++i)
+		_walls[i].bottom = stream->readSint16LE();
+
+	// Load the block list
+	_blocks.resize(blockCount);
+
+	for (int i = 0; i < blockCount; ++i)
+		_blocks[i].left = stream->readSint16LE();
+	for (int i = 0; i < blockCount; ++i)
+		_blocks[i].top = stream->readSint16LE();
+	for (int i = 0; i < blockCount; ++i)
+		_blocks[i].right = stream->readSint16LE();
+	for (int i = 0; i < blockCount; ++i)
+		_blocks[i].bottom = stream->readSint16LE();
+}
+
+void Room::doCommands() {
+	int commandId = 0;
+	Common::CustomEventType action;
+
+	if (_vm->_startup != -1)
+		return;
+
+	if (_vm->_inventory->_invChangeFlag)
+		_vm->_inventory->refreshInventory();
+
+	if (_vm->_screen->_screenChangeFlag) {
+		_vm->_screen->_screenChangeFlag = false;
+		_vm->_events->_cursorExitFlag = true;
+		executeCommand(7);
+	}
+	else if (_vm->_events->_wheelUp || _vm->_events->_wheelDown) {
+		// Handle scrolling mouse wheel
+		cycleCommand(_vm->_events->_wheelUp ? 1 : -1);
+
+	} else if (_vm->_events->_middleButton) {
+		// Switch back to walking
+		handleCommand(7);
+
+	} else if (_vm->_events->_leftButton) {
+		if (!_vm->gameIs(kGameNoctropolis) && _vm->_events->_mouseRow >= 22) {
+			// Mouse in user interface area
+			for (commandId = 0; commandId < 10; ++commandId) {
+				if (_vm->_events->_mousePos.x >= _rMouse[commandId][0] &&
+					_vm->_events->_mousePos.x < _rMouse[commandId][1])
+					break;
+			}
+			if (commandId < 10)
+				handleCommand(commandId);
+
+		} else {
+			// Mouse click in main game area
+			mainAreaLClick();
+		}
+	} else if (_vm->_events->_rightButton) {
+		mainAreaRClick();
+	} else if (_vm->_events->getAction(action)) {
+		const AccessActionCode *actionCodes = _vm->getActionCodes();
+		for (int i = 0; actionCodes[i]._action != kActionNone; ++i) {
+			if (actionCodes[i]._action == action) {
+				handleCommand(actionCodes[i]._code);
+				break;
+			}
+		}
+	}
+}
+
+void Room::cycleCommand(int incr) {
+	int command = _selectCommand + incr;
+	if (command < -1)
+		command = 6;
+	else if (command == -1)
+		command = 7;
+	else  if (command == 1)
+		command = (incr == 1) ? 2 : 0;
+	else if (command == 4)
+		command = (incr == 1) ? 5 : 3;
+
+	handleCommand(command);
+}
+
+void Room::handleCommand(int commandId) {
+	if (commandId == -2) {
+		// Save-load button event from keymapper or Noctropolis menu.
+		// Only open if allowed at the moment.
+		if (_vm->_canSaveLoad)
+			_vm->openMainMenuDialog();
+	} else if ((commandId == 9) || (_vm->gameIs(kGameNoctropolis) && commandId == 10)) {
+		// Open Options menu (in all games)
+		// NOTE: In Noctropolis we map both "Options" and "Disk" to this.
+		// If we implement original dialogs we can split these cases.
+		//
+		_vm->_events->debounceLeft();
+		_vm->_canSaveLoad = true;
+		_vm->openMainMenuDialog();
+		_vm->_canSaveLoad = false;
+	} else if (commandId == _selectCommand) {
+		_vm->_events->debounceLeft();
+		commandOff();
+	} else {
+		_vm->_events->debounceLeft();
+		executeCommand(commandId);
+	}
+}
+
+void Room::executeCommand(int commandId) {
+	EventsManager &events = *_vm->_events;
+	Screen &screen = *_vm->_screen;
+	_selectCommand = commandId;
+
+	if (_vm->gameIs(kGameMartianMemorandum)) {
+		switch (commandId) {
+		case 4:
+			events.setCursor(CURSOR_ARROW);
+			if (_vm->_inventory->displayInv() == 2) {
+				commandOff();
+				return;
+			}
+			if (_vm->_useItem == 39) {
+				// Use hoverboard
+				if (_vm->_player->_roomNumber == 23)
+					_vm->_flags[174] = 1;
+				commandOff();
+				return;
+			} else if (_vm->_useItem == 6) {
+				// Use comlink
+				_vm->_flags[3] = 2;
+				_vm->_scripts->converse1(24);
+
+				_conFlag = true;
+				while (_conFlag && !_vm->shouldQuitOrRestart()) {
+					_conFlag = false;
+					_vm->_scripts->executeScript();
+				}
+
+				_vm->_boxSelect = true;
+				return;
+			}
+			break;
+		case 7:
+			walkCursor();
+			return;
+		case 8: {
+			events.forceSetCursor(CURSOR_CROSSHAIRS);
+			_vm->_scripts->_sequence = 10000;
+			_vm->_scripts->searchForSequence();
+
+			_conFlag = true;
+			while (_conFlag && !_vm->shouldQuitOrRestart()) {
+				_conFlag = false;
+				_vm->_scripts->executeScript();
+			}
+
+			_vm->_boxSelect = true;
+			return;
+			}
+		default:
+			// No set cursor in MM. Forcing to CROSSHAIRS
+			events.setCursor(CURSOR_CROSSHAIRS);
+			break;
+		}
+	} else if (_vm->gameIs(kGameAmazon)) {
+		switch (commandId) {
+		case 0:
+		case 1:
+			events.forceSetCursor(CURSOR_LOOK);
+			break;
+		case 2:
+			events.forceSetCursor(CURSOR_USE);
+			break;
+		case 3:
+			events.forceSetCursor(CURSOR_TAKE);
+			break;
+		case 4:
+			events.setCursor(CURSOR_ARROW);
+			if (_vm->_inventory->displayInv() == 2) {
+				commandOff();
+				return;
+			}
+			break;
+		case 5:
+			events.forceSetCursor(CURSOR_CLIMB);
+			break;
+		case 6:
+			events.forceSetCursor(CURSOR_TALK);
+			break;
+		case 7:
+			walkCursor();
+			return;
+		case 8:
+			events.forceSetCursor(CURSOR_HELP);
+			break;
+		default:
+			break;
+		}
+	} else {
+		assert(_vm->gameIs(kGameNoctropolis));
+		// See the code in NoctRoomEngine::afterDoCommandsTick / CheckCommand
+		if (commandId == Noctropolis::kNoctCmdInventory) {
+			while (!_vm->shouldQuitOrRestart()) {
+				Noctropolis::NoctropolisEngine *vm = (Noctropolis::NoctropolisEngine *)_vm;
+				vm->_inventory->displayInv();
+				//debug("getVariable(99) = %d", getVariable(99));
+				if (_vm->_useItem == 62) {
+					vm->doSpecialComic();
+				} else if (_vm->_useItem != -1) {
+					vm->_invScript->_sequence = _vm->_inventory->useItem();
+					vm->_invScript->searchForSequence();
+					vm->_invScript->executeScript();
+				} else
+					break;
+			}
+			_conFlag = false;
+			_vm->_scripts->_continuenceType = 0;
+		} else {
+			if (_vm->_exitBox)
+				_vm->_events->setCursor(CURSOR_NOCT_EXIT);
+			else if (_selectCommand >= 0 && _selectCommand <= 6)
+				_vm->_events->setCursor((CursorType)(_selectCommand + 2));
+			else
+				_vm->_events->setCursor(CURSOR_ARROW);
+
+			_vm->_scripts->_continuenceFlag = false;
+			_vm->_scripts->_continuenceType = 0;
+
+			if (_selectCommand == Noctropolis::kNoctCmdTravel) {
+				_selectCommand = Noctropolis::kNoctCmdLook;
+				_vm->_scripts->_sequence = 5000;
+				_vm->_scripts->searchForSequence();
+				_vm->_scripts->_endFlag = false;
+				_vm->_scripts->_returnCode = 0;
+
+				while (!_vm->_scripts->_continuenceFlag && !_vm->_scripts->_endFlag && !_vm->shouldQuitOrRestart()) {
+					_vm->_scripts->executeScript();
+				}
+			} else if (_selectCommand == Noctropolis::kNoctCmdUse) {
+				_selectCommand = Noctropolis::kNoctCmdLook;
+				_vm->_scripts->_sequence = 10000;
+				_vm->_scripts->searchForSequence();
+				_vm->_scripts->_endFlag = false;
+				_vm->_scripts->_returnCode = 0;
+
+				while (!_vm->_scripts->_continuenceFlag && !_vm->_scripts->_endFlag && !_vm->shouldQuitOrRestart()) {
+					_vm->_scripts->executeScript();
+				}
+			} else {
+				_conFlag = false;
+				_vm->_scripts->_continuenceType = 0;
+			}
+		}
+	}
+	screen.saveScreen();
+	screen.setDisplayScan();
+
+	const SpriteResource *icons = _vm->getIcons();
+
+	// Draw the button as selected (except in Noctropolis)
+	if (_vm->gameIs(kGameMartianMemorandum)) {
+		screen.plotImage(icons, 0, Common::Point(5, 184));
+		screen.plotImage(icons, 1, Common::Point(155, 184));
+	} else if (_vm->gameIs(kGameAmazon)) {
+		screen.plotImage(icons, 0, Common::Point(0, 177));
+		screen.plotImage(icons, 1, Common::Point(143, 177));
+	}
+	if (!_vm->gameIs(kGameNoctropolis))
+		screen.plotImage(icons, _selectCommand + 2,
+			Common::Point(_rMouse[_selectCommand][0], (_vm->gameIs(kGameMartianMemorandum)) ? 184 : 176));
+
+	_vm->_screen->restoreScreen();
+	_vm->_boxSelect = true;
+}
+
+void Room::walkCursor() {
+	EventsManager &events = *_vm->_events;
+
+	events.forceSetCursor(CURSOR_CROSSHAIRS);
+	_vm->_scripts->_sequence = 5000;
+	_vm->_scripts->searchForSequence();
+	roomMenu();
+	_selectCommand = -1;
+
+	_conFlag = true;
+	while (_conFlag && !_vm->shouldQuitOrRestart()) {
+		_conFlag = false;
+		_vm->_scripts->executeScript();
+	}
+
+	_vm->_boxSelect = true;
+}
+
+void Room::commandOff() {
+	_selectCommand = -1;
+	_vm->_events->forceSetCursor(CURSOR_CROSSHAIRS);
+	if (!_vm->gameIs(kGameNoctropolis))
+		roomMenu();
+}
+
+int Room::checkBoxes() {
+	return checkBoxes1(_vm->_player->_rawPlayer);
+}
+
+int Room::checkBoxes1(const Common::Point &pt) {
+	return checkBoxes2(pt, 0, _plotter._blocks.size());
+}
+
+int Room::checkBoxes2(const Common::Point &pt, int start, int count) {
+	for (; count > 0 && start < (int)_plotter._blocks.size(); --count, ++start) {
+		if (_plotter._blocks[start].contains(pt)) {
+			_plotter._blockIn = start;
+			return start;
+		}
+	}
+
+	return -1;
+}
+
+void Room::checkBoxes3() {
+	Common::Point pt = _vm->_events->calcRawMouse();
+
+	for (uint start = 0; start < _plotter._blocks.size(); ++start) {
+		if (_plotter._blocks[start].contains(pt)) {
+			_plotter._blockIn = start;
+			if (!(validateBox(start) & 0x80)) {
+				_vm->_events->debounceLeft();
+				_vm->_boxSelect = start;
+
+				_conFlag = true;
+				while (_conFlag && !_vm->shouldQuitOrRestart()) {
+					_conFlag = false;
+					_vm->_scripts->executeScript();
+				}
+
+				_vm->_boxSelect = true;
+				return;
+			}
+		}
+	}
+}
+
+int Room::validateBox(int boxId) {
+	_vm->_scripts->_sequence = boxId;
+	_vm->_scripts->searchForSequence();
+	return _vm->_scripts->executeScript();
+}
+
+void Room::swapOrg() {
+	SWAP<int>(_vm->_screen->_orgX1, _vm->_screen->_orgX2);
+	SWAP<int>(_vm->_screen->_orgY1, _vm->_screen->_orgY2);
+}
+
+int Room::calcLR(int yp) {
+	const Screen &screen = *_vm->_screen;
+
+	int yv = (yp - screen._orgY1) * (screen._orgX2 - screen._orgX1);
+	int yd = screen._orgY2 - screen._orgY1;
+
+	int rem = (yv % yd) * 2;
+	yv /= yd;
+	if (rem >= yd || rem < 0)
+		++yv;
+
+	return yv + screen._orgX1;
+}
+
+int Room::calcUD(int xp) {
+	const Screen &screen = *_vm->_screen;
+
+	int xv = (xp - screen._orgX1) * (screen._orgY2 - screen._orgY1);
+	int xd = screen._orgX2 - screen._orgX1;
+
+	int rem = (xv % xd) * 2;
+	xv /= xd;
+	if (rem >= xd || rem < 0)
+		++xv;
+
+	return xv + screen._orgY1;
+}
+
+bool Room::codeWalls() {
+	Screen &screen = *_vm->_screen;
+	Player &player = *_vm->_player;
+
+	if (_plotter._walls.size() == 0)
+		return false;
+
+	for (uint i = 0; i < _plotter._walls.size(); ++i) {
+		Common::Rect &r = _plotter._walls[i];
+		JetFrame &jf = _jetFrame[i];
+
+		jf._wallCode = 0;
+		jf._wallCode1 = 0;
+		screen._orgX1 = r.left;
+		screen._orgY1 = r.top;
+		screen._orgX2 = r.right;
+		screen._orgY2 = r.bottom;
+
+		if (screen._orgY2 != screen._orgY1) {
+			if (screen._orgY2 < screen._orgY1)
+				swapOrg();
+
+			if ((player._rawYTemp >= screen._orgY1) &&
+					(player._rawYTemp <= screen._orgY2)) {
+				jf._wallCode |= (calcLR(player._rawYTemp) - player._rawXTemp) < 0 ? 2 : 1;
+				jf._wallCode1 |= (calcLR(player._rawYTemp) -
+					(player._rawXTemp + player._playerOffset.x)) < 0 ? 2 : 1;
+			}
+		}
+
+		if (screen._orgX2 != screen._orgX1) {
+			if (screen._orgX2 < screen._orgX1)
+				swapOrg();
+
+			if ((player._rawXTemp >= screen._orgX1) &&
+					(player._rawXTemp <= screen._orgX2)) {
+				int y = screen._orgY2;
+				if (y != screen._orgY1)
+					y = calcUD(player._rawXTemp);
+
+				jf._wallCode |= (player._rawYTemp - y) < 0 ? 4 : 8;
+			}
+
+			int x = player._rawXTemp + player._playerOffset.x;
+			if ((x >= screen._orgX1) && (x <= screen._orgX2)) {
+				int y = screen._orgY2;
+				if (screen._orgY2 != screen._orgY1)
+					y = calcUD(player._rawXTemp + player._playerOffset.x);
+
+				jf._wallCode1 |= (player._rawYTemp - y) < 0 ? 4 : 8;
+			}
+		}
+	}
+
+	for (const JetFrame &jf : _jetFrame) {
+		if (checkCode(jf._wallCode, jf._wallCodeOld) ||
+			checkCode(jf._wallCode1, jf._wallCode1Old))
+			return true;
+	}
+
+	// Copy the current wall calculations to the old properties
+	for (JetFrame &jf : _jetFrame) {
+		jf._wallCodeOld = jf._wallCode;
+		jf._wallCode1Old = jf._wallCode1;
+	}
+
+	return false;
+}
+
+bool Room::checkCode(int v1, int v2) {
+	Player &p = *_vm->_player;
+
+	if (!v1 || !v2 || (v1 == v2))
+		return false;
+
+	if (v1 & 1) {
+		if (v2 & 2) {
+			p._collideFlag = true;
+			return true;
+		}
+	} else if (v1 & 2) {
+		if (v2 & 1) {
+			p._collideFlag = true;
+			return true;
+		}
+	} else if (v1 & 4) {
+		if (v2 & 8) {
+			p._collideFlag = true;
+			return true;
+		}
+	} else if (v1 & 8) {
+		if (v2 & 4) {
+			p._collideFlag = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*------------------------------------------------------------------------*/
+
+RoomInfo::RoomInfo(const byte *data, AccessGameType gameType, bool isCD, bool isDemo) {
+	Common::MemoryReadStream stream(data, 2048);
+
+	_roomFlag = stream.readByte();
+
+	_estIndex = -1;
+	_palIntensity = 255;
+	if (gameType == kGameAmazon && isCD)
+		_estIndex = stream.readSint16LE();
+	else if (gameType == kGameNoctropolis)
+		_palIntensity = stream.readByte();
+
+	_musicFile.load(stream);
+	_scaleH1 = stream.readByte();
+	_scaleH2 = stream.readByte();
+	_scaleN1 = stream.readByte();
+	_playFieldFile.load(stream);
+
+	for (byte cell = stream.readByte(); cell != 0xff; cell = stream.readByte()) {
+		CellIdent ci;
+		ci._cell = cell;
+		ci.load(stream);
+
+		_cells.push_back(ci);
+	}
+
+	_scriptFile.load(stream);
+	_animFile.load(stream);
+	_scaleI = stream.readByte();
+	_scrollThreshold = stream.readByte();
+
+	if (gameType != kGameNoctropolis) {
+		_paletteFile.load(stream);
+	}
+
+	if (_paletteFile._fileNum == -1) {
+		_startColor = _numColors = 0;
+	} else {
+		_startColor = stream.readUint16LE();
+		_numColors = stream.readUint16LE();
+	}
+
+	if (gameType != kGameNoctropolis) {
+		for (int16 v = stream.readSint16LE(); v != -1; v = stream.readSint16LE()) {
+			ExtraCell ec;
+			ec._vid._fileNum = v;
+			ec._vid._subFile = stream.readSint16LE();
+
+			_extraCells.push_back(ec);
+		}
+	} else {
+		// Noctropolis has a null-terminated series of filenames
+		while (!stream.eos()) {
+			Common::String fname = stream.readString();
+			if (fname.empty())
+				break;
+			ExtraCell ec;
+			ec._vidFilename = fname;
+			_extraCells.push_back(ec);
+		}
+	}
+
+	for (int16 fileNum = stream.readSint16LE(); fileNum != -1; fileNum = stream.readSint16LE()) {
+		SoundIdent fi;
+		fi._fileNum = fileNum;
+		if (fileNum == 0xff) {
+			fi._fileNum = -1;
+			fi._soundFilename = stream.readString();
+		} else {
+			fi._subFile = stream.readUint16LE();
+		}
+		fi._priority = stream.readUint16LE();
+
+		_sounds.push_back(fi);
+	}
+}
+
+} // End of namespace Access

@@ -1,0 +1,179 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ULTIMA8_GFX_FONTS_FONT_H
+#define ULTIMA8_GFX_FONTS_FONT_H
+
+#include "common/list.h"
+#include "common/rect.h"
+#include "common/str.h"
+#include "ultima/ultima8/misc/encoding.h"
+
+namespace Ultima {
+namespace Ultima8 {
+
+class RenderedText;
+
+struct PositionedText {
+	Common::String _text;
+	Common::Rect32 _dims;
+	Common::String::size_type _cursor;
+};
+
+class Font {
+public:
+	Font();
+	virtual ~Font();
+
+	enum TextAlign {
+		TEXT_LEFT,
+		TEXT_CENTER,
+		TEXT_RIGHT
+	};
+
+	//! get the height of the font
+	virtual int getHeight() = 0;
+
+	//! get the baseline of the font (relative from the top)
+	virtual int getBaseline() = 0;
+
+	//! get the baselineskip of the font (distance between two baselines)
+	virtual int getBaselineSkip() = 0;
+
+	//! get the dimensions of a string (not containing any newlines)
+	//! \param text The string
+	//! \param width Returns the width
+	//! \param height Returns the height
+	virtual void getStringSize(const Common::String &text,
+		int32 &width, int32 &height) = 0;
+
+	//! render a string
+	//! \param text The text
+	//! \param remaining Returns index of the first character not printed
+	//! \param width The width of the target rectangle, or 0 for unlimited
+	//! \param height The height of the target rectangle, or 0 for unlimited
+	//! \param align Alignment of the text (left, right, center)
+	//! \param u8specials If true, interpret the special characters U8 uses
+	//! \param pagebreaks If true (and u8specials too), stop at U8 pagebreaks
+	//! \return the rendered text in a RenderedText object
+	virtual RenderedText *renderText(const Common::String &text,
+	    unsigned int &remaining, int32 width = 0, int32 height = 0,
+		TextAlign align = TEXT_LEFT, bool u8specials = false,
+		bool pagebreaks = false,
+		Common::String::size_type cursor = Common::String::npos) = 0;
+
+	//! get the dimensions of a rendered string
+	//! \param text The text
+	//! \param resultwidth Returns the resulting width
+	//! \param resultheight Returns the resulting height
+	//! \param remaining Returns index of the first character not printed
+	//! \param width The width of the target rectangle, or 0 for unlimited
+	//! \param height The height of the target rectangle, or 0 for unlimited
+	//! \param align Alignment of the text (left, right, center)
+	//! \param u8specials If true, interpret the special characters U8 uses
+	//! \param pagebreaks If true (and u8specials too), stop at U8 pagebreaks
+	virtual void getTextSize(const Common::String &text,
+		int32 &resultwidth, int32 &resultheight, unsigned int &remaining,
+		int32 width = 0, int32 height = 0, TextAlign align = TEXT_LEFT,
+		bool u8specials = false, bool pagebreaks = false);
+
+	void setHighRes(bool hr) {
+		_highRes = hr;
+	}
+	bool isHighRes() const {
+		return _highRes;
+	}
+
+protected:
+	bool _highRes;
+
+	struct Traits {
+		static bool isSpace(Common::String::const_iterator &i, bool u8specials) {
+			char c = *i;
+			return (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+			        (u8specials && (c == '%' || c == '~' || c == '*' || c == '^')));
+		}
+		static bool isTab(Common::String::const_iterator &i, bool u8specials) {
+			char c = *i;
+			return (c == '\t' ||
+			        (u8specials && (c == '\t' || c == '%')));
+		}
+		static bool isBreak(Common::String::const_iterator &i, bool u8specials) {
+			char c = *i;
+			return (c == '\n' ||
+			        (u8specials && (c == '\n' || c == '~' || c == '*')));
+		}
+		static bool isPageBreak(Common::String::const_iterator &i, bool u8specials) {
+			char c = *i;
+			return (u8specials && c == '*');
+		}
+		static bool canBreakAfter(Common::String::const_iterator &i);
+		static void advance(Common::String::const_iterator &i) {
+			++i;
+		}
+		static Common::String::size_type length(const Common::String &t) {
+			return t.size();
+		}
+		static uint32 unicode(Common::String::const_iterator &i) {
+			return encoding[static_cast<uint8>(*i++)];
+		}
+	};
+	struct SJISTraits : public Traits {
+		static bool canBreakAfter(Common::String::const_iterator &i);
+		static void advance(Common::String::const_iterator &i) {
+			// FIXME: this can advance past the end of a malformed string
+			uint8 c = *i;
+			i++;
+			if (c >= 0x80) i++;
+		}
+		static Common::String::size_type length(const Common::String &t) {
+			Common::String::size_type l = 0;
+			Common::String::const_iterator iter = t.begin();
+			while (iter != t.end()) {
+				advance(iter);
+				l++;
+			}
+			return l;
+		}
+		static uint32 unicode(Common::String::const_iterator &i) {
+			uint16 s = static_cast<uint8>(*i);
+			i++;
+			if (s >= 0x80) {
+				uint16 t = static_cast<uint8>(*i++);
+				s |= (t << 8);
+			}
+			return shiftjis_to_unicode(s);
+		}
+	};
+};
+
+template<class T>
+Common::List<PositionedText> typesetText(Font *font,
+	const Common::String &text, unsigned int &remaining,
+	int32 width, int32 height, Font::TextAlign align,
+	bool u8specials, bool pagebreaks,
+	int32 &resultwidth, int32 &resultheight,
+	Common::String::size_type cursor = Common::String::npos);
+
+} // End of namespace Ultima8
+} // End of namespace Ultima
+
+#endif

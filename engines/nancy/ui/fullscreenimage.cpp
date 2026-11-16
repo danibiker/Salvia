@@ -1,0 +1,57 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "engines/nancy/nancy.h"
+#include "engines/nancy/resource.h"
+#include "engines/nancy/graphics.h"
+
+#include "engines/nancy/ui/fullscreenimage.h"
+
+namespace Nancy {
+namespace UI {
+
+void FullScreenImage::init(const Common::Path &imageName) {
+	if (!g_nancy->_resource->loadImage(imageName, _drawSurface)) {
+		return;
+	}
+
+	Common::Rect srcBounds = Common::Rect(0,0, _drawSurface.w, _drawSurface.h);
+	_screenPosition = srcBounds;
+
+	RenderObject::init();
+}
+
+void FullScreenImage::initBlank() {
+	Common::Rect bounds = g_nancy->_graphics->getGameBounds();
+	_drawSurface.create(bounds.width(), bounds.height(), g_nancy->_graphics->getScreenPixelFormat());
+	_drawSurface.clear(_drawSurface.format.ARGBToColor(255, 0, 0, 0));
+	_screenPosition = bounds;
+
+	RenderObject::init();
+}
+
+void FullScreenImage::setBlankColor(uint32 argb) {
+	_drawSurface.clear(argbToColor(_drawSurface.format, argb | 0xFF000000));
+	_needsRedraw = true;
+}
+
+} // End of namespace UI
+} // End of namespace Nancy

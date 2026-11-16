@@ -1,0 +1,153 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NUVIE_CORE_CONVERSE_GUMP_H
+#define NUVIE_CORE_CONVERSE_GUMP_H
+
+#include "ultima/nuvie/misc/call_back.h"
+#include "ultima/nuvie/gui/widgets/gui_widget.h"
+#include "common/str.h"
+
+namespace Ultima {
+namespace Nuvie {
+
+
+class Configuration;
+class Font;
+class MsgScroll;
+class Actor;
+
+class ConverseGump: public MsgScroll {
+	Common::List<MsgText> conv_keywords;
+	Common::List<MsgText> permitted_input_keywords;
+
+	Common::List<MsgText> *keyword_list;
+
+	unsigned char *npc_portrait;
+	unsigned char *avatar_portrait;
+
+	bool found_break_char;
+	bool solid_bg;
+	bool force_solid_bg;
+	uint8 converse_bg_color;
+
+	uint16 cursor_position;
+
+	uint8 portrait_width;
+	uint8 portrait_height;
+	uint8 frame_w;
+	uint8 frame_h;
+	uint16 min_w;
+
+	nuvie_game_t game_type;
+
+public:
+
+	ConverseGump(const Configuration *cfg, Font *f, Screen *s);
+	~ConverseGump() override;
+
+	void set_actor_portrait(Actor *a);
+	unsigned char *create_framed_portrait(Actor *a);
+	bool parse_token(MsgText *token) override;
+	Common::String get_token_string_at_pos(uint16 x, uint16 y) override;
+	void display_string(const Common::String &s, Font *f, bool include_on_map_window) override;
+	void set_talking(bool state, Actor *actor = nullptr) override;
+	void set_font(uint8 font_type) override {}
+//bool get_solid_bg() { return solid_bg; }
+	void set_solid_bg(bool val) {
+		solid_bg = val;
+	}
+
+	void Display(bool full_redraw) override;
+
+	GUI_status KeyDown(const Common::KeyState &key) override;
+	GUI_status MouseUp(int x, int y, Events::MouseButton button) override;
+
+	GUI_status MouseDown(int x, int y, Events::MouseButton button) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseMotion(int x, int y, uint8 state) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseEnter(uint8 state) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseLeave(uint8 state) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseClick(int x, int y, Events::MouseButton button) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseDouble(int x, int y, Events::MouseButton button) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseDelayed(int x, int y, Events::MouseButton button) override {
+		return GUI_YUM;
+	}
+	GUI_status MouseHeld(int x, int y, Events::MouseButton button) override {
+		return GUI_YUM;
+	}
+
+	void set_found_break_char(bool val) {
+		found_break_char = val;
+	}
+
+	bool input_buf_add_char(char c) override;
+	bool input_buf_remove_char() override;
+
+	bool is_converse_finished() override {
+		return (is_holding_buffer_empty() && msg_buf.size() == 1 && msg_buf.back()->total_length == 0);
+	}
+
+	void drawCursor(uint16 x, uint16 y) override;
+
+protected:
+	Common::String strip_whitespace_after_break(Common::String s);
+	void add_keyword(Common::String keyword);
+
+	void set_permitted_input(const char *allowed) override;
+	void clear_permitted_input() override;
+
+	bool cursor_at_input_section() const {
+		return (keyword_list && cursor_position == keyword_list->size());
+	}
+	void cursor_reset() {
+		cursor_position = 0;
+	}
+	void cursor_move_to_input() {
+		cursor_position = keyword_list ? keyword_list->size() : 0;
+	}
+
+	void input_add_string(Common::String token_str);
+
+	Common::String get_token_at_cursor();
+
+	bool is_permanent_keyword(const Common::String &keyword);
+	void parse_fm_towns_token(MsgText *token);
+
+private:
+	unsigned char *get_portrait_data(Actor *a);
+};
+
+} // End of namespace Nuvie
+} // End of namespace Ultima
+
+#endif

@@ -1,0 +1,59 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * This is an auto generated dummy file used for sticking strings from
+ * dists/android/res/values/strings.xml into our translation system
+ *
+ */
+ 
+#include "common/translation.h" // For catching the file during POTFILES reviews
+
+static Common::U32String app_name = _("ScummVM");
+static Common::U32String app_name_debug = _("ScummVM (debug)");
+static Common::U32String app_desc = _("Graphic adventure game engine");
+static Common::U32String quit = _("Quit");
+static Common::U32String no_log_file_title = _("Log File Error");
+static Common::U32String no_log_file = _("Unable to read ScummVM log file or create a new one!");
+static Common::U32String no_config_file_title = _("Config File Error");
+static Common::U32String no_config_file = _("Unable to read ScummVM config file or create a new one!");
+static Common::U32String no_save_path_title = _("Save Path Error");
+static Common::U32String no_save_path_configured = _("Unable to create or access default save path!");
+static Common::U32String no_icons_path_title = _("Icons Path Error");
+static Common::U32String no_icons_path_configured = _("Unable to create or access default icons and shaders path!");
+static Common::U32String customkeyboardview_keycode_alt = _("Alt");
+static Common::U32String customkeyboardview_keycode_cancel = _("Cancel");
+static Common::U32String customkeyboardview_keycode_delete = _("Delete");
+static Common::U32String customkeyboardview_keycode_done = _("Done");
+static Common::U32String customkeyboardview_keycode_mode_change = _("Mode change");
+static Common::U32String customkeyboardview_keycode_shift = _("Shift");
+static Common::U32String customkeyboardview_keycode_enter = _("Enter");
+static Common::U32String customkeyboardview_popup_close = _("Close popup");
+static Common::U32String local_net_permission_denied = _("Local network access permission was denied: Web server won\'t be reachable");
+static Common::U32String http_service_description = _("ScummVM Web server");
+static Common::U32String tts_voice_name = _("Default voice");
+static Common::U32String ini_parsing_error = _("Configuration file could not be parsed");
+static Common::U32String shortcut_creator_title = _("Run a game");
+static Common::U32String shortcut_creator_search_game = _("Search a game");
+static Common::U32String shortcut_creator_no_games = _("No games (yet)\nOpen ScummVM and add your games here.");
+static Common::U32String shortcut_creator_game_item_icon = _("Game icon");
+static Common::U32String shortcut_creator_customize_game_name_hint = _("Shortcut label");
+static Common::U32String shortcut_creator_customize_game_icon_description = _("Shortcut icon");

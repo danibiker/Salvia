@@ -1,0 +1,551 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * This file is dual-licensed.
+ * In addition to the GPLv3 license mentioned above, this code is also
+ * licensed under LGPL 2.1. See LICENSES/COPYING.LGPL file for the
+ * full text of the license.
+ *
+ */
+
+#include "common/config-manager.h"
+#include "common/str.h"
+
+#include "gob/gob.h"
+#include "gob/inter.h"
+#include "gob/global.h"
+#include "gob/dataio.h"
+#include "gob/game.h"
+#include "gob/expression.h"
+#include "gob/script.h"
+#include "gob/resources.h"
+#include "gob/hotspots.h"
+#include "gob/draw.h"
+#include "gob/sound/sound.h"
+#include "gob/videoplayer.h"
+#include "gob/save/saveload.h"
+
+namespace Gob {
+
+#define OPCODEVER Inter_v6
+#define OPCODEDRAW(i, x)  _opcodesDraw[i]._OPCODEDRAW(OPCODEVER, x)
+#define OPCODEFUNC(i, x)  _opcodesFunc[i]._OPCODEFUNC(OPCODEVER, x)
+#define OPCODEGOB(i, x)   _opcodesGob[i]._OPCODEGOB(OPCODEVER, x)
+
+Inter_v6::Inter_v6(GobEngine *vm) : Inter_v5(vm) {
+	_gotFirstPalette = false;
+}
+
+void Inter_v6::setupOpcodesDraw() {
+	Inter_v5::setupOpcodesDraw();
+
+	OPCODEDRAW(0x40, o6_totSub);
+	OPCODEDRAW(0x83, o6_playVmdOrMusic);
+}
+
+void Inter_v6::setupOpcodesFunc() {
+	Inter_v5::setupOpcodesFunc();
+
+	OPCODEFUNC(0x03, o6_loadCursor);
+	OPCODEFUNC(0x09, o6_assign);
+	OPCODEFUNC(0x19, o6_removeHotspot);
+	OPCODEFUNC(0x32, o1_copySprite);
+	OPCODEFUNC(0x33, o6_fillRect);
+}
+
+void Inter_v6::setupOpcodesGob() {
+}
+
+Common::String Inter_v6::getFile(const char *path, bool stripPath, bool *isCd) {
+	const char *orig = path;
+
+	if      (!strncmp(path, "@:\\", 3))
+		path += 3;
+	else if (!strncmp(path, "<ME>", 4))
+		path += 4;
+	else if (!strncmp(path, "<CD>", 4)) {
+		path += 4;
+		if (isCd)
+			*isCd = true;
+	} else if (!strncmp(path, "<STK>", 5))
+		path += 5;
+	else if (!strncmp(path, "<ALLCD>", 7)) {
+		path += 7;
+		if (isCd)
+			*isCd = true;
+	}
+
+	if (stripPath) {
+		const char *backslash = strrchr(path, '\\');
+		if (backslash)
+			path = backslash + 1;
+	}
+
+	Common::String newPath = path;
+	// Comma in filenames tells this engine that the file handle may be reused for next read/write operations
+	// E.g. myfile,0 will keep the file handle for "myfile".
+	// If later we request file I/O for "myfile,1" the file handle will be reused.
+	// It seems that we can just ignore this, as the seek position of the handle is reset anyway.
+	uint32 commaPos = newPath.find(',');
+	if (commaPos != Common::String::npos)
+		newPath = newPath.substr(0, commaPos);
+
+	if (orig != newPath)
+		debugC(2, kDebugFileIO, "Inter_Playtoons::getFile(): Evaluating path"
+				"\"%s\" to \"%s\"", orig, path);
+
+	return newPath;
+}
+
+void Inter_v6::o6_totSub() {
+	uint8 length = _vm->_game->_script->readByte();
+	if ((length & 0x7F) > 13)
+		error("Length in o6_totSub is greater than 13 (%d)", length);
+
+	Common::String totFile;
+	if (length & 0x80)
+		totFile = _vm->_game->_script->evalString();
+	else
+		for (uint8 i = 0; i < length; i++)
+			totFile += _vm->_game->_script->readChar();
+
+	uint8 flags = _vm->_game->_script->readByte();
+	if (flags & 0x40) {
+		// The original engine would start an external program here. The only known use at the time of writing is for
+		// starting a game in the Adi4 gamebox collection.
+		// We emulate it by lanching the ScummVM target whose path matches the external program's directory, if any.
+		// This target must have been added in ScummVM beforehand.
+		Common::Path currentPath = ConfMan.getPath("path");
+		Common::Path programPath(getFile(totFile.c_str(), false), '\\');
+		Common::Path programDirFullPath = currentPath / programPath.getParent();
+		programDirFullPath = programDirFullPath.normalize();
+		Common::String target;
+
+		for (auto iter = ConfMan.beginGameDomains(); iter != ConfMan.endGameDomains(); ++iter) {
+			Common::ConfigManager::Domain &dom = iter->_value;
+			Common::Path targetPath = Common::Path::fromConfig(dom.getVal("path"));
+			targetPath = targetPath.normalize();
+
+			if (targetPath.equalsIgnoreCase(programDirFullPath)) {
+				target = iter->_key;
+				break;
+			}
+		}
+
+		if (target.empty()) {
+			warning("o6_totSub(): Could not find any matching ScummVM target for external program \"%s\"", programPath.toString().c_str());
+			return;
+		}
+
+		debugC(1, kDebugGameFlow, "o6_totSub(): Launching ScummVM target \"%s\" to substitute for external program \"%s\"",
+			   target.c_str(),
+			   programPath.toString().c_str());
+
+		ChainedGamesMan.push(target);
+		ChainedGamesMan.push(ConfMan.getActiveDomainName(), 100);
+
+		if (_vm->getGameType() == kGameTypeAdi4) {
+			// Save all current game variables in a fictive save file.
+			// Although it is generally not possible to create a snapshot of an arbitrary engine state in Gob,
+			// just saving the current game variables is sufficient here to be able to restore most the engine
+			// state after restarting it through ChainedGamesMan. One simplifying factor is that this opcode
+			// is called from the top-level script.
+			_vm->_saveLoad->save("RETURN_FROM_GAMEBOX", 0, 0, 0);
+		}
+
+		// Force a return to the launcher. This will start the first chained game.
+		Common::EventManager *eventMan = g_system->getEventManager();
+		Common::Event event;
+		event.type = Common::EVENT_RETURN_TO_LAUNCHER;
+		eventMan->pushEvent(event);
+	} else {
+		_vm->_game->totSub(flags, totFile);
+	}
+}
+
+void Inter_v6::o6_playVmdOrMusic() {
+	Common::String file = _vm->_game->_script->evalString();
+
+	VideoPlayer::Properties props;
+
+	props.x          = _vm->_game->_script->readValExpr();
+	props.y          = _vm->_game->_script->readValExpr();
+	props.startFrame = _vm->_game->_script->readValExpr();
+	props.lastFrame  = _vm->_game->_script->readValExpr();
+	props.breakKey   = _vm->_game->_script->readValExpr();
+	props.flags      = _vm->_game->_script->readValExpr();
+	props.palStart   = _vm->_game->_script->readValExpr();
+	props.palEnd     = _vm->_game->_script->readValExpr();
+	props.palCmd     = 1 << (props.flags & 0x3F);
+	props.forceSeek  = true;
+
+	debugC(1, kDebugVideo, "Playing video \"%s\" @ %d+%d, frames %d - %d, "
+			"paletteCmd %d (%d - %d), flags %X", file.c_str(),
+			props.x, props.y, props.startFrame, props.lastFrame,
+			props.palCmd, props.palStart, props.palEnd, props.flags);
+
+	// WORKAROUND: When taking the music sheet from Dr. Dramish's car,
+	//             the video that lets the sheet vanish is missing. We'll
+	//             play the one where the sheet is already gone instead.
+	if (_vm->isCurrentTot("avt005.tot") && file.equalsIgnoreCase("MXRAMPART"))
+		file = "PLCOFDR2";
+
+	if (file == "RIEN") { // (French word for "nothing")
+		_vm->_vidPlayer->closeAll();
+		return;
+	}
+
+	bool close = false;
+	if (props.lastFrame == -1) {
+		close = true;
+	} else if (props.lastFrame == -5) {
+//		warning("Urban/Playtoons Stub: Stop without delay");
+		_vm->_sound->bgStop();
+		return;
+	} else if (props.lastFrame == -6) {
+//		warning("Urban/Playtoons Stub: Video/Music command -6 (cache video)");
+		return;
+	} else if (props.lastFrame == -7) {
+//		warning("Urban/Playtoons Stub: Video/Music command -7 (flush cache)");
+		return;
+	} else if ((props.lastFrame == -8) || (props.lastFrame == -9)) {
+		if (!file.contains('.'))
+			file += ".WA8";
+
+		probe16bitMusic(file);
+
+		if (props.lastFrame == -9)
+			debugC(0, kDebugVideo, "Urban/Playtoons Stub: Delayed music stop?");
+
+		_vm->_sound->bgStop();
+		_vm->_sound->bgPlay(file.c_str(), SOUND_WAV);
+		return;
+	} else if (props.lastFrame <= -10) {
+		_vm->_vidPlayer->closeVideo();
+
+		if (!(props.flags & VideoPlayer::kFlagNoVideo))
+			props.loop = true;
+
+	} else if (props.lastFrame < 0) {
+		warning("Urban/Playtoons Stub: Unknown Video/Music command: %d, %s", props.lastFrame, file.c_str());
+		return;
+	}
+
+	if (props.startFrame == -2) {
+		props.startFrame = 0;
+		props.lastFrame  = -1;
+		props.noBlock    = true;
+	}
+
+	_vm->_vidPlayer->evaluateFlags(props);
+
+	bool primary = true;
+	if (props.noBlock && (props.flags & VideoPlayer::kFlagNoVideo))
+		primary = false;
+
+	int slot = 0;
+	if (!file.empty() && ((slot = _vm->_vidPlayer->openVideo(primary, file, props)) < 0)) {
+		WRITE_VAR(11, (uint32) -1);
+		return;
+	}
+
+	if (props.hasSound)
+		_vm->_vidPlayer->closeLiveVideos();
+
+	if (props.startFrame >= 0)
+		_vm->_vidPlayer->play(slot, props);
+
+	if (close && !props.noBlock) {
+		if (!props.canceled)
+			_vm->_vidPlayer->waitSoundEnd(slot);
+		_vm->_vidPlayer->closeVideo(slot);
+	}
+
+}
+
+void Inter_v6::o6_loadCursor(OpFuncParams &params) {
+	int16 id = _vm->_game->_script->readInt16();
+
+	if ((id == -1) || (id == -2)) {
+		char file[10];
+
+		if (id == -1) {
+			for (int i = 0; i < 9; i++)
+				file[i] = _vm->_game->_script->readChar();
+		} else
+			strncpy(file, GET_VAR_STR(_vm->_game->_script->readInt16()), 10);
+
+		file[9] = '\0';
+
+		uint16 start = _vm->_game->_script->readUint16();
+		int8 index = _vm->_game->_script->readInt8();
+
+		VideoPlayer::Properties props;
+
+		props.sprite = -1;
+
+		int vmdSlot = _vm->_vidPlayer->openVideo(false, file, props);
+		if (vmdSlot == -1) {
+			warning("Can't open video \"%s\" as cursor", file);
+			return;
+		}
+
+		int16 framesCount = _vm->_vidPlayer->getFrameCount(vmdSlot);
+
+		for (int i = 0; i < framesCount; i++) {
+			props.startFrame   = i;
+			props.lastFrame    = i;
+			props.waitEndFrame = false;
+
+			_vm->_vidPlayer->play(vmdSlot, props);
+			_vm->_vidPlayer->copyFrame(vmdSlot, *_vm->_draw->_cursorSprites,
+					0, 0, _vm->_draw->_cursorWidth, _vm->_draw->_cursorWidth,
+					(start + i) * _vm->_draw->_cursorWidth, 0);
+		}
+
+		_vm->_vidPlayer->closeVideo(vmdSlot);
+
+		_vm->_draw->_cursorAnimLow[index] = start;
+		_vm->_draw->_cursorAnimHigh[index] = framesCount + start - 1;
+		_vm->_draw->_cursorAnimDelays[index] = 10;
+
+		return;
+	}
+
+	int8 index = _vm->_game->_script->readInt8();
+
+	if ((index * _vm->_draw->_cursorWidth) >= _vm->_draw->_cursorSprites->getWidth())
+		return;
+
+	Resource *resource = _vm->_game->_resources->getResource((uint16) id);
+	if (!resource)
+		return;
+
+	_vm->_draw->_cursorSprites->fillRect(index * _vm->_draw->_cursorWidth, 0,
+			index * _vm->_draw->_cursorWidth + _vm->_draw->_cursorWidth - 1,
+			_vm->_draw->_cursorHeight - 1, 0);
+
+	_vm->_video->drawPackedSprite(resource->getData(),
+			resource->getWidth(), resource->getHeight(),
+			index * _vm->_draw->_cursorWidth, 0, 0, *_vm->_draw->_cursorSprites);
+	_vm->_draw->_cursorAnimLow[index] = 0;
+
+	delete resource;
+}
+
+void Inter_v6::o6_assign(OpFuncParams &params) {
+	uint16 size, destType;
+	uint16 dest = _vm->_game->_script->readVarIndex(&size, &destType);
+
+	if (size != 0) {
+		int32 src;
+
+		_vm->_game->_script->push();
+
+		src = _vm->_game->_script->readVarIndex(&size, nullptr);
+
+		memcpy(_vm->_inter->_variables->getAddressOff8(dest),
+				_vm->_inter->_variables->getAddressOff8((uint16) src), size * 4);
+
+		_vm->_game->_script->pop();
+
+		_vm->_game->_script->evalExpr(&src);
+
+		return;
+	}
+
+	byte loopCount;
+	if (_vm->_game->_script->peekByte() == 98) {
+		_vm->_game->_script->skip(1);
+		loopCount = _vm->_game->_script->readByte();
+
+		for (int i = 0; i < loopCount; i++) {
+			uint8 c = _vm->_game->_script->readByte();
+			uint16 n = _vm->_game->_script->readUint16();
+
+			memset(_vm->_inter->_variables->getAddressOff8(dest), c, n);
+
+			dest += n;
+		}
+
+		return;
+
+	} else if (_vm->_game->_script->peekByte() == 99) {
+		_vm->_game->_script->skip(1);
+		loopCount = _vm->_game->_script->readByte();
+	} else
+		loopCount = 1;
+
+	// WORKAROUND for a bug in Adibou 2 scripts for cooking activity: bananas count is not updated correctly.
+	// The banana balance equation should be: "remaining bananas = previous remaining bananas - bananas used for cake"
+	// but scripts do instead "remaining bananas = previous remaining *cherries* - bananas used for cake" :p
+	if (_vm->getGameType() == kGameTypeAdibou2 &&
+		loopCount == 1 &&
+		_vm->_enableAdibou2FreeBananasWorkaround &&
+		_vm->_game->_script->pos() == 18631 && // same offset in all versions
+		(dest == 40956 || dest == 40916) && // bananas in v2.10, v2.11 / v2.12, v2.13
+		_vm->isCurrentTot("cuisine.tot")) {
+		uint16 bananasInCakesVar = (dest == 40956) ? 22820 : 22828;
+		WRITE_VAR_OFFSET(dest, VAR_OFFSET(dest) - VAR_OFFSET(bananasInCakesVar) /* bananas used for cake */);
+		_vm->_game->_script->skipExpr(99);
+		return;
+	}
+
+	// WORKAROUND: Make the "bird table" animation in the hollow tree skippable with right click
+	if (_vm->getGameType() == kGameTypeAdibou2 &&
+		loopCount == 1 &&
+		(dest == 19104 || dest == 19400 || dest == 19404) && // animation "frame" in different versions
+		_vm->_game->_script->pos() > 9036 &&
+		_vm->_game->_script->pos() < 9478 &&
+		_vm->isCurrentTot("atelier.tot") &&
+		VAR(4) == kMouseButtonsRight) {
+		WRITE_VAR_OFFSET(dest, 200);
+		_vm->_game->_script->skipExpr(99);
+		return;
+	}
+
+	for (int i = 0; i < loopCount; i++) {
+		int32 result;
+		int16 srcType = _vm->_game->_script->evalExpr(&result);
+
+		switch (destType) {
+		case TYPE_VAR_INT8:
+		case TYPE_ARRAY_INT8:
+			WRITE_VARO_UINT8(dest + i, _vm->_game->_script->getResultInt());
+			break;
+
+		case TYPE_VAR_INT16:
+		case TYPE_ARRAY_INT16:
+			WRITE_VARO_UINT16(dest + i * 2, _vm->_game->_script->getResultInt());
+			break;
+
+		case TYPE_VAR_INT32:
+		case TYPE_ARRAY_INT32:
+			WRITE_VAR_OFFSET(dest + i * 4, _vm->_game->_script->getResultInt());
+			break;
+
+		case TYPE_VAR_INT32_AS_INT16:
+			WRITE_VARO_UINT16(dest + i * 4, _vm->_game->_script->getResultInt());
+			break;
+
+		case TYPE_VAR_STR:
+		case TYPE_ARRAY_STR:
+			if (srcType == TYPE_IMM_INT16)
+				WRITE_VARO_UINT8(dest + i * _vm->_global->_inter_animDataSize, result);
+			else
+				WRITE_VARO_STR(dest + i * _vm->_global->_inter_animDataSize, _vm->_game->_script->getResultStr());
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	// WORKAROUND for a bug in Adibou2 script of "pleasant/unpleasant" game
+	if (_vm->getGameType() == kGameTypeAdibou2 &&
+		loopCount == 1 &&
+		_vm->_game->_script->pos() == 6739 &&
+		dest == 508 &&
+		VAR_OFFSET(dest) == 0 &&
+		_vm->isCurrentTot("l6ex11.tot")) {
+		WRITE_VAR_OFFSET(dest, 1); // used as a loop index for an array initialized only from index 1, skip value 0
+	}
+}
+
+void Inter_v6::o6_removeHotspot(OpFuncParams &params) {
+	int16 id;
+	uint8 stateType1    = Hotspots::kStateFilledDisabled | Hotspots::kStateType1;
+	uint8 stateType2    = Hotspots::kStateFilledDisabled | Hotspots::kStateType2;
+	uint8 stateDisabled = Hotspots::kStateDisabled;
+
+	id = _vm->_game->_script->readValExpr();
+
+	switch (id + 5) {
+	case 0:
+		_vm->_game->_hotspots->push(1, true);
+		break;
+	case 1:
+		_vm->_game->_hotspots->pop();
+		break;
+	case 2:
+		_vm->_game->_hotspots->push(2, true);
+		break;
+	case 3:
+		_vm->_game->_hotspots->removeState(stateType1);
+		_vm->_game->_hotspots->removeState(stateDisabled);
+		break;
+	case 4:
+		_vm->_game->_hotspots->removeState(stateType2);
+		break;
+	default:
+		_vm->_game->_hotspots->remove((stateType2 << 12) + id);
+		break;
+	}
+}
+
+void Inter_v6::o6_fillRect(OpFuncParams &params) {
+	int16 destSurf;
+
+	_vm->_draw->_destSurface = destSurf = _vm->_game->_script->readInt16();
+
+	_vm->_draw->_destSpriteX = _vm->_game->_script->readValExpr();
+	_vm->_draw->_destSpriteY = _vm->_game->_script->readValExpr();
+	_vm->_draw->_spriteRight = _vm->_game->_script->readValExpr();
+	_vm->_draw->_spriteBottom = _vm->_game->_script->readValExpr();
+
+	uint32 patternColor = _vm->_game->_script->evalInt();
+
+	_vm->_draw->_backColor = patternColor & 0xFFFF;
+	_vm->_draw->_pattern   = patternColor >> 16;
+
+	if (_vm->_draw->_spriteRight < 0) {
+		_vm->_draw->_destSpriteX += _vm->_draw->_spriteRight - 1;
+		_vm->_draw->_spriteRight = -_vm->_draw->_spriteRight + 2;
+	}
+	if (_vm->_draw->_spriteBottom < 0) {
+		_vm->_draw->_destSpriteY += _vm->_draw->_spriteBottom - 1;
+		_vm->_draw->_spriteBottom = -_vm->_draw->_spriteBottom + 2;
+	}
+
+	if (destSurf & 0x80) {
+		// Implemented in Inter_v7::o7_fillRect, consider merging if needed
+		warning("Urban Stub: o6_fillRect(), destSurf & 0x80");
+		return;
+	}
+
+	if (!_vm->_draw->_spritesArray[(destSurf > 100) ? (destSurf - 80) : destSurf])
+		return;
+
+	_vm->_draw->spriteOperation(DRAW_FILLRECT);
+}
+
+void Inter_v6::probe16bitMusic(Common::String &fileName) {
+	if (fileName[fileName.size() - 1] != '8')
+		return;
+
+	fileName.setChar('V', fileName.size() - 1);
+
+	if (_vm->_dataIO->hasFile(fileName))
+		return;
+
+	fileName.setChar('8', fileName.size() - 1);
+}
+
+} // End of namespace Gob

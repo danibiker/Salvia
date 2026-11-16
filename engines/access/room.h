@@ -1,0 +1,231 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef ACCESS_ROOM_H
+#define ACCESS_ROOM_H
+
+#include "common/scummsys.h"
+#include "common/array.h"
+#include "common/rect.h"
+#include "access/data.h"
+#include "access/detection.h"
+
+#define TILE_WIDTH 16
+#define TILE_HEIGHT 16
+
+namespace Access {
+
+class Plotter {
+public:
+	Common::Array<Common::Rect> _walls;
+	Common::Array<Common::Rect> _blocks;
+	int _blockIn;
+	int _delta;
+public:
+	Plotter();
+
+	void load(Common::SeekableReadStream *stream, int wallCount, int blockCount);
+};
+
+class JetFrame {
+public:
+	int _wallCode;
+	int _wallCodeOld;
+	int _wallCode1;
+	int _wallCode1Old;
+
+	JetFrame() {
+		_wallCode = _wallCodeOld = 0;
+		_wallCode1 = _wallCode1Old = 0;
+	}
+};
+
+enum Function { FN_NONE = 0, FN_CLEAR1 = 1, FN_CLEAR2 = 2, FN_RELOAD = 3, FN_BREAK = 4, FN_5 = 5 };
+
+// room flags for Noctropolis
+enum RoomFlag {
+	kRoomFlagStiletto = 2,
+	kRoomFlagTopView = 4,
+	kRoomFlagNoPlayer = 0x80,
+};
+
+
+class Room : public Manager {
+private:
+	Common::Array<JetFrame> _jetFrame;
+	int _matrixSize;
+
+private:
+	void roomLoop();
+
+	void cmdExitContinuance();
+	void roomLoopContinuance();
+
+	void commandOff();
+
+	void swapOrg();
+	int calcLR(int yp);
+	int calcUD(int xp);
+
+	void takePicture();
+
+	/**
+	 * Cycles forwards or backwards through the list of commands
+	 */
+	void cycleCommand(int incr);
+
+	bool checkCode(int v1, int v2);
+
+protected:
+	void loadRoomData(const byte *roomData);
+
+	/**
+	* Free the playfield data
+	*/
+	void freePlayField();
+
+	/**
+	* Free tile data
+	*/
+	void freeTileData();
+
+	int checkBoxes();
+	int checkBoxes2(const Common::Point &pt, int start, int count);
+	void checkBoxes3();
+
+	virtual int validateBox(int boxId);
+
+	/**
+	 * Inner handler for switching to a given command mode
+	 */
+	void executeCommand(int commandId);
+
+	void clearCamera();
+
+	virtual void roomInit();
+
+	virtual void reloadRoom() = 0;
+
+	virtual void reloadRoom1() = 0;
+
+	virtual void setupRoom();
+
+	virtual void doCommands();
+
+	virtual void mainAreaLClick() = 0;
+
+	virtual void mainAreaRClick() {};
+
+	virtual void walkCursor();
+
+public:
+	int _rMouse[10][2];
+	byte _palIntensity;
+	uint16 *_playField;
+	Plotter _plotter;
+	byte *_tile;
+	Function _function;
+	int _roomFlag;
+	int _playFieldWidth;
+	int _playFieldHeight;
+	int _selectCommand;
+	bool _conFlag; // not the same as script->_continuenceFlag which is used in Noctropolis
+
+public:
+
+	Room(AccessEngine *vm);
+
+	virtual ~Room();
+
+	void doRoom();
+
+	void loadRoom(int roomNumber);
+
+	virtual void roomMenu() = 0;
+
+	/**
+	 * Clear all the data used by the room
+	 */
+	virtual void clearRoom();
+
+	/**
+	 * Builds up a game screen
+	 */
+	void buildScreen();
+
+	/**
+	 * Draw a column of a game scene
+	 */
+	void buildColumn(int playX, int screenX);
+
+	/**
+	 * Draw a row of a game scene
+	 */
+	void buildRow(int playY, int screenY);
+
+	virtual void init4Quads() = 0;
+
+	void setWallCodes();
+
+	bool codeWalls();
+
+	/**
+	* Switch to a given command mode
+	*/
+	void handleCommand(int commandId);
+
+	void loadPlayField(const FileIdent &file);
+
+	int checkBoxes1(const Common::Point &pt);
+};
+
+class RoomInfo {
+public:
+	struct SoundIdent : FileIdent {
+		Common::String _soundFilename;
+		int _priority;
+	};
+public:
+	byte _roomFlag;
+	int _estIndex;
+	byte _palIntensity;
+	FileIdent _musicFile;
+	int _scaleH1;
+	int _scaleH2;
+	int _scaleN1;
+	FileIdent _playFieldFile;
+	Common::Array<CellIdent> _cells;
+	FileIdent _scriptFile;
+	FileIdent _animFile;
+	int _scaleI;
+	int _scrollThreshold;
+	FileIdent _paletteFile;
+	int _startColor;
+	int _numColors;
+	Common::Array<ExtraCell> _extraCells;
+	Common::Array<SoundIdent> _sounds;
+public:
+	RoomInfo(const byte *data, AccessGameType gameType, bool isCD, bool isDemo);
+};
+
+} // End of namespace Access
+
+#endif /* ACCESS_ROOM_H */

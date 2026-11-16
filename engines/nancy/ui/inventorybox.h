@@ -1,0 +1,114 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NANCY_UI_INVENTORYBOX_H
+#define NANCY_UI_INVENTORYBOX_H
+
+#include "common/ptr.h"
+
+#include "engines/nancy/time.h"
+#include "engines/nancy/renderobject.h"
+#include "engines/nancy/ui/scrollbar.h"
+
+namespace Nancy {
+
+class NancyEngine;
+struct NancyInput;
+
+namespace State {
+class Scene;
+}
+
+namespace UI {
+
+class InventoryBox : public RenderObject {
+public:
+	struct ItemDescription {
+		Common::String name; // 0x00
+		byte keepItem = kInvItemUseThenLose; // 0x14
+		Common::Rect sourceRect; // 0x16
+	};
+
+	InventoryBox();
+
+	void init() override;
+	void updateGraphics() override;
+	void registerGraphics() override;
+	void handleInput(NancyInput &input);
+
+	void onScrollbarMove();
+
+	void addItem(const int16 itemID);
+	void removeItem(const int16 itemID);
+	void onReorder();
+
+	Common::Array<int16> &getOrder() { return _order; }
+
+private:
+	// These are private since they should only be called from Scene
+
+	void setHotspots(const uint pageNr);
+	void drawItemInSlot(const uint itemID, const uint slotID, const bool highlighted = false);
+
+	class Curtains : public RenderObject {
+	public:
+		Curtains();
+		virtual ~Curtains() = default;
+
+		void init() override;
+		void updateGraphics() override;
+
+		void setOpen(bool open) { _areOpen = open; }
+
+		void setAnimationFrame(uint frame);
+
+		uint _numFrames;
+		uint _curFrame;
+		Time _nextFrameTime;
+		bool _areOpen;
+		bool _soundTriggered;
+	};
+
+	struct ItemHotspot {
+		int16 itemID = -1;
+		int itemOrder = -1; // index of the item into the _order array
+		Common::Rect hotspot; // in screen coordinates
+	};
+
+	Graphics::ManagedSurface _iconsSurface;
+	Graphics::ManagedSurface _fullInventorySurface;
+
+	Common::ScopedPtr<Scrollbar> _scrollbar;
+	Curtains _curtains;
+
+	float _scrollbarPos;
+
+	Common::Array<int16> _order;
+	ItemHotspot _itemHotspots[4];
+	int _highlightedHotspot;
+
+	const struct INV *_inventoryData;
+};
+
+} // End of namespace UI
+} // End of namespace Nancy
+
+#endif // NANCY_UI_INVENTORYBOX_H

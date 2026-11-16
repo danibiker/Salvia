@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="app_name">ScummVM</string>
+  <string name="app_name_debug">ScummVM (відладка)</string>
+  <string name="app_desc">Движок графічних квестів</string>
+  <string name="quit">Вихід</string>
+  <string name="no_log_file_title">Помилка файла логу</string>
+  <string name="no_log_file">Не вдалося прочитати лог-файл ScummVM або створити новий!</string>
+  <string name="no_config_file_title">Помилка файла конфігурації</string>
+  <string name="no_config_file">Не вдалося прочитати файл конфігурації ScummVM або створити новий!</string>
+  <string name="no_save_path_title">Помилка шляху зберігання</string>
+  <string name="no_save_path_configured">Не вдалося створити або дістатися до шляху збереження ігор!</string>
+  <string name="no_icons_path_title">Помилка шляху іконок</string>
+  <string name="no_icons_path_configured">Не вдалося створити або дістатися до шляху іконок та шейдерів!</string>
+  <string name="customkeyboardview_keycode_alt">Alt</string>
+  <string name="customkeyboardview_keycode_cancel">Скасувати</string>
+  <string name="customkeyboardview_keycode_delete">Видалити</string>
+  <string name="customkeyboardview_keycode_done">Готове</string>
+  <string name="customkeyboardview_keycode_mode_change">Зміна режиму</string>
+  <string name="customkeyboardview_keycode_shift">Shift</string>
+  <string name="customkeyboardview_keycode_enter">Enter</string>
+  <string name="customkeyboardview_popup_close">Закрити вискакуючий список</string>
+  <string name="http_service_description">Веб-сервер ScummVM</string>
+  <string name="ini_parsing_error">Файл конфігурації має помилку у форматі</string>
+  <string name="shortcut_creator_title">Запустити гру</string>
+  <string name="shortcut_creator_search_game">Шукати гру</string>
+  <string name="shortcut_creator_game_item_icon">Іконки гри</string>
+  <string name="shortcut_creator_customize_game_name_hint">Мітка скроту</string>
+  <string name="shortcut_creator_customize_game_icon_description">Іконка скроту</string>
+</resources>

@@ -1,0 +1,191 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NANCY_ACTION_ACTIONRECORD_H
+#define NANCY_ACTION_ACTIONRECORD_H
+
+#include "engines/nancy/time.h"
+#include "engines/nancy/cursor.h"
+#include "engines/nancy/commontypes.h"
+#include "engines/nancy/renderobject.h"
+
+namespace Common {
+class SeekableReadStream;
+}
+
+namespace Nancy {
+
+class NancyEngine;
+class NancyConsole;
+struct NancyInput;
+
+namespace Action {
+
+enum struct DependencyType : int16 {
+	kNone							= 0,
+	kInventory						= 1,
+	kEvent							= 2,
+	kLogic							= 3,
+	kElapsedGameTime				= 4,
+	kElapsedSceneTime				= 5,
+	kElapsedPlayerTime				= 6,
+	kSamsSight						= 7,	// Not implemented
+	kSamsSound						= 8,	// Not implemented
+	kSceneCount						= 9,
+	kElapsedPlayerDay				= 10,
+	kCursorType						= 11,
+	kPlayerTOD						= 12,
+	// Nancy11 used types 13/14 for software-timer less-/greater-than checks (with 22
+	// for "is active"). Nancy12 moved the software-timer checks to types 22-25 and
+	// left 13/14 unused. Nancy14 then repurposed type 13 into a value-table test
+	// (label = value index, milliseconds = threshold, condition = comparison); 14
+	// stays unused.
+	kTimerLessThanDependencyTime	= 13,
+	kTimerGreaterThanDependencyTime	= 14,
+	kDifficultyLevel				= 15,
+	kClosedCaptioning				= 16,
+	kSound							= 17,
+	kOpenParenthesis				= 18,
+	kCloseParenthesis				= 19,
+	kRandom							= 20,
+	kDefaultAR						= 21,
+	kTimerIsActive					= 22,	// Nancy11+ software-timer slot is running (or paused, in Nancy12+)
+	kTimerEqualsDependencyTime		= 23,	// The next three compare a running software
+	kTimerBelowDependencyTime		= 24,	// timer's elapsed time against the dependency's
+	kTimerAboveDependencyTime		= 25,	// own time, and only while that slot is running
+	kPlayerCharacter				= 26	// Nancy15+ which protagonist is being played
+};
+
+// Describes a condition that needs to be fulfilled before the
+// action record can be executed
+struct DependencyRecord {
+	DependencyType type = DependencyType::kNone;
+	int16 label 		= -1;
+	int16 condition 	= -1;
+	bool orFlag 		= false;
+	int16 hours 		= -1;
+	int16 minutes 		= -1;
+	int16 seconds 		= -1;
+	int16 milliseconds 	= -1;
+
+	bool satisfied		= false;
+	Time timeData;
+
+	// Only used for kRandom
+	bool stopEvaluating = false;
+
+	// Used to support the dependency tree structure in nancy3 and up
+	// The only valid field in dependencies with children is the orFlag
+	Common::Array<DependencyRecord> children;
+
+	void reset();
+};
+
+// Describes a single action that will be performed on every update.
+// Supports conditional execution (via dependencies) and can have
+// clickable hotspots on screen.
+// Does _not_ support drawing to screen, records that need this functionality
+// will have to subclass RenderActionRecord.
+class ActionRecord {
+public:
+	enum ExecutionState { kBegin, kRun, kActionTrigger };
+	enum ExecutionType { kOneShot = 1, kRepeating = 2 };
+	ActionRecord() :
+		_type(0),
+		_execType(kOneShot),
+		_isActive(false),
+		_isDone(false),
+		_hasHotspot(false),
+		_state(ExecutionState::kBegin),
+		_cursorDependency(nullptr) {}
+	virtual ~ActionRecord() {}
+
+	virtual void readData(Common::SeekableReadStream &stream) = 0;
+	virtual void execute() {}
+	virtual void onPause(bool pause) {}
+
+	virtual CursorManager::CursorType getHoverCursor() const { return CursorManager::kHotspot; }
+	virtual bool cursorSetFromScript() const { return false; }
+	virtual void handleInput(NancyInput &input) {}
+
+	// Used for debugging
+	virtual Common::String getRecordTypeName() const = 0;
+	virtual Common::String getRecordExtraInfo() const { return ""; }
+
+	// Used for handling kCursorType dependency
+	virtual bool canHaveHotspot() const { return false; }
+
+	// Records returning true survive the upcoming scene change (i.e. are not
+	// deleted by Scene::clearSceneData / ActionManager::clearActionRecords).
+	// `nextSceneIsNoArt` is true when the incoming scene is a "NO_ART_SCENE": a
+	// videoless scene that keeps the previous scene's frame on screen and only
+	// overlays new logic. The original engine's ClearNoArtSceneData clears the
+	// conversation / sound / phone records but leaves the ambient character
+	// videos playing, so e.g. a character stays visible while a phone-call
+	// conversation runs in front of them.
+	virtual bool survivesSceneChange(bool nextSceneIsNoArt) const { return false; }
+
+protected:
+	void finishExecution();
+
+public:
+	Common::String _description;
+	Common::String _includeSource; // the included file this record came from, empty for the scene's own
+	byte _type;
+	ExecutionType _execType;
+	// 0x32 data
+	DependencyRecord _dependencies;
+	// 0x3A numDependencies
+	bool _isActive;
+	// 0x3C satisfiedDependencies[]
+	// 0x48 timers[]
+	// 0x78 orFlags[]
+	bool _isDone;
+	bool _hasHotspot;
+	Common::Rect _hotspot;
+	ExecutionState _state;
+	DependencyRecord *_cursorDependency;
+};
+
+// Base class for visual ActionRecords
+class RenderActionRecord : public virtual ActionRecord, public RenderObject {
+public:
+	RenderActionRecord(uint zOrder) : RenderObject(zOrder) {}
+	virtual ~RenderActionRecord() {}
+
+	RenderActionRecord(RenderActionRecord &&) = default;
+
+	// This makes sure the AR is re-added to the render system
+	// when returning from a different state (e.g. the Help screen)
+	void onPause(bool pause) override { if (!pause) registerGraphics(); }
+};
+
+// Dummy AR for classes that haven't been implemented/don't work in the current game version
+class Unimplemented : public ActionRecord {
+	void execute() override;
+	void readData(Common::SeekableReadStream &stream) override {}
+	Common::String getRecordTypeName() const override { return "Unimplemented"; }
+};
+
+} // End of namespace Action
+} // End of namespace Nancy
+
+#endif // NANCY_ACTION_ACTIONRECORD_H

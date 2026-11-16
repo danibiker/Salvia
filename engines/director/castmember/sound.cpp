@@ -1,0 +1,326 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "director/director.h"
+#include "director/cast.h"
+#include "director/sound.h"
+#include "director/castmember/sound.h"
+#include "director/lingo/lingo-the.h"
+
+namespace Director {
+
+SoundCastMember::SoundCastMember(Cast *cast, uint16 castId)
+		: CastMember(cast, castId) {
+	_type = kCastSound;
+	_audio = nullptr;
+	_looping = 0;
+}
+
+SoundCastMember::SoundCastMember(Cast *cast, uint16 castId, Common::SeekableReadStreamEndian &stream, uint16 version)
+		: CastMember(cast, castId, stream) {
+	_type = kCastSound;
+	_audio = nullptr;
+	_looping = 0;
+}
+
+SoundCastMember::SoundCastMember(Cast *cast, uint16 castId, SoundCastMember &source)
+		: CastMember(cast, castId) {
+	_type = kCastSound;
+	_loaded = false;
+	_audio = nullptr;
+	_looping = source._looping;
+	if (cast == source._cast)
+		_children = source._children;
+	warning("SoundCastMember(): Duplicating source %d to target %d! This is unlikely to work properly, as the resource loader is based on the cast ID", source._castId, castId);
+}
+
+SoundCastMember::~SoundCastMember() {
+	if (_audio)
+		delete _audio;
+}
+
+Common::String SoundCastMember::formatInfo() {
+	return Common::String::format(
+		"looping: %d", _looping
+	);
+}
+
+void SoundCastMember::load() {
+	if (_loaded)
+		return;
+
+	uint32 tag = 0;
+	uint16 sndId = 0;
+
+	MoaSoundFormatDecoder *sndFormat = nullptr;
+
+	if (_cast->_version < kFileVer400) {
+		tag = MKTAG('S', 'N', 'D', ' ');
+		sndId = (uint16)(_castId + _cast->_castIDoffset);
+	} else if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer600) {
+		for (auto &it : _children) {
+			if (it.tag == MKTAG('s', 'n', 'd', ' ') || it.tag == MKTAG('S', 'N', 'D', ' ')) {
+				sndId = it.index;
+				tag = it.tag;
+				break;
+			}
+		}
+		if (!sndId) {
+			warning("SoundCastMember::load(): No snd resource found in %d children, falling back to D3", _children.size());
+			tag = MKTAG('S', 'N', 'D', ' ');
+			sndId = (uint16)(_castId + _cast->_castIDoffset);
+		}
+	} else if (_cast->_version >= kFileVer600 && _cast->_version < kFileVer800) {
+		for (auto &it : _children) {
+			if (it.tag == MKTAG('s', 'n', 'd', ' ')) {
+				sndId = it.index;
+				tag = it.tag;
+			} else if (it.tag == MKTAG('s', 'n', 'd', 'H')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				if (!sndFormat)
+					sndFormat = new MoaSoundFormatDecoder();
+				sndFormat->loadHeaderStream(*sndData);
+				delete sndData;
+			} else if (it.tag == MKTAG('s', 'n', 'd', 'S')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				if (!sndFormat)
+					sndFormat = new MoaSoundFormatDecoder();
+				sndFormat->loadSampleStream(*sndData);
+				delete sndData;
+			} else if (it.tag == MKTAG('e', 'd', 'i', 'M')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+				Common::String format =  _cast->getCastMemberInfo(_castId)->mediaFormatName.c_str();
+
+				if (!_audio) {
+					if (format.equalsIgnoreCase("kMoaCfFormat_AIFF")) {
+						_audio = new MoaStreamDecoder(format, sndData);
+						_loaded = true;
+						return;
+					} else {
+						warning("SoundCastMember::load(): Unsupported ediM format '%s' in sound cast member %d", format.c_str(), _castId);
+					}
+				} else {
+					warning("SoundCastMember::load(): Multiple ediM resources in sound cast member %d", _castId);
+				}
+				delete sndData;
+			} else if (it.tag == MKTAG('c', 'u', 'p', 't')) {
+				Common::SeekableReadStreamEndian *sndData = _cast->getResource(it.tag, it.index);
+
+				int32 numCuePoints = sndData->readSint32BE();
+				char cuePointName[32];
+
+				for (int i = 0; i < numCuePoints; i++) {
+					int32 cuePoint = sndData->readSint32BE();
+					_cuePoints.push_back(cuePoint);
+
+					sndData->read(cuePointName, 32);
+					cuePointName[31] = '\0';
+					_cuePointNames.push_back(cuePointName);
+
+					debugC(2, kDebugLoading, "    Cue point %d: %d (%s) in sound cast member %d", i, cuePoint, cuePointName, _castId);
+				}
+			} else {
+				debugC(2, kDebugLoading, "SoundCastMember::load(): Ignoring unknown tag '%s' in sound cast member %d", tag2str(it.tag), _castId);
+			}
+		}
+
+	} else {
+		warning("STUB: SoundCastMember::load(): Sounds not yet supported for version v%d (%d)", humanVersion(_cast->_version), _cast->_version);
+	}
+
+
+	if (sndFormat) {
+		_audio = sndFormat;
+		_loaded = true;
+		return;
+	}
+
+	Common::SeekableReadStreamEndian *sndData = _cast->getResource(tag, sndId);
+	if (!sndData) {
+		tag = MKTAG('s', 'n', 'd', ' ');
+		sndData = _cast->getResource(tag, sndId);
+	}
+
+	if (sndData == nullptr || sndData->size() == 0) {
+		// audio file is linked, load from the filesystem
+		Common::String res = _cast->getLinkedPath(_castId);
+		if (!res.empty()) {
+
+			debugC(2, kDebugLoading, "****** Loading file '%s', cast id: %d", res.c_str(), sndId);
+			AudioFileDecoder *audio = new AudioFileDecoder(res);
+			_audio = audio;
+
+			// Linked sound files always have the loop flag disabled
+			_looping = 0;
+		} else {
+			warning("Sound::load(): no resource or info found for cast member %d, skipping", _castId);
+		}
+	} else {
+		debugC(2, kDebugLoading, "****** Loading '%s' id: %d, %d bytes", tag2str(tag), sndId, (int)sndData->size());
+		SNDDecoder *audio = new SNDDecoder();
+		audio->loadStream(*sndData);
+		_audio = audio;
+		_size = sndData->size();
+		if (_cast->_version < kFileVer400) {
+			// The looping flag wasn't added to sound cast members until D4.
+			// In older versions, always loop sounds that contain a loop start and end.
+			_looping = audio->hasLoopBounds();
+		} else {
+			// Some sound cast members at version kFileVer400 have looping=true with
+			// invalid loop bounds (bigger than sample size or non-consecutive).
+			// Resetting loop bounds to sample bounds and disabling looping similar
+			// to how D4 playback seems to work.
+			if (!audio->hasValidLoopBounds()) {
+				// only emit a warning for files > kFileVer400 as it's only kFileVer400 files that should be affected
+				if (_cast->_version > kFileVer400) {
+					warning("Sound::load(): Invalid loop bounds detected. Disabling looping for cast member id %d, sndId %d", _castId, sndId);
+				} else {
+					debugC(2, "Sound::load(): Invalid loop bounds detected. Disabling looping for cast member id %d, sndId %d", _castId, sndId);
+				}
+				_looping = false;
+				audio->resetLoopBounds();
+			}
+		}
+	}
+	if (sndData)
+		delete sndData;
+
+	_loaded = true;
+}
+
+void SoundCastMember::unload() {
+	if (!_loaded)
+		return;
+
+	delete _audio;
+	_audio = nullptr;
+	_size = 0;
+	_looping = false;
+
+	_loaded = false;
+}
+
+bool SoundCastMember::hasField(int field) {
+	switch (field) {
+	case kTheChannelCount:
+	case kTheCuePointNames:		// D6
+	case kTheCuePointTimes:		// D6
+	case kTheCurrentTime:		// D6
+	case kTheLoop:
+	case kTheSampleRate:
+	case kTheSampleSize:
+		return true;
+	default:
+		break;
+	}
+	return CastMember::hasField(field);
+}
+
+Datum SoundCastMember::getField(int field) {
+	Datum d;
+	load();
+	if (!_audio) {
+		warning("SoundCastMember::getField(): Audio not found");
+		return d;
+	}
+
+	switch (field) {
+	case kTheChannelCount:
+		d = _audio->getChannelCount();
+		break;
+	case kTheCuePointNames:
+		{
+			FArray *arr = new FArray();
+			for (size_t i = 0; i < _cuePointNames.size(); i++) {
+				arr->arr.push_back(Datum(_cuePointNames[i]));
+			}
+			d.type = ARRAY;
+			d.u.farr = arr;
+		}
+		break;
+	case kTheCuePointTimes:
+		{
+			FArray *arr = new FArray();
+			for (size_t i = 0; i < _cuePoints.size(); i++) {
+				arr->arr.push_back(Datum((int)_cuePoints[i]));
+			}
+			d.type = ARRAY;
+			d.u.farr = arr;
+		}
+		break;
+	case kTheLoop:
+		d = _looping ? 1 : 0;
+		break;
+	case kTheSampleRate:
+		d = _audio->getSampleRate();
+		break;
+	case kTheSampleSize:
+		d = _audio->getSampleSize();
+		break;
+	default:
+		d = CastMember::getField(field);
+	}
+
+	return d;
+}
+
+void SoundCastMember::setField(int field, const Datum &d) {
+	switch (field) {
+	case kTheChannelCount:
+	case kTheSampleRate:
+	case kTheSampleSize:
+		warning("SoundCastMember::setField(): Attempt to set read-only field %s of cast %d", g_lingo->field2str(field), _castId);
+		return;
+	case kTheLoop:
+		_looping = bool(d.asInt());
+		warning("STUB: SoundCastMember::setField(): Set looping to %d for cast %d", _looping, _castId);
+		break;
+	default:
+		break;
+	}
+
+	CastMember::setField(field, d);
+}
+
+bool SoundCastMember::canWriteCastData() {
+	// D5-D6 legitimately have no 'CASt' data (it lives in 'snd '/'sndH')
+	return _cast->_version >= kFileVer400 && _cast->_version < kFileVer700;
+}
+
+// Similar to PaletteCastMember, SoundCastMember has no data in the 'CASt' resource or is ignored
+// This is the data in 'CASt' resource
+uint32 SoundCastMember::getCastDataSize() {
+	if (_cast->_version >= kFileVer500 && _cast->_version < kFileVer700) {
+		// D5+  sound lives in snd/sndH children
+		return 0;
+	} else if (_cast->_version >= kFileVer400 && _cast->_version < kFileVer500) {
+		// (castType (see Cast::loadCastData() for Director 4 only) 1 byte
+		return 1;		// Since SoundCastMember doesn't have any flags
+	}
+	return 0;
+}
+
+void SoundCastMember::writeCastData(Common::SeekableWriteStream *writeStream) {
+	// This should never get triggered
+	// since there is no data to write
+}
+
+} // End of namespace Director

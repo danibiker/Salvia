@@ -1,0 +1,87 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NANCY_ACTION_ROTATINGLOCKPUZZLE_H
+#define NANCY_ACTION_ROTATINGLOCKPUZZLE_H
+
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/cursor.h"
+
+namespace Nancy {
+namespace Action {
+
+class RotatingLockPuzzle : public PuzzleRecord {
+public:
+	enum SolveState { kNotSolved, kPlaySound, kWaitForSound };
+	static const byte kRandomStart = 99;
+	RotatingLockPuzzle() : PuzzleRecord(7) {}
+	virtual ~RotatingLockPuzzle() {}
+
+	void init() override;
+
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+	void handleInput(NancyInput &input) override;
+
+	Common::Array<Common::Rect> _srcRects;
+	Common::Array<Common::Rect> _destRects;
+	Common::Array<Common::Rect> _upHotspots;
+	Common::Array<Common::Rect> _downHotspots;
+	// Nancy 14+: per-dial starting positions; kRandomStart picks a random
+	// position that differs from the solution
+	Common::Array<byte> _startSequence;
+	Common::Array<byte> _correctSequence;
+	uint16 _iconsPerDial = 10;
+	// Cursor types shown while hovering a dial's up/down hotspot. Nancy 10+
+	// stores these per-puzzle (e.g. a crank uses the rotate-clockwise cursor);
+	// older games and unset fields default to the up/down movement cursors.
+	CursorManager::CursorType _upCursorType = CursorManager::kMoveUp;
+	CursorManager::CursorType _downCursorType = CursorManager::kMoveDown;
+	SoundDescription _clickSound;
+	// Nancy16+: an event flag that also has to be set for the puzzle to count as solved
+	FlagDescription _solveCondition;
+
+	// Nancy17: a clicked up or down button shows as pressed for a moment. An
+	// empty picture means the button has none.
+	Common::Rect _upPressedSrc;
+	Common::Rect _downPressedSrc;
+	uint32 _pressedTime = 0;	// in milliseconds
+	Common::Rect _pressedButton;
+	uint32 _pressedEndTime = 0;
+
+	SolveState _solveState = kNotSolved;
+	Common::Array<byte> _currentSequence;
+	Time _solveSoundPlayTime;
+
+	bool isViewportRelative() const override { return true; }
+
+protected:
+	Common::String getRecordTypeName() const override { return "RotatingLockPuzzle"; }
+
+	void readDataNancy16(Common::SeekableReadStream &stream);
+	void drawDial(uint id);
+	void drawPressedButton(const Common::Rect &src, const Common::Rect &button);
+};
+
+} // End of namespace Action
+} // End of namespace Nancy
+
+#endif // NANCY_ACTION_ROTATINGLOCKPUZZLE_H

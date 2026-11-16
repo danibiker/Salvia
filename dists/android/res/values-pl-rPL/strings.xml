@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="app_name">ScummVM</string>
+  <string name="app_name_debug">ScummVM (tryb debugowania)</string>
+  <string name="app_desc">Silnik graficzny gier przygodowych</string>
+  <string name="quit">Zakończ</string>
+  <string name="no_log_file_title">Błąd pliku dziennika</string>
+  <string name="no_log_file">Nie można odczytać lub utworzyć pliku dziennika ScummVM!</string>
+  <string name="no_config_file_title">Błąd pliku konfiguracyjnego</string>
+  <string name="no_config_file">Nie można odczytać lub utworzyć pliku konfiguracyjnego ScummVM!</string>
+  <string name="no_save_path_title">Błąd ścieżki zapisów</string>
+  <string name="no_save_path_configured">Nie można utworzyć domyślnej ścieżki zapisu ani uzyskać do niej dostępu!</string>
+  <string name="no_icons_path_title">Błąd ścieżki ikon</string>
+  <string name="no_icons_path_configured">Nie można utworzyć domyślnych ścieżek ikon ani shaderów oraz uzyskać do nich dostępu!</string>
+  <string name="customkeyboardview_keycode_alt">Alt</string>
+  <string name="customkeyboardview_keycode_cancel">Anuluj</string>
+  <string name="customkeyboardview_keycode_delete">Usuń</string>
+  <string name="customkeyboardview_keycode_done">Gotowe</string>
+  <string name="customkeyboardview_keycode_mode_change">Zmiana trybu</string>
+  <string name="customkeyboardview_keycode_shift">Shift</string>
+  <string name="customkeyboardview_keycode_enter">Enter</string>
+  <string name="customkeyboardview_popup_close">Zamknij okno</string>
+  <string name="ini_parsing_error">Nie można przetworzyć pliku konfiguracyjnego</string>
+  <string name="shortcut_creator_title">Uruchom grę</string>
+  <string name="shortcut_creator_search_game">Znajdź grę</string>
+  <string name="shortcut_creator_game_item_icon">Ikona gry</string>
+  <string name="shortcut_creator_customize_game_name_hint">Etykieta skrótu</string>
+  <string name="shortcut_creator_customize_game_icon_description">Ikona skrótu</string>
+</resources>

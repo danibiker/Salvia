@@ -1,0 +1,240 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NANCY_ACTION_MULTIBUILDPUZZLE_H
+#define NANCY_ACTION_MULTIBUILDPUZZLE_H
+
+#include "engines/nancy/action/puzzlerecord.h"
+#include "engines/nancy/cursor.h"
+#include "engines/nancy/renderobject.h"
+
+namespace Nancy {
+namespace Action {
+
+// Click-and-drag assembly puzzle used in Nancy 9.
+// Used for three puzzles:
+// - book sorting: click and drag book pieces in a drawer, leaving no gaps (win
+//   condition is checked on placement)
+// - sandwich making: click and drag ingredients onto a plate. Some ingredients
+//   are bad and lead to food poisoning (win condition is checked on exit)
+// - sand castle building: free placement of sand pieces (no win condition)
+// - Nancy 13 burger counter: assemble an order, then ring it up at a hotspot
+class MultiBuildPuzzle : public PuzzleRecord {
+public:
+	MultiBuildPuzzle() : PuzzleRecord(7) {}
+	virtual ~MultiBuildPuzzle();
+
+	void init() override;
+	void registerGraphics() override;
+
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+	void handleInput(NancyInput &input) override;
+
+	bool isViewportRelative() const override { return true; }
+
+protected:
+	Common::String getRecordTypeName() const override { return "MultiBuildPuzzle"; }
+	bool isValidDrop() const;
+
+	// Nancy 13 stores this in the mustPlace byte; values below kPieceInspect are counts.
+	enum PieceKind {
+		kPieceIngredient	= 0,	// Normal draggable piece
+		kPieceInspect		= 101,	// Opens a closeup, dismissed by the next click
+		kPieceReset			= 102	// Button that clears the whole board
+	};
+
+	// How a piece's placement count is matched against mustPlace.
+	enum PieceCompare {
+		kPlaceExactly		= 0,
+		kDoNotPlace			= 1,
+		kPlaceAtLeast		= 2		// Nancy 13
+	};
+
+	// A single puzzle piece. Each piece is its own RenderObject.
+	// Unplaced: _drawSurface shows srcRect from primary image.
+	// Placed:   _drawSurface shows the rotation sprite (from altSrcRect or srcRect).
+	struct Piece : RenderObject {
+		Piece() : RenderObject(0) {}
+
+		Common::Rect srcRect;     // Source in primary image (unplaced visual)
+		Common::Rect homeRect;    // Slot position in viewport coords
+		Common::Rect altSrcRect;  // If non-empty: used as source for sprite creation
+		Common::Rect cuSrcRect;   // Source in closeup image
+		Common::Rect placedDstRect; // Nancy 10: placement destination on screen
+		Common::Path imageName;   // Nancy 13: the piece's own closeup image, if any
+		uint8 counterByte = 0;    // Non-zero: respawns on placement; doesn't count toward solve
+		uint8 mustPlace = 0;      // Required placement count; 0 = no count requirement
+		uint8 compare = kPlaceExactly; // How placeCount is matched against mustPlace
+		uint8 kind = kPieceIngredient;
+		uint8 placeCount = 0;     // Runtime: number of times this piece (or any clone of it) has been placed
+
+		Common::Rect gameRect;    // Current viewport-space rect
+		int curRotation = 0;
+		bool isPlaced = false;
+		int  typeIdx = -1;        // -1 for original pieces; source piece index for counter clones
+
+		Graphics::ManagedSurface rotateSurfaces[4];
+		bool hasSurface[4] = {};
+		Graphics::ManagedSurface image;
+
+		bool isViewportRelative() const override { return true; }
+	};
+
+	Common::Path _primaryImageName;
+	Common::Path _closeupImageName;
+	bool _hasCloseupImage = false;
+
+	// Nancy 10 additions
+	// Parsed for correct chunk alignment but not acted upon: no shipping N10/N11
+	// MultiBuild puzzle sets it (cake mixing and cake cooking both have it clear),
+	// so the save/restore of placement counts is deliberately not implemented.
+	bool _retainState = false;
+	Common::Path _animImageName;    // Completion animation sprite sheet
+	bool _hasAnimImage = false;
+	Common::Rect _animRect;
+	int16 _animLayout[4] = {};      // cols / framesPerStep / spacing / totalRows
+
+	// Played when an ingredient is dropped outside a valid area (thrown away).
+	// The caption uses the CONVO lookup of _missedTextKey, falling back to the
+	// raw _missedText.
+	SoundDescription _missedSound;
+	Common::String _missedTextKey;
+	Common::String _missedText;
+
+	uint16 _numPieces = 0;
+	uint16 _requiredPieces = 0;        // Minimum placed pieces (counterByte==0) for solve check
+	bool _autoSolveOnDrop = false;     // If true, solve check fires after each drop
+	bool _canRotateAll = false;
+	bool _useRotationHotspot = false;  // Rotation triggered only by clicking a hotspot rect
+	int16 _rotHotspotHeight = 0;
+	int16 _rotHotspotWidth = 0;
+	bool _allowAltZoneSnap = false;    // Allow drop outside target zone if stacking on a moved piece
+	uint8 _altZoneSnapMode = 0;        // Raw value: 2 = "add ingredient" mode (cake), count via placeCount, no counter-spawn
+	bool _checkOverlapOnDrop = false;  // Reject drop if it overlaps an already-placed piece
+
+	Common::Array<Piece *> _pieces;
+
+	SoundDescription _rotationSound;
+	SoundDescription _pickupSound;
+	SoundDescription _dropSound;
+
+	int16 _dragCursorID  = 16;  // Cursor for hover/drag/drop (kCustom1 by default)
+	int16 _exitCursorID1 = -1;  // -1: use _puzzleExitCursor
+	int16 _exitCursorID2 = -1;
+
+	Common::String _solveTextKey;  // Looked up in CONVO chunk first
+	Common::String _solveText;     // Raw fallback used if key missing
+
+	// "Enough pieces placed" flag; its own field in Nancy 13, the cancel scene's before.
+	FlagDescription _minCountFlag;
+
+	// Nancy 13: outcome of ringing the order up. The order is always accepted;
+	// its contents are carried by the two flags updateSolveFlags() writes.
+	SceneChangeWithFlag _submitScene;
+	SoundDescription _submitSound;
+	Common::String _submitTextKey;
+	Common::String _submitText;
+
+	Common::Rect _exitHotspot2;
+	Common::Rect _targetZone;      // Valid drop area (drawer/plate/...)
+
+	Graphics::ManagedSurface _primaryImage;
+	Graphics::ManagedSurface _closeupImage;
+
+	int16 _selectedPiece = -1;  // Piece shown in closeup view, -1 if none
+	int16 _pickedUpPiece = -1;  // Piece being dragged, -1 if none
+	bool _isDragging = false;
+	bool _isSolved = false;
+	bool _isCancelled = false;
+	bool _isSubmitted = false;
+
+	// Event-flag write tracking: the original re-writes the solve flags on every
+	// drop, but re-writing an unchanged flag can re-trigger scene voice lines, so
+	// we only write on an actual value change.
+	int _minCountFlagLastValue = -1;  // last value written to the cancel-scene "enough ingredients" flag
+	int _solveFlagLastValue = -1;     // last value written to the solve-scene flag (-1 = never)
+
+	enum SolveState {
+		kIdle            = 0,
+		kWaitTimer       = 1,
+		kWaitSolveSound  = 4,
+		kPlaySolveSound  = 5,
+		kAnimStep        = 6, // Blit current frame, advance counters
+		kAnimWaitFrame   = 7, // ~100 ms hold between frames
+		kWaitSubmitSound = 8, // Nancy 13: order rung up, waiting on the bell
+		kResetButtonHeld = 9  // Nancy 13: reset button shown pressed for 200 ms
+	};
+	SolveState _solveState = kIdle;
+	uint32 _timerEnd = 0;
+
+	// Nancy 10 mixing animation
+	struct AnimRender : RenderObject {
+		AnimRender() : RenderObject(0) {}
+		bool isViewportRelative() const override { return true; }
+	};
+
+	Graphics::ManagedSurface _animImage;
+	AnimRender _animRender;
+	uint16 _animFrameCounter = 0;
+	uint16 _animRowCounter = 0;
+	uint32 _animFrameWaitEnd = 0;
+	Common::Rect _animSrcRect;
+	bool _animActive = false;
+	bool _animEnded = false;
+	bool _animSurfaceReady = false;
+	void renderAnimFrame();
+	void clearAnimFrame();
+
+	int16 _pickedUpWidth = 0;
+	int16 _pickedUpHeight = 0;
+
+	bool _isInitialized = false;
+
+	void checkIfSolved();
+	void checkIfSolvedOnExit();
+	// Nancy 13: ring the order up through the first exit hotspot.
+	void submitPuzzle();
+	// Nancy 13: return every piece to its slot and drop the counter clones.
+	void resetPuzzle();
+	// Updates the min-count/solve event flags. Returns true when every piece
+	// satisfies its own placement rule.
+	bool updateSolveFlags();
+	void updatePieceRender(int pieceIdx);
+	static void rotateSurface90CW(const Graphics::ManagedSurface &src, Graphics::ManagedSurface &dst);
+	// Clone an existing piece at the end of _pieces (counter-piece respawn).
+	void spawnCounterPiece(int srcIdx);
+	// Move a piece into its closeup position and select it.
+	void openCloseup(int pieceIdx, const Common::Rect &viewportScreen);
+	// Drop is valid if it overhangs the top of a moved piece (sand-castle stacking).
+	bool altZoneSnapValid() const;
+	// Map a data cursor id to CursorManager::CursorType; out-of-range falls back.
+	CursorManager::CursorType cursorFromDataID(int16 id, CursorManager::CursorType fallback) const;
+	// Tests one exit hotspot and (if hovered) sets its cursor / handles the click.
+	// Returns true when the cursor is inside `hot`, so the caller can skip the
+	// other hotspot. In Nancy 13 the first hotspot rings the order up.
+	bool checkExitHotspot(const Common::Rect &hot, int16 cursorID, bool isSubmit, const NancyInput &input);
+};
+
+} // End of namespace Action
+} // End of namespace Nancy
+
+#endif // NANCY_ACTION_MULTIBUILDPUZZLE_H

@@ -1,0 +1,932 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// Based on Phantasma code by Thomas Harte (2013),
+// available at https://github.com/TomHarte/Phantasma/ (MIT)
+
+#include "common/config-manager.h"
+#include "common/system.h"
+#include "math/glmath.h"
+
+#include "freescape/objects/object.h"
+#include "freescape/gfx_opengl_shaders.h"
+#include "freescape/gfx_opengl_texture.h"
+
+namespace Freescape {
+
+const GLfloat bitmapVertices[] = {
+	// XS   YT
+	0.0, 0.0,
+	1.0, 0.0,
+	0.0, 1.0,
+	1.0, 1.0,
+};
+
+Renderer *CreateGfxOpenGLShader(int screenW, int screenH, Common::RenderMode renderMode, bool authenticGraphics) {
+	return new OpenGLShaderRenderer(screenW, screenH, renderMode, authenticGraphics);
+}
+
+OpenGLShaderRenderer::OpenGLShaderRenderer(int screenW, int screenH, Common::RenderMode renderMode, bool authenticGraphics) : Renderer(screenW, screenH, renderMode, authenticGraphics) {
+	_verts = nullptr;
+	_triangleShader = nullptr;
+	_triangleVBO = 0;
+
+	_bitmapShader = nullptr;
+	_bitmapVBO = 0;
+
+	_cubemapShader = nullptr;
+	_cubemapVertVBO = 0;
+	_cubemapTexCoordVBO = 0;
+	_cubemapEBO = 0;
+
+	_texturePixelFormat = getRGBAPixelFormat();
+	_isAccelerated = true;
+}
+
+OpenGLShaderRenderer::~OpenGLShaderRenderer() {
+	OpenGL::Shader::freeBuffer(_triangleVBO);
+	delete _triangleShader;
+	OpenGL::Shader::freeBuffer(_bitmapVBO);
+	delete _bitmapShader;
+	OpenGL::Shader::freeBuffer(_cubemapVertVBO);
+	OpenGL::Shader::freeBuffer(_cubemapTexCoordVBO);
+	OpenGL::Shader::freeBuffer(_cubemapEBO);
+	delete _cubemapShader;
+	free(_verts);
+}
+
+Texture *OpenGLShaderRenderer::createTexture(const Graphics::Surface *surface, bool is3D) {
+	return new OpenGLTexture(surface);
+}
+
+void OpenGLShaderRenderer::freeTexture(Texture *texture) {
+	delete texture;
+}
+
+Common::Point OpenGLShaderRenderer::nativeResolution() {
+	GLint vect[4];
+	glGetIntegerv(GL_VIEWPORT, vect);
+	return Common::Point(vect[2], vect[3]);
+}
+
+void OpenGLShaderRenderer::init() {
+	computeScreenViewport();
+
+	_verts = (Vertex *)malloc(sizeof(Vertex) * kVertexArraySize);
+
+	static const char *triangleAttributes[] = { "position", nullptr };
+	_triangleShader = OpenGL::Shader::fromFiles("freescape_triangle", triangleAttributes);
+	_triangleVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, sizeof(Vertex) * kVertexArraySize, _verts, GL_DYNAMIC_DRAW);
+	// TODO: Check if 3 * sizeof(float) == sizeof(Vertex)
+	_triangleShader->enableVertexAttribute("position", _triangleVBO, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
+
+	static const char *bitmapAttributes[] = { "position", "texcoord", nullptr };
+	_bitmapShader = OpenGL::Shader::fromFiles("freescape_bitmap", bitmapAttributes);
+	_bitmapVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, sizeof(bitmapVertices), bitmapVertices);
+	_bitmapShader->enableVertexAttribute("position", _bitmapVBO, 2, GL_FLOAT, GL_TRUE, 2 * sizeof(float), 0);
+	_bitmapShader->enableVertexAttribute("texcoord", _bitmapVBO, 2, GL_FLOAT, GL_TRUE, 2 * sizeof(float), 0);
+
+	static const char *cubemapAttributes[] = { "position", "texcoord", nullptr };
+	_cubemapShader = OpenGL::Shader::fromFiles("freescape_cubemap", cubemapAttributes);
+	_cubemapVertVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, sizeof(_skyVertices), _skyVertices);
+	_cubemapTexCoordVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, sizeof(_skyUvs1008), _skyUvs1008);
+	_cubemapEBO = OpenGL::Shader::createBuffer(GL_ELEMENT_ARRAY_BUFFER, sizeof(_skyIndices), _skyIndices);
+
+	_cubemapShader->enableVertexAttribute("position", _cubemapVertVBO, 3, GL_FLOAT, GL_TRUE, 3 * sizeof(float), 0);
+	_cubemapShader->enableVertexAttribute("texcoord", _cubemapTexCoordVBO, 2, GL_FLOAT, GL_TRUE, 2 * sizeof(float), 0);
+
+	// populate default stipple data for shader rendering
+	for (int i = 0; i < 128; i++)
+		_defaultShaderStippleArray[i] = _defaultStippleArray[i];
+
+	glDisable(GL_TEXTURE_2D);
+	glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CW);
+	glEnable(GL_SCISSOR_TEST);
+	setViewport(_viewport);
+}
+
+void OpenGLShaderRenderer::setViewport(const Common::Rect &rect) {
+	_viewport = Common::Rect(
+	                _screenViewport.width() * rect.width() / _screenW,
+	                _screenViewport.height() * rect.height() / _screenH
+	            );
+
+	_viewport.translate(
+	    _screenViewport.left + _screenViewport.width() * rect.left / _screenW,
+	    _screenViewport.top + _screenViewport.height() * rect.top / _screenH
+	);
+
+	_unscaledViewport = rect;
+	glViewport(_viewport.left, g_system->getHeight() - _viewport.bottom, _viewport.width(), _viewport.height());
+	glScissor(_viewport.left, g_system->getHeight() - _viewport.bottom, _viewport.width(), _viewport.height());
+}
+
+void OpenGLShaderRenderer::drawTexturedRect2D(const Common::Rect &screenRect, const Common::Rect &textureRect, Texture *texture) {
+	OpenGLTexture *glTexture = static_cast<OpenGLTexture *>(texture);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_BLEND);
+
+	_bitmapShader->use();
+	_bitmapShader->setUniform("flipY", glTexture->_upsideDown);
+
+	glDisable(GL_CULL_FACE);
+	glDepthMask(GL_FALSE);
+
+	glBindTexture(GL_TEXTURE_2D, glTexture->_id);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisable(GL_BLEND);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_CULL_FACE);
+	_bitmapShader->unbind();
+}
+
+void OpenGLShaderRenderer::drawSkybox(Texture *texture, Math::Vector3d camera) {
+	OpenGLTexture *glTexture = static_cast<OpenGLTexture *>(texture);
+
+	Math::Matrix4 proj = _projectionMatrix;
+	Math::Matrix4 model = _modelViewMatrix;
+	// remove translation
+	model(3, 0) = 0.0f;
+	model(3, 1) = 0.0f;
+	model(3, 2) = 0.0f;
+
+	proj.transpose();
+	model.transpose();
+
+	Math::Matrix4 skyboxMVP = proj * model;
+	skyboxMVP.transpose();
+
+	_cubemapShader->use();
+	_cubemapShader->setUniform("mvpMatrix", skyboxMVP);
+
+	glDisable(GL_CULL_FACE);
+
+	glBindBuffer(GL_ARRAY_BUFFER, _cubemapTexCoordVBO);
+	if (texture->_width == 1008)
+		glBufferData(GL_ARRAY_BUFFER, sizeof(_skyUvs1008), _skyUvs1008, GL_DYNAMIC_DRAW);
+	else if (texture->_width == 672)
+		glBufferData(GL_ARRAY_BUFFER, sizeof(_skyUvs672), _skyUvs672, GL_DYNAMIC_DRAW);
+	else if (texture->_width == 128)
+		glBufferData(GL_ARRAY_BUFFER, sizeof(_skyUvs128), _skyUvs128, GL_DYNAMIC_DRAW);
+	else
+		error("Unsupported skybox texture width %d", texture->_width);
+
+	glBindTexture(GL_TEXTURE_2D, glTexture->_id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
+	glDrawElements(GL_TRIANGLES, 24, GL_UNSIGNED_INT, 0);
+
+	glEnable(GL_CULL_FACE);
+
+	_cubemapShader->unbind();
+}
+
+void OpenGLShaderRenderer::drawThunder(Texture *texture, const Math::Vector3d position, const float size) {
+	OpenGLTexture *glTexture = static_cast<OpenGLTexture *>(texture);
+
+	// Compute eye-space position of the thunder
+	// Convention: matrix(col, row) maps to column-major layout
+	const Math::Matrix4 &mv = _modelViewMatrix;
+	float ex = mv(0,0)*position.x() + mv(1,0)*position.y() + mv(2,0)*position.z() + mv(3,0);
+	float ey = mv(0,1)*position.x() + mv(1,1)*position.y() + mv(2,1)*position.z() + mv(3,1);
+	float ez = mv(0,2)*position.x() + mv(1,2)*position.y() + mv(2,2)*position.z() + mv(3,2);
+
+	// Build billboard model-view with Rz(-90) rotation and eye-space translation
+	// cos(-90) = 0, sin(-90) = -1
+	Math::Matrix4 billboardMV;
+	billboardMV(0, 0) = 0.0f;  billboardMV(0, 1) = -1.0f; billboardMV(0, 2) = 0.0f; billboardMV(0, 3) = 0.0f;
+	billboardMV(1, 0) = 1.0f;  billboardMV(1, 1) = 0.0f;  billboardMV(1, 2) = 0.0f; billboardMV(1, 3) = 0.0f;
+	billboardMV(2, 0) = 0.0f;  billboardMV(2, 1) = 0.0f;  billboardMV(2, 2) = 1.0f; billboardMV(2, 3) = 0.0f;
+	billboardMV(3, 0) = ex;    billboardMV(3, 1) = ey;     billboardMV(3, 2) = ez;   billboardMV(3, 3) = 1.0f;
+
+	// Build MVP using the same pattern as drawSkybox/positionCamera
+	Math::Matrix4 proj = _projectionMatrix;
+	Math::Matrix4 model = billboardMV;
+	proj.transpose();
+	model.transpose();
+	Math::Matrix4 thunderMVP = proj * model;
+	thunderMVP.transpose();
+
+	// Build quad geometry (two triangles)
+	float half = size * 0.5f;
+	float quadVerts[] = {
+		-half, -half, 0.0f,
+		 half, -half, 0.0f,
+		 half,  half, 0.0f,
+		-half, -half, 0.0f,
+		 half,  half, 0.0f,
+		-half,  half, 0.0f,
+	};
+	float quadTexCoords[] = {
+		0.0f, 0.0f,
+		0.0f, 0.72f,
+		1.0f, 0.72f,
+		0.0f, 0.0f,
+		1.0f, 0.72f,
+		1.0f, 0.0f,
+	};
+
+	_cubemapShader->use();
+	_cubemapShader->setUniform("mvpMatrix", thunderMVP);
+
+	// Upload quad vertex data
+	glBindBuffer(GL_ARRAY_BUFFER, _cubemapVertVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_DYNAMIC_DRAW);
+
+	// Upload quad texcoord data
+	glBindBuffer(GL_ARRAY_BUFFER, _cubemapTexCoordVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadTexCoords), quadTexCoords, GL_DYNAMIC_DRAW);
+
+	// Bind thunder texture
+	glBindTexture(GL_TEXTURE_2D, glTexture->_id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// Additive blending for glow effect
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glDisable(GL_CULL_FACE);
+
+	// Draw the textured quad
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	// Restore skybox vertex data in the VBO
+	glBindBuffer(GL_ARRAY_BUFFER, _cubemapVertVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(_skyVertices), _skyVertices, GL_DYNAMIC_DRAW);
+
+	// Restore state
+	glDisable(GL_BLEND);
+	glEnable(GL_CULL_FACE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	_cubemapShader->unbind();
+}
+
+void OpenGLShaderRenderer::updateProjectionMatrix(float fov, float aspectRatio, float nearClipPlane, float farClipPlane) {
+	float xmaxValue = nearClipPlane * tan(Math::deg2rad(fov) / 2);
+	float ymaxValue = xmaxValue / aspectRatio;
+	if (_stereoEye == kStereoEyeLeft || _stereoEye == kStereoEyeRight) {
+		float stereoOffset = getStereoFrustumOffset(nearClipPlane, true);
+		_projectionMatrix = Math::makeFrustumMatrix(xmaxValue + stereoOffset, -xmaxValue + stereoOffset, -ymaxValue, ymaxValue, nearClipPlane, farClipPlane);
+	} else {
+		_projectionMatrix = Math::makeFrustumMatrix(xmaxValue, -xmaxValue, -ymaxValue, ymaxValue, nearClipPlane, farClipPlane);
+	}
+}
+
+void OpenGLShaderRenderer::positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest, float rollAngle) {
+	Math::Vector3d up_vec(0, 1, 0);
+
+	Math::Matrix4 lookMatrix;
+	Math::Vector3d viewPosition;
+	if (_stereoEye == kStereoEyeLeft || _stereoEye == kStereoEyeRight) {
+		Math::Vector3d eyePos;
+		Math::Vector3d eyeInterest;
+		getStereoCamera(pos, interest, eyePos, eyeInterest);
+		lookMatrix = Math::makeLookAtMatrix(eyePos, eyeInterest, up_vec);
+		viewPosition = eyePos;
+	} else {
+		lookMatrix = Math::makeLookAtMatrix(pos, interest, up_vec);
+		viewPosition = pos;
+	}
+	Math::Matrix4 viewMatrix;
+	viewMatrix.translate(-viewPosition);
+	viewMatrix.transpose();
+
+	// Roll around the camera's forward axis. The matrix is stored in the
+	// same transposed convention as lookMatrix (row-major storage that
+	// becomes column-major when handed to GL via getData()), so the entries
+	// are the transpose of the standard glRotatef(rollAngle, 0, 0, 1).
+	float c = cos(Math::deg2rad(rollAngle));
+	float s = sin(Math::deg2rad(rollAngle));
+	Math::Matrix4 rollMatrix;
+	rollMatrix(0, 0) = c;
+	rollMatrix(0, 1) = s;
+	rollMatrix(1, 0) = -s;
+	rollMatrix(1, 1) = c;
+	rollMatrix(2, 2) = 1.0f;
+	rollMatrix(3, 3) = 1.0f;
+
+	_modelViewMatrix = viewMatrix * rollMatrix * lookMatrix;
+
+	Math::Matrix4 proj = _projectionMatrix;
+	Math::Matrix4 model = _modelViewMatrix;
+	proj.transpose();
+	model.transpose();
+	_mvpMatrix = proj * model;
+	_mvpMatrix.transpose();
+
+	_triangleShader->use();
+	_triangleShader->setUniform("shakeOffset",
+		Math::Vector2d(_shakeOffset.x * 0.025f, _shakeOffset.y * 0.025f));
+}
+
+void OpenGLShaderRenderer::renderSensorShoot(byte color, const Math::Vector3d sensor, const Math::Vector3d target, const Common::Rect &viewArea) {
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+	useColor(255, 255, 255);
+
+	glLineWidth(20);
+	copyToVertexArray(0, sensor);
+	copyToVertexArray(1, target);
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, 8 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+
+	glDrawArrays(GL_LINES, 0, 2);
+	glLineWidth(1);
+
+	glDisable(GL_BLEND);
+	glDepthMask(GL_TRUE);
+}
+
+// TODO: move inside the shader?
+float remap(float f, float s) {
+	return 2. * f / s - 1;
+}
+
+void OpenGLShaderRenderer::renderPlayerShootBall(byte color, const Common::Point &_position, int frame, const Common::Rect &viewArea) {
+	uint8 r, g, b;
+
+	Math::Matrix4 identity;
+	identity(0, 0) = 1.0;
+	identity(1, 1) = 1.0;
+	identity(2, 2) = 1.0;
+	identity(3, 3) = 1.0;
+
+	_triangleShader->use();
+	_triangleShader->setUniform("useStipple", false);
+	_triangleShader->setUniform("mvpMatrix", identity);
+	_triangleShader->setUniform("shakeOffset", Math::Vector2d(0, 0));
+
+	if (_renderMode == Common::kRenderCGA || _renderMode == Common::kRenderZX) {
+		r = g = b = 255;
+	} else {
+		if (_renderMode == Common::kRenderHercG) {
+			// Hercules Green
+			r = b = 0;
+			g = 255;
+		} else if (_renderMode == Common::kRenderHercA) {
+			// Hercules Amber
+			r = 255;
+			g = 191;
+			b = 0;
+		} else
+			r = g = b = 255;
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+	}
+
+	glDisable(GL_CULL_FACE);
+	glDepthMask(GL_FALSE);
+
+	useColor(r, g, b);
+
+	int triangleAmount = 20;
+	float twicePi = (float)(2.0 * M_PI);
+
+	// Exponential ease-out trajectory inspired by the original ZX animation.
+	float coef = 1.0f - powf(0.5f, (8 - frame + 1) / 2.0f);
+	float radius = 1.0f + frame * 0.5f;
+
+	float posX = (float)_position.x;
+	float posY = (float)(_screenH - _position.y);
+	float startX = viewArea.left + viewArea.width() / 2.0f + 2;
+	float startY = (float)(_screenH - (viewArea.height() + viewArea.top));
+	float ballX = coef * posX + (1.0f - coef) * startX;
+	float ballY = coef * posY + (1.0f - coef) * startY;
+
+	copyToVertexArray(0, Math::Vector3d(remap(ballX, _screenW), remap(ballY, _screenH), 0));
+
+	for (int i = 0; i <= triangleAmount; i++) {
+		float x = remap(ballX + (radius * cos(i * twicePi / triangleAmount)), _screenW);
+		float y = remap(ballY + (radius * sin(i * twicePi / triangleAmount)), _screenH);
+		copyToVertexArray(i + 1, Math::Vector3d(x, y, 0));
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, (triangleAmount + 2) * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, (triangleAmount + 2));
+
+	glDisable(GL_BLEND);
+	glEnable(GL_CULL_FACE);
+	glDepthMask(GL_TRUE);
+}
+
+void OpenGLShaderRenderer::renderPlayerShootRay(byte color, const Common::Point &position, const Common::Rect &viewArea) {
+	uint8 r, g, b;
+
+	Math::Matrix4 identity;
+	identity(0, 0) = 1.0;
+	identity(1, 1) = 1.0;
+	identity(2, 2) = 1.0;
+	identity(3, 3) = 1.0;
+
+	_triangleShader->use();
+	_triangleShader->setUniform("useStipple", false);
+	_triangleShader->setUniform("mvpMatrix", identity);
+	_triangleShader->setUniform("shakeOffset", Math::Vector2d(0, 0));
+
+	if (_renderMode == Common::kRenderCGA || _renderMode == Common::kRenderZX) {
+		r = g = b = 255;
+	} else {
+		if (_renderMode == Common::kRenderHercG) {
+			// Hercules Green
+			r = b = 0;
+			g = 255;
+		} else if (_renderMode == Common::kRenderHercA) {
+			// Hercules Amber
+			r = 255;
+			g = 191;
+			b = 0;
+		} else
+			r = g = b = 255;
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+	}
+
+	glDisable(GL_CULL_FACE);
+	glDepthMask(GL_FALSE);
+
+	useColor(r, g, b);
+
+	glLineWidth(5); // It will not work in every OpenGL implementation since the
+	                // spec doesn't require support for line widths other than 1
+	copyToVertexArray(0, Math::Vector3d(remap(viewArea.left, _screenW), remap(viewArea.height() - viewArea.top,  _screenH), 0));
+	copyToVertexArray(1, Math::Vector3d(remap(position.x,  _screenW), remap(_screenH - position.y, _screenH), 0));
+
+	copyToVertexArray(2, Math::Vector3d(remap(viewArea.left, _screenW), remap(viewArea.height() - viewArea.top + 3, _screenH), 0));
+	copyToVertexArray(3, Math::Vector3d(remap(position.x, _screenW), remap(_screenH - position.y, _screenH), 0));
+
+	copyToVertexArray(4, Math::Vector3d(remap(viewArea.right, _screenW), remap(_screenH - viewArea.bottom, _screenH), 0));
+	copyToVertexArray(5, Math::Vector3d(remap(position.x,  _screenW), remap(_screenH - position.y, _screenH), 0));
+
+	copyToVertexArray(6, Math::Vector3d(remap(viewArea.right, _screenW), remap(_screenH - viewArea.bottom + 3, _screenH), 0));
+	copyToVertexArray(7, Math::Vector3d(remap(position.x,  _screenW), remap(_screenH - position.y, _screenH), 0));
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, 8 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+	glDrawArrays(GL_LINES, 0, 8);
+
+	glLineWidth(1);
+
+	glDisable(GL_BLEND);
+	glEnable(GL_CULL_FACE);
+	glDepthMask(GL_TRUE);
+}
+
+void OpenGLShaderRenderer::drawCelestialBody(const Math::Vector3d position, float radius, byte color) {
+	// === Safety checks ===
+	if (!_triangleShader || radius <= 0.0f)
+		return;
+
+	// === Decode color from palette ===
+	uint8 r1, g1, b1, r2, g2, b2;
+	byte *stipple = nullptr;
+	getRGBAt(color, 0, r1, g1, b1, r2, g2, b2, stipple);
+	setStippleData(stipple);
+	useColor(r1, g1, b1);
+
+	// === Build circular vertex fan ===
+	const int triangleAmount = 20;
+	const float twicePi = 2.0f * static_cast<float>(M_PI);
+	const float adj = 1.25f;
+
+	Common::Array<float> verts;
+
+	// Center vertex
+	verts.push_back(static_cast<float>(position.x()));
+	verts.push_back(static_cast<float>(position.y()));
+	verts.push_back(static_cast<float>(position.z()));
+
+	// Circle vertices in YZ plane (same as legacy code)
+	for (int i = 0; i <= triangleAmount; i++) {
+		float x = static_cast<float>(position.x());
+		float y = static_cast<float>(position.y()) + radius * cosf(i * twicePi / triangleAmount);
+		float z = static_cast<float>(position.z()) + adj * radius * sinf(i * twicePi / triangleAmount);
+		verts.push_back(x);
+		verts.push_back(y);
+		verts.push_back(z);
+	}
+
+	// === Apply billboard effect to modelview matrix only ===
+	// Matrix4 operator()(i,j) uses (column, row) convention, matching
+	// OpenGL column-major m[col*4+row]. Zero columns 1 and 3 (skip 2),
+	// set diagonal to 1.0 — same as legacy glGetFloatv billboard.
+	Math::Matrix4 billboardMV = _modelViewMatrix;
+	for (int i = 1; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			if (i == 2)
+				continue;
+			if (i == j)
+				billboardMV(i, j) = 1.0f;
+			else
+				billboardMV(i, j) = 0.0f;
+		}
+	}
+
+	// Recombine with projection (same pattern as positionCamera)
+	Math::Matrix4 proj = _projectionMatrix;
+	Math::Matrix4 model = billboardMV;
+	proj.transpose();
+	model.transpose();
+	Math::Matrix4 billboardMVP = proj * model;
+	billboardMVP.transpose();
+
+	// === Bind VBO ===
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
+
+	// === Set vertex attribute 0 (position) ===
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+
+	// === Shader uniforms ===
+	_triangleShader->use();
+	_triangleShader->setUniform("mvpMatrix", billboardMVP);
+	_triangleShader->setUniform("shakeOffset", Math::Vector2d(0, 0));
+	_triangleShader->setUniform("useStipple", false);
+
+	// === Render settings ===
+	glDepthMask(GL_FALSE);
+
+	// === Draw vertex fan ===
+	glDrawArrays(GL_TRIANGLE_FAN, 0, verts.size() / 3);
+
+	if (r1 != r2 || g1 != g2 || b1 != b2) {
+		useStipple(true);
+		useColor(r2, g2, b2);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, verts.size() / 3);
+		useStipple(false);
+	}
+
+	// === Restore state ===
+	glDepthMask(GL_TRUE);
+
+	// === Cleanup binding ===
+	glDisableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	_triangleShader->unbind();
+}
+
+void OpenGLShaderRenderer::drawAABB(const Math::AABB &aabb, uint8 r, uint8 g, uint8 b) {
+	if (!aabb.isValid())
+		return;
+
+	Math::Vector3d min = aabb.getMin();
+	Math::Vector3d max = aabb.getMax();
+
+	// calculate the 8 corners of the box
+	Math::Vector3d c[8];
+	c[0] = Math::Vector3d(min.x(), min.y(), min.z());
+	c[1] = Math::Vector3d(max.x(), min.y(), min.z());
+	c[2] = Math::Vector3d(max.x(), max.y(), min.z());
+	c[3] = Math::Vector3d(min.x(), max.y(), min.z());
+	c[4] = Math::Vector3d(min.x(), min.y(), max.z());
+	c[5] = Math::Vector3d(max.x(), min.y(), max.z());
+	c[6] = Math::Vector3d(max.x(), max.y(), max.z());
+	c[7] = Math::Vector3d(min.x(), max.y(), max.z());
+
+	_triangleShader->use();
+	_triangleShader->setUniform("mvpMatrix", _mvpMatrix);
+	useColor(r, g, b);
+
+	// disable depth so we can see the box through walls
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glLineWidth(2.0f);
+
+	// build lines (12 lines * 2 vertices = 24 vertices)
+	int idx = 0;
+
+	auto pushLine = [&](int i, int j) {
+		copyToVertexArray(idx++, c[i]);
+		copyToVertexArray(idx++, c[j]);
+	};
+
+	// bottom
+	pushLine(0, 1);
+	pushLine(1, 2);
+	pushLine(2, 3);
+	pushLine(3, 0);
+	// top
+	pushLine(4, 5);
+	pushLine(5, 6);
+	pushLine(6, 7);
+	pushLine(7, 4);
+	// sides
+	pushLine(0, 4);
+	pushLine(1, 5);
+	pushLine(2, 6);
+	pushLine(3, 7);
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, idx * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+	glDrawArrays(GL_LINES, 0, idx);
+
+	// restore state
+	glLineWidth(1.0f);
+}
+
+void OpenGLShaderRenderer::renderCrossair(const Common::Point &crossairPosition) {
+	Math::Matrix4 identity;
+	identity(0, 0) = 1.0;
+	identity(1, 1) = 1.0;
+	identity(2, 2) = 1.0;
+	identity(3, 3) = 1.0;
+
+	_triangleShader->use();
+	_triangleShader->setUniform("useStipple", false);
+	_triangleShader->setUniform("mvpMatrix", identity);
+	_triangleShader->setUniform("shakeOffset", Math::Vector2d(0, 0));
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+
+	glDepthMask(GL_FALSE);
+
+	useColor(255, 255, 255);
+
+	glLineWidth(MAX(2, g_system->getWidth() / 640)); // It will not work in every OpenGL implementation since the
+	                                                 // spec doesn't require support for line widths other than 1
+
+	copyToVertexArray(0, Math::Vector3d(remap(crossairPosition.x - 3, _screenW), remap(_screenH - crossairPosition.y, _screenH), 0));
+	copyToVertexArray(1, Math::Vector3d(remap(crossairPosition.x - 1, _screenW), remap(_screenH - crossairPosition.y, _screenH), 0));
+
+	copyToVertexArray(2, Math::Vector3d(remap(crossairPosition.x + 1, _screenW), remap(_screenH - crossairPosition.y, _screenH), 0));
+	copyToVertexArray(3, Math::Vector3d(remap(crossairPosition.x + 3, _screenW), remap(_screenH - crossairPosition.y, _screenH), 0));
+
+	copyToVertexArray(4, Math::Vector3d(remap(crossairPosition.x, _screenW), remap(_screenH - crossairPosition.y - 3, _screenH), 0));
+	copyToVertexArray(5, Math::Vector3d(remap(crossairPosition.x, _screenW), remap(_screenH - crossairPosition.y - 1, _screenH), 0));
+
+	copyToVertexArray(6, Math::Vector3d(remap(crossairPosition.x, _screenW), remap(_screenH - crossairPosition.y + 1, _screenH), 0));
+	copyToVertexArray(7, Math::Vector3d(remap(crossairPosition.x, _screenW), remap(_screenH - crossairPosition.y + 3, _screenH), 0));
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, 8 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+	glDrawArrays(GL_LINES, 0, 8);
+
+	glLineWidth(1);
+	glDisable(GL_BLEND);
+	glDepthMask(GL_TRUE);
+}
+
+void OpenGLShaderRenderer::renderFace(const Common::Array<Math::Vector3d> &vertices) {
+	assert(vertices.size() >= 2);
+	const Math::Vector3d &v0 = vertices[0];
+
+	_triangleShader->use();
+	_triangleShader->setUniform("mvpMatrix", _mvpMatrix);
+
+#if !USE_FORCED_GLES2
+	if (_debugRenderWireframe) {
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		useColor(0, 255, 0);
+	}
+#endif
+
+	if (vertices.size() == 2) {
+		const Math::Vector3d &v1 = vertices[1];
+		if (v0 == v1)
+			return;
+
+		copyToVertexArray(0, v0);
+		copyToVertexArray(1, v1);
+
+		glLineWidth(MAX(1, g_system->getWidth() / 640));
+
+		glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+		glBufferData(GL_ARRAY_BUFFER, 2 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+		glDrawArrays(GL_LINES, 0, 2);
+
+		glLineWidth(1);
+#if !USE_FORCED_GLES2
+		if (_debugRenderWireframe)
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
+		return;
+	}
+
+	uint vi = 0;
+	for (uint i = 1; i < vertices.size() - 1; i++) { // no underflow since vertices.size() > 2
+		const Math::Vector3d &v1 = vertices[i];
+		const Math::Vector3d &v2 = vertices[i + 1];
+		vi = 3 * (i - 1); // no underflow since i >= 1
+		copyToVertexArray(vi + 0, v0);
+		copyToVertexArray(vi + 1, v1);
+		copyToVertexArray(vi + 2, v2);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, (vi + 3) * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+
+	glDrawArrays(GL_TRIANGLES, 0, vi + 3);
+
+	if (_debugRenderNormals && vertices.size() >= 3) {
+		// calculate center
+		Math::Vector3d center(0, 0, 0);
+		for (auto &v : vertices) center += v;
+		center /= (float)vertices.size();
+
+		// calculate normal vector
+		Math::Vector3d v1 = vertices[1] - vertices[0];
+		Math::Vector3d v2 = vertices[2] - vertices[0];
+		Math::Vector3d normal = Math::Vector3d::crossProduct(v1, v2);
+		normal.normalize();
+		Math::Vector3d tip = center + (normal * 50.0f);
+
+		// upload normal line
+		copyToVertexArray(0, center);
+		copyToVertexArray(1, tip);
+
+		useColor(255, 0, 255); // pink
+
+		glBufferData(GL_ARRAY_BUFFER, 2 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+		glDrawArrays(GL_LINES, 0, 2);
+	}
+
+#if !USE_FORCED_GLES2
+	if (_debugRenderWireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
+}
+
+void OpenGLShaderRenderer::enableCulling(bool enabled) {
+	if (enabled) {
+		glEnable(GL_CULL_FACE);
+	} else {
+		glDisable(GL_CULL_FACE);
+	}
+}
+
+void OpenGLShaderRenderer::polygonOffset(bool enabled) {
+	if (enabled) {
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		glPolygonOffset(-10.0f, 1.0f);
+	} else {
+		glPolygonOffset(0, 0);
+		glDisable(GL_POLYGON_OFFSET_FILL);
+	}
+}
+
+void OpenGLShaderRenderer::setStippleData(byte *data) {
+	if (!data)
+		data = _defaultStippleArray;
+
+	for (int i = 0; i < 128; i++)
+		_variableStippleArray[i] = data[i];
+}
+
+void OpenGLShaderRenderer::useStipple(bool enabled) {
+	_triangleShader->use();
+	_triangleShader->setUniform("useStipple", enabled);
+
+	if (enabled) {
+		GLfloat factor = 0;
+		glGetFloatv(GL_POLYGON_OFFSET_FACTOR, &factor);
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		glPolygonOffset(factor - 0.5f, -1.0f);
+		if (_renderMode == Common::kRenderZX    ||
+		        _renderMode == Common::kRenderCPC   ||
+		        _renderMode == Common::kRenderCGA   ||
+		        _renderMode == Common::kRenderHercG)
+			_triangleShader->setUniform("stipple", 128, _variableStippleArray);
+		else
+			_triangleShader->setUniform("stipple", 128, _defaultShaderStippleArray);
+	} else {
+		glPolygonOffset(0, 0);
+		glDisable(GL_POLYGON_OFFSET_FILL);
+	}
+}
+
+void OpenGLShaderRenderer::setStereoEye(StereoEye eye) {
+	Renderer::setStereoEye(eye);
+	if (eye == kStereoEyeNone)
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	else if (eye == kStereoEyeLeft)
+		glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE);
+	else if (eye == kStereoEyeRight)
+		glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
+	else if (eye == kStereoEyeFlatAnaglyph)
+		glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE);
+}
+
+void OpenGLShaderRenderer::useColor(uint8 r, uint8 g, uint8 b) {
+	if (_stereoEye != kStereoEyeNone)
+		applyStereoTint(r, g, b);
+	Math::Vector3d color(r / 256.0, g / 256.0, b / 256.0);
+	_triangleShader->use();
+	_triangleShader->setUniform("color", color);
+}
+
+void OpenGLShaderRenderer::clear(uint8 r, uint8 g, uint8 b, bool ignoreViewport) {
+	if (_stereoEye != kStereoEyeNone)
+		applyStereoTint(r, g, b);
+	if (ignoreViewport)
+		glDisable(GL_SCISSOR_TEST);
+	glClearColor(r / 255., g / 255., b / 255., 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	if (ignoreViewport)
+		glEnable(GL_SCISSOR_TEST);
+}
+
+void OpenGLShaderRenderer::clearDepthBuffer(bool ignoreViewport) {
+	if (ignoreViewport)
+		glDisable(GL_SCISSOR_TEST);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	if (ignoreViewport)
+		glEnable(GL_SCISSOR_TEST);
+}
+
+void OpenGLShaderRenderer::drawFloor(uint8 color) {
+	/*uint8 r1, g1, b1, r2, g2, b2;
+	byte *stipple;
+	assert(getRGBAt(color, r1, g1, b1, r2, g2, b2, stipple)); // TODO: move check inside this function
+	glColor4ub(r1, g1, b1, 255);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	copyToVertexArray(0, Math::Vector3d(-100000.0, 0.0, -100000.0));
+	copyToVertexArray(1, Math::Vector3d(100000.0, 0.0, -100000.0));
+	copyToVertexArray(2, Math::Vector3d(100000.0, 0.0, 100000.0));
+	copyToVertexArray(3, Math::Vector3d(-100000.0, 0.0, 100000.0));
+	glVertexPointer(3, GL_FLOAT, 0, _verts);
+	glDrawArrays(GL_QUADS, 0, 4);
+	glDisableClientState(GL_VERTEX_ARRAY);*/
+}
+
+void OpenGLShaderRenderer::fillViewportStippled(uint8 r1, uint8 g1, uint8 b1, uint8 r2, uint8 g2, uint8 b2, byte *stipple) {
+	Math::Matrix4 identity;
+	identity(0, 0) = 1.0;
+	identity(1, 1) = 1.0;
+	identity(2, 2) = 1.0;
+	identity(3, 3) = 1.0;
+
+	_triangleShader->use();
+	_triangleShader->setUniform("mvpMatrix", identity);
+	_triangleShader->setUniform("shakeOffset", Math::Vector2d(0, 0));
+
+	glDepthMask(GL_FALSE);
+
+	useColor(r1, g1, b1);
+	setStippleData(stipple);
+	useStipple(true);
+	useColor(r2, g2, b2);
+
+	// Clockwise, since the renderer treats that as the front face
+	copyToVertexArray(0, Math::Vector3d(-1, 1, 0));
+	copyToVertexArray(1, Math::Vector3d(1, 1, 0));
+	copyToVertexArray(2, Math::Vector3d(1, -1, 0));
+	copyToVertexArray(3, Math::Vector3d(-1, -1, 0));
+
+	glBindBuffer(GL_ARRAY_BUFFER, _triangleVBO);
+	glBufferData(GL_ARRAY_BUFFER, 4 * 3 * sizeof(float), _verts, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	useStipple(false);
+	glDepthMask(GL_TRUE);
+	// The rest of the frame is still drawn with the camera set up by positionCamera()
+	_triangleShader->setUniform("shakeOffset",
+		Math::Vector2d(_shakeOffset.x * 0.025f, _shakeOffset.y * 0.025f));
+}
+
+void OpenGLShaderRenderer::flipBuffer() {}
+
+Graphics::Surface *OpenGLShaderRenderer::getScreenshot() {
+	Common::Rect screen = viewport();
+	Graphics::Surface *s = new Graphics::Surface();
+	s->create(screen.width(), screen.height(), getRGBAPixelFormat());
+	glReadPixels(screen.left, screen.top, screen.width(), screen.height(), GL_RGBA, GL_UNSIGNED_BYTE, s->getPixels());
+	flipVertical(s);
+	return s;
+}
+
+} // End of namespace Freescape

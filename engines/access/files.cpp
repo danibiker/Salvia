@@ -1,0 +1,243 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/substream.h"
+#include "access/files.h"
+#include "access/amazon/amazon_resources.h"
+#include "access/martian/martian_resources.h"
+#include "access/access.h"
+
+namespace Access {
+
+FileIdent::FileIdent() {
+	_fileNum = -1;
+	_subFile = 0;
+}
+
+void FileIdent::load(Common::SeekableReadStream &s) {
+	_fileNum = s.readSint16LE();
+	_subFile = s.readUint16LE();
+}
+
+/*------------------------------------------------------------------------*/
+
+CellIdent::	CellIdent() {
+	_cell = 0;
+}
+
+CellIdent::CellIdent(int cell, int fileNum, int subfile) {
+	_cell = cell;
+	_fileNum = fileNum;
+	_subFile = subfile;
+}
+
+/*------------------------------------------------------------------------*/
+
+Resource::Resource() {
+	_stream = nullptr;
+	_size = 0;
+	_data = nullptr;
+}
+
+Resource::~Resource() {
+	delete[] _data;
+	delete _stream;
+}
+
+Resource::Resource(byte *p, int size) {
+	_data = p;
+	_size = size;
+	_stream = new Common::MemoryReadStream(p, size);
+}
+
+const byte *Resource::data() {
+	if (_data == nullptr) {
+		_data = new byte[_size];
+		int pos = _stream->pos();
+		_stream->seek(0);
+		_stream->read(_data, _size);
+		_stream->seek(pos);
+	}
+
+	return _data;
+}
+
+ const char *Resource::getFileName() const {
+		return _file.getName();
+}
+
+/*------------------------------------------------------------------------*/
+
+FileManager::FileManager(AccessEngine *vm) : _vm(vm) {
+	_setPaletteFlag = true;
+}
+
+FileManager::~FileManager() {
+}
+
+Resource *FileManager::loadFile(int fileNum, int subfile) {
+	Resource *res = nullptr;
+	const Common::Path &filepath = _vm->_res->FILENAMES[fileNum];
+
+	// Noctropolis remastered has music in OGG or MID format broken
+	// out into the individual files.
+	if (_vm->gameIs(kGameNoctropolis) && fileNum == 98 && !SearchMan.hasFile(filepath)) {
+		Common::Path path = Common::Path(Common::String::format("MUSIC/M%02d.mid", subfile));
+		// TODO: Also check for OGG file here.  Make it a configuration
+		// variable - originally hidef_music, default true.
+		if (SearchMan.hasFile(path))
+			res = loadRawFile(path);
+	} else {
+		res = new Resource();
+		setAppended(res, filepath);
+		gotoAppended(res, subfile);
+		handleFile(res);
+	}
+
+	return res;
+}
+
+Resource *FileManager::loadFile(const FileIdent &fileIdent) {
+	return loadFile(fileIdent._fileNum, fileIdent._subFile);
+}
+
+Resource *FileManager::loadRawFile(const Common::Path &filename) {
+	Resource *res = new Resource();
+
+	// Open the file
+	openFile(res, filename);
+
+	// Set up stream for the entire file
+	res->_size = res->_file.size();
+	res->_stream = res->_file.readStream(res->_size);
+
+	handleFile(res);
+	return res;
+}
+
+bool FileManager::existFile(const Common::Path &filename) {
+	return Common::File::exists(filename);
+}
+
+void FileManager::openFile(Resource *res, const Common::Path &filename) {
+	// Open up the file
+	_indexedFilename.clear();
+	if (!res->_file.open(filename))
+		error("Could not open file - %s", filename.toString().c_str());
+}
+
+void FileManager::loadScreen(Graphics::ManagedSurface *dest, int fileNum, int subfile) {
+	Resource *res = loadFile(fileNum, subfile);
+	handleScreen(dest, res);
+	delete res;
+}
+
+void FileManager::handleScreen(Graphics::ManagedSurface *dest, Resource *res) {
+	_vm->_screen->loadRawPalette(res->_stream);
+	if (_setPaletteFlag)
+		_vm->_screen->setPalette();
+	_setPaletteFlag = true;
+
+	// The remainder of the file after the palette may be separately compressed,
+	// so call handleFile to handle it if it is
+	res->_size -= res->_stream->pos();
+	handleFile(res);
+
+	Graphics::Surface destSurface = dest->getSubArea(Common::Rect(0, 0,
+		_vm->_screen->w, _vm->_screen->h));
+
+	if (destSurface.w == destSurface.pitch) {
+		res->_stream->read((byte *)destSurface.getPixels(), destSurface.w * destSurface.h);
+	} else {
+		for (int y = 0; y < destSurface.h; ++y) {
+			byte *pDest = (byte *)destSurface.getBasePtr(0, y);
+			res->_stream->read(pDest, destSurface.w);
+		}
+	}
+}
+
+void FileManager::loadScreen(int fileNum, int subfile) {
+	loadScreen(_vm->_screen, fileNum, subfile);
+}
+
+void FileManager::loadScreen(const Common::Path &filename) {
+	Resource *res = loadRawFile(filename);
+	handleScreen(_vm->_screen, res);
+	delete res;
+}
+
+void FileManager::handleFile(Resource *res) {
+	char header[3];
+	res->_stream->read(&header[0], 3);
+	res->_stream->seek(-3, SEEK_CUR);
+
+	bool isCompressed = !strncmp(header, "DBE", 3);
+
+	// If the data is compressed, uncompress it and replace the stream
+	// in the resource with the decompressed one
+	if (isCompressed) {
+		// Read in the entire compressed data
+		byte *src = new byte[res->_size];
+		res->_stream->read(src, res->_size);
+
+		// Decompress the data
+		res->_size = decompressDBE(src, &res->_data);
+
+		// Replace the default resource stream with a stream for the decompressed data
+		delete res->_stream;
+		res->_file.close();
+		res->_stream = new Common::MemoryReadStream(res->_data, res->_size);
+
+		delete[] src;
+	}
+}
+
+void FileManager::setAppended(Resource *res, const Common::Path &fileName) {
+	// Open the file for access
+	if (!res->_file.open(fileName))
+		error("Could not open file %s", fileName.toString().c_str());
+
+	// If a different file has been opened then previously, load its index
+	if (_indexedFilename != fileName) {
+		_indexedFilename = fileName;
+		readIndex(res);
+	}
+}
+
+void FileManager::readIndex(Resource *res) {
+	// Read in the file index
+	int count = res->_file.readUint16LE();
+	assert(count <= 200);
+	_fileIndex.resize(count);
+	for (int i = 0; i < count; ++i)
+		_fileIndex[i] = res->_file.readUint32LE();
+}
+
+void FileManager::gotoAppended(Resource *res, int subfile) {
+	uint32 offset = _fileIndex[subfile];
+	uint32 size = (subfile == (int)_fileIndex.size() - 1) ? res->_file.size() - offset :
+		_fileIndex[subfile + 1] - offset;
+
+	res->_size = size;
+	res->_stream = new Common::SeekableSubReadStream(&res->_file, offset, offset + size);
+}
+
+} // End of namespace Access

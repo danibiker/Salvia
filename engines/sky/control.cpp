@@ -1,0 +1,2707 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+
+#include "backends/keymapper/keymap.h"
+
+#include "common/endian.h"
+#include "common/config-manager.h"
+#include "common/events.h"
+#include "common/file.h"
+#include "common/system.h"
+#include "common/savefile.h"
+#include "common/textconsole.h"
+
+#include "gui/message.h"
+#include "graphics/font.h"
+#include "graphics/fonts/ttf.h"
+#include "image/cgbi.h"
+#include "sky/compact.h"
+#include "sky/control.h"
+#include "sky/disk.h"
+#include "sky/logic.h"
+#include "sky/music/musicbase.h"
+#include "sky/mouse.h"
+#include "sky/screen.h"
+#include "sky/sky.h"
+#include "sky/skydefs.h"
+#include "sky/sound.h"
+#include "sky/struc.h"
+#include "sky/text.h"
+#include "sky/compact.h"
+
+#define ANIM_DELAY 20
+#define CLICK_DELAY 150
+
+namespace Sky {
+
+ConResource::ConResource(void *pSpData, uint32 pNSprites, uint32 pCurSprite, uint16 pX, uint16 pY, uint32 pText, uint8 pOnClick, OSystem *system, uint8 *screen) {
+	_spriteData = (DataFileHeader *)pSpData;
+	_numSprites = pNSprites;
+	_curSprite = pCurSprite;
+	_x = pX;
+	_y = pY;
+	_text = pText;
+	_onClick = pOnClick;
+	_system = system;
+	_screen = screen;
+}
+
+bool ConResource::isMouseOver(uint32 mouseX, uint32 mouseY) {
+	if ((mouseX >= _x) && (mouseY >= _y) && ((uint16)mouseX <= _x + _spriteData->s_width) && ((uint16)mouseY <= _y + _spriteData->s_height))
+		return true;
+	else
+		return false;
+}
+
+void ConResource::drawToScreen(bool doMask) {
+	uint8 *screenPos = _y * GAME_SCREEN_WIDTH + _x + _screen;
+
+	if (!_spriteData)
+		return;
+	uint8 *spriteData = ((uint8 *)_spriteData) + sizeof(DataFileHeader);
+	spriteData += _spriteData->s_sp_size * _curSprite;
+	if (doMask) {
+		for (uint16 cnty = 0; cnty < _spriteData->s_height; cnty++) {
+			for (uint16 cntx = 0; cntx < _spriteData->s_width; cntx++) {
+				if (spriteData[cntx]) screenPos[cntx] = spriteData[cntx];
+			}
+			screenPos += GAME_SCREEN_WIDTH;
+			spriteData += _spriteData->s_width;
+		}
+	} else {
+		for (uint16 cnty = 0; cnty < _spriteData->s_height; cnty++) {
+			memcpy(screenPos, spriteData, _spriteData->s_width);
+			screenPos += GAME_SCREEN_WIDTH;
+			spriteData += _spriteData->s_width;
+		}
+	}
+}
+
+TextResource::TextResource(void *pSpData, uint32 pNSprites, uint32 pCurSprite, uint16 pX, uint16 pY, uint32 pText, uint8 pOnClick, OSystem *system, uint8 *screen) :
+	ConResource(pSpData, pNSprites, pCurSprite, pX, pY, pText, pOnClick, system, screen) {
+		_oldScreen = (uint8 *)malloc(PAN_CHAR_HEIGHT * 3 * PAN_LINE_WIDTH);
+		_oldY = 0;
+		_oldX = GAME_SCREEN_WIDTH;
+}
+
+TextResource::~TextResource() {
+	free(_oldScreen);
+}
+
+void TextResource::flushForRedraw() {
+	if (_oldX < GAME_SCREEN_WIDTH) {
+		uint16 cpWidth = (PAN_LINE_WIDTH > (GAME_SCREEN_WIDTH - _oldX))?(GAME_SCREEN_WIDTH - _oldX):(PAN_LINE_WIDTH);
+		for (uint8 cnty = 0; cnty < PAN_CHAR_HEIGHT; cnty++)
+			memcpy(_screen + (cnty + _oldY) * GAME_SCREEN_WIDTH + _oldX, _oldScreen + cnty * PAN_LINE_WIDTH, cpWidth);
+	}
+	_oldX = GAME_SCREEN_WIDTH;
+}
+
+void TextResource::drawToScreen(bool doMask) {
+	(void)doMask;
+	uint16 cnty, cntx, cpWidth, cpHeight;
+	if ((_oldX == _x) && (_oldY == _y) && (_spriteData))
+		return;
+	if (_oldX < GAME_SCREEN_WIDTH) {
+		cpWidth = (PAN_LINE_WIDTH > (GAME_SCREEN_WIDTH - _oldX))?(GAME_SCREEN_WIDTH - _oldX):(PAN_LINE_WIDTH);
+		if (_spriteData && (cpWidth > _spriteData->s_width))
+			cpWidth = _spriteData->s_width;
+		if (_spriteData)
+			cpHeight = (_spriteData->s_height > (GAME_SCREEN_HEIGHT - _oldY))?(GAME_SCREEN_HEIGHT - _oldY):(_spriteData->s_height);
+		else
+			cpHeight = PAN_CHAR_HEIGHT;
+		for (cnty = 0; cnty < cpHeight; cnty++)
+			memcpy(_screen + (cnty + _oldY) * GAME_SCREEN_WIDTH + _oldX, _oldScreen + cnty * PAN_LINE_WIDTH, cpWidth);
+	}
+	if (!_spriteData) {
+		_oldX = GAME_SCREEN_WIDTH;
+		return;
+	}
+	_oldX = _x;
+	_oldY = _y;
+	cpWidth = (PAN_LINE_WIDTH > (GAME_SCREEN_WIDTH - _x))?(GAME_SCREEN_WIDTH - _x):(PAN_LINE_WIDTH);
+	if (cpWidth > _spriteData->s_width)
+		cpWidth = _spriteData->s_width;
+	cpHeight = (_spriteData->s_height > (GAME_SCREEN_HEIGHT - _y))?(GAME_SCREEN_HEIGHT - _y):(_spriteData->s_height);
+
+	uint8 *screenPos = _screen + _y * GAME_SCREEN_WIDTH + _x;
+	uint8 *copyDest = _oldScreen;
+	uint8 *copySrc = ((uint8 *)_spriteData) + sizeof(DataFileHeader);
+	for (cnty = 0; cnty < cpHeight; cnty++) {
+		memcpy(copyDest, screenPos, cpWidth);
+		for (cntx = 0; cntx < cpWidth; cntx++)
+			if (copySrc[cntx]) screenPos[cntx] = copySrc[cntx];
+		copySrc += _spriteData->s_width;
+		copyDest += PAN_LINE_WIDTH;
+		screenPos += GAME_SCREEN_WIDTH;
+	}
+}
+
+ControlStatus::ControlStatus(Text *skyText, OSystem *system, uint8 *scrBuf) {
+	_skyText = skyText;
+	_system = system;
+	_screenBuf = scrBuf;
+	_textData = NULL;
+	_statusText = new TextResource(NULL, 2, 1, 64, 163, 0, DO_NOTHING, _system, _screenBuf);
+}
+
+ControlStatus::~ControlStatus() {
+	free(_textData);
+	delete _statusText;
+}
+
+void ControlStatus::setToText(const char *newText) {
+	char tmpLine[256];
+	Common::strlcpy(tmpLine, newText, 256);
+	if (_textData) {
+		_statusText->flushForRedraw();
+		free(_textData);
+	}
+	DisplayedText disText = _skyText->displayText(tmpLine, sizeof(tmpLine), NULL, Graphics::kTextAlignCenter, STATUS_WIDTH, 255);
+	_textData = (DataFileHeader *)disText.textData;
+	_statusText->setSprite(_textData);
+	_statusText->drawToScreen(WITH_MASK);
+}
+
+void ControlStatus::setToText(uint16 textNum) {
+	free(_textData);
+	DisplayedText disText = _skyText->displayText(textNum, NULL, Graphics::kTextAlignCenter, STATUS_WIDTH, 255);
+	_textData = (DataFileHeader *)disText.textData;
+	_statusText->setSprite(_textData);
+	_statusText->drawToScreen(WITH_MASK);
+}
+
+void ControlStatus::drawToScreen() {
+	_statusText->flushForRedraw();
+	_statusText->drawToScreen(WITH_MASK);
+}
+
+Control::Control(SkyEngine *vm, Common::SaveFileManager *saveFileMan, Screen *screen, Disk *disk, Mouse *mouse, Text *text, MusicBase *music, Logic *logic, Sound *sound, SkyCompact *skyCompact, OSystem *system, Common::Keymap *shortcutsKeymap) {
+	_vm = vm;
+	_saveFileMan = saveFileMan;
+
+	_skyScreen = screen;
+	_skyDisk = disk;
+	_skyMouse = mouse;
+	_skyText = text;
+	_skyMusic = music;
+	_skyLogic = logic;
+	_skySound = sound;
+	_skyCompact = skyCompact;
+	_system = system;
+	_shortcutsKeymap = shortcutsKeymap;
+	_controlPanel = NULL;
+	_action = kSkyActionNone;
+}
+
+ConResource *Control::createResource(void *pSpData, uint32 pNSprites, uint32 pCurSprite, int16 pX, int16 pY, uint32 pText, uint8 pOnClick, uint8 panelType) {
+	if (pText) pText += 0x7000;
+	if (panelType == MAINPANEL) {
+		pX += MPNL_X;
+		pY += MPNL_Y;
+	} else {
+		pX += SPNL_X;
+		pY += SPNL_Y;
+	}
+	return new ConResource(pSpData, pNSprites, pCurSprite, pX, pY, pText, pOnClick, _system, _screenBuf);
+}
+
+void Control::removePanel() {
+	//
+	// We sync sound settings when exiting the Panel
+	// TODO: There's still an edge case not addressed here
+	//       for when the player opens the native menu (F5)
+	//       and the ScummVM in-game menu on top of it.
+	//       In that case, the eventual music volume
+	//       will be the one set in the ScummVM UI
+	//
+	// Setting the music volume from native menu affects only music volume
+	// even though the native menu has no setting for SFX and Speech volume
+	// TODO: Was this the behavior in the original (DOS version)?
+	//
+	// SkyEngine native sound volume range is [0, 127]
+	// However, via ScummVM UI, the volume range can be set within [0, 256]
+	// so we "translate" between them
+	uint8 volume = _skyMusic->giveVolume();
+	if (volume == 127) { // ensure mapping of max values
+		ConfMan.setInt("music_volume", 256);
+	} else {
+		ConfMan.setInt("music_volume", CLIP(volume << 1, 0, 256));
+	}
+	_vm->syncSoundSettings();
+
+	free(_screenBuf);
+	free(_sprites.controlPanel); free(_sprites.button);
+	free(_sprites.buttonDown);   free(_sprites.savePanel);
+	free(_sprites.yesNo);        free(_sprites.slide);
+	free(_sprites.slide2);       free(_sprites.slode);
+	free(_sprites.slode2);       free(_sprites.musicBodge);
+	delete _controlPanel;        delete _exitButton;
+	_controlPanel = NULL;
+	delete _slide;               delete _slide2;
+	delete _slode;               delete _restorePanButton;
+	delete _savePanel;           delete _saveButton;
+	delete _downFastButton;      delete _downSlowButton;
+	delete _upFastButton;        delete _upSlowButton;
+	delete _quitButton;          delete _autoSaveButton;
+	delete _savePanButton;       delete _dosPanButton;
+	delete _restartPanButton;    delete _fxPanButton;
+	delete _musicPanButton;      delete _bodge;
+	delete _yesNo;               delete _text;
+	delete _statusBar;           delete _restoreButton;
+
+	if (_textSprite) {
+		free(_textSprite);
+		_textSprite = NULL;
+	}
+}
+
+Common::Array<Hint> Control::buildHints() {
+	Common::Array<Hint> hints;
+	Hint h;
+
+	switch (SkyEngine::giveCurrentScreen()) {
+	case 0:
+	case 1:
+	case 2:
+	case 4:
+		if (!SkyEngine::hasSeenScreen(5)) {
+			debug(1, "Section RECYCLING PLANT 1");
+
+			// fire exit unopened, fire_exit_flag == 106
+			if (2 == SkyEngine::giveScriptVar(106)) {
+				h.question = 0;
+				h.answers.clear();
+				h.answers.push_back(1057);
+				h.answers.push_back(1058);
+				hints.push_back(h);
+				break;
+			}
+
+			// if joey not alive and on transporter screen - joey_born == 125
+			if (!SkyEngine::giveScriptVar(125)) {
+				if (SkyEngine::giveCurrentScreen() == 2) {
+					h.question = 1;
+					h.answers.clear();
+					h.answers.push_back(1059);
+					h.answers.push_back(1060);
+					hints.push_back(h);
+				} else {
+					h.question = 50;
+					h.answers.clear();
+					h.answers.push_back(1213);
+					hints.push_back(h);
+				}
+				break;
+			}
+
+			h.question = 2;
+			h.answers.clear();
+			h.answers.push_back(1061);
+			h.answers.push_back(1062);
+			h.answers.push_back(1063);
+			hints.push_back(h);
+			h.question = 3;
+			h.answers.clear();
+			h.answers.push_back(1064);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(90) && !SkyEngine::hasSeenScreen(90)) {
+			h.question = 19;
+			h.answers.clear();
+			h.answers.push_back(1108);
+			h.answers.push_back(1109);
+			hints.push_back(h);
+			break;
+		}
+		break;
+	case 3: // furnace
+		if (!SkyEngine::hasSeenScreen(6)) {
+			h.question = 4;
+			h.answers.clear();
+			h.answers.push_back(1065);
+			h.answers.push_back(1066);
+			hints.push_back(h);
+		}
+		break;
+	case 10:
+	case 11:
+		if (SkyEngine::giveScriptVar(337) && !SkyEngine::giveScriptVar(788)) {
+			h.question = 31;
+			h.answers.clear();
+			h.answers.push_back(1146);
+			h.answers.push_back(1147);
+			h.answers.push_back(1148);
+			hints.push_back(h);
+			break;
+		}
+
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+			break;
+		}
+
+		h.question = 20;
+		h.answers.clear();
+		h.answers.push_back(1110);
+		hints.push_back(h);
+
+		if (SkyEngine::hasSeenScreen(93)) {
+			h.question = 24;
+			h.answers.clear();
+			h.answers.push_back(1123);
+			h.answers.push_back(1124);
+			h.answers.push_back(1125);
+			h.answers.push_back(1126);
+			h.answers.push_back(1127);
+			hints.push_back(h);
+			break;
+		}
+		break;
+	case 5:
+	case 6:
+	case 7:
+	case 8:
+	case 9:
+	case 12:
+	case 13:
+	case 14:
+	case 15:
+	case 18:
+		if (SkyEngine::giveScriptVar(787)) {
+			break;
+		}
+		if (SkyEngine::giveScriptVar(830) && !SkyEngine::giveScriptVar(787)) {
+			h.question = 33;
+			h.answers.clear();
+			h.answers.push_back(1153);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(337) && !SkyEngine::giveScriptVar(788)) {
+			h.question = 31;
+			h.answers.clear();
+			h.answers.push_back(1146);
+			h.answers.push_back(1147);
+			h.answers.push_back(1148);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(190) && !SkyEngine::giveScriptVar(256)) {
+			h.question = 15;
+			h.answers.clear();
+			h.answers.push_back(1096);
+			h.answers.push_back(1097);
+			h.answers.push_back(1098);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(90)) {
+			if (!SkyEngine::hasSeenScreen(31)) {
+				h.question = 53;
+				h.answers.clear();
+				h.answers.push_back(1216);
+				hints.push_back(h);
+			}
+			break;
+		}
+		if (SkyEngine::giveScriptVar(90)) {
+			h.question = 19;
+			h.answers.clear();
+			h.answers.push_back(1108);
+			h.answers.push_back(1109);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(282) && !SkyEngine::hasSeenScreen(18)) {
+			h.question = 14;
+			h.answers.clear();
+			h.answers.push_back(1092);
+			h.answers.push_back(1093);
+			h.answers.push_back(1094);
+			h.answers.push_back(1095);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(12) && !SkyEngine::giveScriptVar(428)) {
+			h.question = 5;
+			h.answers.clear();
+			h.answers.push_back(1067);
+			h.answers.push_back(1068);
+			h.answers.push_back(1069);
+			h.answers.push_back(1070);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(12) && !SkyEngine::giveScriptVar(446)) {
+			h.question = 6;
+			h.answers.clear();
+			h.answers.push_back(1071);
+			h.answers.push_back(1072);
+			h.answers.push_back(1073);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(13)) {
+			if (SkyEngine::giveScriptVar(224) != 42 && !SkyEngine::giveScriptVar(75)) {
+				h.question = 7;
+				h.answers.clear();
+				h.answers.push_back(1074);
+				h.answers.push_back(1075);
+				hints.push_back(h);
+
+				if (SkyEngine::giveScriptVar(270)) {
+					h.question = 8;
+					h.answers.clear();
+					h.answers.push_back(1076);
+					h.answers.push_back(1077);
+					hints.push_back(h);
+				}
+			}
+		}
+		if (SkyEngine::hasSeenScreen(18)) {
+			if (SkyEngine::giveScriptVar(224) != 42) {
+				h.question = 9;
+				h.answers.clear();
+				h.answers.push_back(1078);
+				h.answers.push_back(1079);
+				hints.push_back(h);
+			}
+			if (!SkyEngine::giveScriptVar(445) && SkyEngine::giveScriptVar(75)) {
+				h.question = 10;
+				h.answers.clear();
+				h.answers.push_back(1080);
+				h.answers.push_back(1081);
+				h.answers.push_back(1082);
+				h.answers.push_back(1083);
+				h.answers.push_back(1084);
+				hints.push_back(h);
+			}
+		}
+		if (!SkyEngine::hasSeenScreen(29) && SkyEngine::giveScriptVar(445)) {
+			h.question = 11;
+			h.answers.clear();
+			h.answers.push_back(1085);
+			h.answers.push_back(1086);
+			hints.push_back(h);
+			break;
+		}
+		if (!SkyEngine::hasSeenScreen(12)) {
+			h.question = 51;
+			h.answers.clear();
+			h.answers.push_back(1214);
+			hints.push_back(h);
+		}
+		if (!SkyEngine::hasSeenScreen(18)) {
+			if (SkyEngine::giveScriptVar(75) && SkyEngine::giveScriptVar(224) != 42) {
+				h.question = 52;
+				h.answers.clear();
+				h.answers.push_back(1215);
+				hints.push_back(h);
+			}
+		}
+		break;
+	case 16:
+	case 17:
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+		}
+		break;
+	case 19:
+	case 20:
+	case 21:
+	case 22:
+	case 23:
+	case 24:
+	case 25:
+	case 26:
+	case 28:
+	case 29:
+		if (SkyEngine::giveScriptVar(282) && !SkyEngine::giveScriptVar(190)) {
+			h.question = 14;
+			h.answers.clear();
+			h.answers.push_back(1092);
+			h.answers.push_back(1093);
+			h.answers.push_back(1094);
+			h.answers.push_back(1095);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(787)) {
+			h.question = 34;
+			h.answers.clear();
+			h.answers.push_back(1154);
+			h.answers.push_back(1155);
+			h.answers.push_back(1156);
+			h.answers.push_back(1157);
+			h.answers.push_back(1158);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(830) && !SkyEngine::giveScriptVar(787)) {
+			h.question = 33;
+			h.answers.clear();
+			h.answers.push_back(1153);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(337) && !SkyEngine::giveScriptVar(788)) {
+			h.question = 31;
+			h.answers.clear();
+			h.answers.push_back(1146);
+			h.answers.push_back(1147);
+			h.answers.push_back(1148);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(38) && !SkyEngine::giveScriptVar(814)) {
+			h.question = 26;
+			h.answers.clear();
+			h.answers.push_back(1131);
+			h.answers.push_back(1132);
+			h.answers.push_back(1133);
+			h.answers.push_back(1134);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(90)) {
+			if (!SkyEngine::hasSeenScreen(31)) {
+				h.question = 53;
+				h.answers.clear();
+				h.answers.push_back(1216);
+				hints.push_back(h);
+			}
+			break;
+		}
+		if (SkyEngine::giveScriptVar(90)) {
+			h.question = 19;
+			h.answers.clear();
+			h.answers.push_back(1108);
+			h.answers.push_back(1109);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(190) && !SkyEngine::giveScriptVar(256)) {
+			h.question = 15;
+			h.answers.clear();
+			h.answers.push_back(1096);
+			h.answers.push_back(1097);
+			h.answers.push_back(1098);
+			hints.push_back(h);
+			break;
+		}
+		if (!SkyEngine::giveScriptVar(282)) {
+			if (!SkyEngine::giveScriptVar(88)) {
+				h.question = 12;
+				h.answers.clear();
+				h.answers.push_back(1087);
+				h.answers.push_back(1088);
+				h.answers.push_back(1089);
+				h.answers.push_back(1090);
+				hints.push_back(h);
+			}
+			if (SkyEngine::giveScriptVar(88)) {
+				h.question = 13;
+				h.answers.clear();
+				h.answers.push_back(1091);
+				hints.push_back(h);
+			}
+			break;
+		}
+		if (!SkyEngine::giveScriptVar(83) && !SkyEngine::giveScriptVar(90)) {
+			h.question = 17;
+			h.answers.clear();
+			h.answers.push_back(1100);
+			h.answers.push_back(1101);
+			h.answers.push_back(1102);
+			h.answers.push_back(1103);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(83)) {
+			h.question = 18;
+			h.answers.clear();
+			h.answers.push_back(1104);
+			h.answers.push_back(1105);
+			h.answers.push_back(1106);
+			h.answers.push_back(1107);
+			hints.push_back(h);
+			break;
+		}
+		break;
+	case 27:
+		if (SkyEngine::giveScriptVar(830) && !SkyEngine::giveScriptVar(787)) {
+			h.question = 33;
+			h.answers.clear();
+			h.answers.push_back(1153);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(256)) {
+			h.question = 16;
+			h.answers.clear();
+			h.answers.push_back(1099);
+			hints.push_back(h);
+			break;
+		}
+		break;
+	case 90:
+	case 91:
+	case 92:
+	case 93:
+	case 94:
+	case 95:
+		if (SkyEngine::giveScriptVar(703) == 1) {
+			h.question = 44;
+			h.answers.clear();
+			if (SkyEngine::giveScriptVar(497) != 6) {
+				h.answers.push_back(1191);
+			} else {
+				h.answers.push_back(1192);
+				h.answers.push_back(1193);
+				h.answers.push_back(1194);
+				h.answers.push_back(1195);
+				h.answers.push_back(1196);
+			}
+			hints.push_back(h);
+		}
+		if (SkyEngine::giveScriptVar(82)) {
+			if (!SkyEngine::giveScriptVar(337)) {
+				h.question = 30;
+				h.answers.clear();
+				h.answers.push_back(1143);
+				h.answers.push_back(1144);
+				h.answers.push_back(1145);
+				hints.push_back(h);
+			}
+			break;
+		}
+		if (SkyEngine::giveCurrentScreen() == 90 || SkyEngine::giveCurrentScreen() == 91) {
+			h.question = 21;
+			h.answers.clear();
+			h.answers.push_back(1111);
+			h.answers.push_back(1112);
+			h.answers.push_back(1113);
+			h.answers.push_back(1114);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveCurrentScreen() == 92) {
+			h.question = 22;
+			h.answers.clear();
+			h.answers.push_back(1115);
+			h.answers.push_back(1116);
+			h.answers.push_back(1117);
+			h.answers.push_back(1118);
+			hints.push_back(h);
+			break;
+		}
+		h.question = 23;
+		h.answers.clear();
+		h.answers.push_back(1119);
+		h.answers.push_back(1120);
+		h.answers.push_back(1121);
+		h.answers.push_back(1122);
+		hints.push_back(h);
+		break;
+	case 30:
+	case 31:
+	case 32:
+	case 33:
+	case 34:
+	case 35:
+	case 36:
+	case 38:
+		if (SkyEngine::giveScriptVar(787)) {
+			h.question = 34;
+			h.answers.clear();
+			h.answers.push_back(1154);
+			h.answers.push_back(1155);
+			h.answers.push_back(1156);
+			h.answers.push_back(1157);
+			h.answers.push_back(1158);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(830) && !SkyEngine::giveScriptVar(787)) {
+			h.question = 33;
+			h.answers.clear();
+			h.answers.push_back(1153);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(788) || SkyEngine::giveScriptVar(789)) {
+			h.question = 32;
+			h.answers.clear();
+			h.answers.push_back(1149);
+			h.answers.push_back(1150);
+			h.answers.push_back(1151);
+			h.answers.push_back(1152);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(337) && !SkyEngine::giveScriptVar(788)) {
+			h.question = 31;
+			h.answers.clear();
+			h.answers.push_back(1146);
+			h.answers.push_back(1147);
+			h.answers.push_back(1148);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(38) && !SkyEngine::giveScriptVar(814)) {
+			h.question = 26;
+			h.answers.clear();
+			h.answers.push_back(1131);
+			h.answers.push_back(1132);
+			h.answers.push_back(1133);
+			h.answers.push_back(1134);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::hasSeenScreen(38)) {
+			h.question = 25;
+			h.answers.clear();
+			h.answers.push_back(1128);
+			h.answers.push_back(1129);
+			h.answers.push_back(1130);
+			hints.push_back(h);
+		}
+		if (SkyEngine::giveCurrentScreen() != 38 && SkyEngine::hasSeenScreen(38)) {
+			h.question = 27;
+			h.answers.clear();
+			h.answers.push_back(1135);
+			h.answers.push_back(1136);
+			h.answers.push_back(1137);
+			hints.push_back(h);
+		}
+		break;
+	case 39:
+	case 40:
+	case 41:
+		h.question = 28;
+		h.answers.clear();
+		h.answers.push_back(1138);
+		hints.push_back(h);
+		if (SkyEngine::giveScriptVar(822) && !SkyEngine::giveScriptVar(337)) {
+			h.question = 29;
+			h.answers.clear();
+			h.answers.push_back(1139);
+			h.answers.push_back(1140);
+			h.answers.push_back(1141);
+			h.answers.push_back(1142);
+			hints.push_back(h);
+		}
+		break;
+	case 37:
+		h.question = 34;
+		h.answers.clear();
+		h.answers.push_back(1154);
+		h.answers.push_back(1155);
+		h.answers.push_back(1156);
+		h.answers.push_back(1157);
+		h.answers.push_back(1158);
+		hints.push_back(h);
+		if (!SkyEngine::giveScriptVar(79) && SkyEngine::giveScriptVar(813) == 1) {
+			h.question = 35;
+			h.answers.clear();
+			h.answers.push_back(1159);
+			h.answers.push_back(1160);
+			h.answers.push_back(1161);
+			h.answers.push_back(1162);
+			hints.push_back(h);
+		}
+		if (SkyEngine::giveScriptVar(813) == 1) {
+			h.question = 36;
+			h.answers.clear();
+			h.answers.push_back(1163);
+			h.answers.push_back(1164);
+			hints.push_back(h);
+		}
+		break;
+	case 48:
+		h.question = 37;
+		h.answers.clear();
+		h.answers.push_back(1165);
+		hints.push_back(h);
+		break;
+	case 67:
+		h.question = 38;
+		h.answers.clear();
+		h.answers.push_back(1166);
+		h.answers.push_back(1168);
+		h.answers.push_back(1169);
+		h.answers.push_back(1170);
+		hints.push_back(h);
+		break;
+	case 68:
+	case 69:
+	case 70:
+	case 71:
+	case 72:
+	case 73:
+	case 74:
+	case 75:
+	case 76:
+	case 77:
+	case 78:
+	case 79:
+	case 80:
+		if (!SkyEngine::giveScriptVar(700)) {
+			if (SkyEngine::hasSeenScreen(70) && !SkyEngine::giveScriptVar(696)) {
+				h.question = 39;
+				h.answers.clear();
+				h.answers.push_back(1171);
+				h.answers.push_back(1172);
+				h.answers.push_back(1173);
+				h.answers.push_back(1174);
+				hints.push_back(h);
+			}
+			if (SkyEngine::giveScriptVar(72) > 0) {
+				h.question = 40;
+				h.answers.clear();
+				h.answers.push_back(1175);
+				h.answers.push_back(1176);
+				h.answers.push_back(1177);
+				h.answers.push_back(1178);
+				hints.push_back(h);
+			}
+			if (!SkyEngine::giveScriptVar(72)) {
+				h.question = 41;
+				h.answers.clear();
+				h.answers.push_back(1179);
+				h.answers.push_back(1180);
+				h.answers.push_back(1181);
+				h.answers.push_back(1182);
+				h.answers.push_back(1183);
+				hints.push_back(h);
+			}
+			break;
+		}
+		if (!SkyEngine::giveScriptVar(703)) {
+			h.question = 42;
+			h.answers.clear();
+			h.answers.push_back(1184);
+			h.answers.push_back(1185);
+			h.answers.push_back(1186);
+			h.answers.push_back(1187);
+			h.answers.push_back(1188);
+			hints.push_back(h);
+			break;
+		}
+		if (!SkyEngine::giveScriptVar(642)) {
+			h.question = 43;
+			h.answers.clear();
+			h.answers.push_back(1189);
+			h.answers.push_back(1190);
+			hints.push_back(h);
+			break;
+		}
+		if (!SkyEngine::giveScriptVar(713)) {
+			h.question = 45;
+			h.answers.clear();
+			h.answers.push_back(1197);
+			h.answers.push_back(1198);
+			h.answers.push_back(1199);
+			h.answers.push_back(1200);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(719) != 2) {
+			h.question = 46;
+			h.answers.clear();
+			h.answers.push_back(1201);
+			h.answers.push_back(1202);
+			h.answers.push_back(1203);
+			hints.push_back(h);
+			break;
+		}
+		if (SkyEngine::giveScriptVar(708) != 3) {
+			h.question = 47;
+			h.answers.clear();
+			h.answers.push_back(1204);
+			h.answers.push_back(1205);
+			h.answers.push_back(1206);
+			h.answers.push_back(1207);
+			hints.push_back(h);
+			break;
+		} else {
+			h.question = 48;
+			h.answers.clear();
+			h.answers.push_back(1208);
+			h.answers.push_back(1209);
+			h.answers.push_back(1210);
+			h.answers.push_back(1211);
+			hints.push_back(h);
+			break;
+		}
+		break;
+	case 81:
+		h.question = 49;
+		h.answers.clear();
+		h.answers.push_back(1212);
+		hints.push_back(h);
+		break;
+	default:
+		break;
+	}
+	h.question = 54;
+	h.answers.clear();
+	hints.push_back(h);
+	h.question = 55;
+	hints.push_back(h);
+
+	if (2 == SkyEngine::giveScriptVar(106)) {
+		h.question = 56;
+		hints.push_back(h);
+	}
+	return hints;
+}
+
+int Control::drawHintList(Graphics::Surface *scaled, int destX, int destY, int newW, Graphics::Font *font, const Common::Array<Hint> &hints, Common::Array<Common::Rect> &hintRects, int scrollOffset) {
+	_skyScreen->_screen32.fillRect(Common::Rect(0, 0, _skyScreen->_screen32.w, _skyScreen->_screen32.h), 0);
+	_skyScreen->_screen32.copyRectToSurface(*scaled, destX, destY, Common::Rect(0, 0, scaled->w, scaled->h));
+	hintRects.clear();
+
+	int textWrapWidth = newW - 30;
+	uint32 colorWhite = _skyScreen->_screen32.format.RGBToColor(255, 255, 255);
+	int y = destY + 40 - scrollOffset;
+
+	for (uint i = 0; i < hints.size(); i++) {
+		Common::U32String text = SkyEngine::lookUpAscii(hints[i].question + 1000);
+		Common::Array<Common::U32String> lines;
+		font->wordWrapText(text, textWrapWidth, lines);
+		int startY = y;
+		for (uint l = 0; l < lines.size(); l++) {
+			if (y >= destY + 20 && y + font->getFontHeight() <= destY + scaled->h - 20)
+				font->drawString(&_skyScreen->_screen32, lines[l], destX + 10, y, textWrapWidth, colorWhite);
+			y += font->getFontHeight() + 2;
+		}
+		hintRects.push_back(Common::Rect(destX + 10, startY, destX + 10 + textWrapWidth, y));
+		y += 8;
+	}
+	return y;
+}
+
+TappableAnswer Control::drawHintDetail(Graphics::Surface *scaled, int destX, int destY, int newW, Graphics::Font *font, const Hint &hint, int detailScrollOffset, int &detailContentBottom) {
+	_skyScreen->_screen32.fillRect(Common::Rect(0, 0, _skyScreen->_screen32.w, _skyScreen->_screen32.h), 0);
+	_skyScreen->_screen32.copyRectToSurface(*scaled, destX, destY, Common::Rect(0, 0, scaled->w, scaled->h));
+
+	int textWrapWidth = newW - 30;
+	uint32 colorWhite = _skyScreen->_screen32.format.RGBToColor(255, 255, 255);
+	int y = destY + 40 - detailScrollOffset;
+	int topBound = destY + 20;
+	int bottomBound = destY + scaled->h - 20;
+
+	// question text
+	Common::U32String qText = SkyEngine::lookUpAscii(hint.question + 1000);
+	Common::Array<Common::U32String> qLines;
+	font->wordWrapText(qText, textWrapWidth, qLines);
+	for (uint l = 0; l < qLines.size(); l++) {
+		if (y >= topBound && y + font->getFontHeight() <= bottomBound)
+			font->drawString(&_skyScreen->_screen32, qLines[l], destX + 10, y, textWrapWidth, colorWhite);
+		y += font->getFontHeight() + 2;
+	}
+	y += 12;
+
+	// answers
+	TappableAnswer tappable;
+	tappable.answerId = -1;
+	bool foundTappable = false;
+	for (uint j = 0; j < hint.answers.size(); j++) {
+		int answer = hint.answers[j];
+		bool seen = SkyEngine::isHintAnswerSeen(answer - 1057);
+		debug(1, "answer %d, normalized %d, seen %d", answer, answer - 1057, (int)seen);
+
+		Common::U32String text;
+		if (seen) {
+			text = SkyEngine::lookUpAscii(answer);
+		} else {
+			Common::String fmt = Common::String::format(SkyEngine::lookUpAscii(1254).c_str(), j + 1, (int)hint.answers.size());
+			text = Common::U32String(fmt);
+		}
+
+		int startY = y;
+		Common::Array<Common::U32String> lines;
+		font->wordWrapText(text, textWrapWidth, lines);
+		for (uint l = 0; l < lines.size(); l++) {
+			if (y >= topBound && y + font->getFontHeight() <= bottomBound)
+				font->drawString(&_skyScreen->_screen32, lines[l], destX + 10, y, textWrapWidth, colorWhite);
+			y += font->getFontHeight() + 2;
+		}
+
+		if (!seen) {
+			if (!foundTappable) {
+				foundTappable = true;
+				tappable.rect = Common::Rect(destX + 10, startY, destX + 10 + textWrapWidth, y);
+				tappable.answerId = answer;
+			} else {
+				break;
+			}
+		}
+		y += 8;
+	}
+	detailContentBottom = y;
+	return tappable;
+}
+
+void Control::drawScrollButtons(Graphics::Font *font, Graphics::Surface &screen, int destX, int destY, int newW, int panelBottom, int scrollOffset, int contentBottom, uint32 colorGray, Common::Rect &scrollUpRect, Common::Rect &scrollDownRect) {
+	scrollUpRect = Common::Rect();
+	scrollDownRect = Common::Rect();
+	if (scrollOffset > 0) {
+		scrollUpRect = Common::Rect(destX + newW / 2 - 20, destY + 42, destX + newW / 2 + 20, destY + 58);
+		font->drawString(&screen, Common::U32String("^"), scrollUpRect.left, scrollUpRect.top, 40, colorGray);
+	}
+	int textBottomBound = panelBottom - 10;
+	if (contentBottom > textBottomBound) {
+		scrollDownRect = Common::Rect(destX + newW / 2 - 20, panelBottom - 16, destX + newW / 2 + 20, panelBottom);
+		font->drawString(&screen, Common::U32String("v"), scrollDownRect.left, scrollDownRect.top, 40, colorGray);
+	}
+}
+
+void Control::initHelpPanel() {
+	Image::CgBIDecoder d;
+	Common::File f;
+	Common::String fileName = SkyEngine::giveButton("hints_txtbox.png");
+	if (!f.open(Common::Path(fileName)) || !d.loadStream(f)) {
+		debug(1, "Cannot open file");
+		return;
+	}
+	Graphics::Surface *surface = d.getSurface();
+	if (!surface) {
+		debug(1, "No surface");
+		return;
+	}
+	Graphics::Surface *converted = surface->convertTo(_skyScreen->_screen32.format);
+
+	float scaleX = (float)GAME_SCREEN_WIDTH / converted->w;
+	float scaleY = (float)FULL_SCREEN_HEIGHT / converted->h;
+	float scaleFactor = MIN(scaleX, scaleY);
+
+	int16 newW = (int16)(converted->w * scaleFactor);
+	int16 newH = (int16)(converted->h * scaleFactor);
+
+	Graphics::Surface *scaled = converted->scale(newW, newH, true);
+	converted->free();
+	delete converted;
+
+	int destX = (GAME_SCREEN_WIDTH - newW) / 2;
+	int destY = (FULL_SCREEN_HEIGHT - newH) / 2;
+	Graphics::Font *font = nullptr;
+#ifdef USE_FREETYPE2
+	font = Graphics::loadTTFFontFromArchive("NotoSans-Regular.ttf", 12);
+#endif
+	if (!font) {
+		warning("Cannot load font, hints disabled");
+		scaled->free();
+		delete scaled;
+		return;
+	}
+	Common::Array<Hint> hints = buildHints();
+	Common::Array<Common::Rect> hintRects;
+	TappableAnswer currentTappable;
+	currentTappable.answerId = -1;
+	int selectedHint = -1;
+	int scrollOffset = 0;
+	int detailScrollOffset = 0;
+	int detailContentBottom = 0;
+	Common::Rect scrollUpRect;
+	Common::Rect scrollDownRect;
+	int contentBottom = drawHintList(scaled, destX, destY, newW, font, hints, hintRects, scrollOffset);
+	int panelBottom = destY + newH - 10;
+	uint32 colorGray = _skyScreen->_screen32.format.RGBToColor(180, 180, 180);
+	drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, scrollOffset, contentBottom, colorGray, scrollUpRect, scrollDownRect);
+	_mouseClicked = false;
+	while (!Engine::shouldQuit()) {
+		if (_skyScreen->_screen32.getPixels())
+			_system->copyRectToScreen(_skyScreen->_screen32.getPixels(), _skyScreen->_screen32.pitch, 0, 0, _skyScreen->_screen32.w, _skyScreen->_screen32.h);
+		_system->updateScreen();
+		delay(ANIM_DELAY);
+		if (_action == kSkyActionSkip)
+			break;
+
+		if (_mouseClicked) {
+			Common::Point mouse = _system->getEventManager()->getMousePos();
+			_mouseClicked = false;
+			if (selectedHint == -1) {
+				if (scrollUpRect.width() > 0 && scrollUpRect.contains(mouse)) {
+					scrollOffset = MAX(0, scrollOffset - 50);
+					contentBottom = drawHintList(scaled, destX, destY, newW, font, hints, hintRects, scrollOffset);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, scrollOffset, contentBottom, colorGray, scrollUpRect, scrollDownRect);
+				} else if (scrollDownRect.width() > 0 && scrollDownRect.contains(mouse)) {
+					scrollOffset += 50;
+					contentBottom = drawHintList(scaled, destX, destY, newW, font, hints, hintRects, scrollOffset);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, scrollOffset, contentBottom, colorGray, scrollUpRect, scrollDownRect);
+				} else {
+					for (uint i = 0; i < hintRects.size(); i++) {
+						if (hintRects[i].contains(mouse)) {
+							selectedHint = (int)i;
+							detailScrollOffset = 0;
+							currentTappable = drawHintDetail(scaled, destX, destY, newW, font, hints[selectedHint], detailScrollOffset, detailContentBottom);
+							drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, detailScrollOffset, detailContentBottom, colorGray, scrollUpRect, scrollDownRect);
+							break;
+						}
+					}
+				}
+			} else {
+				if (scrollUpRect.width() > 0 && scrollUpRect.contains(mouse)) {
+					detailScrollOffset = MAX(0, detailScrollOffset - 50);
+					currentTappable = drawHintDetail(scaled, destX, destY, newW, font, hints[selectedHint], detailScrollOffset, detailContentBottom);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, detailScrollOffset, detailContentBottom, colorGray, scrollUpRect, scrollDownRect);
+				} else if (scrollDownRect.width() > 0 && scrollDownRect.contains(mouse)) {
+					detailScrollOffset += 50;
+					currentTappable = drawHintDetail(scaled, destX, destY, newW, font, hints[selectedHint], detailScrollOffset, detailContentBottom);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, detailScrollOffset, detailContentBottom, colorGray, scrollUpRect, scrollDownRect);
+				} else if (currentTappable.answerId != -1 && currentTappable.rect.contains(mouse)) {
+					SkyEngine::setHintAnswerSeen(currentTappable.answerId - 1057);
+					currentTappable = drawHintDetail(scaled, destX, destY, newW, font, hints[selectedHint], detailScrollOffset, detailContentBottom);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, detailScrollOffset, detailContentBottom, colorGray, scrollUpRect, scrollDownRect);
+					debug(1, "tappable answerId: %d, rect: (%d, %d, %d, %d)", currentTappable.answerId, currentTappable.rect.left, currentTappable.rect.top, currentTappable.rect.right, currentTappable.rect.bottom);
+				} else {
+					// back to question
+					selectedHint = -1;
+					currentTappable.answerId = -1;
+					contentBottom = drawHintList(scaled, destX, destY, newW, font, hints, hintRects, scrollOffset);
+					drawScrollButtons(font, _skyScreen->_screen32, destX, destY, newW, panelBottom, scrollOffset, contentBottom, colorGray, scrollUpRect, scrollDownRect);
+				}
+			}
+		}
+	}
+	_skyScreen->forceRefresh();
+	_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
+	delete font;
+	scaled->free();
+	delete scaled;
+}
+
+void Control::initPanel() {
+	_screenBuf = (uint8 *)malloc(GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+
+	uint16 volY = (127 - _skyMusic->giveVolume()) / 4 + 59 - MPNL_Y; // volume slider's Y coordinate
+	uint16 spdY = (SkyEngine::_systemVars->gameSpeed - 2) / SPEED_MULTIPLY;
+	spdY += MPNL_Y + 83; // speed slider's initial position
+
+	_sprites.controlPanel	= _skyDisk->loadFile(60500);
+	_sprites.button			= _skyDisk->loadFile(60501);
+	_sprites.buttonDown		= _skyDisk->loadFile(60502);
+	_sprites.savePanel		= _skyDisk->loadFile(60503);
+	_sprites.yesNo			= _skyDisk->loadFile(60504);
+	_sprites.slide			= _skyDisk->loadFile(60505);
+	_sprites.slode			= _skyDisk->loadFile(60506);
+	_sprites.slode2			= _skyDisk->loadFile(60507);
+	_sprites.slide2			= _skyDisk->loadFile(60508);
+	if (SkyEngine::_systemVars->gameVersion < 368)
+		_sprites.musicBodge = NULL;
+	else
+		_sprites.musicBodge = _skyDisk->loadFile(60509);
+
+	//Main control panel:                                            X    Y Text       OnClick
+	_controlPanel     = createResource(_sprites.controlPanel, 1, 0,  0,   0,  0,      DO_NOTHING, MAINPANEL);
+	_exitButton       = createResource(      _sprites.button, 3, 0, 16, 125, 50,            EXIT, MAINPANEL);
+	_slide            = createResource(      _sprites.slide2, 1, 0, 19,spdY, 95,     SPEED_SLIDE, MAINPANEL);
+	_slide2           = createResource(      _sprites.slide2, 1, 0, 19,volY, 14,     MUSIC_SLIDE, MAINPANEL);
+	_slode            = createResource(      _sprites.slode2, 1, 0,  9,  49,  0,      DO_NOTHING, MAINPANEL);
+	_restorePanButton = createResource(      _sprites.button, 3, 0, 58,  19, 51, REST_GAME_PANEL, MAINPANEL);
+	_savePanButton    = createResource(      _sprites.button, 3, 0, 58,  39, 48, SAVE_GAME_PANEL, MAINPANEL);
+	_dosPanButton     = createResource(      _sprites.button, 3, 0, 58,  59, 93,     QUIT_TO_DOS, MAINPANEL);
+	_restartPanButton = createResource(      _sprites.button, 3, 0, 58,  79, 94,         RESTART, MAINPANEL);
+	_fxPanButton      = createResource(      _sprites.button, 3, 0, 58,  99, 90,       TOGGLE_FX, MAINPANEL);
+
+	if (SkyEngine::isCDVersion()) { // CD Version: Toggle text/speech
+		_musicPanButton = createResource(    _sprites.button, 3, 0, 58, 119, 52,     TOGGLE_TEXT, MAINPANEL);
+	} else {                       // disk version: toggle music on/off
+		_musicPanButton = createResource(    _sprites.button, 3, 0, 58, 119, 91,       TOGGLE_MS, MAINPANEL);
+	}
+	_bodge            = createResource(  _sprites.musicBodge, 2, 1, 98, 115,  0,      DO_NOTHING, MAINPANEL);
+	_yesNo            = createResource(       _sprites.yesNo, 1, 0, -2,  40,  0,      DO_NOTHING, MAINPANEL);
+
+	_text = new TextResource(NULL, 1, 0, 15, 137, 0, DO_NOTHING, _system, _screenBuf);
+	_controlPanLookList[0] = _exitButton;
+	_controlPanLookList[1] = _restorePanButton;
+	_controlPanLookList[2] = _savePanButton;
+	_controlPanLookList[3] = _dosPanButton;
+	_controlPanLookList[4] = _restartPanButton;
+	_controlPanLookList[5] = _fxPanButton;
+	_controlPanLookList[6] = _musicPanButton;
+	_controlPanLookList[7] = _slide;
+	_controlPanLookList[8] = _slide2;
+
+	// save/restore panel
+	_savePanel      = createResource( _sprites.savePanel, 1, 0,   0,   0,  0,      DO_NOTHING, SAVEPANEL);
+	_saveButton     = createResource(    _sprites.button, 3, 0,  29, 129, 48,     SAVE_A_GAME, SAVEPANEL);
+	_downFastButton = createResource(_sprites.buttonDown, 1, 0, 212, 114,  0, SHIFT_DOWN_FAST, SAVEPANEL);
+	_downSlowButton = createResource(_sprites.buttonDown, 1, 0, 212, 104,  0, SHIFT_DOWN_SLOW, SAVEPANEL);
+	_upFastButton   = createResource(_sprites.buttonDown, 1, 0, 212,  10,  0,   SHIFT_UP_FAST, SAVEPANEL);
+	_upSlowButton   = createResource(_sprites.buttonDown, 1, 0, 212,  21,  0,   SHIFT_UP_SLOW, SAVEPANEL);
+	_quitButton     = createResource(    _sprites.button, 3, 0,  72, 129, 49,       SP_CANCEL, SAVEPANEL);
+	_restoreButton  = createResource(    _sprites.button, 3, 0,  29, 129, 51,  RESTORE_A_GAME, SAVEPANEL);
+	_autoSaveButton = createResource(    _sprites.button, 3, 0, 115, 129, 0x8FFF,    RESTORE_AUTO, SAVEPANEL);
+
+	_savePanLookList[0] = _saveButton;
+	_restorePanLookList[0] = _restoreButton;
+	_restorePanLookList[1] = _savePanLookList[1] = _downSlowButton;
+	_restorePanLookList[2] = _savePanLookList[2] = _downFastButton;
+	_restorePanLookList[3] = _savePanLookList[3] = _upFastButton;
+	_restorePanLookList[4] = _savePanLookList[4] = _upSlowButton;
+	_restorePanLookList[5] = _savePanLookList[5] = _quitButton;
+	_restorePanLookList[6] = _autoSaveButton;
+
+	_statusBar = new ControlStatus(_skyText, _system, _screenBuf);
+
+	_textSprite = NULL;
+}
+
+void Control::buttonControl(ConResource *pButton) {
+	char autoSave[50] = "Restore Autosave";
+
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::RU_RUS)
+		strncpy(autoSave, "Zarpyzit/ abtocoxpahehie", 50);
+
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR)
+		strncpy(autoSave, "\x99\x87\x86\x85\x98 \x99\x8e\x89\x98\x84 \x80\x85\x88\x85\x8e\x88\x89\x9a", 50);
+
+	if (pButton == NULL) {
+		free(_textSprite);
+		_textSprite = NULL;
+		_curButtonText = 0;
+		_text->setSprite(NULL);
+		return;
+	}
+	if (_curButtonText != pButton->_text) {
+		free(_textSprite);
+		_textSprite = NULL;
+		_curButtonText = pButton->_text;
+		if (pButton->_text) {
+			DisplayedText textRes;
+			if (pButton->_text == 0xFFFF) // text for autosave button
+				textRes = _skyText->displayText(autoSave, sizeof(autoSave), NULL, Graphics::kTextAlignLeft, PAN_LINE_WIDTH, 255);
+			else
+				textRes = _skyText->displayText(pButton->_text, NULL, Graphics::kTextAlignLeft, PAN_LINE_WIDTH, 255);
+			_textSprite = (DataFileHeader *)textRes.textData;
+			_text->setSprite(_textSprite);
+		} else
+			_text->setSprite(NULL);
+	}
+	Common::Point mouse = _system->getEventManager()->getMousePos();
+	int destY = (mouse.y - 16 >= 0) ? mouse.y - 16 : 0;
+	_text->setXY(mouse.x + 12, destY);
+}
+
+void Control::drawTextCross(uint32 flags) {
+	_bodge->drawToScreen(NO_MASK);
+	if (!(flags & SF_ALLOW_SPEECH))
+		drawCross(151, 124);
+	if (!(flags & SF_ALLOW_TEXT))
+		drawCross(173, 124);
+}
+
+void Control::drawCross(uint16 x, uint16 y) {
+	_text->flushForRedraw();
+	uint8 *bufPos, *crossPos;
+	bufPos = _screenBuf + y * GAME_SCREEN_WIDTH + x;
+	crossPos = _crossImg;
+	for (uint16 cnty = 0; cnty < CROSS_SZ_Y; cnty++) {
+		for (uint16 cntx = 0; cntx < CROSS_SZ_X; cntx++)
+			if (crossPos[cntx] != 0xFF)
+				bufPos[cntx] = crossPos[cntx];
+		bufPos += GAME_SCREEN_WIDTH;
+		crossPos += CROSS_SZ_X;
+	}
+	bufPos = _screenBuf + y * GAME_SCREEN_WIDTH + x;
+	_text->drawToScreen(WITH_MASK);
+}
+
+void Control::animClick(ConResource *pButton) {
+	if (pButton->_curSprite != pButton->_numSprites -1) {
+		pButton->_curSprite++;
+		_text->flushForRedraw();
+		pButton->drawToScreen(NO_MASK);
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+		delay(CLICK_DELAY);
+		if (!_controlPanel)
+			return;
+		pButton->_curSprite--;
+		_text->flushForRedraw();
+		pButton->drawToScreen(NO_MASK);
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+	}
+}
+
+void Control::drawMainPanel() {
+	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+	if (_controlPanel)
+		_controlPanel->drawToScreen(NO_MASK);
+	_exitButton->drawToScreen(NO_MASK);
+	_savePanButton->drawToScreen(NO_MASK);
+	_restorePanButton->drawToScreen(NO_MASK);
+	_dosPanButton->drawToScreen(NO_MASK);
+	_restartPanButton->drawToScreen(NO_MASK);
+	_fxPanButton->drawToScreen(NO_MASK);
+	_musicPanButton->drawToScreen(NO_MASK);
+	_slode->drawToScreen(WITH_MASK);
+	_slide->drawToScreen(WITH_MASK);
+	_slide2->drawToScreen(WITH_MASK);
+	_bodge->drawToScreen(WITH_MASK);
+	if (SkyEngine::isCDVersion())
+		drawTextCross(SkyEngine::_systemVars->systemFlags & TEXT_FLAG_MASK);
+	_statusBar->drawToScreen();
+}
+
+void Control::doLoadSavePanel() {
+	if (SkyEngine::isDemo())
+		return; // I don't think this can even happen
+	initPanel();
+	_skyScreen->clearScreen();
+	if (SkyEngine::_systemVars->gameVersion < 331)
+		_skyScreen->setPalette(60509);
+	else
+		_skyScreen->setPalette(60510);
+
+	_savedMouse = _skyMouse->giveCurrentMouseType();
+	_savedCharSet = _skyText->giveCurrentCharSet();
+	_skyText->fnSetFont(2);
+	_skyMouse->spriteMouse(MOUSE_NORMAL, 0, 0);
+	_lastButton = -1;
+	_curButtonText = 0;
+
+	saveRestorePanel(false);
+
+	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+	_skyScreen->renderControlPanel(_screenBuf);
+	_system->updateScreen();
+	_skyScreen->forceRefresh();
+	_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
+	removePanel();
+	_skyMouse->spriteMouse(_savedMouse, 0, 0);
+	_skyText->fnSetFont(_savedCharSet);
+}
+
+void Control::doControlPanel() {
+	if (SkyEngine::isDemo()) {
+		return;
+	}
+
+	initPanel();
+
+	_savedCharSet = _skyText->giveCurrentCharSet();
+	_skyText->fnSetFont(2);
+
+	_skyScreen->clearScreen();
+	if (SkyEngine::_systemVars->gameVersion < 331)
+		_skyScreen->setPalette(60509);
+	else
+		_skyScreen->setPalette(60510);
+
+	// Set initial button lights
+	_fxPanButton->_curSprite =
+		(SkyEngine::_systemVars->systemFlags & SF_FX_OFF ? 0 : 2);
+
+	// music button only available in floppy version
+	if (!SkyEngine::isCDVersion())
+		_musicPanButton->_curSprite =
+			(SkyEngine::_systemVars->systemFlags & SF_MUS_OFF ? 0 : 2);
+
+	drawMainPanel();
+
+	_savedMouse = _skyMouse->giveCurrentMouseType();
+
+	_skyMouse->spriteMouse(MOUSE_NORMAL, 0, 0);
+	bool quitPanel = false;
+	_lastButton = -1;
+	_curButtonText = 0;
+	uint16 clickRes = 0;
+
+	while (!quitPanel && !Engine::shouldQuit()) {
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+		_mouseClicked = false;
+		delay(ANIM_DELAY);
+		if (!_controlPanel)
+			return;
+		if (_action == kSkyActionSkip) { // escape pressed
+			_mouseClicked = false;
+			quitPanel = true;
+		}
+		bool haveButton = false;
+		Common::Point mouse = _system->getEventManager()->getMousePos();
+		for (uint8 lookCnt = 0; lookCnt < 9; lookCnt++) {
+			if (_controlPanLookList[lookCnt]->isMouseOver(mouse.x, mouse.y)) {
+				haveButton = true;
+				buttonControl(_controlPanLookList[lookCnt]);
+				if (_mouseClicked && _controlPanLookList[lookCnt]->_onClick) {
+					clickRes = handleClick(_controlPanLookList[lookCnt]);
+					if (!_controlPanel) //game state was destroyed
+						return;
+					_text->flushForRedraw();
+					drawMainPanel();
+					_text->drawToScreen(WITH_MASK);
+					if ((clickRes == QUIT_PANEL) || (clickRes == GAME_SAVED) ||
+						(clickRes == GAME_RESTORED))
+						quitPanel = true;
+				}
+				_mouseClicked = false;
+			}
+		}
+		if (!haveButton)
+			buttonControl(NULL);
+	}
+	memset(_screenBuf, 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+	_skyScreen->renderControlPanel(_screenBuf);
+	if (!Engine::shouldQuit())
+		_system->updateScreen();
+	_skyScreen->forceRefresh();
+	_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
+	removePanel();
+	_skyMouse->spriteMouse(_savedMouse, 0, 0);
+	_skyText->fnSetFont(_savedCharSet);
+}
+
+void Control::doHelpPanel() {
+	initHelpPanel();
+}
+
+uint16 Control::handleClick(ConResource *pButton) {
+	char quitDos[50] = "Quit to DOS?";
+	char restart[50] = "Restart?";
+
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::RU_RUS) {
+		strncpy(quitDos, "B[uti b DOC?", 50);
+		strncpy(restart, "Hobaq irpa?", 50);
+	}
+
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR) {
+		strncpy(quitDos, "\x89\x96\x89\x80\x84 \x80\x8c SOD?", 50);
+		strncpy(restart, "\x84\x9a\x87\x8c\x84 \x8e\x87\x83\x99?", 50);
+	}
+
+	switch (pButton->_onClick) {
+	case DO_NOTHING:
+		return 0;
+	case REST_GAME_PANEL:
+		if (!loadSaveAllowed())
+			return CANCEL_PRESSED; // can't save/restore while choosing
+		animClick(pButton);
+		return saveRestorePanel(false); // texts can't be edited
+	case SAVE_GAME_PANEL:
+		if (!loadSaveAllowed())
+			return CANCEL_PRESSED; // can't save/restore while choosing
+		animClick(pButton);
+		return saveRestorePanel(true); // texts can be edited
+	case SAVE_A_GAME:
+		animClick(pButton);
+		return saveGameToFile(true);
+	case RESTORE_A_GAME:
+		animClick(pButton);
+		return restoreGameFromFile(false);
+	case RESTORE_AUTO:
+		animClick(pButton);
+		return restoreGameFromFile(true);
+	case SP_CANCEL:
+		animClick(pButton);
+		return CANCEL_PRESSED;
+	case SHIFT_DOWN_FAST:
+		animClick(pButton);
+		return shiftDown(FAST);
+	case SHIFT_DOWN_SLOW:
+		animClick(pButton);
+		return shiftDown(SLOW);
+	case SHIFT_UP_FAST:
+		animClick(pButton);
+		return shiftUp(FAST);
+	case SHIFT_UP_SLOW:
+		animClick(pButton);
+		return shiftUp(SLOW);
+	case SPEED_SLIDE:
+		_mouseClicked = true;
+		return doSpeedSlide();
+	case MUSIC_SLIDE:
+		_mouseClicked = true;
+		return doMusicSlide();
+	case TOGGLE_FX:
+		toggleFx(pButton);
+		return TOGGLED;
+	case TOGGLE_MS:
+		toggleMusic(pButton);
+		return TOGGLED;
+	case TOGGLE_TEXT:
+		animClick(pButton);
+		return toggleText();
+	case EXIT:
+		animClick(pButton);
+		return QUIT_PANEL;
+	case RESTART:
+		animClick(pButton);
+		if (getYesNo(restart, sizeof(restart))) {
+			restartGame();
+			return GAME_RESTORED;
+		} else
+			return 0;
+	case QUIT_TO_DOS:
+		animClick(pButton);
+		if (getYesNo(quitDos, sizeof(quitDos)))
+			Engine::quitGame();
+		return 0;
+	default:
+		error("Control::handleClick: unknown routine: %X",pButton->_onClick);
+	}
+}
+
+bool Control::getYesNo(char *text, uint bufSize) {
+	bool retVal = false;
+	bool quitPanel = false;
+	uint8 mouseType = MOUSE_NORMAL;
+	uint8 wantMouse = MOUSE_NORMAL;
+	DataFileHeader *dlgTextDat;
+	uint16 textY = MPNL_Y;
+
+	_yesNo->drawToScreen(WITH_MASK);
+	if (text) {
+		DisplayedText dlgLtm = _skyText->displayText(text, bufSize, NULL, Graphics::kTextAlignCenter, _yesNo->_spriteData->s_width - 8, 37);
+		dlgTextDat = (DataFileHeader *)dlgLtm.textData;
+		textY = MPNL_Y + 44 + (28 - dlgTextDat->s_height) / 2;
+	} else
+		dlgTextDat = NULL;
+
+	TextResource *dlgText = new TextResource(dlgTextDat, 1, 0, MPNL_X+2, textY, 0, DO_NOTHING, _system, _screenBuf);
+	dlgText->drawToScreen(WITH_MASK);
+
+	while (!quitPanel) {
+		if (mouseType != wantMouse) {
+			mouseType = wantMouse;
+			_skyMouse->spriteMouse(mouseType, 0, 0);
+		}
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+		delay(ANIM_DELAY);
+		if (!_controlPanel) {
+			free(dlgTextDat);
+			delete dlgText;
+			return retVal;
+		}
+		Common::Point mouse = _system->getEventManager()->getMousePos();
+		if ((mouse.y >= 83) && (mouse.y <= 110)) {
+			if ((mouse.x >= 77) && (mouse.x <= 114)) { // over 'yes'
+				wantMouse = MOUSE_CROSS;
+				if (_mouseClicked) {
+					quitPanel = true;
+					retVal = true;
+				}
+			} else if ((mouse.x >= 156) && (mouse.x <= 193)) { // over 'no'
+				wantMouse = MOUSE_CROSS;
+				if (_mouseClicked) {
+					quitPanel = true;
+					retVal = false;
+				}
+			} else
+				wantMouse = MOUSE_NORMAL;
+		} else
+			wantMouse = MOUSE_NORMAL;
+	}
+	_mouseClicked = false;
+	_skyMouse->spriteMouse(MOUSE_NORMAL, 0, 0);
+	free(dlgTextDat);
+	delete dlgText;
+	return retVal;
+}
+
+uint16 Control::doMusicSlide() {
+	Common::Point mouse = _system->getEventManager()->getMousePos();
+	int ofsY = _slide2->_y - mouse.y;
+	uint8 volume;
+	while (_mouseClicked) {
+		delay(ANIM_DELAY);
+		if (!_controlPanel)
+			return 0;
+		mouse = _system->getEventManager()->getMousePos();
+		int newY = ofsY + mouse.y;
+		if (newY < 59) newY = 59;
+		if (newY > 91) newY = 91;
+		if (newY != _slide2->_y) {
+			_slode->drawToScreen(NO_MASK);
+			_slide2->setXY(_slide2->_x, (uint16)newY);
+			_slide2->drawToScreen(WITH_MASK);
+			_slide->drawToScreen(WITH_MASK);
+			volume = (newY - 59) * 4;
+			if (volume >= 128) volume = 0;
+			else volume = 127 - volume;
+			_skyMusic->setVolume(volume);
+			// we don't sync here with ConfMan to avoid numerous redundant I/O.
+			// we sync in removePanel()
+		}
+		buttonControl(_slide2);
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+	}
+	return 0;
+}
+
+uint16 Control::doSpeedSlide() {
+	Common::Point mouse = _system->getEventManager()->getMousePos();
+	int ofsY = _slide->_y - mouse.y;
+	uint16 speedDelay = _slide->_y - (MPNL_Y + 93);
+	speedDelay *= SPEED_MULTIPLY;
+	speedDelay += 2;
+	while (_mouseClicked) {
+		delay(ANIM_DELAY);
+		if (!_controlPanel)
+			return SPEED_CHANGED;
+		mouse = _system->getEventManager()->getMousePos();
+		int newY = ofsY + mouse.y;
+		if (newY < MPNL_Y + 93) newY = MPNL_Y + 93;
+		if (newY > MPNL_Y + 104) newY = MPNL_Y + 104;
+		if ((newY == 110) || (newY == 108)) newY = 109;
+		if (newY != _slide->_y) {
+			_slode->drawToScreen(NO_MASK);
+			_slide->setXY(_slide->_x, (uint16)newY);
+			_slide->drawToScreen(WITH_MASK);
+			_slide2->drawToScreen(WITH_MASK);
+			speedDelay = newY - (MPNL_Y + 93);
+			speedDelay *= SPEED_MULTIPLY;
+			speedDelay += 2;
+		}
+		buttonControl(_slide);
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+	}
+	SkyEngine::_systemVars->gameSpeed = speedDelay;
+	return SPEED_CHANGED;
+}
+
+void Control::toggleFx(ConResource *pButton) {
+	SkyEngine::_systemVars->systemFlags ^= SF_FX_OFF;
+	if (SkyEngine::_systemVars->systemFlags & SF_FX_OFF) {
+		pButton->_curSprite = 0;
+		_statusBar->setToText(0x7000 + 87);
+	} else {
+		pButton->_curSprite = 2;
+		_statusBar->setToText(0x7000 + 86);
+	}
+
+	ConfMan.setBool("sfx_mute", (SkyEngine::_systemVars->systemFlags & SF_FX_OFF) != 0);
+
+	pButton->drawToScreen(WITH_MASK);
+	_skyScreen->renderControlPanel(_screenBuf);
+	_system->updateScreen();
+}
+
+uint16 Control::toggleText() {
+	uint32 flags = SkyEngine::_systemVars->systemFlags & TEXT_FLAG_MASK;
+	SkyEngine::_systemVars->systemFlags &= ~TEXT_FLAG_MASK;
+
+	if (flags == SF_ALLOW_TEXT) {
+		flags = SF_ALLOW_SPEECH;
+		_statusBar->setToText(0x7000 + 21); // speech only
+	} else if (flags == SF_ALLOW_SPEECH) {
+		flags = SF_ALLOW_SPEECH | SF_ALLOW_TEXT;
+		_statusBar->setToText(0x7000 + 52); // text and speech
+	} else {
+		flags = SF_ALLOW_TEXT;
+		_statusBar->setToText(0x7000 + 35); // text only
+	}
+
+	ConfMan.setBool("subtitles", (flags & SF_ALLOW_TEXT) != 0);
+	ConfMan.setBool("speech_mute", (flags & SF_ALLOW_SPEECH) == 0);
+
+	SkyEngine::_systemVars->systemFlags |= flags;
+
+	drawTextCross(flags);
+
+	_skyScreen->renderControlPanel(_screenBuf);
+	_system->updateScreen();
+	return TOGGLED;
+}
+
+void Control::toggleMusic(ConResource *pButton) {
+	SkyEngine::_systemVars->systemFlags ^= SF_MUS_OFF;
+	if (SkyEngine::_systemVars->systemFlags & SF_MUS_OFF) {
+		_skyMusic->startMusic(0);
+		pButton->_curSprite = 0;
+		_statusBar->setToText(0x7000 + 89);
+	} else {
+		_skyMusic->startMusic(SkyEngine::_systemVars->currentMusic);
+		pButton->_curSprite = 2;
+		_statusBar->setToText(0x7000 + 88);
+	}
+
+	ConfMan.setBool("music_mute", (SkyEngine::_systemVars->systemFlags & SF_MUS_OFF) != 0);
+
+	pButton->drawToScreen(WITH_MASK);
+	_skyScreen->renderControlPanel(_screenBuf);
+	_system->updateScreen();
+}
+
+uint16 Control::shiftDown(uint8 speed) {
+	if (speed == SLOW) {
+		if (_firstText >= MAX_SAVE_GAMES - MAX_ON_SCREEN)
+			return 0;
+		_firstText++;
+	} else {
+		if (_firstText <= MAX_SAVE_GAMES - 2 * MAX_ON_SCREEN)
+			_firstText += MAX_ON_SCREEN;
+		else if (_firstText < MAX_SAVE_GAMES - MAX_ON_SCREEN)
+			_firstText = MAX_SAVE_GAMES - MAX_ON_SCREEN;
+		else
+			return 0;
+	}
+
+	return SHIFTED;
+}
+
+uint16 Control::shiftUp(uint8 speed) {
+	if (speed == SLOW) {
+		if (_firstText > 0)
+			_firstText--;
+		else
+			return 0;
+	} else {
+		if (_firstText >= MAX_ON_SCREEN)
+			_firstText -= MAX_ON_SCREEN;
+		else if (_firstText > 0)
+			_firstText = 0;
+		else
+			return 0;
+	}
+	return SHIFTED;
+}
+
+bool Control::autoSaveExists() {
+	bool test = false;
+	Common::InSaveFile *f = _saveFileMan->openForLoading(
+		g_engine->getSaveStateName(g_engine->getAutosaveSlot()));
+	if (f != NULL) {
+		test = true;
+		delete f;
+	}
+	return test;
+}
+
+uint16 Control::saveRestorePanel(bool allowSave) {
+	_keyPressed.reset();
+	_action = kSkyActionNone;
+	_mouseWheel = 0;
+	buttonControl(NULL);
+	_text->drawToScreen(WITH_MASK); // flush text restore buffer
+
+	ConResource **lookList;
+	uint16 cnt;
+	uint8 lookListLen;
+	if (allowSave) {
+		lookList = _savePanLookList;
+		lookListLen = 6;
+		_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, true);
+
+		 // Disable the shortcuts keymap during text input to prevent letters from being mapped to action events
+		_shortcutsKeymap->setEnabled(false);
+	} else {
+		lookList = _restorePanLookList;
+		if (autoSaveExists())
+			lookListLen = 7;
+		else
+			lookListLen = 6;
+	}
+	bool withAutoSave = (lookListLen == 7);
+
+	Common::StringArray saveGameTexts;
+	DataFileHeader *textSprites[MAX_ON_SCREEN + 1];
+	for (cnt = 0; cnt < MAX_ON_SCREEN + 1; cnt++)
+		textSprites[cnt] = NULL;
+	_firstText = 0;
+
+	Common::String dirtyBufStr;
+	loadDescriptions(saveGameTexts);
+	_selectedGame = 0;
+	dirtyBufStr = saveGameTexts[_selectedGame];
+
+	bool quitPanel = false;
+	bool refreshNames = true;
+	bool refreshAll = true;
+	uint16 clickRes = 0;
+	while (!quitPanel && !Engine::shouldQuit()) {
+		clickRes = 0;
+		if (refreshNames || refreshAll) {
+			if (refreshAll) {
+				_text->flushForRedraw();
+				_savePanel->drawToScreen(NO_MASK);
+				_quitButton->drawToScreen(NO_MASK);
+				if (withAutoSave)
+					_autoSaveButton->drawToScreen(NO_MASK);
+				refreshAll = false;
+			}
+			for (cnt = 0; cnt < MAX_ON_SCREEN; cnt++)
+				if (textSprites[cnt])
+					free(textSprites[cnt]);
+			setUpGameSprites(saveGameTexts, textSprites, _firstText, _selectedGame, dirtyBufStr);
+			showSprites(textSprites, allowSave);
+			refreshNames = false;
+		}
+
+		_text->drawToScreen(WITH_MASK);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+		_mouseClicked = false;
+		delay(ANIM_DELAY);
+		if (!_controlPanel)
+			return clickRes;
+		if (_action == kSkyActionSkip) { // escape pressed
+			_mouseClicked = false;
+			clickRes = CANCEL_PRESSED;
+			quitPanel = true;
+		} else if (_action == kSkyActionConfirm) { // enter pressed
+			// Note: The original engine code does not allow an empty string for a save name
+			// but it does allow a series of blank spaces as a name.
+			if (dirtyBufStr != "") {
+				clickRes = handleClick(lookList[0]);
+				if (!_controlPanel) //game state was destroyed
+					return clickRes;
+				if (clickRes == GAME_SAVED) {
+					saveGameTexts[_selectedGame] = dirtyBufStr;
+					saveDescriptions(saveGameTexts);
+				} else if (clickRes == NO_DISK_SPACE)
+					displayMessage("Could not save the game. (%s)", _saveFileMan->popErrorDesc().c_str());
+				quitPanel = true;
+			}
+			_mouseClicked = false;
+			_action = kSkyActionNone;
+		} if (allowSave && _keyPressed.keycode) {
+			handleKeyPress(_keyPressed, dirtyBufStr);
+			refreshNames = true;
+			_keyPressed.reset();
+		}
+
+		if (_mouseWheel) {
+			if (_mouseWheel < 0)
+				clickRes = shiftUp(SLOW);
+			else if (_mouseWheel > 0)
+				clickRes = shiftDown(SLOW);
+			_mouseWheel = 0;
+			if (clickRes == SHIFTED) {
+				_selectedGame = _firstText;
+				dirtyBufStr = saveGameTexts[_selectedGame];
+				refreshNames = true;
+			}
+		}
+
+		bool haveButton = false;
+		Common::Point mouse = _system->getEventManager()->getMousePos();
+		for (cnt = 0; cnt < lookListLen; cnt++)
+			if (lookList[cnt]->isMouseOver(mouse.x, mouse.y)) {
+				buttonControl(lookList[cnt]);
+				haveButton = true;
+
+				if (_mouseClicked && lookList[cnt]->_onClick) {
+					_mouseClicked = false;
+
+					if (lookList[cnt]->_onClick != SAVE_A_GAME
+					    || (lookList[cnt]->_onClick == SAVE_A_GAME && dirtyBufStr != "")) {
+						// The save button will not animate for an empty string save name
+						// and the save action will be ignored
+						clickRes = handleClick(lookList[cnt]);
+						if (!_controlPanel) //game state was destroyed
+							return clickRes;
+
+						if (clickRes == SHIFTED) {
+							_selectedGame = _firstText;
+							dirtyBufStr = saveGameTexts[_selectedGame];
+							refreshNames = true;
+						}
+						if (clickRes == NO_DISK_SPACE) {
+							displayMessage("Could not save the game. (%s)", _saveFileMan->popErrorDesc().c_str());
+							quitPanel = true;
+						}
+						if ((clickRes == CANCEL_PRESSED) || (clickRes == GAME_RESTORED))
+							quitPanel = true;
+
+						if (clickRes == GAME_SAVED) {
+							saveGameTexts[_selectedGame] = dirtyBufStr;
+							saveDescriptions(saveGameTexts);
+							quitPanel = true;
+						}
+						if (clickRes == RESTORE_FAILED)
+							refreshAll = true;
+					}
+				}
+			}
+
+		if (_mouseClicked) {
+			if ((mouse.x >= GAME_NAME_X) && (mouse.x <= GAME_NAME_X + PAN_LINE_WIDTH) &&
+				(mouse.y >= GAME_NAME_Y) && (mouse.y <= GAME_NAME_Y + PAN_CHAR_HEIGHT * MAX_ON_SCREEN)) {
+
+				uint16 newSelectedGame = (mouse.y - GAME_NAME_Y) / PAN_CHAR_HEIGHT + _firstText;
+				if (_selectedGame != newSelectedGame) {
+					_selectedGame = newSelectedGame;
+					dirtyBufStr = saveGameTexts[_selectedGame];
+				}
+				refreshNames = true;
+			}
+		}
+		if (!haveButton)
+			buttonControl(NULL);
+	}
+
+	for (cnt = 0; cnt < MAX_ON_SCREEN + 1; cnt++)
+		free(textSprites[cnt]);
+
+	if (allowSave) {
+		_shortcutsKeymap->setEnabled(true);
+		_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, false);
+	}
+
+	return clickRes;
+}
+
+void Control::handleKeyPress(Common::KeyState kbd, Common::String &textBuf) {
+	if (kbd.keycode == Common::KEYCODE_BACKSPACE) { // backspace
+		if (textBuf.size() > 0)
+			textBuf.deleteLastChar();
+	} else if (kbd.ascii) {
+		// Cannot enter text wider than the save/load panel
+		if (_enteredTextWidth >= PAN_LINE_WIDTH - 10)
+			return;
+
+		// Cannot enter text longer than MAX_TEXT_LEN-1 chars, since
+		// the storage is only so big. Note: The code used to incorrectly
+		// allow up to MAX_TEXT_LEN, which caused an out of bounds access,
+		// overwriting the next entry in the list of savegames partially.
+		// This could be triggered by e.g. entering lots of periods ".".
+		if (textBuf.size() >= MAX_TEXT_LEN - 1)
+			return;
+
+		// Allow the key only if is a letter, a digit, or one of a selected
+		// list of extra characters
+		if (Common::isAlnum(kbd.ascii) || strchr(" ,().='-&+!?\"", kbd.ascii) != 0) {
+			textBuf += kbd.ascii;
+		}
+	}
+}
+
+void Control::setUpGameSprites(const Common::StringArray &saveGameNames, DataFileHeader **nameSprites, uint16 firstNum, uint16 selectedGame, const Common::String &dirtyString) {
+	char cursorChar[2] = "-";
+	DisplayedText textSpr;
+	if (!nameSprites[MAX_ON_SCREEN]) {
+		textSpr = _skyText->displayText(cursorChar, sizeof(cursorChar), NULL, Graphics::kTextAlignLeft, 15, 0);
+		nameSprites[MAX_ON_SCREEN] = (DataFileHeader *)textSpr.textData;
+	}
+	for (uint16 cnt = 0; cnt < MAX_ON_SCREEN; cnt++) {
+		char nameBuf[MAX_TEXT_LEN + 10];
+
+		if (firstNum + cnt == selectedGame) {
+			Common::sprintf_s(nameBuf, "%3d: %s", firstNum + cnt + 1, dirtyString.c_str());
+			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, Graphics::kTextAlignStart, PAN_LINE_WIDTH, 0);
+		} else {
+			Common::sprintf_s(nameBuf, "%3d: %s", firstNum + cnt + 1, saveGameNames[firstNum + cnt].c_str());
+			textSpr = _skyText->displayText(nameBuf, sizeof(nameBuf), NULL, Graphics::kTextAlignStart, PAN_LINE_WIDTH, 37);
+		}
+		nameSprites[cnt] = (DataFileHeader *)textSpr.textData;
+		if (firstNum + cnt == selectedGame) {
+			nameSprites[cnt]->flag = 1;
+			_enteredTextWidth = (uint16)textSpr.textWidth;
+		} else
+			nameSprites[cnt]->flag = 0;
+	}
+}
+
+void Control::showSprites(DataFileHeader **nameSprites, bool allowSave) {
+	ConResource *drawResource = new ConResource(NULL, 1, 0, 0, 0, 0, 0, _system, _screenBuf);
+	for (uint16 cnt = 0; cnt < MAX_ON_SCREEN; cnt++) {
+		drawResource->setSprite(nameSprites[cnt]);
+		drawResource->setXY(GAME_NAME_X, GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT);
+		if (nameSprites[cnt]->flag) { // name is highlighted
+			for (uint16 cnty = GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT; cnty < GAME_NAME_Y + (cnt + 1) * PAN_CHAR_HEIGHT - 1; cnty++)
+				memset(_screenBuf + cnty * GAME_SCREEN_WIDTH + GAME_NAME_X, 37, PAN_LINE_WIDTH);
+			drawResource->drawToScreen(WITH_MASK);
+			if (allowSave) {
+				drawResource->setSprite(nameSprites[MAX_ON_SCREEN]);
+				drawResource->setXY(GAME_NAME_X + _enteredTextWidth + 1, GAME_NAME_Y + cnt * PAN_CHAR_HEIGHT + 4);
+				drawResource->drawToScreen(WITH_MASK);
+			}
+		} else
+			drawResource->drawToScreen(NO_MASK);
+	}
+	delete drawResource;
+}
+
+void Control::loadDescriptions(Common::StringArray &savenames) {
+	savenames.resize(MAX_SAVE_GAMES);
+
+	Common::InSaveFile *inf;
+	inf = _saveFileMan->openForLoading("SKY-VM.SAV");
+	if (inf != NULL) {
+		char *tmpBuf =  new char[MAX_SAVE_GAMES * MAX_TEXT_LEN];
+		char *tmpPtr = tmpBuf;
+		inf->read(tmpBuf, MAX_SAVE_GAMES * MAX_TEXT_LEN);
+		for (int i = 0; i < MAX_SAVE_GAMES; ++i) {
+			savenames[i] = tmpPtr;
+			tmpPtr += savenames[i].size() + 1;
+		}
+		delete inf;
+		delete[] tmpBuf;
+	}
+}
+
+bool Control::loadSaveAllowed() {
+	if (SkyEngine::_systemVars->systemFlags & SF_CHOOSING)
+		return false; // texts get lost during load/save, so don't allow it during choosing
+	if (Logic::_scriptVariables[SCREEN] >= 101)
+		return false; // same problem with LINC terminals
+	if ((Logic::_scriptVariables[SCREEN] >= 82) &&
+		(Logic::_scriptVariables[SCREEN] != 85) &&
+		(Logic::_scriptVariables[SCREEN] < 90))
+		return false; // don't allow saving in final rooms
+
+	return true;
+}
+
+bool Control::isControlPanelOpen() {
+	return _controlPanel;
+}
+
+int Control::displayMessage(const char *message, ...) {
+	char buf[STRINGBUFLEN];
+	va_list va;
+
+	va_start(va, message);
+	vsnprintf(buf, STRINGBUFLEN, message, va);
+	va_end(va);
+
+	GUI::MessageDialog dialog(buf);
+	int result = dialog.runModal();
+	_skyMouse->spriteMouse(MOUSE_NORMAL, 0, 0);
+	return result;
+}
+
+void Control::saveDescriptions(const Common::StringArray &list) {
+	Common::OutSaveFile *outf;
+
+	outf = _saveFileMan->openForSaving("SKY-VM.SAV");
+	bool ioFailed = true;
+	if (outf != nullptr) {
+		for (uint16 cnt = 0; cnt < MAX_SAVE_GAMES; cnt++) {
+			outf->write(list[cnt].c_str(), list[cnt].size() + 1);
+		}
+		outf->finalize();
+		if (!outf->err())
+			ioFailed = false;
+		delete outf;
+	}
+	if (ioFailed)
+		displayMessage("Unable to store Savegame names to file SKY-VM.SAV. (%s)", _saveFileMan->popErrorDesc().c_str());
+}
+
+uint16 Control::saveGameToFile(bool fromControlPanel, const char *filename, bool isAutosave) {
+	char fName[20];
+	if (!filename) {
+		Common::sprintf_s(fName,"SKY-VM.%03d", isAutosave ? 0 : _selectedGame + 1);
+		filename = fName;
+	}
+
+	Common::OutSaveFile *outf;
+	outf = _saveFileMan->openForSaving(filename);
+	if (outf == nullptr)
+		return NO_DISK_SPACE;
+
+	if (!fromControlPanel) {
+		// These variables are usually set when entering the control panel,
+		// but not when using the GMM.
+		_savedCharSet = _skyText->giveCurrentCharSet();
+		_savedMouse = _skyMouse->giveCurrentMouseType();
+	}
+
+	uint8 *saveData = (uint8 *)malloc(0x20000);
+	uint32 fSize = prepareSaveData(saveData);
+
+	uint32 writeRes = outf->write(saveData, fSize);
+	outf->finalize();
+	if (outf->err())
+		writeRes = 0;
+	free(saveData);
+	delete outf;
+
+	return (writeRes == fSize) ? GAME_SAVED : NO_DISK_SPACE;
+}
+
+#define STOSD(ptr, val) { *(uint32 *)(ptr) = TO_LE_32(val); (ptr) += 4; }
+#define STOSW(ptr, val) { *(uint16 *)(ptr) = TO_LE_16(val); (ptr) += 2; }
+
+uint32 Control::prepareSaveData(uint8 *destBuf) {
+	uint32 cnt;
+	memset(destBuf, 0, 4); // space for data size
+	uint8 *destPos = destBuf + 4;
+	STOSD(destPos, SAVE_FILE_REVISION);
+	STOSD(destPos, SkyEngine::_systemVars->gameVersion);
+
+	STOSW(destPos, _skySound->_saveSounds[0]);
+	STOSW(destPos, _skySound->_saveSounds[1]);
+
+	STOSD(destPos, _skyMusic->giveCurrentMusic());
+	STOSD(destPos, _savedCharSet);
+	STOSD(destPos, _savedMouse);
+	STOSD(destPos, SkyEngine::_systemVars->currentPalette);
+	for (cnt = 0; cnt < 838; cnt++)
+		STOSD(destPos, Logic::_scriptVariables[cnt]);
+	uint32 *loadedFilesList = _skyDisk->giveLoadedFilesList();
+
+	for (cnt = 0; cnt < 60; cnt++)
+		STOSD(destPos, loadedFilesList[cnt]);
+
+	for (cnt = 0; cnt < _skyCompact->_numSaveIds; cnt++) {
+		uint16 numElems;
+		uint16 *rawCpt = (uint16 *)_skyCompact->fetchCptInfo(_skyCompact->_saveIds[cnt], &numElems, NULL, NULL);
+		for (uint16 elemCnt = 0; elemCnt < numElems; elemCnt++)
+			STOSW(destPos, rawCpt[elemCnt]);
+	}
+
+	*(uint32 *)destBuf = TO_LE_32(destPos - destBuf); // save size
+	return destPos - destBuf;
+}
+
+#undef STOSD
+#undef STOSW
+
+#define LODSD(strPtr, val) { val = READ_LE_UINT32(strPtr); (strPtr) += 4; }
+#define LODSW(strPtr, val) { val = READ_LE_UINT16(strPtr); (strPtr) += 2; }
+
+void Control::importOldMegaSet(uint8 **srcPos, MegaSet *mega) {
+	LODSW(*srcPos, mega->gridWidth);
+	LODSW(*srcPos, mega->colOffset);
+	LODSW(*srcPos, mega->colWidth);
+	LODSW(*srcPos, mega->lastChr);
+}
+
+void Control::importOldCompact(Compact* destCpt, uint8 **srcPos, uint16 numElems, uint16 type, char *name) {
+	uint16 saveType;
+	LODSW(*srcPos, saveType);
+	if ((saveType & (SAVE_EXT | SAVE_TURNP)) && (numElems < 54))
+		error("Cpt %s: Savedata doesn't match cpt size (%d)", name, numElems);
+	if ((saveType & SAVE_MEGA0) && (numElems < 54 + 13))
+		error("Cpt %s: Savedata doesn't match cpt size (%d)", name, numElems);
+	if ((saveType & SAVE_MEGA1) && (numElems < 54 + 13 + 13))
+		error("Cpt %s: Savedata doesn't match cpt size (%d)", name, numElems);
+	if ((saveType & SAVE_MEGA2) && (numElems < 54 + 13 + 13 + 13))
+		error("Cpt %s: Savedata doesn't match cpt size (%d)", name, numElems);
+	if ((saveType & SAVE_MEGA3) && (numElems < 54 + 13 + 13 + 13))
+		error("Cpt %s: Savedata doesn't match cpt size (%d)", name, numElems);
+	if (saveType & SAVE_GRAFX) {
+		uint16 graphType, target, pos;
+		LODSW(*srcPos, graphType);
+		LODSW(*srcPos, target);
+		LODSW(*srcPos, pos);
+		// convert to new compact system..
+		destCpt->grafixProgPos = pos;
+		if (graphType == OG_PTR_NULL)
+			destCpt->grafixProgId = 0;
+		else if (graphType == OG_AUTOROUTE)
+			destCpt->grafixProgId = destCpt->animScratchId;
+		else if (graphType == OG_COMPACT)
+			destCpt->grafixProgId = target;
+		else if (graphType == OG_TALKTABLE)
+			destCpt->grafixProgId = ((uint16 *)_skyCompact->fetchCpt(CPT_TALK_TABLE_LIST))[target];
+		else if (graphType == OG_COMPACTELEM)
+			destCpt->grafixProgId = *(uint16 *)_skyCompact->getCompactElem(destCpt, target);
+		else
+			error("Illegal GrafixProg type encountered for compact %s", name);
+	}
+	if (saveType & SAVE_TURNP) {
+		// basically impossible to import these. simply set it to end-of-turn and hope the script
+		// will take care of it.
+		destCpt->turnProgId = 0x13B;
+		destCpt->turnProgPos = 1;
+		uint16 turnSkipLen;
+		LODSW(*srcPos, turnSkipLen);
+		*srcPos += 2 * turnSkipLen;
+	} else if (numElems >= 49) {
+		destCpt->turnProgId = 0;
+		destCpt->turnProgPos = 0;
+	}
+	LODSW(*srcPos, destCpt->logic);
+	LODSW(*srcPos, destCpt->status);
+	LODSW(*srcPos, destCpt->sync);
+	LODSW(*srcPos, destCpt->screen);
+	LODSW(*srcPos, destCpt->place);
+	// getToTable
+	LODSW(*srcPos, destCpt->xcood);
+	LODSW(*srcPos, destCpt->ycood);
+	LODSW(*srcPos, destCpt->frame);
+	LODSW(*srcPos, destCpt->cursorText);
+	LODSW(*srcPos, destCpt->mouseOn);
+	LODSW(*srcPos, destCpt->mouseOff);
+	LODSW(*srcPos, destCpt->mouseClick);
+	LODSW(*srcPos, destCpt->mouseRelX);
+	LODSW(*srcPos, destCpt->mouseRelY);
+	LODSW(*srcPos, destCpt->mouseSizeX);
+	LODSW(*srcPos, destCpt->mouseSizeY);
+	LODSW(*srcPos, destCpt->actionScript);
+	LODSW(*srcPos, destCpt->upFlag);
+	LODSW(*srcPos, destCpt->downFlag);
+	LODSW(*srcPos, destCpt->getToFlag);
+	LODSW(*srcPos, destCpt->flag);
+	LODSW(*srcPos, destCpt->mood);
+	// grafixProg
+	LODSW(*srcPos, destCpt->offset);
+	LODSW(*srcPos, destCpt->mode);
+	LODSW(*srcPos, destCpt->baseSub);
+	LODSW(*srcPos, destCpt->baseSub_off);
+	if (saveType & SAVE_EXT) {
+		LODSW(*srcPos, destCpt->actionSub);
+		LODSW(*srcPos, destCpt->actionSub_off);
+		LODSW(*srcPos, destCpt->getToSub);
+		LODSW(*srcPos, destCpt->getToSub_off);
+		LODSW(*srcPos, destCpt->extraSub);
+		LODSW(*srcPos, destCpt->extraSub_off);
+		LODSW(*srcPos, destCpt->dir);
+		LODSW(*srcPos, destCpt->stopScript);
+		LODSW(*srcPos, destCpt->miniBump);
+		LODSW(*srcPos, destCpt->leaving);
+		LODSW(*srcPos, destCpt->atWatch);
+		LODSW(*srcPos, destCpt->atWas);
+		LODSW(*srcPos, destCpt->alt);
+		LODSW(*srcPos, destCpt->request);
+		LODSW(*srcPos, destCpt->spWidth_xx);
+		LODSW(*srcPos, destCpt->spColor);
+		LODSW(*srcPos, destCpt->spTextId);
+		LODSW(*srcPos, destCpt->spTime);
+		LODSW(*srcPos, destCpt->arAnimIndex);
+		// turnProg
+		LODSW(*srcPos, destCpt->waitingFor);
+		LODSW(*srcPos, destCpt->arTargetX);
+		LODSW(*srcPos, destCpt->arTargetY);
+		// animScratch
+		LODSW(*srcPos, destCpt->megaSet);
+		if (saveType & SAVE_MEGA0)
+			importOldMegaSet(srcPos, &(destCpt->megaSet0));
+		if (saveType & SAVE_MEGA1)
+			importOldMegaSet(srcPos, &(destCpt->megaSet1));
+		if (saveType & SAVE_MEGA2)
+			importOldMegaSet(srcPos, &(destCpt->megaSet2));
+		if (saveType & SAVE_MEGA3)
+			importOldMegaSet(srcPos, &(destCpt->megaSet3));
+	}
+}
+
+uint16 Control::parseSaveData(uint8 *srcBuf) {
+	uint32 reloadList[60];
+	uint32 cnt;
+	uint8 *srcPos = srcBuf;
+	uint32 size;
+	uint32 saveRev;
+	uint32 gameVersion;
+	LODSD(srcPos, size);
+	LODSD(srcPos, saveRev);
+	if (saveRev > SAVE_FILE_REVISION) {
+		displayMessage("Unknown save file revision (%d)", saveRev);
+		return RESTORE_FAILED;
+	} else if (saveRev < OLD_SAVEGAME_TYPE) {
+		displayMessage("This saved game version is unsupported.");
+		return RESTORE_FAILED;
+	}
+	LODSD(srcPos, gameVersion);
+	if (gameVersion != SkyEngine::_systemVars->gameVersion) {
+		if ((!SkyEngine::isCDVersion()) || (gameVersion < 365)) { // cd versions are compatible
+			displayMessage("This saved game was created by\n"
+				"Beneath a Steel Sky v0.0%03d\n"
+				"It cannot be loaded by this version (v0.0%3d)",
+				gameVersion, SkyEngine::_systemVars->gameVersion);
+			return RESTORE_FAILED;
+		}
+	}
+	SkyEngine::_systemVars->systemFlags |= SF_GAME_RESTORED;
+
+	LODSW(srcPos, _skySound->_saveSounds[0]);
+	LODSW(srcPos, _skySound->_saveSounds[1]);
+	_skySound->restoreSfx();
+
+	uint32 music, mouseType, palette;
+	LODSD(srcPos, music);
+	LODSD(srcPos, _savedCharSet);
+	LODSD(srcPos, mouseType);
+	LODSD(srcPos, palette);
+
+	_skyLogic->parseSaveData((uint32 *)srcPos);
+	srcPos += NUM_SKY_SCRIPTVARS * sizeof(uint32);
+
+	for (cnt = 0; cnt < 60; cnt++)
+		LODSD(srcPos, reloadList[cnt]);
+
+	if (saveRev == SAVE_FILE_REVISION) {
+		for (cnt = 0; cnt < _skyCompact->_numSaveIds; cnt++) {
+			uint16 numElems;
+			uint16 *rawCpt = (uint16 *)_skyCompact->fetchCptInfo(_skyCompact->_saveIds[cnt], &numElems, NULL, NULL);
+			for (uint16 elemCnt = 0; elemCnt < numElems; elemCnt++)
+				LODSW(srcPos, rawCpt[elemCnt]);
+		}
+	} else {	// import old savegame revision
+		for (cnt = 0; cnt < (uint32)(_skyCompact->_numSaveIds - 2); cnt++) {
+			uint16 numElems;
+			uint16 type;
+			char name[128];
+			uint16 *rawCpt = (uint16 *)_skyCompact->fetchCptInfo(_skyCompact->_saveIds[cnt], &numElems, &type, name, sizeof(name));
+			if (type == COMPACT) {
+				importOldCompact((Compact *)rawCpt, &srcPos, numElems, type, name);
+			} else if (type == ROUTEBUF) {
+				assert(numElems == 32);
+				for (uint32 elemCnt = 0; elemCnt < numElems; elemCnt++)
+					LODSW(srcPos, rawCpt[elemCnt]);
+			}
+		}
+		uint16 *rawCpt = (uint16 *)_skyCompact->fetchCpt(0xBF);
+		for (cnt = 0; cnt < 3; cnt++)
+			LODSW(srcPos, rawCpt[cnt]);
+		rawCpt = (uint16 *)_skyCompact->fetchCpt(0xC2);
+		for (cnt = 0; cnt < 13; cnt++)
+			LODSW(srcPos, rawCpt[cnt]);
+	}
+
+	// make sure all text compacts are off
+	for (cnt = CPT_TEXT_1; cnt <= CPT_TEXT_11; cnt++)
+		_skyCompact->fetchCpt(cnt)->status = 0;
+
+	if (srcPos - srcBuf != (int32)size)
+		error("Restore failed! Savegame data = %lu bytes. Expected size: %d", (long)(srcPos-srcBuf), size);
+
+	_skyDisk->refreshFilesList(reloadList);
+	SkyEngine::_systemVars->currentMusic = (uint16)music;
+	if (!(SkyEngine::_systemVars->systemFlags & SF_MUS_OFF))
+		_skyMusic->startMusic((uint16)music);
+	_savedMouse = (uint16)mouseType;
+	SkyEngine::_systemVars->currentPalette = palette; // will be set when doControlPanel ends
+
+	return GAME_RESTORED;
+}
+
+
+uint16 Control::restoreGameFromFile(bool autoSave) {
+	int slot = autoSave ? g_engine->getAutosaveSlot() : _selectedGame + 1;
+	Common::String filename = g_engine->getSaveStateName(slot);
+
+	Common::InSaveFile *inf;
+	inf = _saveFileMan->openForLoading(filename);
+	if (inf == NULL) {
+		return RESTORE_FAILED;
+	}
+
+	uint32 infSize = inf->readUint32LE();
+	if (infSize < 4) infSize = 4;
+	uint8 *saveData = (uint8 *)malloc(infSize);
+	*(uint32 *)saveData = TO_LE_32(infSize);
+
+	if (inf->read(saveData+4, infSize-4) != infSize-4) {
+		displayMessage("Can't read from file '%s'", filename.c_str());
+		free(saveData);
+		delete inf;
+		return RESTORE_FAILED;
+	}
+
+	uint16 res = parseSaveData(saveData);
+	SkyEngine::_systemVars->pastIntro = true;
+	delete inf;
+	free(saveData);
+	return res;
+}
+
+/**
+* @param slot The slot index in the ScummVM Save file manager. "0" is the auto-save slot.
+* @return The result of the restore attempt. A value from "onClick return codes" eg GAME_RESTORED, RESTORE_FAILED etc
+*/
+uint16 Control::quickXRestore(uint16 slot) {
+	uint16 result;
+	if (!_controlPanel)
+		initPanel();
+	_mouseClicked = false;
+
+	_savedCharSet = _skyText->giveCurrentCharSet();
+	_skyText->fnSetFont(2);
+
+	_skyScreen->renderControlPanel(_screenBuf);
+	_system->updateScreen();
+
+	if (SkyEngine::_systemVars->gameVersion < 331)
+		_skyScreen->setPalette(60509);
+	else
+		_skyScreen->setPalette(60510);
+
+	_savedMouse = _skyMouse->giveCurrentMouseType();
+	_skyMouse->spriteMouse(MOUSE_NORMAL, 0, 0);
+
+	if (slot == 0)
+		result = restoreGameFromFile(true);
+	else {
+		_selectedGame = slot - 1;
+		result = restoreGameFromFile(false);
+	}
+	if (result == GAME_RESTORED) {
+		memset(_skyScreen->giveCurrent(), 0, GAME_SCREEN_WIDTH * GAME_SCREEN_HEIGHT);
+		_skyScreen->showScreen(_skyScreen->giveCurrent());
+		_skyScreen->forceRefresh();
+		_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
+	} else {
+		memset(_screenBuf, 0, FULL_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+		_skyScreen->renderControlPanel(_screenBuf);
+		_system->updateScreen();
+		_skyScreen->showScreen(_skyScreen->giveCurrent());
+		_skyScreen->setPalette(60111);
+	}
+	_skyMouse->spriteMouse(_savedMouse, 0, 0);
+	_skyText->fnSetFont(_savedCharSet);
+
+	removePanel();
+	return result;
+}
+
+/**
+ * Restarts the game (skipping intro) and places Foster (the player)
+ * already on the top level of the factory.
+ *
+*/
+void Control::restartGame() {
+	if (SkyEngine::_systemVars->gameVersion <= 267)
+		return; // no restart for floppy demo
+
+	uint8 *resetData = _skyCompact->createResetData((uint16)SkyEngine::_systemVars->gameVersion);
+	parseSaveData((uint8 *)resetData);
+	free(resetData);
+
+	// reset the hints
+	for (int i = 0; i < TOTAL_HINT_ANSWERS; i++)
+		SkyEngine::_systemVars->pastIntro = true;
+
+	// seen screen flags
+	for (int i = 0; i < TOTAL_SCREENS; i++)
+		SkyEngine::_systemVars->pastIntro = true;
+
+	_skyScreen->forceRefresh();
+
+	memset(_skyScreen->giveCurrent(), 0, GAME_SCREEN_WIDTH * FULL_SCREEN_HEIGHT);
+	_skyScreen->showScreen(_skyScreen->giveCurrent());
+	_skyScreen->setPaletteEndian((uint8 *)_skyCompact->fetchCpt(SkyEngine::_systemVars->currentPalette));
+	_skyMouse->spriteMouse(_savedMouse, 0, 0);
+	SkyEngine::_systemVars->pastIntro = true;
+}
+
+void Control::delay(unsigned int amount) {
+	Common::Event event;
+
+	uint32 start = _system->getMillis();
+	uint32 cur = start;
+	_keyPressed.reset();
+	_action = kSkyActionNone;
+
+	do {
+		Common::EventManager *eventMan = _system->getEventManager();
+		while (eventMan->pollEvent(event)) {
+			switch (event.type) {
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+				_action = event.customType;
+				break;
+			case Common::EVENT_KEYDOWN:
+				_keyPressed = event.kbd;
+				break;
+			case Common::EVENT_MOUSEMOVE:
+				if (!(SkyEngine::_systemVars->systemFlags & SF_MOUSE_LOCKED))
+					_skyMouse->mouseMoved(event.mouse.x, event.mouse.y);
+				break;
+			case Common::EVENT_LBUTTONDOWN:
+				_mouseClicked = true;
+				break;
+			case Common::EVENT_LBUTTONUP:
+				_mouseClicked = false;
+				break;
+			case Common::EVENT_RBUTTONDOWN:
+				break;
+			case Common::EVENT_WHEELUP:
+				_mouseWheel = -1;
+				break;
+			case Common::EVENT_WHEELDOWN:
+				_mouseWheel = 1;
+				break;
+			default:
+				break;
+			}
+		}
+
+		uint this_delay = 20; // 1?
+		if (this_delay > amount)
+			this_delay = amount;
+
+		if (this_delay > 0)	_system->delayMillis(this_delay);
+
+		cur = _system->getMillis();
+	} while (cur < start + amount);
+}
+
+void Control::showGameQuitMsg() {
+	_skyText->fnSetFont(0);
+	uint8 *textBuf1 = (uint8 *)malloc(GAME_SCREEN_WIDTH * 18 + sizeof(DataFileHeader));
+	uint8 *textBuf2 = (uint8 *)malloc(GAME_SCREEN_WIDTH * 18 + sizeof(DataFileHeader));
+	uint8 *screenData;
+	if (_skyScreen->sequenceRunning())
+		_skyScreen->stopSequence();
+
+	screenData = _skyScreen->giveCurrent();
+
+	if (Common::parseLanguage(ConfMan.get("language")) == Common::RU_RUS) {
+		_skyText->displayText(_quitTexts[8 * 2 + 0], sizeof(_quitTexts[8 * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[8 * 2 + 1], sizeof(_quitTexts[8 * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
+	} else if (SkyEngine::_systemVars->language == SKY_CHINESE_TRADITIONAL) { // Not translated in original
+		_skyText->displayText(_quitTexts[0], sizeof(_quitTexts[0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[1], sizeof(_quitTexts[1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
+	} else if (Common::parseLanguage(ConfMan.get("language")) == Common::HE_ISR) {
+		_skyText->displayText(_quitTexts[SKY_HEBREW * 2 + 0], sizeof(_quitTexts[SKY_HEBREW * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[SKY_HEBREW * 2 + 1], sizeof(_quitTexts[SKY_HEBREW * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
+	} else {
+		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 0], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 0]), textBuf1, Graphics::kTextAlignCenter, 320, 255);
+		_skyText->displayText(_quitTexts[SkyEngine::_systemVars->language * 2 + 1], sizeof(_quitTexts[SkyEngine::_systemVars->language * 2 + 1]), textBuf2, Graphics::kTextAlignCenter, 320, 255);
+	}
+	uint8 *curLine1 = textBuf1 + sizeof(DataFileHeader);
+	uint8 *curLine2 = textBuf2 + sizeof(DataFileHeader);
+	uint8 *targetLine = screenData + GAME_SCREEN_WIDTH * 80;
+	for (uint8 cnty = 0; cnty < PAN_CHAR_HEIGHT; cnty++) {
+		for (uint16 cntx = 0; cntx < GAME_SCREEN_WIDTH; cntx++) {
+			if (curLine1[cntx])
+				targetLine[cntx] = curLine1[cntx];
+			if (curLine2[cntx])
+				(targetLine + 24 * GAME_SCREEN_WIDTH)[cntx] = curLine2[cntx];
+		}
+		curLine1 += GAME_SCREEN_WIDTH;
+		curLine2 += GAME_SCREEN_WIDTH;
+		targetLine += GAME_SCREEN_WIDTH;
+	}
+	_skyScreen->halvePalette();
+	_skyScreen->showScreen(screenData);
+	free(textBuf1);
+	free(textBuf2);
+}
+
+char Control::_quitTexts[20][45] = {
+	"Game over player one",
+	"BE VIGILANT",
+	"Das Spiel ist aus.",
+	"SEI WACHSAM",
+	"Game over joueur 1",
+	"SOYEZ VIGILANTS",
+	"Game over player one",
+	"BE VIGILANT",
+	"SPELET \x2Ar SLUT, Agent 1.",
+	"VAR VAKSAM",
+	"Game over giocatore 1",
+	"SIATE VIGILANTI",
+	"Fim de jogo para o jogador um",
+	"BE VIGILANT",
+	"Game over player one",
+	"BE VIGILANT",
+	"Irpa okohseha, irpok 1",
+	"JYD\x96 JDITELEH",
+	"\x84\x8E\x99\x87\x97 \x90\x82\x8e\x98 \x99\x87\x97\x8F \x8E\x91\x94\x98 \x80\x87\x9A",
+	"\x84\x89\x85 \x92\x98\x90\x89\x89\x8D"
+};
+
+uint8 Control::_crossImg[594] = {
+	0xFF, 0xFF, 0xFF, 0xFF, 0x09, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0B, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0x4D, 0x61,
+	0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x08, 0x4E, 0x53, 0x50, 0x4F, 0x0C, 0x4D, 0x4E, 0x51, 0x58, 0x58, 0x54, 0x4E, 0x08, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4E, 0x54, 0x58, 0x50, 0x4E, 0xFF,
+	0xFF, 0xFF, 0xFF, 0x50, 0x4E, 0x54, 0x58, 0x58, 0x54, 0x4E, 0x0C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0x61, 0x53, 0x58, 0x54, 0x4E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x50, 0x4E, 0x55, 0x58, 0x58, 0x53, 0x4E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, 0x51, 0x58, 0x58,
+	0x51, 0x50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0x51, 0x58,
+	0x59, 0x58, 0x51, 0x61, 0xFF, 0xFF, 0x61, 0x54, 0x58, 0x58, 0x4F, 0x52, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4E, 0x55, 0x58, 0x58, 0x57, 0x4E,
+	0x4F, 0x56, 0x58, 0x57, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0x51, 0x58, 0x58, 0x58, 0x58, 0x58, 0x54, 0x4E, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0x6A, 0x4F, 0x58, 0x58, 0x58, 0x58, 0x52, 0x06, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x54, 0x58,
+	0x58, 0x58, 0x58, 0x57, 0x53, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x09, 0x58, 0x58, 0x58, 0x57, 0x56, 0x58, 0x58, 0x58,
+	0x57, 0x4F, 0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x61, 0x55, 0x58, 0x58, 0x58, 0x58, 0x4E, 0x64, 0x57, 0x58, 0x58, 0x58, 0x58, 0x53, 0x61, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x57, 0x58, 0x58, 0x58, 0x58,
+	0x50, 0xFF, 0xFF, 0x4E, 0x57, 0x58, 0x58, 0x58, 0x58, 0x56, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x58, 0x58, 0x58, 0x58, 0x58, 0x53, 0x09, 0xFF, 0xFF, 0xFF, 0x4E,
+	0x57, 0x58, 0x58, 0x58, 0x58, 0x58, 0x0B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x57,
+	0x58, 0x58, 0x58, 0x58, 0x56, 0x4E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x58, 0x58, 0x58, 0x58,
+	0x58, 0x57, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x55, 0x58, 0x58, 0x58, 0x58, 0x58, 0x4E,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0x58, 0x58, 0x58, 0x58, 0x4E, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0x06, 0x58, 0x58, 0x58, 0x58, 0x58, 0x52, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0x0C, 0x52, 0x58, 0x58, 0x51, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x56, 0x58,
+	0x58, 0x58, 0x58, 0x56, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0x56,
+	0x58, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x4D, 0x4D, 0x51, 0x56, 0x58, 0x58, 0x50, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0x54, 0x09, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x4E, 0x50, 0x54, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x06, 0x50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0x61, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x61, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF
+};
+
+} // End of namespace Sky

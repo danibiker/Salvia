@@ -1,0 +1,169 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef FREESCAPE_DRILLER_H
+#define FREESCAPE_DRILLER_H
+
+#include "audio/audiostream.h"
+#include "audio/mixer.h"
+
+#include "engines/freescape/music.h"
+#include "engines/freescape/games/driller/c64.music.h"
+#include "engines/freescape/games/driller/c64.sfx.h"
+
+namespace Freescape {
+
+enum DrillerFontSize {
+	kDrillerFontSmall,
+	kDrillerFontNormal,
+};
+
+class DrillerEngine : public FreescapeEngine {
+public:
+	DrillerEngine(OSystem *syst, const ADGameDescription *gd);
+	~DrillerEngine();
+
+	uint32 _initialJetEnergy;
+	uint32 _initialJetShield;
+
+	uint32 _initialTankEnergy;
+	uint32 _initialTankShield;
+
+	bool _useAutomaticDrilling;
+
+	MusicPlayer *_playerMusic;
+	DrillerC64SFXPlayer *_playerC64Sfx;
+	bool _c64UseSFX;
+
+	void toggleC64Sound();
+
+	// Only used for Amiga and Atari ST
+	Font _fontSmall;
+	void drawString(const DrillerFontSize size, const Common::String &str, int x, int y, uint32 primaryColor, uint32 secondaryColor, uint32 backColor, Graphics::Surface *surface);
+
+	Common::HashMap<uint16, uint32> _drillStatusByArea;
+	Common::HashMap<uint16, uint32> _drillMaxScoreByArea;
+	Common::HashMap<uint16, uint32> _drillSuccessByArea;
+
+	void initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *infoScreenKeyMap, const char *target) override;
+	void initGameState() override;
+	bool triggerWinCondition() override;
+	bool checkIfGameEnded() override;
+	void endGame() override;
+
+	void gotoArea(uint16 areaID, int entranceID) override;
+
+	void drawInfoMenu() override;
+	void drawSensorShoot(Sensor *sensor) override;
+	void drawCompass(Graphics::Surface *surface, int x, int y, double degrees, double magnitude, double fov, uint32 color);
+
+	void pressedKey(const int keycode) override;
+	Common::Error saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave = false) override;
+	Common::Error loadGameStreamExtended(Common::SeekableReadStream *stream) override;
+
+private:
+	int _finalAreaWinConditionIndex;
+	int _amigaAtariEndGameStep;
+	bool drillDeployed(Area *area);
+	Math::Vector3d drillPosition();
+	float compassYaw() const;
+	void addDrill(const Math::Vector3d position, bool gasFound);
+	bool checkDrill(const Math::Vector3d position);
+	void removeDrill(Area *area);
+	void addSkanner(Area *area);
+
+	void loadAssets() override;
+	void loadAssetsAtariFullGame() override;
+	void loadAssetsAtariDemo() override;
+	void loadAssetsAmigaFullGame() override;
+	void loadAssetsAmigaDemo() override;
+	void loadAssetsDOSFullGame() override;
+	void loadAssetsDOSDemo() override;
+	void loadAssetsZXFullGame() override;
+	void loadAssetsCPCFullGame() override;
+	void loadAssetsC64FullGame() override;
+
+	void drawDOSUI(Graphics::Surface *surface) override;
+	void drawZXUI(Graphics::Surface *surface) override;
+	void drawCPCUI(Graphics::Surface *surface) override;
+	void drawC64UI(Graphics::Surface *surface) override;
+	void drawAmigaAtariSTUI(Graphics::Surface *surface) override;
+	bool onScreenControls(Common::Point mouse) override;
+	void initAmigaAtari();
+	void initDOS();
+	void initZX();
+
+	// Amiga/Atari UI sprite indicators loaded from executable
+	Common::Array<Graphics::ManagedSurface *> _rigSprites;     // 5 rig animation frames
+	Common::Array<Graphics::ManagedSurface *> _stepSprites;    // 8 step indicator frames
+	Common::Array<Graphics::ManagedSurface *> _angleSprites;   // 8 angle/compass frames
+	Common::Array<Graphics::ManagedSurface *> _vehicleSprites; // 5 vehicle mode frames (fly + 4 tank heights)
+	Common::Array<Graphics::ManagedSurface *> _quitSprites;   // 11 quit animation frames
+	int _quitConfirmCounter;  // 0=not quitting, 1-4=waiting for confirmations
+	int _quitStartTicks;      // _ticks when quit was initiated (for shutter animation)
+	Common::Rect _quitArea;   // click area for quit button on Amiga/Atari console
+	Common::Array<Graphics::ManagedSurface *> _earthquakeSprites; // seismograph monitor frames
+	int _earthquakeLastFrame;
+	void loadRigSprites(Common::SeekableReadStream *file, int sprigsOffset, byte *palette = nullptr);
+	void loadIndicatorSprites(Common::SeekableReadStream *file, byte *palette,
+		int stepOffset, int angleOffset, int vehicleOffset, int quitOffset);
+	void loadEarthquakeSprites(Common::SeekableReadStream *file, byte *palette, int earthquakeOffset);
+
+	// Compass indicators loaded from executable
+	Graphics::ManagedSurface *_compassPitchStrip;  // pitch: 32px wide × (144+29) rows scrolling strip
+	Common::Array<Graphics::ManagedSurface *> _compassYawFrames; // yaw: 72 pre-rendered 30×5 frames
+	void loadCompassStrips(Common::SeekableReadStream *file, byte *palette,
+		int pitchStripOffset, int yawCogOffset);
+	void initCPC();
+	void initC64();
+
+	void updateTimeVariables() override;
+
+	Common::Rect _moveFowardArea;
+	Common::Rect _moveLeftArea;
+	Common::Rect _moveRightArea;
+	Common::Rect _moveBackArea;
+	Common::Rect _moveUpArea;
+	Common::Rect _moveDownArea;
+	Common::Rect _deployDrillArea;
+	Common::Rect _infoScreenArea;
+	Common::Rect _saveGameArea;
+	Common::Rect _loadGameArea;
+
+	Graphics::ManagedSurface *load8bitTitleImage(Common::SeekableReadStream *file, int offset);
+	Graphics::ManagedSurface *load8bitDemoImage(Common::SeekableReadStream *file, int offset);
+
+	uint32 getPixel8bitTitleImage(int index);
+	void renderPixels8bitTitleImage(Graphics::ManagedSurface *surface, int &i, int &j, int pixels);
+	Graphics::ManagedSurface *_borderExtra;
+	Texture *_borderExtraTexture;
+
+	Common::SeekableReadStream *decryptFileAtari(const Common::Path &filename);
+};
+
+enum DrillerReleaseFlags {
+	GF_AMIGA_MAGAZINE_DEMO = (1 << 0),
+	GF_ATARI_MAGAZINE_DEMO = (1 << 1),
+};
+
+}
+
+#endif // FREESCAPE_DRILLER_H

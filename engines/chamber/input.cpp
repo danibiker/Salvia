@@ -1,0 +1,336 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/events.h"
+#include "common/system.h"
+
+#include "chamber/chamber.h"
+#include "chamber/common.h"
+#include "chamber/dialog.h"
+#include "chamber/input.h"
+#include "chamber/cursor.h"
+#include "chamber/print.h"
+#include "chamber/resdata.h"
+#include "chamber/cga.h"
+#include "chamber/timer.h"
+#include "chamber/ifgm.h"
+
+#include "backends/keymapper/keymapper.h"
+
+namespace Chamber {
+
+byte have_mouse = 0;
+byte have_joystick = 0;
+byte key_held;
+volatile byte key_direction;
+volatile byte key_code;
+
+volatile byte keyboard_scan;
+volatile byte keyboard_specials;
+volatile byte keyboard_arrows;
+volatile byte keyboard_buttons;
+
+byte buttons_repeat = 0;
+byte buttons;
+byte right_button;
+byte key_direction_old;
+byte accel_countdown;
+uint16 acceleration = 1;
+byte mouseButtons = 0;
+
+void pollDiscrete(void);
+
+byte ChamberEngine::readKeyboardChar() {
+	Common::Event event;
+
+	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
+	keymapper->disableAllGameKeymaps();
+	g_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, true);
+
+	while (true) {
+		while (g_system->getEventManager()->pollEvent(event)) {
+			switch (event.type) {
+			case Common::EVENT_KEYDOWN:
+				g_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, false);
+				keymapper->getKeymap("chamber-default")->setEnabled(true);
+				keymapper->getKeymap("game-shortcuts")->setEnabled(true);
+				return event.kbd.ascii;
+
+			case Common::EVENT_RETURN_TO_LAUNCHER:
+			case Common::EVENT_QUIT:
+				_shouldQuit = true;
+				return 0;
+
+			default:
+				break;
+			}
+
+			g_system->updateScreen();
+			g_system->delayMillis(10);
+		}
+	}
+}
+
+void clearKeyboard(void) {
+}
+
+void setInputButtons(byte keys) {
+	if (keys & 2)
+		right_button = 0xff;
+	if (keys & 1)
+		right_button = 0;
+	buttons = keys;
+	buttons_repeat = keys;
+}
+
+byte pollMouse(void) {
+	pollInput();
+
+	return buttons;
+}
+
+byte pollKeyboard(void) {
+	byte direction = key_direction;
+	if (direction && direction == key_direction_old) {
+		if (++accel_countdown == 10) {
+			acceleration++;
+			accel_countdown = 0;
+		}
+	} else {
+		acceleration = 1;
+		accel_countdown = 0;
+	}
+	key_direction_old = direction;
+
+	if (direction & 0x0F) {
+		if (direction == 1) {
+			cursor_x += acceleration;
+			if (cursor_x >= 304) /*TODO: >*/
+				cursor_x = 304;
+		} else {
+			cursor_x -= acceleration;
+			if ((int16)cursor_x < 0)
+				cursor_x = 0;
+		}
+	}
+
+	if (direction & 0xF0) {
+		if (direction == 0x10) {
+			cursor_y += acceleration;
+			if (cursor_y >= 184) /*TODO: >*/
+				cursor_y = 184;
+		} else {
+			cursor_y -= acceleration;
+			if ((int8)cursor_y < 0)
+				cursor_y = 0;
+		}
+	}
+
+	return key_code;
+}
+
+/*
+Show game exit confirmation dialog and get user's input
+*/
+int16 askQuitGame(void) {
+	/*EU version comes without requited text string*/
+	if (g_vm->getLanguage() != Common::EN_USA)
+		return 0;
+
+	int16 quit = -1;
+
+	byte *msg = seekToString(desci_data, 411);	/*DO YOU WANT TO QUIT ? (Y OR N).*/
+	char_draw_max_width = 32;
+	draw_x = 1;
+	draw_y = 188;
+	cga_DrawTextBox(msg, frontbuffer);
+
+	Common::Event event;
+
+	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
+	keymapper->getKeymap("chamber-default")->setEnabled(false);
+	keymapper->getKeymap("game-shortcuts")->setEnabled(false);
+	keymapper->getKeymap("quit-dialog")->setEnabled(true);
+
+	while (quit == -1) {
+		while (g_system->getEventManager()->pollEvent(event)) {
+			switch (event.type) {
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+				if (event.customType == kActionYes)
+					quit = 1;
+				else if (event.customType == kActionNo)
+					quit = 0;
+				break;
+
+			case Common::EVENT_RETURN_TO_LAUNCHER:
+			case Common::EVENT_QUIT:
+				quit = 1;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	g_vm->_renderer->copyScreenBlock(backbuffer, char_draw_max_width + 2, char_draw_coords_y - draw_y + 8, frontbuffer, g_vm->_renderer->calcXY_p(draw_x, draw_y));
+
+	keymapper->getKeymap("quit-dialog")->setEnabled(false);
+	keymapper->getKeymap("chamber-default")->setEnabled(true);
+	keymapper->getKeymap("game-shortcuts")->setEnabled(true);
+
+	return quit;
+}
+
+void pollInputButtonsOnly() {
+	pollInput();
+}
+
+/* In Hercules mode the picture is drawn double-width at a (40, 74) offset on a
+   720x348 surface, so raw event coordinates must be shifted and halved back
+   into the game's native 320x200 space. */
+static void setCursorFromMouse(const Common::Point &mouse) {
+	if (g_vm->_renderMode == Common::kRenderHercG || g_vm->_renderMode == Common::kRenderHercA) {
+		cursor_x = CLIP<int16>((mouse.x - 40) / 2, 0, 319);
+		cursor_y = CLIP<int16>(mouse.y - 74, 0, 199);
+	} else {
+		cursor_x = mouse.x;
+		cursor_y = mouse.y;
+	}
+}
+
+void pollInput(void) {
+	Common::Event event;
+	while (g_system->getEventManager()->pollEvent(event)) {
+		switch (event.type) {
+		case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+			if (event.customType == kActionInteract)
+				mouseButtons |= 1;
+			else if (event.customType == kActionQuit) {
+				if (g_vm->getLanguage() == Common::EN_USA) {
+					if (askQuitGame() != 0)
+						g_vm->_shouldQuit = true;
+				}
+			}
+			break;
+
+		case Common::EVENT_CUSTOM_ENGINE_ACTION_END:
+			if (event.customType == kActionInteract)
+				mouseButtons &= ~1;
+			break;
+
+		case Common::EVENT_RETURN_TO_LAUNCHER:
+		case Common::EVENT_QUIT:
+			g_vm->_shouldQuit = true;
+			break;
+
+		case Common::EVENT_MOUSEMOVE:
+			setCursorFromMouse(event.mouse);
+			break;
+
+		case Common::EVENT_LBUTTONDOWN:
+			setCursorFromMouse(event.mouse);
+			mouseButtons |= 1;
+			break;
+
+		case Common::EVENT_LBUTTONUP:
+			mouseButtons &= ~1;
+			break;
+
+		case Common::EVENT_RBUTTONDOWN:
+			setCursorFromMouse(event.mouse);
+			mouseButtons |= 2;
+			break;
+
+		case Common::EVENT_RBUTTONUP:
+			mouseButtons &= ~2;
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	setInputButtons(mouseButtons);
+}
+
+void clearButtons(void) {
+	mouseButtons = 0;
+	setInputButtons(0);
+}
+
+void processInput(void) {
+	pollInput();
+	updateCursor();
+	drawCursor(frontbuffer);
+}
+
+void keyboardIsr() {
+	warning("STUB: KeyboardIsr()");
+#if 0
+	byte scan, strobe;
+	scan = inportb(0x60);
+	/*consume scan from kbd. controller*/
+	strobe = inportb(0x61);
+	outportb(0x61, strobe | 0x80);
+	outportb(0x61, strobe);
+
+	if (scan == 1) {        /*esc*/
+		esc_pressed = ~0;
+	} else {
+		if (scan & 0x80) {      /*key release?*/
+			key_code = 0;
+			key_direction = 0;
+		} else {
+			switch (scan) {
+			case 0x39:  /*space*/
+				key_code = scan;
+				key_direction = 0;
+				break;
+			case 0x48:  /*up*/
+				key_code = 0;
+				key_direction = 0xF0;
+				break;
+			case 0x50:  /*down*/
+				key_code = 0;
+				key_direction = 0x10;
+				break;
+			case 0x4B:  /*left*/
+				key_code = 0;
+				key_direction = 0x0F;
+				break;
+			case 0x4D:  /*right*/
+				key_code = 0;
+				key_direction = 0x01;
+				break;
+			}
+		}
+	}
+	outportb(0x20, 0x20);
+#endif
+}
+
+void initInput(void) {
+	have_mouse = 1;
+}
+
+void uninitInput(void) {
+}
+
+} // End of namespace Chamber

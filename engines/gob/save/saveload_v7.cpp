@@ -1,0 +1,2906 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * This file is dual-licensed.
+ * In addition to the GPLv3 license mentioned above, this code is also
+ * licensed under LGPL 2.1. See LICENSES/COPYING.LGPL file for the
+ * full text of the license.
+ *
+ */
+
+#include "gob/save/saveload.h"
+#include "gob/save/saveconverter.h"
+#include "gob/inter.h"
+#include "gob/variables.h"
+
+namespace Gob {
+
+SaveLoad_v7::SaveFile SaveLoad_v7::_saveFiles[] = {
+	// Adibou 2 / Addy Junior Base
+	{"DATA/visage01.inf", kSaveModeSave, nullptr, "face"         }, // Child 01
+	{"DATA/visage02.inf", kSaveModeSave, nullptr, "face"         }, // Child 02
+	{"DATA/visage03.inf", kSaveModeSave, nullptr, "face"         }, // Child 03
+	{"DATA/visage04.inf", kSaveModeSave, nullptr, "face"         }, // Child 04
+	{"DATA/visage05.inf", kSaveModeSave, nullptr, "face"         }, // Child 05
+	{"DATA/visage06.inf", kSaveModeSave, nullptr, "face"         }, // Child 06
+	{"DATA/visage07.inf", kSaveModeSave, nullptr, "face"         }, // Child 07
+	{"DATA/visage08.inf", kSaveModeSave, nullptr, "face"         }, // Child 08
+	{"DATA/visage09.inf", kSaveModeSave, nullptr, "face"         }, // Child 09
+	{"DATA/visage10.inf", kSaveModeSave, nullptr, "face"         }, // Child 10
+	{"DATA/visage11.inf", kSaveModeSave, nullptr, "face"         }, // Child 11
+	{"DATA/visage12.inf", kSaveModeSave, nullptr, "face"         }, // Child 12
+	{"DATA/visage13.inf", kSaveModeSave, nullptr, "face"         }, // Child 13
+	{"DATA/visage14.inf", kSaveModeSave, nullptr, "face"         }, // Child 14
+	{"DATA/visage15.inf", kSaveModeSave, nullptr, "face"         }, // Child 15
+	{"DATA/visage16.inf", kSaveModeSave, nullptr, "face"         }, // Child 16
+	{"DATA/enfant.inf",   kSaveModeSave, nullptr, "children"     },
+
+	{"TEMP/debil.tmp",    kSaveModeSave, nullptr, nullptr        },
+	{"DATA/debil.tmp",    kSaveModeSave, nullptr, nullptr        },
+	{"APPLIS/debil.tmp",    kSaveModeSave, nullptr, nullptr      },
+	{"ENVIR/debil.tmp",    kSaveModeSave, nullptr, nullptr       },
+
+
+	{  "DATA/config.inf", kSaveModeSave, nullptr, "configuration"},
+	// Adibou environment (flowers, vegetables...)
+	{"DATA/enviro01.inf", kSaveModeSave, nullptr, "environment" }, // Child 01
+	{"DATA/enviro02.inf", kSaveModeSave, nullptr, "environment" }, // Child 02
+	{"DATA/enviro03.inf", kSaveModeSave, nullptr, "environment" }, // Child 03
+	{"DATA/enviro04.inf", kSaveModeSave, nullptr, "environment" }, // Child 04
+	{"DATA/enviro05.inf", kSaveModeSave, nullptr, "environment" }, // Child 05
+	{"DATA/enviro06.inf", kSaveModeSave, nullptr, "environment" }, // Child 06
+	{"DATA/enviro07.inf", kSaveModeSave, nullptr, "environment" }, // Child 07
+	{"DATA/enviro08.inf", kSaveModeSave, nullptr, "environment" }, // Child 08
+	{"DATA/enviro09.inf", kSaveModeSave, nullptr, "environment" }, // Child 09
+	{"DATA/enviro10.inf", kSaveModeSave, nullptr, "environment" }, // Child 10
+	{"DATA/enviro11.inf", kSaveModeSave, nullptr, "environment" }, // Child 11
+	{"DATA/enviro12.inf", kSaveModeSave, nullptr, "environment" }, // Child 12
+	{"DATA/enviro13.inf", kSaveModeSave, nullptr, "environment" }, // Child 13
+	{"DATA/enviro14.inf", kSaveModeSave, nullptr, "environment" }, // Child 14
+	{"DATA/enviro15.inf", kSaveModeSave, nullptr, "environment" }, // Child 15
+	{"DATA/enviro16.inf", kSaveModeSave, nullptr, "environment" }, // Child 16
+
+	// Adibou environment weather
+	{"DATA/temp01.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp02.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp03.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp04.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp05.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp06.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp07.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp08.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp09.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp10.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp11.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp12.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp13.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp14.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp15.csa"  , kSaveModeSave, nullptr, "weather" },
+	{"DATA/temp16.csa"  , kSaveModeSave, nullptr, "weather" },
+
+	// Adibou breakout game progress
+	{"DATA/brique01.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique02.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique03.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique04.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique05.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique06.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique07.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique08.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique09.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique10.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique11.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique12.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique13.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique14.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique15.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+	{"DATA/brique16.inf"  , kSaveModeSave, nullptr, "breakout game progress" },
+
+	// Adibou Playtoon-like minigame
+	{"construc.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"ptrecord.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // PTRECORD = "Playtoons record" probably
+	{"aide.inf"      , kSaveModeSave, nullptr, "construction game progress" },
+
+	{"DATA/constr01.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 01
+	{"DATA/ptreco01.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide01.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr02.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 02
+	{"DATA/ptreco02.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide02.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr03.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 03
+	{"DATA/ptreco03.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide03.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr04.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 04
+	{"DATA/ptreco04.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide04.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr05.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 05
+	{"DATA/ptreco05.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide05.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr06.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 06
+	{"DATA/ptreco06.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide06.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr07.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 07
+	{"DATA/ptreco07.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide07.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr08.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 08
+	{"DATA/ptreco08.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide08.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr09.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 09
+	{"DATA/ptreco09.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide09.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr10.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 10
+	{"DATA/ptreco10.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide10.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr11.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 11
+	{"DATA/ptreco11.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide11.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr12.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 12
+	{"DATA/ptreco12.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide12.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr13.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 13
+	{"DATA/ptreco13.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide13.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr14.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 14
+	{"DATA/ptreco14.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide14.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr15.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 15
+	{"DATA/ptreco15.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide15.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/constr16.inf"  , kSaveModeSave, nullptr, "construction game progress" }, // Child 16
+	{"DATA/ptreco16.inf"  , kSaveModeSave, nullptr, "construction game progress" },
+	{"DATA/aide16.inf"    , kSaveModeSave, nullptr, "construction game progress" },
+
+	// Adibou Applications 1-7
+	{"DATA/Gsa01_01.inf", kSaveModeSave, nullptr, "app progress" }, // Child 01
+	{"DATA/Gsa02_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_01.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_02.inf", kSaveModeSave, nullptr, "app progress" }, // Child 02
+	{"DATA/Gsa02_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_02.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_03.inf", kSaveModeSave, nullptr, "app progress" }, // Child 03
+	{"DATA/Gsa02_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_03.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_04.inf", kSaveModeSave, nullptr, "app progress" }, // Child 04
+	{"DATA/Gsa02_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_04.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_05.inf", kSaveModeSave, nullptr, "app progress" }, // Child 05
+	{"DATA/Gsa02_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_05.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_06.inf", kSaveModeSave, nullptr, "app progress" }, // Child 06
+	{"DATA/Gsa02_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_06.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_07.inf", kSaveModeSave, nullptr, "app progress" }, // Child 07
+	{"DATA/Gsa02_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_07.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_08.inf", kSaveModeSave, nullptr, "app progress" }, // Child 08
+	{"DATA/Gsa02_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_08.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_09.inf", kSaveModeSave, nullptr, "app progress" }, // Child 09
+	{"DATA/Gsa02_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_09.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_10.inf", kSaveModeSave, nullptr, "app progress" }, // Child 10
+	{"DATA/Gsa02_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_10.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_11.inf", kSaveModeSave, nullptr, "app progress" }, // Child 11
+	{"DATA/Gsa02_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_11.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_12.inf", kSaveModeSave, nullptr, "app progress" }, // Child 12
+	{"DATA/Gsa02_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_12.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_13.inf", kSaveModeSave, nullptr, "app progress" }, // Child 13
+	{"DATA/Gsa02_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_13.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_14.inf", kSaveModeSave, nullptr, "app progress" }, // Child 14
+	{"DATA/Gsa02_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_14.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_15.inf", kSaveModeSave, nullptr, "app progress" }, // Child 15
+	{"DATA/Gsa02_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_15.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa01_16.inf", kSaveModeSave, nullptr, "app progress" }, // Child 16
+	{"DATA/Gsa02_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa03_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa04_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa05_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa06_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/Gsa07_16.inf", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/memo_01.inf", kSaveModeSave, nullptr, "memo" }, // Child 01
+	{"DATA/memo_02.inf", kSaveModeSave, nullptr, "memo" }, // Child 02
+	{"DATA/memo_03.inf", kSaveModeSave, nullptr, "memo" }, // Child 03
+	{"DATA/memo_04.inf", kSaveModeSave, nullptr, "memo" }, // Child 04
+	{"DATA/memo_05.inf", kSaveModeSave, nullptr, "memo" }, // Child 05
+	{"DATA/memo_06.inf", kSaveModeSave, nullptr, "memo" }, // Child 06
+	{"DATA/memo_07.inf", kSaveModeSave, nullptr, "memo" }, // Child 07
+	{"DATA/memo_08.inf", kSaveModeSave, nullptr, "memo" }, // Child 08
+	{"DATA/memo_09.inf", kSaveModeSave, nullptr, "memo" }, // Child 09
+	{"DATA/memo_10.inf", kSaveModeSave, nullptr, "memo" }, // Child 10
+	{"DATA/memo_11.inf", kSaveModeSave, nullptr, "memo" }, // Child 11
+	{"DATA/memo_12.inf", kSaveModeSave, nullptr, "memo" }, // Child 12
+	{"DATA/memo_13.inf", kSaveModeSave, nullptr, "memo" }, // Child 13
+	{"DATA/memo_14.inf", kSaveModeSave, nullptr, "memo" }, // Child 14
+	{"DATA/memo_15.inf", kSaveModeSave, nullptr, "memo" }, // Child 15
+	{"DATA/memo_16.inf", kSaveModeSave, nullptr, "memo" }, // Child 16
+	{"DATA/diplo_01.inf", kSaveModeSave, nullptr, "diplo" }, // Child 01
+	{"DATA/diplo_02.inf", kSaveModeSave, nullptr, "diplo" }, // Child 02
+	{"DATA/diplo_03.inf", kSaveModeSave, nullptr, "diplo" }, // Child 03
+	{"DATA/diplo_04.inf", kSaveModeSave, nullptr, "diplo" }, // Child 04
+	{"DATA/diplo_05.inf", kSaveModeSave, nullptr, "diplo" }, // Child 05
+	{"DATA/diplo_06.inf", kSaveModeSave, nullptr, "diplo" }, // Child 06
+	{"DATA/diplo_07.inf", kSaveModeSave, nullptr, "diplo" }, // Child 07
+	{"DATA/diplo_08.inf", kSaveModeSave, nullptr, "diplo" }, // Child 08
+	{"DATA/diplo_09.inf", kSaveModeSave, nullptr, "diplo" }, // Child 09
+	{"DATA/diplo_10.inf", kSaveModeSave, nullptr, "diplo" }, // Child 10
+	{"DATA/diplo_11.inf", kSaveModeSave, nullptr, "diplo" }, // Child 11
+	{"DATA/diplo_12.inf", kSaveModeSave, nullptr, "diplo" }, // Child 12
+	{"DATA/diplo_13.inf", kSaveModeSave, nullptr, "diplo" }, // Child 13
+	{"DATA/diplo_14.inf", kSaveModeSave, nullptr, "diplo" }, // Child 14
+	{"DATA/diplo_15.inf", kSaveModeSave, nullptr, "diplo" }, // Child 15
+	{"DATA/diplo_16.inf", kSaveModeSave, nullptr, "diplo" }, // Child 16
+	{"DATA/appli_01.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_02.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_03.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_04.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_05.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_06.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/appli_07.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_01.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_02.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_03.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_04.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_05.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_06.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/crite_07.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_01.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_02.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_03.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_04.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_05.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_06.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/exo_07.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_01.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_02.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_03.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_04.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_05.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_06.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/ico_07.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/applis.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/lance.inf", kSaveModeSave, nullptr, "app info" },
+	{"DATA/retour.inf", kSaveModeSave, nullptr, "app info" },
+	// Adibou2 saved drawings (up to 12)
+	// Child1
+	{"DATA/cart0101.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0201.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0301.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0401.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0501.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0601.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0701.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0801.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0901.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1001.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1101.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1201.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_01.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett01.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr01.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod01.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur01.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur01.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud01.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable01.inf", kSaveModeSave, nullptr, "poster" },
+	// Child2
+	{"DATA/cart0102.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0202.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0302.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0402.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0502.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0602.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0702.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0802.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0902.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1002.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1102.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1202.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_02.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett02.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr02.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod02.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur02.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur02.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud02.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable02.inf", kSaveModeSave, nullptr, "poster" },
+	// Child3
+	{"DATA/cart0103.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0203.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0303.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0403.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0503.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0603.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0703.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0803.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0903.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1003.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1103.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1203.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_03.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett03.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr03.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod03.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur03.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur03.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud03.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable03.inf", kSaveModeSave, nullptr, "poster" },
+	// Child4
+	{"DATA/cart0104.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0204.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0304.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0404.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0504.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0604.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0704.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0804.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0904.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1004.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1104.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1204.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_04.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett04.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr04.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod04.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur04.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur04.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud04.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable04.inf", kSaveModeSave, nullptr, "poster" },
+	// Child5
+	{"DATA/cart0105.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0205.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0305.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0405.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0505.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0605.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0705.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0805.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0905.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1005.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1105.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1205.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_05.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett05.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr05.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod05.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur05.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur05.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud05.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable05.inf", kSaveModeSave, nullptr, "poster" },
+	// Child6
+	{"DATA/cart0106.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0206.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0306.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0406.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0506.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0606.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0706.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0806.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0906.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1006.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1106.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1206.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_06.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett06.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr06.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod06.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur06.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur06.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud06.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable06.inf", kSaveModeSave, nullptr, "poster" },
+	// Child7
+	{"DATA/cart0107.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0207.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0307.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0407.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0507.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0607.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0707.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0807.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0907.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1007.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1107.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1207.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_07.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett07.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr07.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod07.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur07.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur07.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud07.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable07.inf", kSaveModeSave, nullptr, "poster" },
+	// Child8
+	{"DATA/cart0108.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0208.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0308.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0408.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0508.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0608.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0708.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0808.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0908.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1008.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1108.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1208.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_08.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett08.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr08.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod08.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur08.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur08.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud08.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable08.inf", kSaveModeSave, nullptr, "poster" },
+	// Child9
+	{"DATA/cart0109.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0209.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0309.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0409.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0509.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0609.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0709.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0809.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0909.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1009.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1109.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1209.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_09.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett09.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr09.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod09.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur09.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur09.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud09.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable09.inf", kSaveModeSave, nullptr, "poster" },
+	// Child10
+	{"DATA/cart0110.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0210.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0310.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0410.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0510.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0610.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0710.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0810.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0910.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1010.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1110.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1210.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_10.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett10.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr10.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod10.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur10.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur10.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud10.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable10.inf", kSaveModeSave, nullptr, "poster" },
+	// Child11
+	{"DATA/cart0111.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0211.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0311.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0411.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0511.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0611.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0711.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0811.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0911.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1011.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1111.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1211.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_11.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett11.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr11.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod11.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur11.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur11.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud11.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable11.inf", kSaveModeSave, nullptr, "poster" },
+	// Child12
+	{"DATA/cart0112.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0212.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0312.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0412.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0512.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0612.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0712.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0812.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0912.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1012.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1112.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1212.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_12.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett12.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr12.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod12.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur12.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur12.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud12.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable12.inf", kSaveModeSave, nullptr, "poster" },
+	// Child13
+	{"DATA/cart0113.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0213.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0313.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0413.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0513.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0613.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0713.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0813.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0913.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1013.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1113.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1213.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_13.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett13.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr13.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod13.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur13.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur13.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud13.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable13.inf", kSaveModeSave, nullptr, "poster" },
+	// Child14
+	{"DATA/cart0114.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0214.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0314.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0414.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0514.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0614.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0714.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0814.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0914.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1014.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1114.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1214.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_14.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett14.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr14.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod14.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur14.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur14.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud14.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable14.inf", kSaveModeSave, nullptr, "poster" },
+	// Child15
+	{"DATA/cart0115.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0215.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0315.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0415.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0515.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0615.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0715.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0815.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0915.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1015.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1115.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1215.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_15.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett15.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr15.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod15.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur15.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur15.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud15.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable15.inf", kSaveModeSave, nullptr, "poster" },
+	// Child16
+	{"DATA/cart0116.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0216.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0316.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0416.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0516.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0616.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0716.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0816.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart0916.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1016.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1116.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/cart1216.inf", kSaveModeSave, nullptr, "drawing" },
+	{"DATA/pal00_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal01_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal02_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal03_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal04_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal05_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal06_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal07_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal08_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal09_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal10_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/pal11_16.inf", kSaveModeSave, nullptr, "drawing thumbnail" },
+	{"DATA/palett16.inf", kSaveModeSave, nullptr, "drawing palette" },
+	{"DATA/plettr16.inf", kSaveModeSave, nullptr, "drawing in mailbox" },
+	{"DATA/pgatod16.inf", kSaveModeSave, nullptr, "photo of cake" },
+	{"DATA/pfleur16.inf", kSaveModeSave, nullptr, "photo of flowers" },
+	{"DATA/mfleur16.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mfleud16.inf", kSaveModeSave, nullptr, "photo of flowers (vase)" },
+	{"DATA/mtable16.inf", kSaveModeSave, nullptr, "poster" },
+
+	{"adibou.pal",   kSaveModeSave, nullptr, "drawing on floppy disk" },
+	{"adibour.pal",  kSaveModeSave, nullptr, "drawing on floppy disk (thumbnail)" },
+	{"test.dob",     kSaveModeSave, nullptr, "test floppy disk file" },
+
+	{"TEMP/liste.$$$", kSaveModeSave, nullptr, "exercise list" },
+	{"TEMP/relance.$$$", kSaveModeSave, nullptr, "app info" },
+	{"TEMP/mem.$$$", kSaveModeSave, nullptr, "app info" },
+
+	{"DATA/GIE05_01.pho", kSaveModeSave, nullptr, "app progress" }, // Child 01
+	{"DATA/GIE06_01.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_01.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_02.pho", kSaveModeSave, nullptr, "app progress" }, // Child 02
+	{"DATA/GIE06_02.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_02.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_03.pho", kSaveModeSave, nullptr, "app progress" }, // Child 03
+	{"DATA/GIE06_03.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_03.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_04.pho", kSaveModeSave, nullptr, "app progress" }, // Child 04
+	{"DATA/GIE06_04.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_04.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_05.pho", kSaveModeSave, nullptr, "app progress" }, // Child 05
+	{"DATA/GIE06_05.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_05.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_06.pho", kSaveModeSave, nullptr, "app progress" }, // Child 06
+	{"DATA/GIE06_06.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_06.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_07.pho", kSaveModeSave, nullptr, "app progress" }, // Child 07
+	{"DATA/GIE06_07.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_07.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_08.pho", kSaveModeSave, nullptr, "app progress" }, // Child 08
+	{"DATA/GIE06_08.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_08.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_09.pho", kSaveModeSave, nullptr, "app progress" }, // Child 09
+	{"DATA/GIE06_09.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_09.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_10.pho", kSaveModeSave, nullptr, "app progress" }, // Child 10
+	{"DATA/GIE06_10.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_10.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_11.pho", kSaveModeSave, nullptr, "app progress" }, // Child 11
+	{"DATA/GIE06_11.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_11.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_12.pho", kSaveModeSave, nullptr, "app progress" }, // Child 12
+	{"DATA/GIE06_12.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_12.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_13.pho", kSaveModeSave, nullptr, "app progress" }, // Child 13
+	{"DATA/GIE06_13.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_13.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_14.pho", kSaveModeSave, nullptr, "app progress" }, // Child 14
+	{"DATA/GIE06_14.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_14.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_15.pho", kSaveModeSave, nullptr, "app progress" }, // Child 15
+	{"DATA/GIE06_15.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_15.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"DATA/GIE05_16.pho", kSaveModeSave, nullptr, "app progress" }, // Child 16
+	{"DATA/GIE06_16.pho", kSaveModeSave, nullptr, "app progress" },
+	{"DATA/GIE07_16.pho", kSaveModeSave, nullptr, "app progress" },
+
+	{"APPLIS/appli_01.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_02.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_03.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_04.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_05.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_06.ini", kSaveModeSave, nullptr, "app info" },
+	{"APPLIS/appli_07.ini", kSaveModeSave, nullptr, "app info" },
+
+	// Adi 4
+	// Temporary ancillary files,
+	{"DATA/iduser.tmp", kSaveModeSave, nullptr, nullptr},
+	{"adi.tmp", kSaveModeSave, nullptr, nullptr},
+	{"adi4.tmp", kSaveModeSave, nullptr, nullptr},
+
+	// Temporary sprites
+	{"ADI.$$$", kSaveModeSave, nullptr, nullptr},
+
+	// Persitent files
+	{"RETURN_FROM_GAMEBOX", kSaveModeSave, nullptr, nullptr}, // Fictive file used to simulate returning from Gamebox in ScummVM
+	{"TEMP/ADI4.PHO", kSaveModeSave, nullptr, nullptr},
+	{"perso.dep", kSaveModeSave, nullptr, nullptr},
+	{"premier.dep", kSaveModeSave, nullptr, nullptr},
+	{"quitter.dep", kSaveModeSave, nullptr, nullptr},
+	{"appel.dep", kSaveModeSave, nullptr, nullptr},
+	{"parole.dep", kSaveModeSave, nullptr, nullptr},
+	{"nouveau.dep", kSaveModeSave, nullptr, nullptr},
+	{"DATA/iduser.inf", kSaveModeSave, nullptr, nullptr},
+	{"adi.inf", kSaveModeSave, nullptr, nullptr},
+	{"adi.bis", kSaveModeSave, nullptr, nullptr},
+	{"DATA/ado4.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/mcurrent.inf", kSaveModeSave, nullptr, nullptr},
+
+	{"DATA/config00.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config01.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config02.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config03.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config04.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config05.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config06.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config07.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config08.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config09.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config10.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config10.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config12.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config13.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config14.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/config15.inf", kSaveModeSave, nullptr, nullptr},
+
+	{"DATA/statev00.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev01.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev02.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev03.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev04.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev05.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev06.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev07.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev08.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev09.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev10.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev10.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev12.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev13.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev14.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/statev15.inf", kSaveModeSave, nullptr, nullptr},
+
+	// App progress files (one per child per year and per app)
+
+	// Maths
+	// 7-8 years
+	{"DATA/RESM1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/RESM9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/RESM8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/RESM7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/RESM6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/RESM5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/RESM4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/RESM3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESM3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Language
+	// 7-8 years
+	{"DATA/RESF1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/RESF9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/RESF8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/RESF7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/RESF6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/RESF5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/RESF4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/RESF3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESF3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Anglais (English)
+	// 7-8 years
+	{"DATA/RESA1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/RESA9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/RESA8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/RESA7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/RESA6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/RESA5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/RESA4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/RESA3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/RESA3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Euro
+    // 7-8 years
+    {"DATA/RESO1D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO1D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 8-9 years
+    {"DATA/RESO9D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO9D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 9-10 years
+    {"DATA/RESO8D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO8D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 10-11 years
+    {"DATA/RESO7D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO7D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 11-12 years
+    {"DATA/RESO6D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO6D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 12-13 years
+    {"DATA/RESO5D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO5D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 13-14 years
+    {"DATA/RESO4D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO4D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 14-15 years
+    {"DATA/RESO3D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/RESO3D15.inf", kSaveModeSave, nullptr, nullptr},
+
+	// DIP files (one per child per year and per app)
+
+	// Maths
+	// 7-8 years
+	{"DATA/DIPM1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/DIPM9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/DIPM8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/DIPM7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/DIPM6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/DIPM5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/DIPM4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/DIPM3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPM3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Language
+	// 7-8 years
+	{"DATA/DIPF1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/DIPF9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/DIPF8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/DIPF7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/DIPF6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/DIPF5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/DIPF4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/DIPF3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPF3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Anglais (English)
+	// 7-8 years
+	{"DATA/DIPA1100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA1115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 8-9 years
+	{"DATA/DIPA9100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA9115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 9-10 years
+	{"DATA/DIPA8100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA8115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 10-11 years
+	{"DATA/DIPA7100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA7115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 11-12 years
+	{"DATA/DIPA6100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA6115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 12-13 years
+	{"DATA/DIPA5100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA5115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 13-14 years
+	{"DATA/DIPA4100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA4115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// 14-15 years
+	{"DATA/DIPA3100.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3101.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3102.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3103.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3104.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3105.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3106.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3107.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3108.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3109.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3110.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3111.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3112.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3113.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3114.inf", kSaveModeSave, nullptr, nullptr},
+	{"DATA/DIPA3115.inf", kSaveModeSave, nullptr, nullptr},
+
+	// Euro
+    // 7-8 years
+    {"DATA/DIPO1D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO1D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 8-9 years
+    {"DATA/DIPO9D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO9D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 9-10 years
+    {"DATA/DIPO8D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO8D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 10-11 years
+    {"DATA/DIPO7D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO7D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 11-12 years
+    {"DATA/DIPO6D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO6D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 12-13 years
+    {"DATA/DIPO5D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO5D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 13-14 years
+    {"DATA/DIPO4D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO4D15.inf", kSaveModeSave, nullptr, nullptr},
+
+    // 14-15 years
+    {"DATA/DIPO3D00.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D01.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D02.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D03.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D04.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D05.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D06.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D07.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D08.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D09.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D10.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D11.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D12.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D13.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D14.inf", kSaveModeSave, nullptr, nullptr},
+    {"DATA/DIPO3D15.inf", kSaveModeSave, nullptr, nullptr},
+};
+
+SaveLoad_v7::SpriteHandler::File::File(GobEngine *vm, const Common::String &base, const Common::String &ext) :
+SlotFileStatic(vm, base, ext) {
+}
+
+SaveLoad_v7::SpriteHandler::File::~File() {
+}
+
+
+SaveLoad_v7::SpriteHandler::SpriteHandler(GobEngine *vm, const Common::String &target, const Common::String &ext)
+	: TempSpriteHandler(vm), _file(vm, target, ext) {
+}
+
+SaveLoad_v7::SpriteHandler::~SpriteHandler() {
+}
+
+int32 SaveLoad_v7::SpriteHandler::getSize() {
+	Common::String fileName = _file.build();
+
+	if (fileName.empty())
+		return -1;
+
+	SaveReader reader(1, 0, fileName);
+	SaveHeader header;
+
+	if (!reader.load())
+		return -1;
+
+	if (!reader.readPartHeader(0, &header))
+		return -1;
+
+	// Return the part's size
+	return header.getSize();
+}
+
+bool SaveLoad_v7::SpriteHandler::load(int16 dataVar, int32 size, int32 offset) {
+	if (!TempSpriteHandler::createFromSprite(size, offset))
+		return false;
+
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveReader reader(1, 0, fileName);
+	if (!reader.load())
+		return false;
+
+	if (!reader.readPart(0, _sprite))
+		return false;
+
+	return TempSpriteHandler::load(dataVar, size, offset);
+}
+
+bool SaveLoad_v7::SpriteHandler::save(int16 dataVar, int32 size, int32 offset) {
+	if (!TempSpriteHandler::save(dataVar, size, offset))
+		return false;
+
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveWriter writer(1, 0, fileName);
+	return writer.writePart(0, _sprite);
+}
+
+bool SaveLoad_v7::SpriteHandler::loadToRaw(byte *ptr, int32 size, int32 offset) {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveReader reader(1, 0, fileName);
+	if (!reader.load())
+		return false;
+
+	if (!reader.readPart(0, _sprite))
+		return false;
+
+	return TempSpriteHandler::loadToRaw(ptr, size, offset);
+}
+
+bool SaveLoad_v7::SpriteHandler::saveFromRaw(const byte *ptr, int32 size, int32 offset) {
+	if (!TempSpriteHandler::saveFromRaw(ptr, size, offset))
+		return false;
+
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveWriter writer(1, 0, fileName);
+	return writer.writePart(0, _sprite);
+}
+
+bool SaveLoad_v7::SpriteHandler::deleteFile() {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveWriter writer(1, 0, fileName);
+	return writer.deleteFile();
+}
+
+SaveLoad_v7::DrawingOnFloppyDiskHandler::File::File(GobEngine *vm, const Common::String &base, const Common::String &ext) :
+	SlotFileStatic(vm, base, ext) {
+}
+
+SaveLoad_v7::DrawingOnFloppyDiskHandler::File::~File() {
+}
+
+
+SaveLoad_v7::DrawingOnFloppyDiskHandler::DrawingOnFloppyDiskHandler(GobEngine *vm,
+																	SaveReader *reader,
+																	SaveWriter *writer,
+																	bool isThumbnail,
+																	uint32 chunkSize)
+	: TempSpriteHandler(vm), _reader(reader), _writer(writer), _isThumbnail(isThumbnail), _chunkSize(chunkSize) {
+}
+
+SaveLoad_v7::DrawingOnFloppyDiskHandler::~DrawingOnFloppyDiskHandler() {
+	// Assume reader and writer are owned by the handler of the full picture
+	if (!_isThumbnail) {
+		delete _reader;
+		delete _writer;
+	}
+}
+
+int32 SaveLoad_v7::DrawingOnFloppyDiskHandler::getSize() {
+	if (_reader == nullptr || !_reader->load())
+		return -1;
+
+	if (_isThumbnail) {
+		// First part is the thumbnail
+		SaveHeader header;
+		if (!_reader->readPartHeader(0, &header))
+			return -1;
+
+		return header.getSize();
+	} else {
+		// Following parts are the full picture chunks
+		int32 size = -1;
+		SaveHeader header;
+		for (int i = 1; _reader->readPartHeader(i, &header); i++) {
+			if (size == -1)
+				size = 0;
+			size += header.getSize();
+		}
+
+		return size;
+	}
+}
+
+bool SaveLoad_v7::DrawingOnFloppyDiskHandler::load(int16 dataVar, int32 index_as_size, int32 offset) {
+	if (!TempSpriteHandler::createFromSprite(index_as_size, offset))
+		return false;
+
+	if (!_reader->load())
+		return false;
+
+	int32 part = 0;
+	if (_isThumbnail)
+		part = 0;
+	else
+		part = 1 + offset / _chunkSize;
+	if (!_reader->readPart(part, _sprite))
+		return false;
+
+	return TempSpriteHandler::load(dataVar, index_as_size, offset);
+}
+
+bool SaveLoad_v7::DrawingOnFloppyDiskHandler::save(int16 dataVar, int32 size, int32 offset) {
+	if (!TempSpriteHandler::save(dataVar, size, offset))
+		return false;
+
+	int32 part = 0;
+	if (_isThumbnail)
+		part = 0;
+	else
+		part = 1 + offset / _chunkSize;
+
+	return _writer->writePart(part, _sprite);
+}
+
+bool SaveLoad_v7::DrawingOnFloppyDiskHandler::deleteFile() {
+	return _writer->deleteFile();
+}
+
+SaveLoad_v7::GameFileHandler::File::File(GobEngine *vm, const Common::String &base, const Common::String &ext) :
+SlotFileStatic(vm, base, ext) {
+}
+
+SaveLoad_v7::GameFileHandler::File::~File() {
+}
+
+
+SaveLoad_v7::GameFileHandler::GameFileHandler(GobEngine *vm, const Common::String &target, const Common::String &ext) :
+SaveHandler(vm), _file(vm, target, ext) {
+}
+
+SaveLoad_v7::GameFileHandler::~GameFileHandler() {
+}
+
+int32 SaveLoad_v7::GameFileHandler::getSize() {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return -1;
+
+	SaveReader reader(1, 0, fileName);
+	SaveHeader header;
+
+	if (!reader.load())
+		return -1;
+
+	if (!reader.readPartHeader(0, &header))
+		return -1;
+
+	// Return the part's size
+	return header.getSize();
+}
+
+bool SaveLoad_v7::GameFileHandler::load(int16 dataVar, int32 size, int32 offset) {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	if (size == 0) {
+		uint32 varSize = SaveHandler::getVarSize(_vm);
+		// Indicator to load all variables
+		dataVar = 0;
+		size = (int32) varSize;
+	}
+
+	int32 fileSize = getSize();
+	if (fileSize < 0)
+		return false;
+
+	SaveReader reader(1, 0, fileName);
+	SavePartVars vars(_vm, fileSize);
+
+	if (!reader.load()) {
+		return false;
+	}
+
+	if (!reader.readPart(0, &vars)) {
+		return false;
+	}
+
+	if (!vars.writeInto((uint16) dataVar, offset, size)) {
+		return false;
+	}
+
+	return true;
+}
+
+bool SaveLoad_v7::GameFileHandler::save(const byte *ptrRaw, int16 dataVar, int32 size, int32 offset) {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	if (size == 0) {
+		// Indicator to save all variables
+		dataVar = 0;
+		uint32 varSize = SaveHandler::getVarSize(_vm);
+		size = (int32) varSize;
+	}
+
+	int32 fileSize = getSize();
+	int32 newFileSize = size + offset;
+	if (fileSize > newFileSize) {
+		newFileSize = fileSize;
+	}
+
+	SavePartVars vars(_vm, newFileSize);
+	if (fileSize > 0
+		&&
+		(offset > 0 || size < fileSize)) {
+		// Load data from file, as some of it will not be overwritten
+		SaveReader reader(1, 0, fileName);
+		if (!reader.load()) {
+			return false;
+		}
+
+		if (fileSize == newFileSize) {
+			// We can use the same SavePartVars object
+			if (!reader.readPart(0, &vars)) {
+				return false;
+			}
+		} else {
+			// We need to use a temporary SavePartVars object to load data
+			SavePartVars vars_from_file(_vm, fileSize);
+			if (!reader.readPart(0, &vars_from_file)) {;
+				return false;
+			}
+
+			// Copy data from temporary SavePartVars object to the real one
+			vars.readFromRaw(vars_from_file.data(), 0, fileSize);
+		}
+	}
+
+	SaveWriter writer(1, 0, fileName);
+	if (ptrRaw) {
+		// Write data from raw pointer
+		vars.readFromRaw(ptrRaw, offset, size);
+	} else {
+		// Write data from variables
+		if (!vars.readFrom((uint16) dataVar, offset, size))
+			return false;
+	}
+
+	return writer.writePart(0, &vars);
+}
+
+bool SaveLoad_v7::GameFileHandler::save(int16 dataVar, int32 size, int32 offset) {
+	return save(nullptr, dataVar, size, offset);
+}
+
+bool SaveLoad_v7::GameFileHandler::loadToRaw(byte *ptr, int32 size, int32 offset) {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	if (size == 0) {
+		uint32 varSize = SaveHandler::getVarSize(_vm);
+		// Indicator to load all variables
+		size = (int32) varSize;
+	}
+
+	int32 fileSize = getSize();
+	if (fileSize < 0)
+		return false;
+
+	SaveReader reader(1, 0, fileName);
+	SavePartVars vars(_vm, fileSize);
+
+	if (!reader.load()) {
+		return false;
+	}
+
+	if (!reader.readPart(0, &vars)) {
+		return false;
+	}
+
+	if (!vars.writeIntoRaw(ptr, offset, size)) {
+		return false;
+	}
+
+	return true;
+}
+
+
+bool SaveLoad_v7::GameFileHandler::saveFromRaw(const byte *ptr, int32 size, int32 offset) {
+	return save(ptr, 0, size, offset);
+}
+
+bool SaveLoad_v7::GameFileHandler::deleteFile() {
+	Common::String fileName = _file.build();
+	if (fileName.empty())
+		return false;
+
+	SaveWriter writer(1, 0, fileName);
+	return writer.deleteFile();
+}
+
+SaveLoad_v7::SaveLoad_v7(GobEngine *vm, const char *targetName) :
+		SaveLoad(vm) {
+
+	uint32 index = 0;
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _faceHandler[i] = new SpriteHandler(_vm,
+																		targetName,
+																		Common::String::format("vsg%02d", i + 1));
+	}
+
+	_saveFiles[index++].handler = _childrenHandler = new FakeFileHandler(_vm);
+	for (int i = 0; i < 4; ++i) {
+		_saveFiles[index++].handler = _debilHandler[i] = new FakeFileHandler(_vm);
+	}
+
+	_saveFiles[index++].handler = _configHandler   = new GameFileHandler(_vm, targetName, "cfg");
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adibou2EnvHandler[i] = new GameFileHandler(_vm,
+																				  targetName,
+																				  Common::String::format("env%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adibou2WeatherHandler[i] = new SpriteHandler(_vm,
+																					targetName,
+																					Common::String::format("weather_%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adibou2BreakoutGameProgressHandler[i] = new GameFileHandler(_vm,
+																								   targetName,
+																								   Common::String::format("breakout_%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfConstructionGameFiles; i++) {
+		_saveFiles[index++].handler = _adibou2ConstructionGameTempFileHandler[i] = new FakeFileHandler(_vm);
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		for (uint32 j = 0; j < kAdibou2NbrOfConstructionGameFiles; j++) {
+			const char *fileName = (j == 0)?"construc":((j == 1)?"ptreco":"aide");
+			_saveFiles[index++].handler = _adibou2ConstructionGameProgressHandler[i][j] = new GameFileHandler(_vm,
+																											  targetName,
+																											  Common::String::format("%s_%02d", fileName, i + 1));
+		}
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		for (uint32 j = 0; j < kAdibou2NbrOfApplications; j++) {
+			Common::String ext = Common::String::format("gsa%02d_%02d", j + 1, i + 1);
+			_saveFiles[index++].handler = _adibou2AppProgressHandler[i][j]  = new GameFileHandler(_vm,
+																								 targetName,
+																								 ext);
+		}
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adibou2MemoHandler[i] = new GameFileHandler(_vm, targetName, Common::String::format("memo%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adibou2DiploHandler[i] = new GameFileHandler(_vm, targetName, Common::String::format("diplo%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		_saveFiles[index++].handler = _adibou2AppliHandler[i] = new GameFileHandler(_vm, targetName, Common::String::format("appli%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		_saveFiles[index++].handler = _adibou2CriteHandler[i] = new GameFileHandler(_vm, targetName, Common::String::format("crite%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		_saveFiles[index++].handler = _adibou2ExoHandler[i] = new GameFileHandler(_vm, targetName, Common::String::format("exo%02d", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		_saveFiles[index++].handler = _adibou2AppIcoHandler[i] = new SpriteHandler(_vm, targetName, Common::String::format("app_ico%02d", i + 1));
+	}
+
+	_saveFiles[index++].handler = _adibou2ApplicationsInfoHandler = new GameFileHandler(_vm, targetName, "applis");
+	_saveFiles[index++].handler = _adibou2LanceHandler = new FakeFileHandler(_vm);
+	_saveFiles[index++].handler = _adibou2RetourHandler = new FakeFileHandler(_vm);
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		for (uint32 j = 0; j < kAdibou2NbrOfSavedDrawings; j++) {
+			_saveFiles[index++].handler = _adibou2DrawingHandler[i][j] = new SpriteHandler(_vm,
+																						   targetName,
+																						   Common::String::format("draw%02d_%02d", i + 1, j + 1));
+		}
+
+		for (uint32 j = 0; j < kAdibou2NbrOfSavedDrawings; j++) {
+			_saveFiles[index++].handler = _adibou2DrawingThumbnailHandler[i][j] = new SpriteHandler(_vm,
+																									targetName,
+																									Common::String::format("draw_thumbnail_%02d_%02d", i + 1, j + 1));
+		}
+
+		_saveFiles[index++].handler = _adibou2DrawingPaletteHandler[i] = new GameFileHandler(_vm,
+																							 targetName,
+																							 Common::String::format("draw_palette_%02d",
+																													i + 1));
+		_saveFiles[index++].handler = _adibou2DrawingMailboxHandler[i] = new SpriteHandler(_vm,
+																						   targetName,
+																						   Common::String::format("draw_mailbox_%02d", i + 1));
+
+		_saveFiles[index++].handler = _adibou2CakePhotoHandler[i] = new SpriteHandler(_vm,
+																					  targetName,
+																					  Common::String::format("photo_cake_%02d", i + 1));
+
+		_saveFiles[index++].handler = _adibou2FlowerPhotoHandler[i] = new SpriteHandler(_vm,
+																						targetName,
+																						Common::String::format("photo_flower_%02d", i + 1));
+
+		_saveFiles[index++].handler = _adibou2FlowerInVaseHandler[i] = new SpriteHandler(_vm,
+																							targetName,
+																							Common::String::format("photo_flower_vase_%02d", i + 1));
+
+		_saveFiles[index++].handler = _adibou2FadedFlowerInVaseHandler[i] = new SpriteHandler(_vm,
+																							 targetName,
+																							 Common::String::format("photo_flower_vase_2_%02d", i + 1));
+
+		_saveFiles[index++].handler = _adibou2PosterHandler[i] = new SpriteHandler(_vm,
+																				   targetName,
+																				   Common::String::format("poster_%02d", i + 1));
+	}
+
+	uint32 drawingOnFloppyDiskFullSize = 163200;
+	uint32 drawingOnFloppyDiskChunkSize = 4800;
+	uint32 nbrOfParts = 1 + drawingOnFloppyDiskFullSize / drawingOnFloppyDiskChunkSize; // 1 for the thumbnail, 34 for the drawing
+	Common::String drawingOnFloppyDiskName = "adibou2_my_drawing_on_floppy_disk"; // Fix filename to facilitate sharing
+
+	SaveReader *reader = new SaveReader(nbrOfParts, 0, drawingOnFloppyDiskName);
+	SaveWriter *writer = new SaveWriter(nbrOfParts, 0, drawingOnFloppyDiskName);
+
+	_saveFiles[index++].handler = _adibou2DrawingOnFloppyDiskHandler = new DrawingOnFloppyDiskHandler(_vm,
+																									  reader,
+																									  writer,
+																									  false,
+																									  drawingOnFloppyDiskChunkSize);
+	_saveFiles[index++].handler = _adibou2DrawingThumbnailOnFloppyDiskHandler = new DrawingOnFloppyDiskHandler(_vm,
+																											   reader,
+																											   writer,
+																											   true);
+	_saveFiles[index++].handler = _adibou2TestDobHandler = new FakeFileHandler(_vm);
+	_saveFiles[index++].handler = _adibou2ExerciseListHandler = new FakeFileHandler(_vm);
+	_saveFiles[index++].handler = _adibou2RelanceHandler = new FakeFileHandler(_vm);
+	_saveFiles[index++].handler = _adibou2MemHandler = new FakeFileHandler(_vm);
+
+	for (uint32 j = 0; j < kChildrenCount; j++) {
+		for (uint32 i = 4; i < kAdibou2NbrOfApplications; i++) {
+			_saveFiles[index++].handler = _adibou2AppProgressExtHandler[i - 4][j] = new GameFileHandler(_vm,
+																										targetName,
+																										Common::String::format("gie_%02d_%02d_pho", i + 1, j + 1));
+		}
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		_saveFiles[index++].handler = _adibou2AppliIniHandler[i] = new GameFileHandler(_vm,
+																					   targetName,
+																					   Common::String::format("appli_%02d_ini", i + 1));
+	}
+
+	for (uint32 i = 0; i < kAdi4NbrOfTempFiles; i++) {
+		_saveFiles[index++].handler = _adi4TempFileHandler[i] = new FakeFileHandler(_vm);
+	}
+
+	_saveFiles[index++].handler = _adi4TempSpriteHandler = new TempSpriteHandler(_vm);
+
+	int indexAdi4file = 0;
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "scummvm_autosave");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "adi4_pho");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "perso_dep");
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "premier_dep");
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "quitter_dep");
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "appel_dep");
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "parole_dep");
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "nouveau_dep");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "id_user");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "adi_inf");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "adi_bis");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "ado4_inf");
+
+	_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																							  targetName,
+																							  "mcurrent_inf");
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																								  targetName,
+																								  Common::String::format("config%02d", i));
+	}
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																								  targetName,
+																								  Common::String::format("statev%02d", i));
+	}
+
+	for (const char* fileType : {"res", "dip"}) {
+		for (uint32 i = 0; i < kAdi4NbrOfApplications; i++) {
+			for (uint32 j = 0; j < kAdi4NbrOfSchoolYears; j++) {
+				for (uint32 k = 0; k < kChildrenCount; k++) {
+					_saveFiles[index++].handler = _adi4GameFileHandler[indexAdi4file++] = new GameFileHandler(_vm,
+																											  targetName,
+																											  Common::String::format("%s_%02d_%02d_%02d", fileType, i, j, k));
+				}
+			}
+		}
+	}
+}
+
+SaveLoad_v7::~SaveLoad_v7() {
+	for (uint32 i = 0; i < kAdi4NbrOfTempFiles; i++) {
+		delete _adi4TempFileHandler[i];
+	}
+
+	delete _adi4TempSpriteHandler;
+
+	for (uint32 i = 0; i < kAdi4NbrOfGameFiles; i++) {
+		delete _adi4GameFileHandler[i];
+	}
+
+	delete _configHandler;
+	for (int i = 0; i < 4; i++)
+		delete _debilHandler[i];
+	delete _childrenHandler;
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		delete _adibou2EnvHandler[i];
+		delete _adibou2WeatherHandler[i];
+		delete _adibou2BreakoutGameProgressHandler[i];
+
+		for (uint32 j = 0; j < kAdibou2NbrOfConstructionGameFiles; j++)
+			delete _adibou2ConstructionGameProgressHandler[i][j];
+
+		for (uint32 j = 0; j < kAdibou2NbrOfApplications; j++)
+			delete _adibou2AppProgressHandler[i][j];
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfConstructionGameFiles; i++)
+		delete _adibou2ConstructionGameTempFileHandler[i];
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		delete _faceHandler[i];
+		delete _adibou2MemoHandler[i];
+		delete _adibou2DiploHandler[i];
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		delete _adibou2AppliHandler[i];
+		delete _adibou2CriteHandler[i];
+		delete _adibou2ExoHandler[i];
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		delete _adibou2AppIcoHandler[i];
+	}
+
+	delete _adibou2ApplicationsInfoHandler;
+	delete _adibou2RetourHandler;
+	delete _adibou2LanceHandler;
+
+	for (uint32 i = 0; i < kChildrenCount; i++) {
+		for (uint32 j = 0; j < kAdibou2NbrOfSavedDrawings; j++) {
+			delete _adibou2DrawingHandler[i][j];
+			delete _adibou2DrawingThumbnailHandler[i][j];
+		}
+
+		delete _adibou2DrawingPaletteHandler[i];
+		delete _adibou2DrawingMailboxHandler[i];
+		delete _adibou2CakePhotoHandler[i];
+		delete _adibou2FlowerPhotoHandler[i];
+		delete _adibou2FlowerInVaseHandler[i];
+		delete _adibou2FadedFlowerInVaseHandler[i];
+		delete _adibou2PosterHandler[i];
+	}
+
+	delete _adibou2DrawingOnFloppyDiskHandler;
+	delete _adibou2DrawingThumbnailOnFloppyDiskHandler;
+	delete _adibou2TestDobHandler;
+	delete _adibou2ExerciseListHandler;
+	delete _adibou2RelanceHandler;
+	delete _adibou2MemHandler;
+
+
+	for (uint32 i = 4; i < kAdibou2NbrOfApplications; i++) {
+		for (uint32 j = 0; j < kChildrenCount; j++) {
+			delete _adibou2AppProgressExtHandler[i - 4][j];
+		}
+	}
+
+	for (uint32 i = 0; i < kAdibou2NbrOfApplications; i++) {
+		delete _adibou2AppliIniHandler[i];
+	}
+}
+
+const SaveLoad_v7::SaveFile *SaveLoad_v7::getSaveFile(const char *fileName) const {
+	Common::String pathNormalized = replacePathSeparators(fileName, '/');
+
+	// First, search for full path match
+	for (int i = 0; i < ARRAYSIZE(_saveFiles); i++)
+		if (!scumm_stricmp(pathNormalized.c_str(), _saveFiles[i].sourceName))
+			return &_saveFiles[i];
+
+	// If no match has been found, search for a filename-only match, ignoring paths
+	fileName = stripPath(pathNormalized.c_str(), '/');
+	for (int i = 0; i < ARRAYSIZE(_saveFiles); i++)
+		if (!scumm_stricmp(fileName, stripPath(_saveFiles[i].sourceName, '/')))
+			return &_saveFiles[i];
+
+	return nullptr;
+}
+
+SaveHandler *SaveLoad_v7::getHandler(const char *fileName) const {
+	const SaveFile *saveFile = getSaveFile(fileName);
+
+	if (saveFile)
+		return saveFile->handler;
+
+	return nullptr;
+}
+
+const char *SaveLoad_v7::getDescription(const char *fileName) const {
+	const SaveFile *saveFile = getSaveFile(fileName);
+
+	if (saveFile)
+		return saveFile->description;
+
+	return nullptr;
+}
+
+SaveLoad::SaveMode SaveLoad_v7::getSaveMode(const char *fileName) const {
+	const SaveFile *saveFile = getSaveFile(fileName);
+
+	if (saveFile)
+		return saveFile->mode;
+
+	return kSaveModeNone;
+}
+
+Common::List<Common::Path> SaveLoad_v7::getFilesMatchingPattern(const Common::Path &pattern) const {
+	Common::List<Common::Path> files;
+
+	for (const SaveFile &saveFile : _saveFiles) {
+		// Full path match only
+		if (Common::matchString(saveFile.sourceName, pattern.toString().c_str(), true))
+			files.push_back(saveFile.sourceName);
+	}
+
+	return files;
+}
+
+} // End of namespace Gob

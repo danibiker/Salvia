@@ -1,0 +1,295 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "engines/nancy/nancy.h"
+#include "engines/nancy/cursor.h"
+#include "engines/nancy/sound.h"
+#include "engines/nancy/input.h"
+#include "engines/nancy/util.h"
+
+#include "engines/nancy/state/setupmenu.h"
+#include "engines/nancy/state/scene.h"
+#include "engines/nancy/ui/button.h"
+#include "engines/nancy/ui/scrollbar.h"
+
+#include "common/config-manager.h"
+
+namespace Common {
+DECLARE_SINGLETON(Nancy::State::SetupMenu);
+}
+
+namespace Nancy {
+namespace State {
+
+// Toggles the engine has ConfMan keys for; see getToggleConfManKey()
+static const uint kNumKnownToggles = 2;
+
+void SetupMenu::process() {
+	switch (_state) {
+	case kInit:
+		init();
+		// fall through
+	case kRun:
+		run();
+		break;
+	case kStop:
+		stop();
+		break;
+	}
+}
+
+void SetupMenu::onStateEnter(const NancyState::NancyState prevState) {
+	registerGraphics();
+}
+
+bool SetupMenu::onStateExit(const NancyState::NancyState nextState) {
+	return true;
+}
+
+void SetupMenu::registerGraphics() {
+	_background.registerGraphics();
+
+	for (auto &tog : _toggles) {
+		tog->registerGraphics();
+	}
+
+	for (auto &scroll : _scrollbars) {
+		scroll->registerGraphics();
+	}
+
+	if (_exitButton) {
+		_exitButton->registerGraphics();
+	}
+
+	if (_designSelectButton) {
+		_designSelectButton->registerGraphics();
+	}
+}
+
+const Common::String SetupMenu::getToggleConfManKey(uint id) {
+	GameType gameType = g_nancy->getGameType();
+
+	if (gameType == kGameTypeVampire) {
+		// Note that toggle id 1 (interlaced video) is ignored since we don't support that option
+		switch (id) {
+		case 0 :
+			return "subtitles";
+		case 2 :
+			return "player_speech";
+		case 3 :
+			return "character_speech";
+		default:
+			return "";
+		}
+	} else if (gameType <= kGameTypeNancy5) {
+		switch (id) {
+		case 0 :
+			return "subtitles";
+		case 1 :
+			return "player_speech";
+		case 2 :
+			return "character_speech";
+		default:
+			return "";
+		}
+	} else {
+		switch (id) {
+		case 0 :
+			return "subtitles";
+		case 1 :
+			return "auto_move";
+		default:
+			return "";
+		}
+	}
+}
+
+void SetupMenu::init() {
+	_setupData = GetEngineData(SET);
+	assert(_setupData);
+
+	if (g_nancy->getGameType() == kGameTypeVampire) {
+		// There is a setup.bmp an the top directory of the first disk,
+		// which we need to avoid
+		_background.init(Common::Path("ART/").joinInPlace(_setupData->_imageName));
+	} else {
+		_background.init(_setupData->_imageName);
+	}
+
+	_background.registerGraphics();
+
+	g_nancy->_cursor->setCursorType(g_nancy->getGameType() >= kGameTypeNancy10 ? CursorManager::kHotspotArrow : CursorManager::kNormalArrow);
+	g_nancy->setMouseEnabled(true);
+
+	g_nancy->_sound->stopSound("MSND");
+
+	for (uint i = 0; i < _setupData->_sounds.size(); ++i) {
+		if (!g_nancy->_sound->isSoundPlaying(_setupData->_sounds[i])) {
+			g_nancy->_sound->loadSound(_setupData->_sounds[i]);
+			g_nancy->_sound->playSound(_setupData->_sounds[i]);
+		}
+	}
+
+	// The buttons run toggles first, then Done. Nancy15 appends an "Interface
+	// Designs" button after Done, which opens the Design Select screen. Keying
+	// on LDSN keeps Nancy16, which dropped both the chunk and the screen, out
+	// of this.
+	const uint numButtons = _setupData->_buttonDests.size();
+	uint numToggles = numButtons - 1;
+	uint doneIndex = numButtons - 1;
+
+	const LDSN *designData = GetEngineData(LDSN)
+	if (designData && numToggles > kNumKnownToggles && numButtons <= _setupData->_buttonDownSrcs.size()) {
+		numToggles = numButtons - 2;
+		doneIndex = numButtons - 2;
+
+		_designSelectButton.reset(new UI::Button(5, _background._drawSurface,
+			_setupData->_buttonDownSrcs[numButtons - 1], _setupData->_buttonDests[numButtons - 1],
+			_setupData->_extraButtonHighlightSrc));
+		_designSelectButton->init();
+		_designSelectButton->setVisible(false);
+	}
+
+	_toggles.resize(numToggles);
+	for (uint i = 0; i < numToggles; ++i) {
+		_toggles[i].reset(new UI::Toggle(5, _background._drawSurface,
+			_setupData->_buttonDownSrcs[i], _setupData->_buttonDests[i]));
+
+		_toggles[i]->init();
+	}
+
+	// Set toggle visibility
+	for (uint i = 0; i < _toggles.size(); ++i) {
+		_toggles[i]->setState(ConfMan.getBool(getToggleConfManKey(i), ConfMan.getActiveDomainName()));
+	}
+
+	_scrollbars.resize(_setupData->_scrollbarSrcs.size());
+	for (uint i = 0; i < _setupData->_scrollbarSrcs.size(); ++i) {
+		_scrollbars[i].reset(new UI::Scrollbar(7, _setupData->_scrollbarSrcs[i],
+			_background._drawSurface, Common::Point(_setupData->_scrollbarsCenterXPosL[i] + 1, _setupData->_scrollbarsCenterYPos[i]),
+			_setupData->_scrollbarsCenterXPosR[i] + 1 - _setupData->_scrollbarsCenterXPosL[i] - 1, false));
+		_scrollbars[i]->init();
+		_scrollbars[i]->setVisible(true);
+	}
+
+	// Set scrollbar positions
+	_scrollbars[0]->setPosition(ConfMan.getInt("speech_volume") / 255.0);
+	_scrollbars[1]->setPosition(ConfMan.getInt("music_volume") / 255.0);
+	_scrollbars[2]->setPosition(ConfMan.getInt("sfx_volume") / 255.0);
+
+	_exitButton.reset(new UI::Button(5, _background._drawSurface,
+		_setupData->_buttonDownSrcs[doneIndex], _setupData->_buttonDests[doneIndex],
+		_setupData->_doneButtonHighlightSrc));
+	_exitButton->init();
+	_exitButton->setVisible(false);
+
+	registerGraphics();
+
+	_state = kRun;
+}
+
+void SetupMenu::run() {
+	NancyInput input = g_nancy->_input->getInput();
+
+	for (uint i = 0; i < _scrollbars.size(); ++i) {
+		auto &scroll = _scrollbars[i];
+
+		float startPos = scroll->getPos();
+		scroll->handleInput(input);
+		float endPos = scroll->getPos();
+
+		if (endPos != startPos) {
+			Audio::Mixer::SoundType type = Audio::Mixer::SoundType::kSpeechSoundType;
+			switch (i) {
+			case 0 :
+				type = Audio::Mixer::SoundType::kSpeechSoundType;
+				ConfMan.setInt("speech_volume", endPos * 255, ConfMan.getActiveDomainName());
+				break;
+			case 1 :
+				type = Audio::Mixer::SoundType::kMusicSoundType;
+				ConfMan.setInt("music_volume", endPos * 255, ConfMan.getActiveDomainName());
+				break;
+			case 2 :
+				type = Audio::Mixer::SoundType::kSFXSoundType;
+				ConfMan.setInt("sfx_volume", endPos * 255, ConfMan.getActiveDomainName());
+				break;
+			default:
+				break;
+			}
+
+			g_system->getMixer()->setVolumeForSoundType(type, endPos * 255);
+		}
+	}
+
+	for (uint i = 0; i < _toggles.size(); ++i) {
+		auto &tog = _toggles[i];
+		tog->handleInput(input);
+		if (tog->_stateChanged) {
+			g_nancy->_sound->playSound("BUOK");
+			Common::String key = getToggleConfManKey(i);
+			if (key.size()) {
+				// Make sure we don't write an empty string as a key in ConfMan
+				ConfMan.setBool(key, tog->_toggleState, ConfMan.getActiveDomainName());
+			}
+		}
+	}
+
+	if (_designSelectButton) {
+		_designSelectButton->handleInput(input);
+
+		if (_designSelectButton->_isClicked) {
+			g_nancy->_sound->playSound("BUOK");
+
+			// Keep hold of the state this menu will return to, so closing the
+			// design screen and then this menu lands back in the game
+			g_nancy->setState(NancyState::kDesignSelect, g_nancy->getPreviousState());
+			return;
+		}
+	}
+
+	if (_exitButton) {
+		_exitButton->handleInput(input);
+
+		if (_exitButton->_isClicked) {
+			g_nancy->_sound->playSound("BUOK");
+			_state = kStop;
+		}
+	}
+
+	g_nancy->_cursor->setCursorType(g_nancy->getGameType() >= kGameTypeNancy10 ? CursorManager::kHotspotArrow : CursorManager::kNormalArrow);
+}
+
+void SetupMenu::stop() {
+	if (g_nancy->_sound->isSoundPlaying("BUOK")) {
+		return;
+	}
+
+	for (auto &sound : _setupData->_sounds) {
+		g_nancy->_sound->stopSound(sound);
+	}
+
+	ConfMan.flushToDisk();
+
+	g_nancy->setToPreviousState();
+}
+
+} // End of namespace State
+} // End of namespace Nancy

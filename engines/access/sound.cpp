@@ -1,0 +1,599 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/config-manager.h"
+#include "audio/mixer.h"
+#include "audio/audiostream.h"
+#include "audio/mididrv.h"
+#include "audio/midiparser.h"
+#include "audio/decoders/raw.h"
+#include "audio/decoders/wave.h"
+#include "audio/decoders/vorbis.h"
+#include "audio/miles.h"
+#include "audio/midiparser_smf.h"
+
+#include "access/access.h"
+#include "access/sound.h"
+
+#include "access/martian/midiparser_bemd.h"
+
+namespace Access {
+
+SoundManager::SoundManager(AccessEngine *vm, Audio::Mixer *mixer) : _vm(vm), _mixer(mixer) {
+	_effectsHandle = new Audio::SoundHandle();
+}
+
+SoundManager::~SoundManager() {
+	clearSounds();
+	delete _effectsHandle;
+}
+
+void SoundManager::clearSounds() {
+	debugC(1, kDebugSound, "clearSounds()");
+
+	if (_mixer->isSoundHandleActive(*_effectsHandle))
+		_mixer->stopHandle(*_effectsHandle);
+
+	for (auto &sound : _soundTable)
+		delete sound._res;
+
+	_soundTable.clear();
+
+	while (_queue.size()) {
+		delete _queue[0]._stream;
+		_queue.remove_at(0);
+	}
+}
+
+bool SoundManager::isSoundQueued(int soundId) const {
+	for (uint idx = 0; idx < _queue.size(); ++idx) {
+		if (_queue[idx]._soundId == soundId)
+			return true;
+	}
+
+	return false;
+}
+
+void SoundManager::loadSoundTable(int idx, int fileNum, int subfile, int priority) {
+	debugC(1, kDebugSound, "loadSoundTable(%d, %d, %d)", idx, fileNum, subfile);
+
+	if (idx >= (int)_soundTable.size())
+		_soundTable.resize(idx + 1);
+	else
+		freeSound(idx);
+
+	Resource *soundResource = _vm->_files->loadFile(fileNum, subfile);
+	_soundTable[idx] = SoundEntry(soundResource, priority, fileNum, subfile);
+}
+
+int SoundManager::loadAndAddSound(const FileIdent &ident, int priority) {
+	return loadAndAddSound(ident._fileNum, ident._subFile);
+}
+
+int SoundManager::loadAndAddSound(int fileNum, int subfile, int priority) {
+	Resource *res = _vm->_files->loadFile(fileNum, subfile);
+	_soundTable.push_back(SoundEntry(res, priority, fileNum, subfile));
+	return _soundTable.size() - 1;
+}
+
+bool SoundManager::hasLoadedSound(const FileIdent &ident) const {
+	for (const auto &entry : _soundTable) {
+		if (entry.matches(ident))
+			return true;
+	}
+	return false;
+}
+
+void SoundManager::freeSound(int idx) {
+	assert(idx >= 0 && idx < (int)_soundTable.size());
+	// make sure we don't try to use the resource
+	stopSound();
+	assert(!isSoundQueued(idx));
+	delete _soundTable[idx]._res;
+	if (idx == (int)_soundTable.size() - 1)
+		_soundTable.pop_back();
+	else
+		_soundTable[idx] = SoundEntry();
+}
+
+void SoundManager::playSound(int soundIndex, bool loop /* = false */) {
+	debugC(1, kDebugSound, "playSound(%d, %d)", soundIndex, loop);
+	if (isSoundQueued(soundIndex))
+		// Prevent duplicate copies of a sound from being queued
+		return;
+
+	if (soundIndex >= (int)_soundTable.size()) {
+		// Happens in Noctropolis demo 2
+		warning("Request to play sound with invalid index %d.", soundIndex);
+		return;
+	}
+
+	int priority = _soundTable[soundIndex]._priority;
+	playSound(_soundTable[soundIndex]._res, priority, loop, soundIndex);
+}
+
+void SoundManager::playSoundByIdent(const FileIdent &ident, bool loop /* = false*/) {
+	for (int i = 0; i < (int)_soundTable.size(); i++) {
+		if (_soundTable[i].matches(ident))
+			playSound(i);
+	}
+}
+
+
+void SoundManager::playSound(Resource *res, int priority, bool loop, int soundIndex) {
+	debugC(1, kDebugSound, "playSound");
+
+	const byte *resourceData = res->data();
+
+	assert(res->_size >= 32);
+
+	Audio::RewindableAudioStream *audioStream;
+
+	if (READ_BE_UINT32(resourceData) == MKTAG('R','I','F','F')) {
+		// Noctropolis and Amazon CD version use raw WAVE-files
+		Common::SeekableReadStream *waveStream = new Common::MemoryReadStream(resourceData, res->_size, DisposeAfterUse::NO);
+		audioStream = Audio::makeWAVStream(waveStream, DisposeAfterUse::YES);
+	} else if (READ_BE_UINT32(resourceData) == MKTAG('S', 'T', 'E', 'V')) {
+		// sound files have a fixed header of 32 bytes in total
+		//  header content:
+		//   "STEVE" - fixed header
+		//   byte    - sample rate
+		//              01h mapped internally to 3Ch
+		//              02h mapped internally to 78h
+		//              03h mapped internally to B5h
+		//              04h mapped internally to F1h
+		//   byte    - unknown
+		//   word    - actual sample size (should be resource-size - 32)
+		byte internalSampleRate = resourceData[5];
+		int sampleSize = READ_LE_UINT16(resourceData + 7);
+
+		assert( (sampleSize + 32) <= res->_size);
+
+		int sampleRate = 0;
+		switch (internalSampleRate) {
+		case 1: // NEG(3Ch) -> C4h time constant
+			sampleRate = 16666;
+			break;
+
+		case 2: // NEG(78h) -> 88h time constant
+			sampleRate = 8334;
+			break;
+
+		case 3: // NEG(B5h) -> 4Bh time constant
+			sampleRate = 5525;
+			break;
+
+		case 4: // NEG(F1h) -> 0Fh time constant
+			sampleRate = 4150;
+			break;
+
+		default:
+			error("Unexpected internal Sample Rate %d", internalSampleRate);
+			return;
+		}
+
+		audioStream = Audio::makeRawStream(resourceData + 32, sampleSize, sampleRate, 0, DisposeAfterUse::NO);
+	} else
+		error("Unknown format");
+
+	if (loop) {
+		_queue.push_back(QueuedSound(new Audio::LoopingAudioStream(audioStream, 0,
+			DisposeAfterUse::NO), soundIndex));
+	} else {
+		_queue.push_back(QueuedSound(audioStream, soundIndex));
+	}
+
+	if (!_mixer->isSoundHandleActive(*_effectsHandle)) {
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, _effectsHandle,
+						_queue[0]._stream, -1, _mixer->kMaxChannelVolume, 0,
+						DisposeAfterUse::NO);
+	}
+}
+
+void SoundManager::checkSoundQueue() {
+	debugC(5, kDebugSound, "checkSoundQueue");
+
+	if (_queue.empty() || _mixer->isSoundHandleActive(*_effectsHandle))
+		return;
+
+	delete _queue[0]._stream;
+	_queue.remove_at(0);
+
+	if (_queue.size() && _queue[0]._stream)
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, _effectsHandle,
+		   _queue[0]._stream, -1, _mixer->kMaxChannelVolume, 0,
+		   DisposeAfterUse::NO);
+}
+
+bool SoundManager::isSFXPlaying() {
+	return _mixer->isSoundHandleActive(*_effectsHandle);
+}
+
+void SoundManager::syncVolume() {
+	int sfxVol = CLIP(ConfMan.getInt("sfx_volume"), 0, 255);
+	_mixer->setVolumeForSoundType(Audio::Mixer::kSFXSoundType, sfxVol);
+}
+
+void SoundManager::loadSounds(const Common::Array<RoomInfo::SoundIdent> &sounds) {
+	debugC(1, kDebugSound, "loadSounds");
+
+	clearSounds();
+
+	for (const auto &sound : sounds) {
+		if (sound._soundFilename.empty()) {
+			loadAndAddSound(sound._fileNum, sound._subFile, sound._priority);
+		} else {
+			//
+			// In Noctropolis, sounds are defined by filenames, eg,
+			// DARK/AUD/FLUX01A.WAV.
+			//
+			// The original does not have the data in a DARK/ subdir,
+			// so trim it first.
+			//
+			loadRawSound(Common::Path(sound._soundFilename.substr(5)), sound._priority);
+		}
+	}
+}
+
+int SoundManager::loadRawSound(const Common::Path &path, int priority) {
+	debugC(1, kDebugSound, "loadRawSound(%s)", path.toString().c_str());
+	if (!_vm->_files->existFile(path)) {
+		// In Noctropolis demo 2 intro sounds are not included
+		warning("Request to load missing sound file '%s'.", path.toString().c_str());
+		return -1;
+	}
+	Resource *soundRes = _vm->_files->loadRawFile(path);
+	_soundTable.push_back(SoundEntry(soundRes, priority));
+	return _soundTable.size() - 1;
+}
+
+void SoundManager::stopSound() {
+	debugC(3, kDebugSound, "stopSound");
+
+	_mixer->stopHandle(*_effectsHandle);
+}
+
+void SoundManager::freeSounds() {
+	debugC(3, kDebugSound, "freeSounds");
+
+	stopSound();
+	clearSounds();
+}
+
+/******************************************************************************************/
+
+MusicManager::~MusicManager() {
+	delete _music;
+	delete _tempMusic;
+}
+
+void MusicManager::loadMusic(int fileNum, int subfile) {
+	debugC(1, kDebugSound, "loadMusic(%d, %d)", fileNum, subfile);
+
+	_music = _vm->_files->loadFile(fileNum, subfile);
+}
+
+
+void MusicManager::freeMusic() {
+	debugC(3, kDebugSound, "freeMusic");
+
+	delete _music;
+	_music = nullptr;
+}
+
+/*******************/
+
+MusicManagerMIDI::MusicManagerMIDI(AccessEngine *vm) : MusicManager(vm), Audio::MidiPlayer() {
+	_music = nullptr;
+	_tempMusic = nullptr;
+	_isLooping = false;
+	_driver = nullptr;
+
+	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_MT32);
+	MusicType musicType = MidiDriver::getMusicType(dev);
+
+	// Amazon Guardians of Eden uses MIDPAK inside MIDIDRV.AP
+	// AdLib patches are inside MIDIDRV.AP too, 2nd resource file
+	//
+	// Amazon Guardians of Eden (demo) seems to use another type of driver, possibly written by Access themselves
+	// Martian Memorandum uses this other type of driver as well, which means it makes sense to reverse engineer it.
+	//
+	switch (musicType) {
+	case MT_ADLIB: {
+		if (_vm->gameIs(kGameAmazon) && !_vm->isDemo()) {
+			Resource *midiDrvResource = _vm->_files->loadFile(92, 1);
+			Common::MemoryReadStream *adLibInstrumentStream = new Common::MemoryReadStream(midiDrvResource->data(), midiDrvResource->_size);
+
+			_driver = Audio::MidiDriver_Miles_AdLib_create("", "", adLibInstrumentStream);
+
+			delete midiDrvResource;
+			delete adLibInstrumentStream;
+		} else {
+			MidiPlayer::createDriver();
+		}
+		break;
+	}
+	case MT_MT32:
+		_driver = Audio::MidiDriver_Miles_MT32_create("");
+		_nativeMT32 = true;
+		break;
+	case MT_GM:
+		if (ConfMan.getBool("native_mt32")) {
+			_driver = Audio::MidiDriver_Miles_MT32_create("");
+			_nativeMT32 = true;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+#if 0
+	MidiPlayer::createDriver();
+	MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_GM);
+#endif
+
+	if (_driver) {
+		int retValue = _driver->open();
+		if (retValue == 0) {
+			if (_nativeMT32)
+				_driver->sendMT32Reset();
+			else
+				_driver->sendGMReset();
+
+			_driver->setTimerCallback(this, &timerCallback);
+		}
+	}
+}
+
+MusicManagerMIDI::~MusicManagerMIDI() {
+}
+
+void MusicManagerMIDI::send(uint32 b) {
+	// Pass data directly to driver
+	_driver->send(b);
+#if 0
+	if ((b & 0xF0) == 0xC0 && !_nativeMT32) {
+		b = (b & 0xFFFF00FF) | MidiDriver::_mt32ToGm[(b >> 8) & 0xFF] << 8;
+	}
+
+	Audio::MidiPlayer::send(b);
+#endif
+}
+
+void MusicManagerMIDI::midiPlay() {
+	debugC(1, kDebugSound, "midiPlay");
+
+	if (!_driver)
+		return;
+
+	if (_music->_size < 4) {
+		error("midiPlay() wrong music resource size");
+	}
+
+	stop();
+
+	uint32 magic = READ_BE_UINT32(_music->data());
+	if (magic == MKTAG('M', 'T', 'h', 'd')) {
+		_parser = new MidiParser_SMF();
+
+		if (!_parser->loadMusic(_music->data(), _music->_size))
+			error("midiPlay() couldn't load music resource");
+
+		_parser->setTrack(0);
+		_parser->setMidiDriver(this);
+		_parser->setTimerRate(_driver->getBaseTempo());
+		_parser->property(MidiParser::mpAutoLoop, _isLooping);
+		syncVolume();
+		_isPlaying = true;
+	} else if (magic == MKTAG('B', 'E', 'm', 'd')) {
+		_parser = new MidiParser_BEmd();
+
+		if (!_parser->loadMusic(_music->data(), _music->_size))
+			error("midiPlay() couldn't load music resource");
+
+		_parser->setTrack(0);
+		_parser->setMidiDriver(this);
+		_parser->setTimerRate(_driver->getBaseTempo());
+		_parser->property(MidiParser::mpAutoLoop, _isLooping);
+		syncVolume();
+		_isPlaying = true;
+	} else if (magic == MKTAG('F', 'O', 'R', 'M')) {
+		_parser = MidiParser::createParser_XMIDI();
+
+		if (!_parser->loadMusic(_music->data(), _music->_size))
+			error("midiPlay() wrong music resource");
+
+		_parser->setTrack(0);
+		_parser->setMidiDriver(this);
+		_parser->setTimerRate(_driver->getBaseTempo());
+		_parser->property(MidiParser::mpCenterPitchWheelOnUnload, 1);
+		_parser->property(MidiParser::mpSendSustainOffOnNotesOff, 1);
+
+		// Handle music looping
+		_parser->property(MidiParser::mpAutoLoop, _isLooping);
+		syncVolume();
+		_isPlaying = true;
+	} else {
+		warning("midiPlay() Unexpected signature 0x%08x, expected 'FORM', 'BEmd', or 'MThd'", magic);
+		_isPlaying = false;
+	}
+}
+
+void MusicManagerMIDI::midiRepeat() {
+	debugC(1, kDebugSound, "midiRepeat");
+
+	if (!_driver)
+		return;
+	if (!_parser)
+		return;
+
+	_isLooping = true;
+	_parser->property(MidiParser::mpAutoLoop, _isLooping);
+	if (!_isPlaying)
+		_parser->setTrack(0);
+}
+
+void MusicManagerMIDI::stopSong() {
+	debugC(1, kDebugSound, "stopSong");
+
+	if (!_driver)
+		return;
+
+	stop();
+}
+
+void MusicManagerMIDI::newMusic(int musicId, int mode) {
+	debugC(1, kDebugSound, "newMusic(%d, %d)", musicId, mode);
+
+	if (!_driver)
+		return;
+
+	if (mode == 1) {
+		stopSong();
+		freeMusic();
+		_music = _tempMusic;
+		_tempMusic = nullptr;
+		_isLooping = true;
+	} else {
+		_isLooping = (mode == 2);
+		_tempMusic = _music;
+		stopSong();
+		int musicFile = (_vm->gameIs(kGameAmazon) ? 97 : 98);
+		loadMusic(musicFile, musicId);
+	}
+
+	if (_music)
+		midiPlay();
+}
+
+void MusicManagerMIDI::startMusicFade() {
+	debugC(3, kDebugSound, "fadeMusic");
+	if (!isPlaying())
+		return;
+
+	int startVol = getVolume();
+	warning("TODO: Implement MusicManager::fadeMusic - fade over 700ms from startVol %d", startVol);
+}
+
+void MusicManagerMIDI::setLoop(bool loop) {
+	debugC(3, kDebugSound, "setLoop");
+
+	_isLooping = loop;
+	if (_parser)
+		_parser->property(MidiParser::mpAutoLoop, _isLooping);
+}
+
+/******************/
+
+#ifdef USE_VORBIS
+
+MusicManagerOGG::MusicManagerOGG(AccessEngine *vm) : MusicManager(vm) {
+	_handle = new Audio::SoundHandle();
+}
+
+MusicManagerOGG::~MusicManagerOGG() {
+	delete _handle;
+}
+
+void MusicManagerOGG::midiPlay() {
+	if (isPlaying())
+		stopSong();
+
+	if (!_music) {
+		warning("midiPlay called with nothing loaded");
+		return;
+	}
+
+	Audio::SeekableAudioStream *audio = Audio::makeVorbisStream(_music->_stream, DisposeAfterUse::NO);
+	_vm->_mixer->playStream(Audio::Mixer::kMusicSoundType, _handle,
+		   audio, -1, _vm->_mixer->kMaxChannelVolume, 0,
+		   DisposeAfterUse::YES);
+}
+
+bool MusicManagerOGG::isPlaying() {
+	return _vm->_mixer->isSoundHandleActive(*_handle);
+}
+
+void MusicManagerOGG::midiRepeat() {
+
+}
+
+void MusicManagerOGG::stopSong() {
+	_vm->_mixer->stopHandle(*_handle);
+}
+
+void MusicManagerOGG::newMusic(int musicId, int mode) {
+	debugC(1, kDebugSound, "newMusic(%d, %d)", musicId, mode);
+
+	bool doLoop = false;
+
+	if (mode == 1) {
+		// Resume previous music
+		stopSong();
+		freeMusic();
+		_music = _tempMusic;
+		_tempMusic = nullptr;
+		doLoop = true;
+	} else {
+		doLoop = (mode == 2);
+		_tempMusic = _music;
+		stopSong();
+		loadMusic(98, musicId);
+	}
+
+	if (_music)
+		midiPlay();
+
+	if (doLoop)
+		setLoop(true);
+}
+
+void MusicManagerOGG::loadMusic(int fileNum, int subfile) {
+	Common::Path path = Common::Path(Common::String::format("MUSIC/M%02d.ogg", subfile));
+	if (!_vm->_files->existFile(path)) {
+		warning("Don't have requested music file %s", path.toString().c_str());
+		return;
+	}
+
+	_music = _vm->_files->loadRawFile(path);
+}
+
+void MusicManagerOGG::startMusicFade() {
+	warning("TODO: Implement MusicManagerOGG::startMusicFade");
+}
+
+void MusicManagerOGG::setLoop(bool loop) {
+	if (loop)
+		_vm->_mixer->loopChannel(*_handle);
+}
+
+void MusicManagerOGG::syncVolume() {
+	bool mute = ConfMan.getBool("mute");
+	_vm->_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType,
+		mute ? 0 : ConfMan.getInt("music_volume"));
+}
+
+
+#endif // USE_VORBIS
+
+
+} // End of namespace Access

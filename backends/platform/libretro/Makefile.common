@@ -1,0 +1,389 @@
+######################################################################
+# Common settings and defaults
+######################################################################
+
+# Reset flags (DEFINES not reset as used in Makefile)
+INCLUDES    :=
+OBJS_DEPS   :=
+OBJS        :=
+DETECT_OBJS :=
+$(foreach MODULE,$(MODULES),$(MODULE_OBJS-$(MODULE)) :=)
+MODULES     :=
+
+# Defaults
+LOAD_RULES_MK     = 1
+POSIX             = 1
+USE_RGB_COLOR     = 1
+ENABLE_VKEYBD     = 1
+HAVE_GCC3         = 1
+STATIC_LINKING   ?= 0
+LITE             ?= 0
+NO_WIP           ?= 1
+USE_LIBCO        ?= 1
+USE_MT32EMU      ?= 1
+USE_SID_AUDIO    ?= 1
+DEBUG            ?= 0
+FORCE_OPENGL     ?= 0
+FORCE_OPENGLES2  ?= 0
+FORCE_OPENGLNONE ?= 0
+
+DEBUG_ALLOW_DIRTY_SUBMODULES ?= 0
+
+# Variable engines dependencies
+UNAVAILABLE_DEPS :=
+check_deps_availability = $(shell [ ! $(1) = 1 ] && echo $(2))
+
+# Handle OpenGL flags
+ifeq ($(FORCE_OPENGL), 1)
+   HAVE_OPENGL := 1
+   HAVE_OPENGLES2 :=
+endif
+
+ifeq ($(FORCE_OPENGLES2), 1)
+   HAVE_OPENGL :=
+   HAVE_OPENGLES2 := 1
+endif
+
+ifeq ($(FORCE_OPENGLNONE), 1)
+   HAVE_OPENGL :=
+   HAVE_OPENGLES2 :=
+endif
+
+# Features
+ifeq ($(or $(HAVE_OPENGL), $(HAVE_OPENGLES2)), 1)
+   USE_OPENGL := 1
+   USE_OPENGL_GAME := 1
+   USE_OPENGL_SHADERS := 1
+   DEFINES += -DUSE_OPENGL -DUSE_GLAD -DUSE_OPENGL_GAME -DUSE_OPENGL_SHADERS
+ifeq ($(DEBUG), 1)
+   DEFINES += -DOPENGL_DEBUG
+endif
+ifeq ($(HAVE_OPENGL), 1)
+   DEFINES += -DHAVE_OPENGL
+   $(info Support for OpenGL requested)
+else
+   DEFINES += -DHAVE_OPENGLES2
+   $(info Support for OpenGLES2 requested)
+endif
+else
+   UNAVAILABLE_DEPS += opengl_game_shaders opengl_game_classic
+   $(info No support for OpenGL/OpenGLES2 requested)
+endif
+
+USE_HIGHRES      ?= 1
+ifeq ($(USE_HIGHRES),1)
+DEFINES          += -DUSE_HIGHRES
+endif
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_HIGHRES), highres)
+
+USE_BINK          = 1
+DEFINES          +=  -DUSE_BINK
+
+# Features with baked-in libs (defines handled in dependencies.mk)
+USE_FLUIDSYNTH   ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_FLUIDSYNTH), fluidsynth)
+
+USE_TREMOR       ?=
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_TREMOR), tremor)
+
+USE_VORBIS       ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_VORBIS), vorbis)
+
+USE_FRIBIDI       = 1
+
+USE_ZLIB          = 1
+
+USE_FLAC          = 1
+
+USE_MAD           = 1
+
+USE_FAAD          = 1
+
+USE_PNG           = 1
+
+USE_JPEG          = 1
+
+USE_FREETYPE2     = 1
+
+USE_CLOUD        ?=
+
+# Components (defines handled by engines.awk)
+USE_THEORADEC    ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_THEORADEC), component_theoradec)
+# handled in dependencies.mk
+
+USE_HNM          ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_HNM), component_hnm)
+ifneq ($(USE_HNM),1)
+USE_HNM=
+else
+DEFINES += -DUSE_HNM
+endif
+
+USE_ENET         ?= 0
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_ENET), component_enet)
+ifneq ($(USE_ENET),1)
+USE_ENET=
+else
+DEFINES += -DUSE_ENET
+endif
+
+USE_IMGUI        ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_IMGUI), component_imgui)
+ifneq ($(USE_IMGUI),1)
+USE_IMGUI=
+else
+DEFINES += -DUSE_IMGUI
+endif
+
+USE_MPEG2         ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_MPEG2), component_mpeg2)
+ifneq ($(USE_MPEG2),1)
+USE_MPEG2=
+else
+DEFINES += -DUSE_MPEG2
+endif
+
+USE_GIF         ?= 1
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_GIF), component_gif)
+ifneq ($(USE_GIF),1)
+USE_GIF=
+else
+DEFINES += -DUSE_GIF
+endif
+
+USE_VPX         ?= 0
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_VPX), component_vpx)
+ifneq ($(USE_VPX),1)
+USE_VPX=
+else
+DEFINES += -DUSE_VPX
+endif
+
+USE_MPCDEC         ?= 0
+UNAVAILABLE_DEPS += $(call check_deps_availability, $(USE_MPCDEC), component_mpcdec)
+ifneq ($(USE_MPCDEC),1)
+USE_MPCDEC=
+else
+DEFINES += -DUSE_MPCDEC
+endif
+
+USE_TINYGL        = 1
+DEFINES += -DUSE_TINYGL
+
+USE_LUA           = 1
+DEFINES += -DUSE_LUA
+
+USE_INDEO3        = 1
+DEFINES += -DUSE_INDEO3
+
+USE_INDEO45       = 1
+DEFINES += -DUSE_INDEO45
+
+USE_CDTOONS       = 1
+DEFINES += -DUSE_CDTOONS
+
+USE_JYV1          = 1
+DEFINES += -DUSE_JYV1
+
+USE_TRUEMOTION1   = 1
+DEFINES += -DUSE_TRUEMOTION1
+
+USE_XAN           = 1
+DEFINES += -DUSE_XAN
+
+USE_FMTOWNS_PC98_AUDIO = 1
+DEFINES += -DUSE_FMTOWNS_PC98_AUDIO
+
+USE_SID_AUDIO     = 1
+DEFINES += -DUSE_SID_AUDIO
+
+USE_VGMTRANS_AUDIO = 1
+DEFINES += -DUSE_VGMTRANS_AUDIO
+
+USE_MIDI         = 1
+DEFINES += -DUSE_MIDI
+
+# Paths
+SCUMMVM_PATH         := $(ROOT_PATH)/../../..
+DEPS_PATH            := $(ROOT_PATH)/deps
+CORE_PATH            := $(ROOT_PATH)/src
+SCRIPTS_PATH         := $(ROOT_PATH)/scripts
+srcdir               := $(SCUMMVM_PATH)
+VPATH                := $(SCUMMVM_PATH)
+UP_COMMON_MAKE       := $(SCUMMVM_PATH)/Makefile.common
+SHARED_MOD_MAKE      := $(ROOT_PATH)/shared_modules.mk
+
+# Core version shown in frontend
+GIT_TAG := $(shell cd $(ROOT_PATH) 2>/dev/null && git describe --tags 2>/dev/null)
+ifeq ($(GIT_TAG),)
+   GIT_HASH := $(shell cd $(ROOT_PATH) 2>/dev/null && git rev-parse --short HEAD 2>/dev/null)
+   ifneq ($(GIT_HASH),)
+      DEFINES += -DGIT_HASH=\"$(GIT_HASH)\"
+   endif
+else
+   DEFINES += -DGIT_TAG=\"$(GIT_TAG)\"
+endif
+
+# Nice name shown in frontend
+CORE_NAME = "ScummVM"
+# Pipe separated allowed file extensions that core can handle
+CORE_EXTENSIONS = "scummvm"
+# Subdirs for datafiles bundle
+SCUMMVM_SYSTEM_SUBDIR  := scummvm
+SCUMMVM_EXTRA_SUBDIR   := extra
+SCUMMVM_THEME_SUBDIR   := theme
+
+INCLUDES += -I$(SCUMMVM_PATH)
+DEFINES  += -D__LIBRETRO__ -DNONSTANDARD_PORT -DUSE_RGB_COLOR -DUSE_OSD -DUSE_TRANSLATION -DDETECTION_STATIC -DHAVE_CONFIG_H -DENABLE_VKEYBD
+DEFINES  += -DCORE_NAME=\"$(CORE_NAME)\" -DCORE_EXTENSIONS=\"$(CORE_EXTENSIONS)\" -DSCUMMVM_SYSTEM_SUBDIR=\"$(SCUMMVM_SYSTEM_SUBDIR)\" -DSCUMMVM_EXTRA_SUBDIR=\"$(SCUMMVM_EXTRA_SUBDIR)\" -DSCUMMVM_THEME_SUBDIR=\"$(SCUMMVM_THEME_SUBDIR)\"
+CXXFLAGS += -Wno-long-long -Wno-multichar -Wno-unknown-pragmas -Wno-reorder -Wno-undefined-var-template
+
+ifeq ($(USE_LIBCO), 1)
+   DEFINES += -DUSE_LIBCO
+else
+   LDFLAGS += -lpthread
+endif
+
+ifeq ($(TARGET_64BIT), 1)
+   DEFINES += -DSIZEOF_SIZE_T=8 -DSCUMM_64BITS
+else
+   DEFINES += -DSIZEOF_SIZE_T=4
+endif
+
+ifeq ($(DEBUG), 1)
+   DEFINES += -O0 -g -DLIBRETRO_DEBUG -DDEBUG_BUILD
+else
+   DEFINES += -DRELEASE_BUILD
+endif
+
+ifeq ($(HAVE_NEON), 1)
+   SCUMMVM_NEON := 1
+   DEFINES += -DSCUMMVM_NEON
+endif
+
+######################################################################
+# Libretro settings
+######################################################################
+
+INCLUDES     += -I$(ROOT_PATH)/include
+MODULE_PATHS += $(CORE_PATH)
+
+LIBRETRO_OBJS := $(CORE_PATH)/libretro-core.o \
+	$(CORE_PATH)/libretro-fs.o \
+	$(CORE_PATH)/libretro-fs-factory.o \
+	$(CORE_PATH)/libretro-os-base.o \
+	$(CORE_PATH)/libretro-os-events.o \
+	$(CORE_PATH)/libretro-os-inputs.o \
+	$(CORE_PATH)/libretro-os-utils.o \
+	$(CORE_PATH)/libretro-threads.o \
+	$(CORE_PATH)/libretro-timer.o \
+	$(CORE_PATH)/libretro-mapper.o \
+	$(CORE_PATH)/libretro-options-widget.o \
+	$(CORE_PATH)/libretro-graphics-surface.o \
+	$(CORE_PATH)/libretro-midi.o
+
+ifeq ($(or $(HAVE_OPENGL), $(HAVE_OPENGLES2)), 1)
+	LIBRETRO_OBJS += $(CORE_PATH)/libretro-graphics-opengl.o
+endif
+
+LIBRETRO_OBJS += $(CORE_PATH)/libretro-gl-context-handoff.o
+
+OBJS += $(LIBRETRO_OBJS)
+
+######################################################################
+# External dependencies settings
+######################################################################
+
+ifeq (,$(filter datafiles coreinfo,$(MAKECMDGOALS)))
+$(info Configuring dependencies...)
+include $(ROOT_PATH)/dependencies.mk
+endif
+
+######################################################################
+# Module settings
+######################################################################
+
+INCLUDES    += -I$(SCUMMVM_PATH)/engines -I$(SCUMMVM_PATH)/backends/vkeybd
+
+# Base modules
+MODULES := base
+
+# script.mri head
+ifeq ($(STATIC_LINKING),1)
+   $(shell printf "CREATE $(TARGET)\n" > $(ROOT_PATH)/script.mri)
+endif
+
+# Engine modules
+# Following script generates configuration engines files (build/config.mk.engines, engines/engines.mk, engines/plugins_table.h, engines/detection_table.h) from actual source in $(SCUMMVM_PATH).
+ifneq (,$(filter noengine,$(MAKECMDGOALS)))
+   LITE := 2
+endif
+
+ifeq (,$(filter clean datafiles coreinfo,$(MAKECMDGOALS)))
+$(info Configuring ScummVM engines...)
+ifneq ($(shell cd $(SCRIPTS_PATH); ./configure_engines.sh $(ROOT_PATH) $(SCUMMVM_PATH) $(NO_WIP) $(STATIC_LINKING) $(LITE) $(UNAVAILABLE_DEPS)),0)
+   $(error Configuring ScummVM engines failed)
+else
+-include $(SCUMMVM_PATH)/config.mk.engines
+-include $(SCUMMVM_PATH)/engines/engines.mk
+   $(info - ScummVM engines configured)
+endif
+endif
+
+ifeq ($(USE_MT32EMU),1)
+   INCLUDES += -I$(SCUMMVM_PATH)/audio/softsynth/mt32/sha1
+   DEFINES += -DUSE_MT32EMU
+endif
+
+ifeq ($(USE_SID_AUDIO),1)
+   DEFINES += -DUSE_SID_AUDIO
+endif
+
+# Retrieve shared modules definitions from main Makefile.common
+RETRIEVED_SHARED_MODULES := $(shell cat $(UP_COMMON_MAKE) | tr -s "\n" "\00" | sed -e 's|.*-include engines/engines.mk||' -e 's|\#\#\#.*||' | tr -s "\00" "\n" > $(SHARED_MOD_MAKE) && printf ok || printf error)
+ifeq ($(RETRIEVED_SHARED_MODULES), ok)
+   include $(SHARED_MOD_MAKE)
+else
+   $(error Error retrieving shared modules definitions from main Makefile.common)
+endif
+
+# script.mri tail
+ifeq ($(STATIC_LINKING),1)
+   MRI_LIBS := $(shell res=""; for path in $(MODULES) ; do [ ! -z "$$(cat $(SCUMMVM_PATH)/$${path}/module.mk | grep rules.mk)" ] && res="$$res $$path" ; done ; printf "$$res")
+   $(shell printf "$(addprefix ADDLIB libtemp/lib, $(addsuffix .a\n,$(notdir $(MRI_LIBS))))" >> $(ROOT_PATH)/script.mri)
+   $(shell printf "ADDLIB libtemp/libdeps.a\n" >> $(ROOT_PATH)/script.mri)
+   $(shell printf "ADDLIB libtemp/libdetect.a\n" >> $(ROOT_PATH)/script.mri)
+   $(shell printf "$(addprefix ADDMOD libtemp/, $(addsuffix \n,$(notdir $(LIBRETRO_OBJS))))" >> $(ROOT_PATH)/script.mri)
+   $(shell printf "SAVE\n" >> $(ROOT_PATH)/script.mri)
+   $(shell printf "END\n" >> $(ROOT_PATH)/script.mri)
+   $(shell sed -i.bak -e "s/^ //g" $(ROOT_PATH)/script.mri;rm -f $(ROOT_PATH)/script.mri.bak)
+endif
+
+######################################################################
+# Rules
+######################################################################
+
+core: $(TARGET)
+
+noengine: $(TARGET)
+
+datafiles: scummvm.zip
+
+coreinfo: $(TARGET_NAME)_libretro.info
+
+all: $(TARGET) scummvm.zip $(TARGET_NAME)_libretro.info
+
+#bundle_files
+scummvm.zip: $(SCUMMVM_PATH)/dists/scummvm.rc
+	@echo Preparing $@
+ifeq (, $(shell which zip))
+	$(error "No zip found, consider doing apt-get install zip")
+endif
+	@$(SCRIPTS_PATH)/bundle_datafiles.sh $(ROOT_PATH) $(SCUMMVM_PATH) bundle $(TARGET_NAME)
+
+$(TARGET_NAME)_libretro.info: $(SCUMMVM_PATH)/dists/scummvm.rc
+	@echo Preparing $@
+	@$(SCRIPTS_PATH)/bundle_datafiles.sh $(ROOT_PATH) $(SCUMMVM_PATH) info $(TARGET_NAME) $(CORE_NAME) $(CORE_EXTENSIONS) $(SCUMMVM_SYSTEM_SUBDIR) $(SCUMMVM_EXTRA_SUBDIR) $(SCUMMVM_THEME_SUBDIR)
+
+.PHONY: all core datafiles coreinfo

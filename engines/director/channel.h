@@ -1,0 +1,144 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef DIRECTOR_CHANNEL_H
+#define DIRECTOR_CHANNEL_H
+
+#include "director/cursor.h"
+#include "director/sprite.h"
+
+namespace Graphics {
+	struct Surface;
+	class ManagedSurface;
+	class MacWidget;
+}
+
+namespace Director {
+
+class Sprite;
+class Cursor;
+class Score;
+
+class Channel {
+public:
+	Channel(Score *sc, Sprite *sp, int priority = 0);
+	Channel(const Channel &channel);
+	Channel& operator=(const Channel &channel);
+	~Channel();
+
+	DirectorPlotData getPlotData();
+	const Graphics::Surface *getMask(bool forceMatte = false);
+
+	inline int getWidth() { return _sprite->_width; };
+	inline int getHeight() { return _sprite->_height; };
+	inline Common::Point getPosition() { return _sprite->getPosition(); };
+	// Return the area of screen to be used for drawing content.
+	inline Common::Rect getBbox(bool unstretched = false) { return _sprite->getBbox(unstretched); };
+	Common::Rect getRollOverBbox();
+
+	bool isStretched();
+	bool isDirty(Sprite *nextSprite = nullptr);
+	bool isEmpty();
+	bool isActiveText();
+	CollisionTest isMouseIn(const Common::Point &pos);
+	bool isMatteIntersect(Channel *channel);
+	bool isMatteBoxIntersect(Channel *channel);
+	bool isMatteWithin(Channel *channel);
+	bool isActiveVideo();
+	bool isVideoDirectToStage();
+
+	inline void setWidth(int w) { _sprite->setWidth(w); replaceWidget(); setNeedsDraw(); };
+	inline void setHeight(int h) { _sprite->setHeight(h); replaceWidget(); setNeedsDraw(); };
+	inline void setBbox(int l, int t, int r, int b) { _sprite->setBbox(l, t, r, b); replaceWidget(); setNeedsDraw(); };
+	void setDirty();
+	void setNeedsDraw() { _needsDraw = true; }
+	void setPosition(int x, int y, bool force = false);
+	void setCast(CastMemberID memberID);
+	void setClean(Sprite *nextSprite, bool partial = false);
+	void setStretch(bool enabled);
+	bool getEditable();
+	void setEditable(bool editable);
+	void replaceSprite(Sprite *nextSprite);
+	void replaceWidget(CastMemberID previousCastId = CastMemberID(0, 0), bool force = false);
+	bool updateWidget();
+	void updateTextCast();
+
+	bool isTrail();
+
+	void updateGlobalAttr();
+
+	bool canKeepWidget(CastMemberID castId);
+	bool canKeepWidget(Sprite *currentSprite, Sprite *nextSprite);
+
+	int getMouseChar(int x, int y);
+	int getMouseWord(int x, int y);
+	int getMouseItem(int x, int y);
+	int getMouseLine(int x, int y);
+
+	void updateVideoTime();
+
+	// used for film loops
+	bool hasSubChannels();
+	Common::Array<Channel> *getSubChannels();
+	CastMemberID getSubChannelSound1();
+	CastMemberID getSubChannelSound2();
+
+	Common::String formatInfo();
+
+public:
+	Sprite *_sprite;
+	Cursor _cursor;
+	Graphics::MacWidget *_widget;
+
+	bool _widgetDirty;
+	bool _needsDraw;
+	bool _visible;
+	bool _hideFromStage; // Used in DT for hiding the channel from rendering
+	uint _constraint;
+	Graphics::ManagedSurface *_mask;
+
+	int _priority;
+
+	// Used in digital movie sprites
+	double _movieRate;
+	int _movieTime;
+	int _startTime;
+	int _stopTime;
+
+	// Used in film loops
+	uint _filmLoopFrame;
+
+	Common::Rect _rollOverBbox;
+	Common::Rect _lastRenderedBbox;
+	bool _lastTrail;
+
+	int _startFrame;
+	int _endFrame;
+	Common::Array<Datum> _scriptInstanceList;
+
+private:
+	Graphics::ManagedSurface *getSurface();
+	Score *_score;
+};
+
+} // End of namespace Director
+
+#endif

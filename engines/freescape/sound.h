@@ -1,0 +1,56 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef FREESCAPE_SOUND_H
+#define FREESCAPE_SOUND_H
+
+#include "audio/softsynth/pcspk.h"
+
+namespace Freescape {
+
+// TODO: Migrate to Audio::PCSpeaker
+class SizedPCSpeaker : public Audio::PCSpeakerStream {
+public:
+	bool endOfStream() const override { return !isPlaying(); }
+};
+
+class Sound {
+public:
+	enum Type {
+		kTypeNormal,
+		kTypeMovement
+	};
+
+	virtual ~Sound() {}
+
+	virtual void playSound(int index, Type type) = 0;
+	virtual void stopSound(Type type) = 0;
+	virtual bool isPlayingSound(Type type) const = 0;
+
+	// Whether the given sound index actually exists. Used to skip undefined
+	// sounds without disturbing the sound currently playing, matching the
+	// original engines where an unknown index leaves the active sound untouched.
+	virtual bool isSoundAvailable(int index) const { return true; }
+};
+
+} // End of namespace Freescape
+
+#endif // FREESCAPE_SOUND_H

@@ -1,0 +1,350 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// Disable symbol overrides so that we can use system headers.
+#define FORBIDDEN_SYMBOL_ALLOW_ALL
+
+#include "backends/platform/sdl/macosx/appmenu_osx.h"
+#include "common/translation.h"
+#include "common/ustr.h"
+
+#include "backends/platform/sdl/macosx/macosx-compat.h"
+#include <Cocoa/Cocoa.h>
+#include <AppKit/NSWorkspace.h>
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_12
+#define NSEventModifierFlagCommand NSCommandKeyMask
+#define NSEventModifierFlagOption  NSAlternateKeyMask
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_10
+#define NSEventModifierFlags NSUInteger
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+// https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Cocoa64BitGuide/64BitChangesCocoa/64BitChangesCocoa.html
+#if __LP64__ || NS_BUILD_32_LIKE_64
+typedef unsigned long NSUInteger;
+#else
+typedef unsigned int NSUInteger;
+#endif
+
+// Those are not defined in the 10.4 SDK, but they are defined when targeting
+// Mac OS X 10.4 or above in the 10.5 SDK, and they do work with 10.4.
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_4
+enum {
+	NSUTF32StringEncoding = 0x8c000100,
+	NSUTF32BigEndianStringEncoding = 0x98000100,
+	NSUTF32LittleEndianStringEncoding = 0x9c000100
+};
+#endif
+#endif
+
+// Apple removed setAppleMenu from the header files in 10.4,
+// but as the method still exists we declare it ourselves here.
+// Yes, this works :)
+@interface NSApplication(MissingFunction)
+- (void)setAppleMenu:(NSMenu *)menu;
+@end
+// However maybe we should conditionally use it depending on the system on which we run ScummVM (and not
+// the one on which we compile) to only do it on OS X 10.5.
+// Here is the relevant bit from the release notes for 10.6:
+// In Leopard and earlier, apps that tried to construct a menu bar without a nib would get an undesirable
+// stubby application menu that could not be removed. To work around this problem on Leopard, you can call
+// the undocumented setAppleMenu: method and pass it the application menu, like so:
+//   [NSApp setAppleMenu:[[[NSApp mainMenu] itemAtIndex:0] submenu]];
+// In SnowLeopard, this workaround is unnecessary and should not be used. Under SnowLeopard, the first menu
+// is always identified as the application menu.
+
+static void openFromBundle(NSString *file, NSString *subdir = nil) {
+	NSString *path = nil;
+	NSArray *types = [NSArray arrayWithObjects:@"rtf", @"html", @"txt", @"", @"md", nil];
+	NSEnumerator *typeEnum = [types objectEnumerator];
+	NSString *type;
+
+	while ((type = [typeEnum nextObject])) {
+		if (subdir)
+			path = [[NSBundle mainBundle] pathForResource:file ofType:type inDirectory:subdir];
+		else
+			path = [[NSBundle mainBundle] pathForResource:file ofType:type];
+		if (path)
+			break;
+	}
+
+	// RTF, TXT, and HTML files are widely recognized and we can rely on the default
+	// file association working for those. For the other ones this might not be
+	// the case so we explicitly indicate they should be open with TextEdit.
+	if (path) {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_15
+		if ([path hasSuffix:@".html"] || [path hasSuffix:@".rtf"] || [path hasSuffix:@".txt"])
+			[[NSWorkspace sharedWorkspace] openFile:path];
+		else
+			[[NSWorkspace sharedWorkspace] openFile:path withApplication:@"TextEdit"];
+#else
+		NSURL *pathUrl = [NSURL fileURLWithPath:path isDirectory:NO];
+		if ([path hasSuffix:@".html"] || [path hasSuffix:@".rtf"] || [path hasSuffix:@".txt"]) {
+			[[NSWorkspace sharedWorkspace] openURL:pathUrl];
+		} else {
+			[[NSWorkspace sharedWorkspace] openURLs:[NSArray arrayWithObjects:pathUrl, nil]
+				withApplicationAtURL:[[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:@"com.apple.TextEdit"]
+				configuration:[NSWorkspaceOpenConfiguration configuration]
+				completionHandler:nil
+			];
+		}
+#endif
+	}
+}
+
+@interface ScummVMMenuHandler : NSObject {
+}
+- (void) openReadme;
+- (void) openLicenseGPL;
+- (void) openLicenseApache;
+- (void) openLicenseBSD;
+- (void) openLicenseBSL;
+- (void) openLicenseGLAD;
+- (void) openLicenseISC;
+- (void) openLicenseLGPL;
+- (void) openLicenseLUA;
+- (void) openLicenseMIT;
+- (void) openLicenseMKV;
+- (void) openLicenseMPL;
+- (void) openLicenseOFL;
+- (void) openLicenseTinyGL;
+- (void) openLicenseCatharon;
+- (void) openNews;
+- (void) openUserManual;
+- (void) openCredits;
+@end
+
+@implementation ScummVMMenuHandler : NSObject
+- (void)openReadme {
+	openFromBundle(@"README");
+}
+
+- (void)openLicenseGPL {
+	openFromBundle(@"COPYING", @"licenses");
+}
+
+- (void)openLicenseApache {
+	openFromBundle(@"COPYING-Apache", @"licenses");
+}
+
+- (void)openLicenseBSD {
+	openFromBundle(@"COPYING-BSD", @"licenses");
+}
+
+- (void)openLicenseBSL {
+	openFromBundle(@"COPYING-BSL", @"licenses");
+}
+
+- (void)openLicenseGLAD {
+	openFromBundle(@"COPYING-GLAD", @"licenses");
+}
+
+- (void)openLicenseISC {
+	openFromBundle(@"COPYING-ISC", @"licenses");
+}
+
+- (void)openLicenseLGPL {
+	openFromBundle(@"COPYING-LGPL", @"licenses");
+}
+
+- (void)openLicenseLUA {
+	openFromBundle(@"COPYING-LUA", @"licenses");
+}
+
+- (void)openLicenseMIT {
+	openFromBundle(@"COPYING-MIT", @"licenses");
+}
+
+- (void)openLicenseMKV {
+	openFromBundle(@"COPYING-MKV", @"licenses");
+}
+
+- (void)openLicenseMPL {
+	openFromBundle(@"COPYING-MPL", @"licenses");
+}
+
+- (void)openLicenseOFL {
+	openFromBundle(@"COPYING-OFL", @"licenses");
+}
+
+- (void)openLicenseTinyGL {
+	openFromBundle(@"COPYING-TINYGL", @"licenses");
+}
+
+- (void)openLicenseCatharon {
+	openFromBundle(@"CatharonLicense", @"licenses");
+}
+
+- (void)openNews {
+	openFromBundle(@"NEWS");
+}
+
+- (void)openUserManual {
+	NSString *bundlePath = [[NSBundle mainBundle] resourcePath];
+
+	// If present locally in the bundle, open that file.
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_5
+	NSArray *dirContents = [[NSFileManager defaultManager] directoryContentsAtPath:bundlePath];
+#else
+	NSArray *dirContents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:bundlePath error:nil];
+#endif
+	if (dirContents != nil) {
+		NSEnumerator *dirEnum = [dirContents objectEnumerator];
+		NSString *file;
+
+		while ((file = [dirEnum nextObject])) {
+			if ([file hasPrefix:@"ScummVM Manual"] && [file hasSuffix:@".pdf"]) {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_15
+				[[NSWorkspace sharedWorkspace] openFile:[bundlePath stringByAppendingPathComponent:file]];
+#else
+				NSURL *fileUrl = [NSURL fileURLWithPath:[bundlePath stringByAppendingPathComponent:file] isDirectory:NO];
+				[[NSWorkspace sharedWorkspace] openURL:fileUrl];
+#endif
+				return;
+			}
+		}
+	}
+
+	// Otherwise try to access the only version.
+	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://docs.scummvm.org/"]];
+}
+
+- (void)openCredits {
+	openFromBundle(@"AUTHORS");
+}
+@end
+
+NSString *constructNSStringFromU32String(const Common::U32String &rawU32String) {
+#ifdef SCUMM_LITTLE_ENDIAN
+	NSStringEncoding stringEncoding = NSUTF32LittleEndianStringEncoding;
+#else
+	NSStringEncoding stringEncoding = NSUTF32BigEndianStringEncoding;
+#endif
+	return [[NSString alloc] initWithBytes:rawU32String.c_str() length:4*rawU32String.size() encoding: stringEncoding];
+}
+
+static NSMenu *addMenu(const Common::U32String &title, NSString *key, SEL setAs) {
+	if (setAs && ![NSApp respondsToSelector:setAs]) {
+		return nil;
+	}
+
+	NSString *str = constructNSStringFromU32String(title);
+	NSMenu *menu = [[NSMenu alloc] initWithTitle:str];
+
+	NSMenuItem *menuItem = [[NSMenuItem alloc] initWithTitle:str action:nil keyEquivalent:key];
+	[menuItem setSubmenu:menu];
+	[[NSApp mainMenu] addItem:menuItem];
+
+	if (setAs) {
+		[NSApp performSelector:setAs withObject:menu];
+	}
+
+	[str release];
+	[menuItem release];
+
+	return menu;
+}
+
+static void addMenuItem(const Common::U32String &title, id target, SEL selector, NSString *key, NSMenu *parent, NSEventModifierFlags flags = 0) {
+	NSString *nsString = constructNSStringFromU32String(title);
+	NSMenuItem *menuItem = [[NSMenuItem alloc]
+							initWithTitle:nsString
+							action:selector
+							keyEquivalent:key];
+	if (target) {
+		[menuItem setTarget:target];
+	}
+	if (flags) {
+		[menuItem setKeyEquivalentModifierMask:flags];
+	}
+	[parent addItem:menuItem];
+	[nsString release];
+}
+
+static ScummVMMenuHandler *delegate = nullptr;
+
+void releaseMenu() {
+	[delegate release];
+	delegate = nullptr;
+}
+
+void replaceApplicationMenuItems() {
+	// We cannot use [[NSApp mainMenu] removeAllItems] as removeAllItems was added in OS X 10.6
+	// So remove the SDL generated menus one by one instead.
+	while ([[NSApp mainMenu] numberOfItems] > 0) {
+		[[NSApp mainMenu] removeItemAtIndex:0];
+	}
+
+	NSMenu *appleMenu = addMenu(Common::U32String("ScummVM"), @"", @selector(setAppleMenu:));
+	if (appleMenu) {
+		addMenuItem(_("About ScummVM"), nil, @selector(orderFrontStandardAboutPanel:), @"", appleMenu);
+		[appleMenu addItem:[NSMenuItem separatorItem]];
+		addMenuItem(_("Hide ScummVM"), nil, @selector(hide:), @"h", appleMenu);
+		addMenuItem(_("Hide Others"), nil, @selector(hideOtherApplications:), @"h", appleMenu, (NSEventModifierFlagOption|NSEventModifierFlagCommand));
+		addMenuItem(_("Show All"), nil, @selector(unhideAllApplications:), @"", appleMenu);
+		[appleMenu addItem:[NSMenuItem separatorItem]];
+		addMenuItem(_("Quit ScummVM"), nil, @selector(terminate:), @"q", appleMenu);
+	}
+
+	NSMenu *windowMenu = addMenu(_("Window"), @"", @selector(setWindowsMenu:));
+	if (windowMenu) {
+		addMenuItem(_("Minimize"), nil, @selector(performMiniaturize:), @"m", windowMenu);
+	}
+
+	// Note: special care must be taken for the Help menu before 10.6,
+	// as setHelpMenu didn't exist yet: give an explicit nil for it in
+	// addMenu(), and also make sure it's created last.
+	SEL helpMenuSelector = [NSApp respondsToSelector:@selector(setHelpMenu:)] ? @selector(setHelpMenu:) : nil;
+	NSMenu *helpMenu = addMenu(_("Help"), @"", helpMenuSelector);
+	if (helpMenu) {
+		if (!delegate) {
+			delegate = [[ScummVMMenuHandler alloc] init];
+		}
+		addMenuItem(_("User Manual"), delegate, @selector(openUserManual), @"", helpMenu);
+		[helpMenu addItem:[NSMenuItem separatorItem]];
+		addMenuItem(_("General Information"), delegate, @selector(openReadme), @"", helpMenu);
+		addMenuItem(_("What's New in ScummVM"), delegate, @selector(openNews), @"", helpMenu);
+		[helpMenu addItem:[NSMenuItem separatorItem]];
+		addMenuItem(_("Credits"), delegate, @selector(openCredits), @"", helpMenu);
+		addMenuItem(_("GPL License"), delegate, @selector(openLicenseGPL), @"", helpMenu);
+		addMenuItem(_("LGPL License"), delegate, @selector(openLicenseLGPL), @"", helpMenu);
+		addMenuItem(_("OFL License"), delegate, @selector(openLicenseOFL), @"", helpMenu);
+		addMenuItem(_("BSD License"), delegate, @selector(openLicenseBSD), @"", helpMenu);
+
+		addMenuItem(_("Apache License"), delegate, @selector(openLicenseApache), @"", helpMenu);
+		addMenuItem(_("BSL License"), delegate, @selector(openLicenseBSL), @"", helpMenu);
+		addMenuItem(_("GLAD License"), delegate, @selector(openLicenseGLAD), @"", helpMenu);
+		addMenuItem(_("ISC License"), delegate, @selector(openLicenseISC), @"", helpMenu);
+		addMenuItem(_("Lua License"), delegate, @selector(openLicenseLUA), @"", helpMenu);
+		addMenuItem(_("MIT License"), delegate, @selector(openLicenseMIT), @"", helpMenu);
+		addMenuItem(_("MKV License"), delegate, @selector(openLicenseMKV), @"", helpMenu);
+		addMenuItem(_("MPL License"), delegate, @selector(openLicenseMPL), @"", helpMenu);
+		addMenuItem(_("TinyGL License"), delegate, @selector(openLicenseTinyGL), @"", helpMenu);
+		addMenuItem(_("Catharon License"), delegate, @selector(openLicenseCatharon), @"", helpMenu);
+	}
+
+	[appleMenu release];
+	[windowMenu release];
+	[helpMenu release];
+}

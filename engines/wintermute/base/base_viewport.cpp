@@ -1,0 +1,103 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * This file is based on WME Lite.
+ * http://dead-code.org/redir.php?target=wmelite
+ * Copyright (c) 2011 Jan Nedoma
+ */
+
+#include "engines/wintermute/base/base_viewport.h"
+#include "engines/wintermute/base/base_engine.h"
+#include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/base/base_persistence_manager.h"
+#include "engines/wintermute/base/gfx/base_renderer.h"
+#include "engines/wintermute/platform_osystem.h"
+
+namespace Wintermute {
+
+IMPLEMENT_PERSISTENT(BaseViewport, false)
+
+//////////////////////////////////////////////////////////////////////////
+BaseViewport::BaseViewport(BaseGame *inGame) : BaseClass(inGame) {
+	BasePlatform::setRectEmpty(&_rect);
+	_mainObject = nullptr;
+	_offsetX = _offsetY = 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+BaseViewport::~BaseViewport() {
+
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+bool BaseViewport::persist(BasePersistenceManager *persistMgr) {
+
+	persistMgr->transferPtr(TMEMBER_PTR(_game));
+
+	persistMgr->transferPtr(TMEMBER_PTR(_mainObject));
+	persistMgr->transferSint32(TMEMBER(_offsetX));
+	persistMgr->transferSint32(TMEMBER(_offsetY));
+	persistMgr->transferRect32(TMEMBER(_rect));
+
+	return STATUS_OK;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+bool BaseViewport::setRect(int32 left, int32 top, int32 right, int32 bottom, bool noCheck) {
+	if (!noCheck) {
+		left = MAX<int32>(left, 0);
+		top = MAX<int32>(top, 0);
+		right = MIN(right, _game->_renderer->getWidth());
+		bottom = MIN(bottom, _game->_renderer->getHeight());
+	}
+
+	BasePlatform::setRect(&_rect, left, top, right, bottom);
+	_offsetX = left;
+	_offsetY = top;
+	return STATUS_OK;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+Common::Rect32 *BaseViewport::getRect() {
+	return &_rect;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+int BaseViewport::getWidth() {
+	return _rect.right - _rect.left;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+int BaseViewport::getHeight() {
+	return _rect.bottom - _rect.top;
+}
+
+Common::String BaseViewport::debuggerToString() const {
+	return Common::String::format("%p: BaseViewport: (top, right, bottom, left): (%d, %d, %d, %d)", (const void *)this, _rect.top, _rect.right, _rect.bottom, _rect.left);
+}
+} // End of namespace Wintermute

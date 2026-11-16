@@ -1,0 +1,188 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * This file is based on WME Lite.
+ * http://dead-code.org/redir.php?target=wmelite
+ * Copyright (c) 2011 Jan Nedoma
+ */
+
+#include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/ad/ad_node_state.h"
+#include "engines/wintermute/ad/ad_entity.h"
+#include "engines/wintermute/base/base_sprite.h"
+#include "engines/wintermute/utils/utils.h"
+#include "engines/wintermute/platform_osystem.h"
+#include "engines/wintermute/dcgf.h"
+
+#include "common/str.h"
+
+namespace Wintermute {
+
+IMPLEMENT_PERSISTENT(AdNodeState, false)
+
+
+//////////////////////////////////////////////////////////////////////////
+AdNodeState::AdNodeState(BaseGame *inGame) : BaseClass(inGame) {
+	_name = nullptr;
+	_active = false;
+	for (int i = 0; i < 7; i++) {
+		_caption[i] = nullptr;
+	}
+	_alphaColor = 0;
+	_filename = nullptr;
+	_cursor = nullptr;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+AdNodeState::~AdNodeState() {
+	SAFE_DELETE_ARRAY(_name);
+	SAFE_DELETE_ARRAY(_filename);
+	SAFE_DELETE_ARRAY(_cursor);
+	for (int i = 0; i < 7; i++) {
+		SAFE_DELETE_ARRAY(_caption[i]);
+	}
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+void AdNodeState::setName(const char *name) {
+	SAFE_DELETE_ARRAY(_name);
+	BaseUtils::setString(&_name, name);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+void AdNodeState::setFilename(const char *filename) {
+	SAFE_DELETE_ARRAY(_filename);
+	BaseUtils::setString(&_filename, filename);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+void AdNodeState::setCursor(const char *filename) {
+	SAFE_DELETE_ARRAY(_cursor);
+	BaseUtils::setString(&_cursor, filename);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+bool AdNodeState::persist(BasePersistenceManager *persistMgr) {
+	persistMgr->transferPtr(TMEMBER_PTR(_game));
+
+	persistMgr->transferBool(TMEMBER(_active));
+	persistMgr->transferCharPtr(TMEMBER(_name));
+	persistMgr->transferCharPtr(TMEMBER(_filename));
+	persistMgr->transferCharPtr(TMEMBER(_cursor));
+	persistMgr->transferUint32(TMEMBER(_alphaColor));
+	for (int i = 0; i < 7; i++) {
+		persistMgr->transferCharPtr(TMEMBER(_caption[i]));
+	}
+
+	return STATUS_OK;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+void AdNodeState::setCaption(const char *caption, int caseVal) {
+	if (caseVal == 0) {
+		caseVal = 1;
+	}
+	if (caseVal < 1 || caseVal > 7) {
+		return;
+	}
+
+	SAFE_DELETE_ARRAY(_caption[caseVal - 1]);
+	size_t captionSize = strlen(caption) + 1;
+	_caption[caseVal - 1] = new char[captionSize];
+	Common::strcpy_s(_caption[caseVal - 1], captionSize, caption);
+	_game->_stringTable->expand(&_caption[caseVal - 1]);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+const char *AdNodeState::getCaption(int caseVal) {
+	if (caseVal == 0) {
+		caseVal = 1;
+	}
+	if (caseVal < 1 || caseVal > 7 || _caption[caseVal - 1] == nullptr) {
+		return "";
+	} else {
+		return _caption[caseVal - 1];
+	}
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+bool AdNodeState::transferEntity(AdEntity *entity, bool includingSprites, bool saving) {
+	if (!entity) {
+		return STATUS_FAILED;
+	}
+
+	// HACK!
+	if (this->_game != entity->_game) {
+		this->_game = entity->_game;
+	}
+
+	if (saving) {
+		for (int i = 0; i < 7; i++) {
+			if (entity->_caption[i]) {
+				setCaption(entity->_caption[i], i);
+			}
+		}
+		if (!entity->_region && entity->_sprite && entity->_sprite->_filename && entity->_sprite->_filename[0]) {
+			if (includingSprites) {
+				setFilename(entity->_sprite->_filename);
+			} else {
+				setFilename("");
+			}
+		}
+		if (entity->_cursor && entity->_cursor->_filename && entity->_cursor->_filename[0]) {
+			setCursor(entity->_cursor->_filename);
+		}
+		_alphaColor = entity->_alphaColor;
+		_active = entity->_active;
+	} else {
+		for (int i = 0; i < 7; i++) {
+			if (_caption[i] && _caption[i][0]) {
+				entity->setCaption(_caption[i], i);
+			}
+		}
+		if (_filename && _filename[0] && !entity->_region && includingSprites) {
+			if (!entity->_sprite || !entity->_sprite->_filename || scumm_stricmp(entity->_sprite->_filename, _filename) != 0) {
+				entity->setSprite(_filename);
+			}
+		}
+		if (_cursor && _cursor[0]) {
+			if (!entity->_cursor || !entity->_cursor->_filename || scumm_stricmp(entity->_cursor->_filename, _cursor) != 0) {
+				entity->setCursor(_cursor);
+			}
+		}
+
+		entity->_active = _active;
+		entity->_alphaColor = _alphaColor;
+	}
+
+	return STATUS_OK;
+}
+
+} // End of namespace Wintermute

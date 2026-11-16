@@ -1,0 +1,285 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/events.h"
+#include "common/file.h"
+#include "common/fs.h"
+#include "engines/util.h"
+#include "video/asf_decoder.h"
+#include "video/avi_decoder.h"
+#include "video/dxa_decoder.h"
+#include "video/flic_decoder.h"
+#include "video/mpegps_decoder.h"
+#include "video/mve_decoder.h"
+#include "video/qt_decoder.h"
+#include "video/qt_data.h"
+#include "video/smk_decoder.h"
+#include "video/4xm_decoder.h"
+
+#include "testbed/testbed.h"
+#include "testbed/video.h"
+#include "graphics/cursorman.h"
+#include "graphics/paletteman.h"
+#include "gui/browser.h"
+
+#include "video/qt_data.h"
+
+namespace Testbed {
+
+Common::Error Videotests::videoTest(const Common::Path &path) {
+	const Common::FSNode node(path);
+	if (node.exists() && !node.isDirectory())
+		return videoTest(node);
+
+	Common::File *file = new Common::File();
+	if (!file->open(path)) {
+		warning("Cannot open file %s", path.toString(Common::Path::kNativeSeparator).c_str());
+		delete file;
+		return Common::kNoGameDataFoundError;
+	}
+	return videoTest(file, path.toString(Common::Path::kNativeSeparator));
+}
+
+Common::Error Videotests::videoTest(const Common::FSNode &node) {
+	Common::SeekableReadStream *stream = node.createReadStream();
+	if (!stream) {
+		warning("Cannot open file %s", node.getName().c_str());
+		return Common::kNoGameDataFoundError;
+	}
+
+	return videoTest(stream, node.getName());
+}
+
+Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Common::String &name) {
+	Video::QuickTimeDecoder *qtVideo = nullptr;
+	Video::VideoDecoder *video = nullptr;
+
+	// ASF movies may use game-specific extensions such as .dat.
+	static const byte asfHeader[] = {
+		0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
+		0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c
+	};
+	byte header[sizeof(asfHeader)];
+	const int64 start = stream->pos();
+	const bool isASF = stream->read(header, sizeof(header)) == sizeof(header) &&
+		memcmp(header, asfHeader, sizeof(header)) == 0;
+	stream->seek(start);
+
+	if (isASF) {
+		video = new Video::ASFDecoder();
+	} else if (name.hasSuffixIgnoreCase(".avi")) {
+		video = new Video::AVIDecoder();
+	} else if (name.hasSuffixIgnoreCase(".dxa")) {
+		video = new Video::DXADecoder();
+	} else if (name.hasSuffixIgnoreCase(".flc")) {
+		video = new Video::FlicDecoder();
+	} else if (name.hasSuffixIgnoreCase(".mpg") || name.hasSuffixIgnoreCase(".mpeg")) {
+		video = new Video::MPEGPSDecoder();
+	} else if (name.hasSuffixIgnoreCase(".mve")) {
+		video = new Video::MveDecoder();
+	} else if (name.hasSuffixIgnoreCase(".smk")) {
+		video = new Video::SmackerDecoder();
+	} else if (name.hasSuffixIgnoreCase(".4xm")) {
+		video = new Video::FourXMDecoder();
+	} else {
+		qtVideo = new Video::QuickTimeDecoder();
+		video = qtVideo;
+	}
+
+	if (!video->loadStream(stream)) {
+		warning("Cannot open video %s", name.c_str());
+		delete video;
+		return Common::kReadingFailed;
+	}
+
+	if (qtVideo)
+		qtVideo->setTargetSize(400, 300);
+
+	warning("Video size: %d x %d", video->getWidth(), video->getHeight());
+
+	Common::List<Graphics::PixelFormat> supportedFormatsList = g_system->getSupportedFormats();
+	Graphics::PixelFormat pixelformat = supportedFormatsList.front();
+	warning("Best pixel format: %s", pixelformat.toString().c_str());
+	warning("Video pixel format: %s", video->getPixelFormat().toString().c_str());
+
+	if (video->getPixelFormat().isCLUT8()) {
+		pixelformat = Graphics::PixelFormat::createFormatCLUT8();
+	} else {
+		if (pixelformat.isCLUT8() && video->setDitheringPalette(Video::quickTimeDefaultPalette256)) {
+			pixelformat = Graphics::PixelFormat::createFormatCLUT8();
+		} else if (video->setOutputPixelFormats(supportedFormatsList)) {
+			pixelformat = video->getPixelFormat();
+		} else {
+			pixelformat = supportedFormatsList.front();
+		}
+	}
+
+	warning("Actual pixel format: %s", pixelformat.toString().c_str());
+
+#ifdef __DS__
+	int w = 256, h = 192;
+#elif defined(__3DS__)
+	int w = 320, h = 240;
+#elif defined(USE_HIGHRES)
+	int w = 640, h = 480;
+#else
+	int w = 320, h = 200;
+#endif
+	if (w < video->getWidth() || h < video->getHeight()) {
+		w = video->getWidth();
+		h = video->getHeight();
+	}
+
+	initGraphics(w, h, &pixelformat);
+
+	video->start();
+
+	Common::Point mouse;
+
+	while (!video->endOfVideo()) {
+		if (video->needsUpdate()) {
+			uint32 pos = video->getTime();
+			debug(5, "video time: %d", pos);
+
+			if (pixelformat.isCLUT8() && video->hasDirtyPalette()) {
+				g_system->getPaletteManager()->setPalette(video->getPalette(), 0, 256);
+			}
+
+			const Graphics::Surface *frame = video->decodeNextFrame();
+			int x = 0, y = 0;
+			int mw = 0, mh = 0;
+
+			if (frame) {
+				const Graphics::Surface *surf = frame;
+				Graphics::Surface *conv = nullptr;
+
+				if (frame->format != pixelformat) {
+					surf = conv = frame->convertTo(pixelformat, Video::quickTimeDefaultPalette256);
+				}
+
+				mw = surf->w;
+				mh = surf->h;
+
+				if (surf->w < w)
+					x = (w - surf->w) >> 1;
+				if (surf->h < h)
+					y = (h - surf->h) >> 1;
+
+				g_system->copyRectToScreen(surf->getPixels(), surf->pitch, x, y, MIN<uint16>(surf->w, w), MIN<uint16>(surf->h, h));
+
+				if (conv) {
+					conv->free();
+					delete conv;
+				}
+			}
+
+			Common::Event event;
+
+			while (g_system->getEventManager()->pollEvent(event)) {
+				if (Common::isMouseEvent(event))
+					mouse = event.mouse;
+
+				if (qtVideo && mouse.x >= x && mouse.x < x + mw &&
+						mouse.y >= y && mouse.y < y + mh) {
+					switch (event.type) {
+					case Common::EVENT_LBUTTONDOWN:
+						qtVideo->handleMouseButton(true, event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_LBUTTONUP:
+						qtVideo->handleMouseButton(false, event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_MOUSEMOVE:
+						qtVideo->handleMouseMove(event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_KEYUP:
+					case Common::EVENT_KEYDOWN:
+						qtVideo->handleKey(event.kbd, event.type == Common::EVENT_KEYDOWN);
+						break;
+					default:
+						break;
+					}
+				} else {
+					CursorMan.showMouse(false);
+				}
+
+				if (Engine::shouldQuit()) {
+					video->close();
+					delete video;
+					return Common::kNoError;
+				}
+			}
+			g_system->updateScreen();
+		}
+		video->delayMillis(10);
+	}
+	video->close();
+	delete video;
+
+	return Common::kNoError;
+}
+
+TestExitStatus Videotests::testPlayback() {
+	Testsuite::clearScreen();
+	Common::String info = "Video playback test. A video should be selected using the file browser, and it'll be played on the screen.";
+
+	Common::Point pt(0, 100);
+	Testsuite::writeOnScreen("Testing video playback", pt);
+
+	if (Testsuite::handleInteractiveInput(info, "OK", "Skip", kOptionRight)) {
+		Testsuite::logPrintf("Info! Skipping test : testPlayback\n");
+		return kTestSkipped;
+	}
+
+	GUI::BrowserDialog browser(Common::U32String("Select video file"), false);
+
+	if (browser.runModal() <= 0) {
+		Testsuite::logPrintf("Info! Skipping test : testPlayback\n");
+		return kTestSkipped;
+	}
+
+	byte palette[256 * 3];
+	g_system->getPaletteManager()->grabPalette(palette, 0, 256);
+
+	Common::Error error = videoTest(browser.getResult());
+
+	initGraphics(320, 200);
+	g_system->getPaletteManager()->setPalette(palette, 0, 256);
+
+	if (error.getCode() != Common::kNoError) {
+		Testsuite::logDetailedPrintf("Video playback failed: %s\n", error.getDesc().c_str());
+		return kTestFailed;
+	}
+
+	Common::String prompt = "Did the video display correctly?";
+	if (!Testsuite::handleInteractiveInput(prompt, "Yes", "No", kOptionLeft)) {
+		Testsuite::logDetailedPrintf("Video playback failed\n");
+		return kTestFailed;
+	}
+
+	return kTestPassed;
+}
+
+VideoDecoderTestSuite::VideoDecoderTestSuite() {
+	_isTsEnabled = false;
+	addTest("testPlayback", &Videotests::testPlayback, true);
+}
+
+} // End of namespace Testbed

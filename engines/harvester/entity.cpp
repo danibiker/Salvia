@@ -1,0 +1,1100 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "harvester/entity.h"
+
+#include "common/algorithm.h"
+#include "common/debug.h"
+#include "common/ptr.h"
+#include "common/system.h"
+#include "graphics/blit.h"
+#include "graphics/screen.h"
+#include "harvester/detection.h"
+#include "harvester/resources.h"
+
+namespace Harvester {
+
+namespace {
+
+static const char *const kCursorEntityName = "MOUSE";
+static const char *const kCursorResourcePath = "1:/GRAPHIC/POINTERS/POINTERS.ABM";
+static const float kCursorEntityZ = -100.0f;
+static const int kCursorAnimationRate = 10;
+static const int kFramesPerSequence = 10;
+static const uint32 kDosPitInputFrequency = 1193180;
+static const uint32 kDosPitTimerDivisor = 65536;
+static const byte kTransparentPaletteIndex = 0;
+
+static int scaleDimension(uint32 value, float scale) {
+	return MAX<int>((int)((float)value * scale), 1);
+}
+
+static void scaleIndexedBitmapNearest(const IndexedBitmap &source, IndexedBitmap &dest,
+		int scaledWidth, int scaledHeight) {
+	dest.width = (uint32)scaledWidth;
+	dest.height = (uint32)scaledHeight;
+	dest.pixels.resize((uint32)scaledWidth * (uint32)scaledHeight);
+
+	for (int y = 0; y < scaledHeight; ++y) {
+		const uint32 srcY = MIN<uint32>(((uint32)y * source.height) / (uint32)scaledHeight, source.height - 1);
+		for (int x = 0; x < scaledWidth; ++x) {
+			const uint32 srcX = MIN<uint32>(((uint32)x * source.width) / (uint32)scaledWidth, source.width - 1);
+			dest.pixels[(uint32)y * (uint32)scaledWidth + (uint32)x] =
+				source.pixels[srcY * source.width + srcX];
+		}
+	}
+}
+
+static void blitAnimationFrame(Graphics::Screen &screen, const Common::Array<AbmFrame> &frames, uint frameIndex,
+		int x, int y) {
+	if (frameIndex < frames.size())
+		blitTransparentBitmap(screen, frames[frameIndex], x, y);
+}
+
+} // End of anonymous namespace
+
+uint32 getRuntimeClockTicks() {
+	if (!g_system)
+		return 0;
+
+	// Original game obtains time through DOS int 21h/AH=2Ch. Its hundredths field
+	// advances on the 18.2 Hz BIOS timer, so preserve that quantization instead
+	// of deriving idealized centiseconds directly from wall-clock milliseconds.
+	const uint64 pitTicks = ((uint64)g_system->getMillis() * kDosPitInputFrequency) /
+		((uint64)kDosPitTimerDivisor * 1000U);
+	return (uint32)((pitTicks * kDosPitTimerDivisor * 100U) / kDosPitInputFrequency);
+}
+
+static bool isRectangleOnlyHitClass(int classId) {
+	return classId == kEntityClassRectHotspot ||
+		classId == kEntityClassRectHotspot18 ||
+		classId == kEntityClassRectHotspot19;
+}
+
+bool Entity::loadBitmapResource(ResourceManager &resources, const Common::String &path) {
+	Common::Array<byte> data;
+	if (!resources.loadFile(path, data) || data.size() < 12) {
+		warning("Harvester: unable to load runtime entity bitmap '%s'", path.c_str());
+		return false;
+	}
+
+	AbmFrame frame;
+	if (!decodeBitmap(data, frame)) {
+		warning("Harvester: invalid runtime bitmap '%s'", path.c_str());
+		return false;
+	}
+
+	_frames.clear();
+	_frames.push_back(Common::move(frame));
+	_baseFrames = _frames;
+	_frameDepthScales.clear();
+	_frameDepthScales.resize(_frames.size(), 1.0f);
+	_resourcePath = path;
+	_currentFrame = 0;
+	_firstFrame = 0;
+	_lastFrame = 0;
+	_animationEnabled = false;
+	_drawEnabled = true;
+	_depthScale = 1.0f;
+	updateBoundsFromCurrentFrame();
+	_hitTestMode = kEntityHitTestOpaquePixels;
+	return true;
+}
+
+bool Entity::loadAbmResource(ResourceManager &resources, const Common::String &path) {
+	Common::Array<byte> data;
+	if (!resources.loadFile(path, data) || data.size() < 8) {
+		warning("Harvester: unable to load runtime entity animation '%s'", path.c_str());
+		return false;
+	}
+
+	if (!decodeAbm(data, _frames)) {
+		warning("Harvester: unable to decode runtime entity animation '%s'", path.c_str());
+		return false;
+	}
+
+	_resourcePath = path;
+	_baseFrames = _frames;
+	_frameDepthScales.clear();
+	_frameDepthScales.resize(_frames.size(), 1.0f);
+	_currentFrame = _frames.empty() ? -1 : 0;
+	_firstFrame = _currentFrame;
+	_lastFrame = _frames.empty() ? -1 : (int)_frames.size() - 1;
+	_animationEnabled = !_frames.empty();
+	_drawEnabled = true;
+	_depthScale = 1.0f;
+	updateBoundsFromCurrentFrame();
+	_hitTestMode = kEntityHitTestOpaquePixels;
+	return true;
+}
+
+void Entity::setPosition(int x, int y, float z) {
+	const int previousX = _x;
+	const int previousY = _y;
+	const float previousZ = _z;
+	const Common::Point previousDrawOrigin = getDrawOrigin();
+	const bool anchorChanged = _x != x || _y != y;
+	_x = x;
+	_y = y;
+	_z = z;
+	if (anchorChanged)
+		updateScreenBaseFromCurrentFrame();
+
+	if ((anchorChanged || previousZ != z) && _classId == kEntityClassNpc) {
+		int width = 0;
+		int height = 0;
+		int xOffset = 0;
+		int yOffset = 0;
+		(void)getCurrentFrameMetrics(width, height, xOffset, yOffset);
+		const Common::Point drawOrigin = getDrawOrigin();
+		debugC(3, kDebugPlayer,
+			"Harvester: npc position npc='%s' frame=%d entity=(%d,%d,z=%.2f)->(%d,%d,z=%.2f) frame_size=%dx%d frame_offset=(%d,%d) draw=(%d,%d)->(%d,%d)",
+			_name.c_str(), _currentFrame,
+			previousX, previousY, (double)previousZ, _x, _y, (double)_z,
+			width, height, xOffset, yOffset,
+			previousDrawOrigin.x, previousDrawOrigin.y, drawOrigin.x, drawOrigin.y);
+	}
+}
+
+void Entity::setAnchorMode(EntityAnchorMode anchorMode) {
+	_anchorMode = anchorMode;
+	updateScreenBaseFromCurrentFrame();
+}
+
+void Entity::setAnimationRate(int rate) {
+	const int previousRate = _animationRate;
+	if (rate == 0)
+		_animationTickInterval = 0;
+	else
+		_animationTickInterval = 100 / rate;
+
+	if (rate != _animationRate) {
+		_nextAnimationTick = 0;
+		_animationRate = rate;
+		if (_classId == kEntityClassNpc) {
+			debugC(2, kDebugPlayer,
+				"Harvester: npc animation rate npc='%s' rate=%d->%d interval_ticks=%u next_tick=%u",
+				_name.c_str(), previousRate, _animationRate,
+				_animationTickInterval, _nextAnimationTick);
+		}
+	}
+}
+
+void Entity::setAnimationEnabled(bool enabled) {
+	const bool wasEnabled = _animationEnabled;
+	_animationEnabled = enabled && !_frames.empty() && _currentFrame >= 0;
+	if (wasEnabled != _animationEnabled && _classId == kEntityClassNpc) {
+		debugC(2, kDebugPlayer,
+			"Harvester: npc animation enabled npc='%s' enabled=%d->%d frame=%d range=%d..%d",
+			_name.c_str(), wasEnabled, _animationEnabled,
+			_currentFrame, _firstFrame, _lastFrame);
+	}
+}
+
+void Entity::setCurrentFrame(int frame, bool preserveScreenBase) {
+	if (_frames.empty())
+		return;
+
+	advanceAnimationFrame(frame);
+	if (!preserveScreenBase)
+		updateScreenBaseFromCurrentFrame();
+}
+
+void Entity::setAnimationFrameRange(int firstFrame, int lastFrame, bool looping) {
+	if (_frames.empty())
+		return;
+
+	const int previousFirstFrame = _firstFrame;
+	const int previousLastFrame = _lastFrame;
+	const bool wasLooping = _looping;
+	firstFrame = CLIP<int>(firstFrame, 0, (int)_frames.size() - 1);
+	lastFrame = CLIP<int>(lastFrame, 0, (int)_frames.size() - 1);
+	if (lastFrame < firstFrame)
+		SWAP(firstFrame, lastFrame);
+
+	_animationSequence = -1;
+	_looping = looping;
+	_playBackwards = false;
+	_firstFrame = firstFrame;
+	_lastFrame = lastFrame;
+	_animationEnabled = firstFrame != lastFrame;
+	if (_currentFrame < _firstFrame || _currentFrame > _lastFrame)
+		advanceAnimationFrame(_firstFrame);
+	else
+		updateBoundsFromCurrentFrame();
+
+	if (_classId == kEntityClassNpc) {
+		debugC(2, kDebugPlayer,
+			"Harvester: npc animation range npc='%s' frames=%d..%d->%d..%d current=%d looping=%d->%d enabled=%d",
+			_name.c_str(), previousFirstFrame, previousLastFrame,
+			_firstFrame, _lastFrame, _currentFrame,
+			wasLooping, _looping, _animationEnabled);
+	}
+}
+
+void Entity::setAnimationSequence(int sequence) {
+	if (_frames.empty() || sequence == _animationSequence)
+		return;
+
+	_animationSequence = sequence;
+	_looping = true;
+	_playBackwards = false;
+	_animationEnabled = true;
+	_firstFrame = MIN<int>(sequence * kFramesPerSequence, (int)_frames.size() - 1);
+	_lastFrame = MIN<int>(_firstFrame + kFramesPerSequence - 1, (int)_frames.size() - 1);
+	advanceAnimationFrame(_firstFrame);
+
+	if (_classId == kEntityClassCursor) {
+		debugC(1, kDebugCursor,
+			"Harvester: cursor animation sequence=%d frames=%d..%d current=%d",
+			_animationSequence, _firstFrame, _lastFrame, _currentFrame);
+	}
+}
+
+void Entity::configureHotspotBounds(int width, int height) {
+	_frames.clear();
+	_baseFrames.clear();
+	_frameDepthScales.clear();
+	_currentFrame = -1;
+	_firstFrame = -1;
+	_lastFrame = -1;
+	_animationEnabled = false;
+	_drawEnabled = false;
+	_boundsWidth = MAX(width, 1);
+	_boundsHeight = MAX(height, 1);
+	_hitTestMode = kEntityHitTestBounds;
+	_depthScale = 1.0f;
+	updateScreenBaseFromCurrentFrame();
+}
+
+bool Entity::getCurrentFrameMetrics(int &width, int &height, int &xOffset, int &yOffset) const {
+	if (_frames.empty() || _currentFrame < 0 || (uint)_currentFrame >= _frames.size())
+		return false;
+
+	const AbmFrame &frame = _frames[(uint)_currentFrame];
+	width = (int)frame.width;
+	height = (int)frame.height;
+	xOffset = frame.xOffset;
+	yOffset = frame.yOffset;
+	return true;
+}
+
+bool Entity::hasOpaqueFramesInRange(int firstFrame, int lastFrame) const {
+	const Common::Array<AbmFrame> &frames = !_baseFrames.empty() ? _baseFrames : _frames;
+	if (frames.empty() || firstFrame < 0 || lastFrame < firstFrame ||
+			(uint)lastFrame >= frames.size()) {
+		return false;
+	}
+
+	for (int frameIndex = firstFrame; frameIndex <= lastFrame; ++frameIndex) {
+		const AbmFrame &frame = frames[(uint)frameIndex];
+		bool hasOpaquePixel = false;
+		for (uint i = 0; i < frame.pixels.size(); ++i) {
+			if (frame.pixels[i] != kTransparentPaletteIndex) {
+				hasOpaquePixel = true;
+				break;
+			}
+		}
+		if (!hasOpaquePixel)
+			return false;
+	}
+
+	return true;
+}
+
+void Entity::setDepthScale(float scale) {
+	if (_frames.empty())
+		return;
+
+	const float newScale = scale >= 0.0f ? scale : 1.0f;
+	if (fabsf(_depthScale - newScale) < 0.0001f)
+		return;
+
+	if (_baseFrames.empty()) {
+		_baseFrames = _frames;
+		_frameDepthScales.clear();
+		_frameDepthScales.resize(_frames.size(), 1.0f);
+	}
+
+	_depthScale = newScale;
+	updateBoundsFromCurrentFrame();
+	updateScreenBaseFromCurrentFrame();
+}
+
+bool Entity::tickVisualState(uint32 now) {
+	_animationAdvancedLastTick = false;
+	if (!_animationEnabled || _currentFrame < 0)
+		return false;
+	if (now < _nextAnimationTick)
+		return false;
+
+	const int previousFrameIndex = _currentFrame;
+	const bool wasPlayingBackwards = _playBackwards;
+	const AbmFrame &previousFrame = _frames[(uint)previousFrameIndex];
+	const Common::Point previousDrawOrigin = getDrawOrigin();
+	advanceAnimationFrame(_playBackwards ? -1 : -2);
+	_nextAnimationTick = now + _animationTickInterval;
+	_animationAdvancedLastTick = true;
+
+	if (_classId == kEntityClassPlayer && previousFrameIndex != _currentFrame) {
+		debugC(4, kDebugPlayer,
+			"Harvester: player animation advance frame=%d->%d range=%d..%d rate=%d tick=%u interval=%u next_tick=%u",
+			previousFrameIndex, _currentFrame, _firstFrame, _lastFrame,
+			_animationRate, now, _animationTickInterval, _nextAnimationTick);
+	}
+
+	if (_classId == kEntityClassNpc) {
+		const AbmFrame &currentFrame = _frames[(uint)_currentFrame];
+		const Common::Point drawOrigin = getDrawOrigin();
+		const bool loopReset = _looping && !_pingPong &&
+			((!wasPlayingBackwards && previousFrameIndex == _lastFrame && _currentFrame == _firstFrame) ||
+			 (wasPlayingBackwards && previousFrameIndex == _firstFrame && _currentFrame == _lastFrame));
+		debugC(4, kDebugPlayer,
+			"Harvester: npc animation advance npc='%s' frame=%d->%d range=%d..%d loop_reset=%d backwards=%d->%d rate=%d interval=%u entity=(%d,%d,z=%.2f) previous=(size=%ux%u offset=%d,%d draw=%d,%d) current=(size=%ux%u offset=%d,%d draw=%d,%d)",
+			_name.c_str(),
+			previousFrameIndex, _currentFrame, _firstFrame, _lastFrame,
+			loopReset, wasPlayingBackwards, _playBackwards,
+			_animationRate, _animationTickInterval, _x, _y, (double)_z,
+			previousFrame.width, previousFrame.height, previousFrame.xOffset, previousFrame.yOffset,
+			previousDrawOrigin.x, previousDrawOrigin.y,
+			currentFrame.width, currentFrame.height, currentFrame.xOffset, currentFrame.yOffset,
+			drawOrigin.x, drawOrigin.y);
+	}
+	return true;
+}
+
+Common::Point Entity::getDrawOrigin() const {
+	if (!_frames.empty() && _currentFrame >= 0 && (uint)_currentFrame < _frames.size()) {
+		const AbmFrame &frame = _frames[(uint)_currentFrame];
+		return Common::Point(_screenBaseX + frame.xOffset, _screenBaseY + frame.yOffset);
+	}
+
+	return Common::Point(_screenBaseX, _screenBaseY);
+}
+
+Common::Rect Entity::getScreenRect() const {
+	return getFrameRect();
+}
+
+void Entity::configureTimerCountdown(int initialValue, int currentValue,
+		bool enabled, bool looping, bool global) {
+	_timerInitialValue = MAX(initialValue, 0);
+	_timerCurrentValue = MAX(currentValue, 0);
+	_timerEnabled = false;
+	_timerLooping = looping;
+	_timerGlobal = global;
+	_timerPaused = false;
+	_timerPauseTick = 0;
+	_timerStartTick = 0;
+	_timerNextFireTick = 0;
+	_visible = false;
+	_drawEnabled = false;
+	_animationEnabled = false;
+	_hitTestMode = kEntityHitTestNone;
+	setTimerEnabled(enabled);
+}
+
+void Entity::setTimerEnabled(bool enabled) {
+	if (_classId != kEntityClassTimer)
+		return;
+
+	if (!enabled) {
+		_timerEnabled = false;
+		_timerPaused = false;
+		_timerPauseTick = 0;
+		_timerStartTick = 0;
+		_timerNextFireTick = 0;
+		return;
+	}
+
+	const uint32 now = getRuntimeClockTicks();
+	const int remainingValue = _timerCurrentValue > 0 ? _timerCurrentValue : _timerInitialValue;
+	_timerEnabled = true;
+	_timerPaused = false;
+	_timerPauseTick = 0;
+	_timerStartTick = now;
+	_timerCurrentValue = MAX(remainingValue, 0);
+	_timerNextFireTick = now + (uint32)_timerCurrentValue * 100U;
+}
+
+bool Entity::tickTimerState(uint32 now, Common::Array<Common::String> &expiredTimerNames) {
+	if (_classId != kEntityClassTimer || !_timerEnabled || _timerPaused)
+		return false;
+
+	if (_timerNextFireTick != 0 && (int32)(now - _timerNextFireTick) < 0) {
+		const uint32 remainingTicks = _timerNextFireTick - now;
+		_timerCurrentValue = (int)((remainingTicks + 99U) / 100U);
+		return false;
+	}
+
+	_timerCurrentValue = 0;
+	expiredTimerNames.push_back(_name);
+	if (_timerLooping) {
+		_timerCurrentValue = _timerInitialValue;
+		_timerStartTick = now;
+		_timerNextFireTick = now + (uint32)_timerInitialValue * 100U;
+	} else {
+		_timerEnabled = false;
+		_timerStartTick = 0;
+		_timerNextFireTick = 0;
+	}
+
+	return false;
+}
+
+void Entity::pauseTimerCountdown(uint32 now) {
+	if (_classId != kEntityClassTimer || !_timerEnabled || _timerPaused)
+		return;
+
+	if (_timerNextFireTick != 0 && (int32)(now - _timerNextFireTick) < 0) {
+		const uint32 remainingTicks = _timerNextFireTick - now;
+		_timerCurrentValue = (int)((remainingTicks + 99U) / 100U);
+	} else {
+		_timerCurrentValue = 0;
+	}
+
+	_timerPaused = true;
+	_timerPauseTick = now;
+}
+
+void Entity::resumeTimerCountdown(uint32 now) {
+	if (_classId != kEntityClassTimer || !_timerEnabled || !_timerPaused)
+		return;
+
+	if (_timerNextFireTick != 0)
+		_timerNextFireTick += now - _timerPauseTick;
+	_timerPaused = false;
+	_timerPauseTick = 0;
+}
+
+void Entity::draw(Graphics::Screen &screen) const {
+	if (!_visible || !_drawEnabled || _currentFrame < 0)
+		return;
+
+	const Common::Point drawOrigin = getDrawOrigin();
+	if (_classId == kEntityClassPlayer) {
+		debugC(4, kDebugPlayer,
+			"Harvester: player animation draw frame=%d pos=(%d,%d,z=%.2f) origin=(%d,%d) tick=%u",
+			_currentFrame, _x, _y, _z, drawOrigin.x, drawOrigin.y, getRuntimeClockTicks());
+	}
+	blitAnimationFrame(screen, _frames, _currentFrame, drawOrigin.x, drawOrigin.y);
+}
+
+Common::Rect Entity::getFrameRect() const {
+	const Common::Point drawOrigin = getDrawOrigin();
+	if (!_frames.empty() && _currentFrame >= 0 && (uint)_currentFrame < _frames.size()) {
+		const AbmFrame &frame = _frames[(uint)_currentFrame];
+		return Common::Rect(drawOrigin.x, drawOrigin.y,
+			drawOrigin.x + frame.width, drawOrigin.y + frame.height);
+	}
+
+	return Common::Rect(drawOrigin.x, drawOrigin.y, drawOrigin.x + _boundsWidth, drawOrigin.y + _boundsHeight);
+}
+
+bool Entity::hasOpaqueFrame() const {
+	return !_frames.empty() && _currentFrame >= 0 && (uint)_currentFrame < _frames.size();
+}
+
+bool Entity::isOpaqueAt(const Common::Point &point) const {
+	if (!hasOpaqueFrame())
+		return false;
+
+	const Common::Rect bounds = getFrameRect();
+	if (!bounds.contains(point))
+		return false;
+
+	const AbmFrame &frame = _frames[(uint)_currentFrame];
+	const int relativeX = point.x - bounds.left;
+	const int relativeY = point.y - bounds.top;
+	if (relativeX < 0 || relativeY < 0 || relativeX >= (int)frame.width || relativeY >= (int)frame.height)
+		return false;
+
+	return frame.pixels[(uint)relativeY * frame.width + (uint)relativeX] != 0;
+}
+
+bool Entity::hitTest(const Common::Point &point) const {
+	if (!_visible)
+		return false;
+	if (_classId == kEntityClassDisabledHotspot)
+		return false;
+	if (_classId == kEntityClassBackground)
+		return true;
+	if (_hitTestMode == kEntityHitTestNone)
+		return false;
+
+	const Common::Rect bounds = getFrameRect();
+	if (!bounds.contains(point))
+		return false;
+	if (_hitTestMode != kEntityHitTestOpaquePixels || isRectangleOnlyHitClass(_classId))
+		return true;
+
+	return isOpaqueAt(point);
+}
+
+bool Entity::overlapsBitmap(const IndexedBitmap &bitmap, const Common::Point &position, bool opaquePixels) const {
+	if (!_visible || !bitmap.isValid())
+		return false;
+	const Common::Rect bounds = getFrameRect();
+	const Common::Rect bitmapBounds(position.x, position.y,
+		position.x + bitmap.width, position.y + bitmap.height);
+	if (bounds.right < bitmapBounds.left || bitmapBounds.right < bounds.left ||
+			bounds.bottom < bitmapBounds.top || bitmapBounds.bottom < bounds.top)
+		return false;
+	if (!opaquePixels)
+		return true;
+	const bool rectangleTarget = _classId == kEntityClassRectHotspot;
+	if ((!rectangleTarget && !hasOpaqueFrame()) || bitmap.width > 640 || bitmap.height > 480 ||
+			bounds.width() > 640 || bounds.height() > 480)
+		return false;
+
+	for (uint y = 0; y < bitmap.height; ++y) {
+		for (uint x = 0; x < bitmap.width; x += 2) {
+			const Common::Point point(position.x + x, position.y + y);
+			if (bitmap.pixels[y * bitmap.width + x] &&
+					(rectangleTarget ? bounds.contains(point) : isOpaqueAt(point)))
+				return true;
+		}
+	}
+	return false;
+}
+
+bool Entity::overlapsEntity(const Entity &other) const {
+	if (this == &other || !_visible || !other._visible)
+		return false;
+	if (_classId == kEntityClassCursor || _classId == kEntityClassBackground ||
+		_classId == kEntityClassRectHotspot || _classId == kEntityClassRectHotspot19 ||
+		other._classId == kEntityClassCursor || other._classId == kEntityClassBackground ||
+		other._classId == kEntityClassRectHotspot || other._classId == kEntityClassRectHotspot19) {
+		return false;
+	}
+
+	const int thisZMax = (int)(_z + _zExtent);
+	const int otherZMax = (int)(other._z + other._zExtent);
+	if (thisZMax < (int)other._z || otherZMax < (int)_z)
+		return false;
+
+	const Common::Rect thisRect = getFrameRect();
+	const Common::Rect otherRect = other.getFrameRect();
+	const int left = MAX(thisRect.left, otherRect.left);
+	const int top = MAX(thisRect.top, otherRect.top);
+	const int right = MIN(thisRect.right, otherRect.right);
+	const int bottom = MIN(thisRect.bottom, otherRect.bottom);
+	if (left >= right || top >= bottom)
+		return false;
+	if (_classId == kEntityClassDisabledHotspot ||
+			other._classId == kEntityClassDisabledHotspot) {
+		return true;
+	}
+	if (!hasOpaqueFrame() || !other.hasOpaqueFrame())
+		return false;
+
+	for (int y = top; y < bottom; ++y) {
+		for (int x = left; x < right; ++x) {
+			const Common::Point point(x, y);
+			if (isOpaqueAt(point) && other.isOpaqueAt(point))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+bool Entity::measureCurrentFrameTransparency(uint32 &framePixels, uint32 &transparentPixels,
+		uint32 &preservedPixels) const {
+	framePixels = 0;
+	transparentPixels = 0;
+	preservedPixels = 0;
+
+	if (!hasOpaqueFrame())
+		return false;
+
+	const AbmFrame &frame = _frames[(uint)_currentFrame];
+	framePixels = frame.width * frame.height;
+	Common::Array<byte> opaqueMask;
+	opaqueMask.resize(framePixels);
+	for (uint32 i = 0; i < framePixels; ++i)
+		opaqueMask[i] = frame.pixels[i] == kTransparentPaletteIndex ? 0 : 1;
+
+	Common::Array<byte> probeSurface;
+	probeSurface.resize(framePixels);
+	memset(probeSurface.data(), 0x7f, probeSurface.size());
+	Graphics::keyBlit(probeSurface.data(), opaqueMask.data(), frame.width, frame.width,
+		frame.width, frame.height, 1, kTransparentPaletteIndex);
+
+	for (uint32 i = 0; i < framePixels; ++i) {
+		if (frame.pixels[i] == kTransparentPaletteIndex)
+			++transparentPixels;
+		if (probeSurface[i] == 0x7f)
+			++preservedPixels;
+	}
+
+	return true;
+}
+
+void Entity::advanceAnimationFrame(int directive) {
+	if (_frames.empty())
+		return;
+
+	if (directive == -1) {
+		--_currentFrame;
+		if (_currentFrame >= _firstFrame)
+			goto done;
+
+		if (!_looping) {
+			_currentFrame = _firstFrame;
+			if (_classId == kEntityClassAnimation)
+				_animationEnabled = false;
+			goto done;
+		}
+
+		if (!_pingPong) {
+			_currentFrame = _lastFrame;
+			goto done;
+		}
+
+		_playBackwards = false;
+		_currentFrame = _firstFrame;
+		goto done;
+	}
+
+	if (directive == -2) {
+		++_currentFrame;
+		if (_currentFrame <= _lastFrame)
+			goto done;
+
+		if (!_looping) {
+			_currentFrame = _lastFrame;
+			if (_classId == kEntityClassAnimation)
+				_animationEnabled = false;
+			goto done;
+		}
+
+		if (_pingPong) {
+			_playBackwards = true;
+			_currentFrame = _lastFrame;
+			goto done;
+		}
+
+		_currentFrame = _firstFrame;
+		goto done;
+	}
+
+	_currentFrame = CLIP<int>(directive, 0, (int)_frames.size() - 1);
+
+done:
+	updateBoundsFromCurrentFrame();
+}
+
+void Entity::updateBoundsFromCurrentFrame() {
+	scaleCurrentFrame();
+	if (_frames.empty()) {
+		_boundsWidth = 0;
+		_boundsHeight = 0;
+		return;
+	}
+
+	const int frameIndex = (_currentFrame >= 0 && (uint)_currentFrame < _frames.size()) ? _currentFrame : 0;
+	_boundsWidth = (int)_frames[(uint)frameIndex].width;
+	_boundsHeight = (int)_frames[(uint)frameIndex].height;
+}
+
+void Entity::updateScreenBaseFromCurrentFrame() {
+	int baseX = _x;
+	int baseY = _y;
+
+	if (_anchorMode == kEntityAnchorCentered) {
+		baseX -= _boundsWidth / 2;
+		baseY -= _boundsHeight / 2;
+	}
+
+	_screenBaseX = baseX;
+	_screenBaseY = baseY;
+}
+
+void Entity::scaleCurrentFrame() {
+	if (_baseFrames.empty() || _currentFrame < 0 ||
+			(uint)_currentFrame >= _baseFrames.size())
+		return;
+
+	const uint frameIndex = (uint)_currentFrame;
+	if (_frameDepthScales[frameIndex] == _depthScale)
+		return;
+
+	const AbmFrame &source = _baseFrames[frameIndex];
+	AbmFrame &scaled = _frames[frameIndex];
+	if (fabsf(_depthScale - 1.0f) < 0.0001f) {
+		scaled = source;
+	} else {
+		scaleIndexedBitmapNearest(source, scaled,
+			scaleDimension(source.width, _depthScale),
+			scaleDimension(source.height, _depthScale));
+		// Native depth scaling preserves the authored horizontal frame offset.
+		scaled.xOffset = source.xOffset;
+		scaled.yOffset = (int)((float)source.yOffset * _depthScale);
+	}
+	_frameDepthScales[frameIndex] = _depthScale;
+	debugC(3, kDebugPlayer,
+		"Harvester: entity depth scale name='%s' frame=%u scale=%.4f size=%ux%u",
+		_name.c_str(), frameIndex, (double)_depthScale, scaled.width, scaled.height);
+}
+
+EntityManager::EntityManager(ResourceManager &resources) : _resources(resources) {
+}
+
+EntityManager::~EntityManager() {
+	clear();
+}
+
+void EntityManager::clear() {
+	clearSceneEntities();
+	delete _cursorEntity;
+	_cursorEntity = nullptr;
+}
+
+void EntityManager::clearSceneEntities(bool preserveGlobalTimers) {
+	Common::Array<Entity *> preservedEntities;
+	for (Entity *entity : _sceneEntities) {
+		if (preserveGlobalTimers &&
+				entity->getClassId() == kEntityClassTimer &&
+				entity->isTimerGlobal()) {
+			preservedEntities.push_back(entity);
+			continue;
+		}
+
+		delete entity;
+	}
+	_sceneEntities = Common::move(preservedEntities);
+	_expiredTimerNames.clear();
+	_timerPauseDepth = 0;
+}
+
+Entity *EntityManager::spawnAbmEntityFromResource(const Common::String &name,
+		const Common::String &resourcePath, int classId, const Common::Point &position, float z,
+		int animationRate, bool looping, bool pingPong) {
+	Common::ScopedPtr<Entity> entity(new Entity());
+	if (!entity->loadAbmResource(_resources, resourcePath))
+		return nullptr;
+
+	entity->setName(name);
+	entity->setClassId(classId);
+	entity->setPosition(position.x, position.y, z);
+	entity->setLooping(looping);
+	entity->setPingPong(pingPong);
+	entity->setAnimationRate(animationRate);
+	return entity.release();
+}
+
+Entity *EntityManager::spawnBitmapEntityFromResource(const Common::String &name,
+		const Common::String &resourcePath, int classId, const Common::Point &position, float z) {
+	Common::ScopedPtr<Entity> entity(new Entity());
+	if (!entity->loadBitmapResource(_resources, resourcePath))
+		return nullptr;
+
+	entity->setName(name);
+	entity->setClassId(classId);
+	entity->setPosition(position.x, position.y, z);
+	return entity.release();
+}
+
+Entity *EntityManager::spawnCursorEntity(const Common::Point &position) {
+	if (_cursorEntity)
+		return _cursorEntity;
+
+	_cursorEntity = spawnAbmEntityFromResource(kCursorEntityName, kCursorResourcePath,
+		kEntityClassCursor, position, kCursorEntityZ, kCursorAnimationRate, true, false);
+	if (_cursorEntity)
+		_cursorEntity->setAnimationSequence(0);
+	if (_cursorEntity)
+		_cursorEntity->setHitTestMode(kEntityHitTestNone);
+	if (_cursorEntity) {
+		const uint32 animationInterval = _cursorEntity->getAnimationRate() == 0 ? 0 :
+			(100U / (uint32)_cursorEntity->getAnimationRate());
+		debugC(1, kDebugCursor,
+			"Harvester: spawned cursor entity rate=%d intervalTicks=%u clock_source=dos_centiseconds frame=%d..%d pos=(%d,%d)",
+			_cursorEntity->getAnimationRate(), animationInterval,
+			_cursorEntity->getCurrentFrame(),
+			_cursorEntity->getLastFrame(), position.x, position.y);
+	}
+
+	return _cursorEntity;
+}
+
+Entity *EntityManager::spawnSceneBitmapEntity(const Common::String &name,
+		const Common::String &resourcePath, const Common::Point &position, float z) {
+	Entity *entity = spawnBitmapEntityFromResource(name, resourcePath, kEntityClassObject,
+		position, z);
+	if (entity)
+		insertSceneEntity(entity);
+	return entity;
+}
+
+Entity *EntityManager::spawnSceneHotspotEntity(const Common::String &name,
+		const Common::Rect &bounds, float z) {
+	Entity *entity = new Entity();
+	entity->setName(name);
+	entity->setClassId(kEntityClassObject);
+	entity->setPosition(bounds.left, bounds.top, z);
+	entity->configureHotspotBounds(bounds.width(), bounds.height());
+	insertSceneEntity(entity);
+	return entity;
+}
+
+Entity *EntityManager::spawnSceneAnimationEntity(const Common::String &name,
+		const Common::String &resourcePath, const Common::Point &position, float z, int animationRate,
+		bool active, bool visible, bool looping, bool playBackwards, bool pingPong, int initialFrame) {
+	Entity *entity = spawnAbmEntityFromResource(name, resourcePath, kEntityClassAnimation,
+		position, z, animationRate, looping, pingPong);
+	if (!entity)
+		return nullptr;
+
+	entity->setAnchorMode(kEntityAnchorCentered);
+	entity->setZExtent(3.0f);
+	entity->setPosition(position.x, position.y, z - floorf(MAX<float>(entity->getZExtent(), 0.0f) * 0.5f));
+	entity->setVisible(visible);
+	entity->setPlayBackwards(playBackwards);
+	entity->setHitTestMode(kEntityHitTestNone);
+	int startFrame = playBackwards ? entity->getLastFrame() : 0;
+	if (!playBackwards && initialFrame >= 0)
+		startFrame = CLIP<int>(initialFrame, 0, entity->getLastFrame());
+	entity->setCurrentFrame(startFrame, true);
+	// Non-looping room ANIM records can be authored visible but are started by SET_ANIM.
+	const bool shouldAdvance = active && (looping || initialFrame >= 0);
+	entity->setAnimationEnabled(shouldAdvance);
+
+	if (!active && !visible)
+		entity->setVisible(false);
+	insertSceneEntity(entity);
+	return entity;
+}
+
+Entity *EntityManager::spawnSceneActorEntity(const Common::String &name,
+		const Common::String &resourcePath, const Common::Point &position, float z, int initialFrame) {
+	Entity *entity = spawnAbmEntityFromResource(name, resourcePath, kEntityClassObject,
+		position, z, 0, false, false);
+	if (!entity)
+		return nullptr;
+
+	entity->setAnchorMode(kEntityAnchorTopLeft);
+	entity->setZExtent(3.0f);
+	entity->setHitTestMode(kEntityHitTestOpaquePixels);
+	entity->setCurrentFrame(initialFrame);
+	debugC(1, kDebugScene,
+		"Harvester: spawned scene actor '%s' resource='%s' frames=0..%d initial_frame=%d animation_rate=%d sequence=%d pos=(%d,%d,z=%.2f)",
+		name.c_str(), resourcePath.c_str(), entity->getLastFrame(), initialFrame,
+		entity->getAnimationRate(), entity->getAnimationSequence(),
+		position.x, position.y, (double)z);
+	insertSceneEntity(entity);
+	return entity;
+}
+
+Entity *EntityManager::spawnSceneTimerEntity(const Common::String &name,
+		int initialValue, int currentValue, bool enabled, bool looping, bool global) {
+	Entity *entity = new Entity();
+	entity->setName(name);
+	entity->setClassId(kEntityClassTimer);
+	configureSceneTimerEntity(*entity, initialValue, currentValue, enabled, looping, global);
+	insertSceneEntity(entity);
+	return entity;
+}
+
+void EntityManager::configureSceneTimerEntity(Entity &entity, int initialValue, int currentValue,
+		bool enabled, bool looping, bool global) {
+	entity.configureTimerCountdown(initialValue, currentValue, enabled, looping, global);
+	if (_timerPauseDepth > 0)
+		entity.pauseTimerCountdown(getRuntimeClockTicks());
+}
+
+void EntityManager::hideCursor() {
+	if (_cursorEntity)
+		_cursorEntity->setVisible(false);
+}
+
+void EntityManager::showCursor() {
+	if (_cursorEntity)
+		_cursorEntity->setVisible(true);
+}
+
+void EntityManager::pauseTimerCountdowns() {
+	if (_timerPauseDepth++ > 0)
+		return;
+
+	const uint32 now = getRuntimeClockTicks();
+	for (Entity *entity : _sceneEntities)
+		entity->pauseTimerCountdown(now);
+}
+
+void EntityManager::resumeTimerCountdowns() {
+	if (_timerPauseDepth == 0)
+		return;
+	if (--_timerPauseDepth > 0)
+		return;
+
+	const uint32 now = getRuntimeClockTicks();
+	for (Entity *entity : _sceneEntities)
+		entity->resumeTimerCountdown(now);
+}
+
+bool EntityManager::takeExpiredTimerNames(Common::Array<Common::String> &expiredTimerNames) {
+	if (_expiredTimerNames.empty())
+		return false;
+
+	expiredTimerNames = _expiredTimerNames;
+	_expiredTimerNames.clear();
+	return true;
+}
+
+bool EntityManager::tickSceneEntities() {
+	const uint32 now = getRuntimeClockTicks();
+	bool changed = false;
+
+	for (Entity *entity : _sceneEntities) {
+		if (entity->getClassId() == kEntityClassTimer) {
+			if (_timerPauseDepth == 0)
+				(void)entity->tickTimerState(now, _expiredTimerNames);
+			continue;
+		}
+
+		changed |= entity->tickVisualState(now);
+	}
+
+	return changed;
+}
+
+bool EntityManager::syncCursorEntityPosition(const Common::Point &position) {
+	if (!_cursorEntity)
+		return false;
+
+	const bool moved = _cursorEntity->getX() != position.x || _cursorEntity->getY() != position.y;
+	_cursorEntity->setPosition(position.x, position.y, kCursorEntityZ);
+	return _cursorEntity->tickVisualState(getRuntimeClockTicks()) || moved;
+}
+
+void EntityManager::drawCursor(Graphics::Screen &screen) const {
+	if (_cursorEntity)
+		_cursorEntity->draw(screen);
+}
+
+void EntityManager::drawSceneEntities(Graphics::Screen &screen) const {
+	for (Entity *entity : _sceneEntities)
+		entity->draw(screen);
+}
+
+const Entity *EntityManager::findTopSceneEntityAt(const Common::Point &point, int classIdFilter) const {
+	for (int i = (int)_sceneEntities.size() - 1; i >= 0; --i) {
+		const Entity *entity = _sceneEntities[(uint)i];
+		if (classIdFilter >= 0 && entity->getClassId() != classIdFilter)
+			continue;
+		if (entity->hitTest(point))
+			return entity;
+	}
+
+	return nullptr;
+}
+
+const Entity *EntityManager::findTopSceneEntityOverlappingBitmap(const IndexedBitmap &bitmap,
+		const Common::Point &position, const Common::String &excludedName, bool opaquePixels) const {
+	for (int i = (int)_sceneEntities.size() - 1; i >= 0; --i) {
+		const Entity *entity = _sceneEntities[(uint)i];
+		const int classId = entity->getClassId();
+		if (entity->getName().empty() || entity->getName().equalsIgnoreCase(excludedName) ||
+				entity->getName().equalsIgnoreCase("STAT") || classId == kEntityClassCursor ||
+				classId > kEntityClassRectHotspot)
+			continue;
+		if (!opaquePixels && classId != kEntityClassObject && classId != kEntityClassRectHotspot &&
+				classId != kEntityClassNpc && classId != kEntityClassPlayer)
+			continue;
+		if (entity->overlapsBitmap(bitmap, position, opaquePixels))
+			return entity;
+	}
+	return nullptr;
+}
+
+int EntityManager::findSceneEntityDrawIndexByName(const Common::String &name) const {
+	for (uint i = 0; i < _sceneEntities.size(); ++i) {
+		const Entity *entity = _sceneEntities[i];
+		if (entity->getName().equalsIgnoreCase(name))
+			return (int)i;
+	}
+
+	return -1;
+}
+
+const Entity *EntityManager::findSceneEntityByName(const Common::String &name) const {
+	for (const Entity *entity : _sceneEntities) {
+		if (entity->getName().equalsIgnoreCase(name))
+			return entity;
+	}
+
+	return nullptr;
+}
+
+Entity *EntityManager::findSceneEntityByName(const Common::String &name) {
+	for (Entity *entity : _sceneEntities) {
+		if (entity->getName().equalsIgnoreCase(name))
+			return entity;
+	}
+
+	return nullptr;
+}
+
+Entity *EntityManager::detachSceneEntityByName(const Common::String &name) {
+	for (uint i = 0; i < _sceneEntities.size(); ++i) {
+		Entity *entity = _sceneEntities[i];
+		if (!entity->getName().equalsIgnoreCase(name))
+			continue;
+
+		_sceneEntities.remove_at(i);
+		return entity;
+	}
+
+	return nullptr;
+}
+
+void EntityManager::adoptSceneEntity(Entity *entity) {
+	if (!entity)
+		return;
+
+	insertSceneEntity(entity);
+}
+
+void EntityManager::reinsertSceneEntity(Entity *entity) {
+	if (!entity)
+		return;
+
+	for (uint i = 0; i < _sceneEntities.size(); ++i) {
+		if (_sceneEntities[i] != entity)
+			continue;
+
+		_sceneEntities.remove_at(i);
+		break;
+	}
+
+	insertSceneEntity(entity);
+}
+
+void EntityManager::insertSceneEntity(Entity *entity) {
+	uint insertIndex = 0;
+	while (insertIndex < _sceneEntities.size() && _sceneEntities[insertIndex]->getZ() >= entity->getZ())
+		++insertIndex;
+	_sceneEntities.insert_at(insertIndex, entity);
+}
+
+} // End of namespace Harvester

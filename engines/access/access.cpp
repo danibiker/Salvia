@@ -1,0 +1,702 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/scummsys.h"
+#include "common/config-manager.h"
+#include "common/debug-channels.h"
+#include "common/events.h"
+#include "engines/util.h"
+#include "graphics/scaler.h"
+#include "graphics/thumbnail.h"
+#include "access/access.h"
+#include "access/debugger.h"
+
+namespace Access {
+
+AccessEngine::AccessEngine(OSystem *syst, const AccessGameDescription *gameDesc)
+	: _gameDescription(gameDesc), Engine(syst), _randomSource("Access"),
+	  _useItem(_flags[99]), _startup(_flags[170]), _manScaleOff(_flags[172]), _pictureTaken(_flags[176]) {
+	// Set up debug channels
+
+	_aboutBox = nullptr;
+	_animation = nullptr;
+	_bubbleBox = nullptr;
+	_char = nullptr;
+	_events = nullptr;
+	_files = nullptr;
+	_invBox = nullptr;
+	_inventory = nullptr;
+	_helpBox = nullptr;
+	_midi = nullptr;
+	_player = nullptr;
+	_curPlayer = nullptr;
+	_res = nullptr;
+	_room = nullptr;
+	_screen = nullptr;
+	_scripts = nullptr;
+	_sound = nullptr;
+	_travelBox = nullptr;
+	_video = nullptr;
+
+	_destIn = nullptr;
+	_current = &_buffer2;
+	_mouseMode = 0;
+	_playerDataCount = 0;
+	_currentMan = 0;
+	_currentManOld = -1;
+	_converseMode = 0;
+	_startup = 0;
+	_currentCharFlag = false;
+	_boxSelect = false;
+	_scale = 0;
+	_scaleH1 = _scaleH2 = 0;
+	_scaleN1 = 0;
+	_scaleT1 = 0;
+	_scaleMaxY = 0;
+	_scaleI = 0;
+	_scrollCol = _scrollRow = 0;
+	_scrollX = _scrollY = 0;
+	_canSaveLoad = false;
+	_establish = nullptr;
+
+	_conversation = 0;
+	_newTime = 0;
+	_newDate = 0;
+	Common::fill(&_objectsTable[0], &_objectsTable[128], (SpriteResource *)nullptr);
+	Common::fill(&_establishTable[0], &_establishTable[128], false);
+	Common::fill(&_flags[0], &_flags[256], 0);
+	_establishFlag = false;
+	_establishMode = 0;
+	_establishGroup = 0;
+	_establishCtrlTblOfs = 0;
+	_lastTime = g_system->getMillis();
+	_curTime = 0;
+	_narateFile = 0;
+	_txtPages = 0;
+	_sndSubFile = 0;
+	_loadSaveSlot = -1;
+	_vidX = _vidY = 0;
+	_cheatFl = false;
+	_restartFl = false;
+	_hotspotFl = false;
+	_printEnd = 0;
+	ARRAYCLEAR(_objectsTable);
+	_clearSummaryFlag = false;
+
+	ARRAYCLEAR(_travel);
+	_startTravelItem = _startTravelBox = 0;
+	ARRAYCLEAR(_ask);
+	ARRAYCLEAR(_asked);
+	_startAboutItem = _startAboutBox = 0;
+	_bcnt = 0;
+	_boxDataStart = 0;
+	_boxDataEnd = false;
+	_boxSelectY = 0;
+	_boxSelectYOld = -1;
+	_numLines = 0;
+	_pictureTaken = 0;
+
+	_textFlag = true;
+	_exitBox = false;
+
+	_icons = nullptr;
+	_stilScaleOff = 0;
+
+	ARRAYCLEAR(_countTbl);
+
+	_lang = Common::UNK_LANG;
+}
+
+AccessEngine::~AccessEngine() {
+	delete _animation;
+	delete _bubbleBox;
+	delete _helpBox;
+	delete _travelBox;
+	delete _invBox;
+	delete _aboutBox;
+	delete _char;
+	delete _events;
+	delete _files;
+	delete _inventory;
+	delete _midi;
+	delete _player;
+	delete _res;
+	delete _room;
+	delete _screen;
+	delete _scripts;
+	delete _sound;
+	delete _video;
+	delete _icons;
+
+	freeCells();
+	delete _establish;
+}
+
+void AccessEngine::setVGA() {
+	initGraphics(getScreenWidth(), getScreenHeight());
+}
+
+void AccessEngine::initialize() {
+	if (isCD()) {
+		const Common::FSNode gameDataDir(ConfMan.getPath("path"));
+		// The CD version contains two versions of the game.
+		// - The MCGA version, in the CDROM folder
+		// - The VESA version, in the TDROM folder
+		// We use the hires version.
+
+		// Use forward slash for the folders separator, as documented for SearchSet::addSubDirectoryMatching()
+		const Common::String subfolderMatchPrefix = "tdrom/";
+
+		for (int idx = 0; idx < 15; ++idx) {
+			Common::String folder = subfolderMatchPrefix + ((idx == 0) ? "game" : Common::String::format("chap%.2d", idx));
+			SearchMan.addSubDirectoryMatching(gameDataDir, folder);
+		}
+	}
+
+	// Create sub-objects of the engine
+	_animation = new AnimationManager(this);
+	_bubbleBox = new BubbleBox(this, kBoxTypeNormal, 64, 32, 130, 122, 0, 0, 0, 0, "");
+	if (getGameID() == kGameMartianMemorandum) {
+		// Note: add 1 more pixel to width and height to get the right box size.
+		_helpBox = new BubbleBox(this, kBoxTypeList, 64, 24, 147, 123, 1, 32, 2, 76, "HELP");
+		_travelBox = new BubbleBox(this, kBoxTypeList, 64, 32, 195, 123, 1, 24, 2, 74, "TRAVEL");
+		_invBox = new BubbleBox(this, kBoxTypeList, 64, 32, 147, 123, 1, 32, 2, 76, "INVENTORY");
+		_aboutBox = new BubbleBox(this, kBoxTypeList, 64, 32, 195, 123, 1, 32, 2, 76, "ASK ABOUT");
+	} else {
+		_helpBox = nullptr;
+		_travelBox = nullptr;
+		_invBox = nullptr;
+		_aboutBox = nullptr;
+	}
+	_char = new CharManager(this);
+	_events = new EventsManager(this);
+	_files = new FileManager(this);
+	_player = Player::init(this);
+	_screen = new Screen(this);
+	_sound = new SoundManager(this, _mixer);
+	_midi = new MusicManagerMIDI(this);
+	_curPlayer = _player;
+
+	syncSoundSettings();
+	setTotalPlayTime(0);
+
+	setDebugger(Debugger::init(this));
+	_buffer1.create(g_system->getWidth() + TILE_WIDTH, g_system->getHeight());
+	_buffer2.create(g_system->getWidth(), g_system->getHeight());
+	_vidBuf.create(160, 101);
+
+	// If requested, load a savegame instead of showing the intro
+	if (ConfMan.hasKey("save_slot")) {
+		int saveSlot = ConfMan.getInt("save_slot");
+		if (saveSlot >= 0 && saveSlot <= 999)
+			_loadSaveSlot = saveSlot;
+	}
+}
+
+const SpriteResource *AccessEngine::getIcons() {
+	if (!_icons) {
+		Resource *iconData = _files->loadRawFile(getIconPath());
+		_icons = new SpriteResource(this, iconData);
+		delete iconData;
+	}
+	return _icons;
+}
+
+Common::Error AccessEngine::run() {
+	if (ConfMan.hasKey("language"))
+		_lang = Common::parseLanguage(ConfMan.get("language"));
+	else
+		_lang = getLanguage();
+
+	_res = Resources::init(this);
+	Common::U32String errorMessage;
+	if (!_res->load(errorMessage)) {
+		GUIErrorMessage(errorMessage);
+		return Common::kNoError;
+	}
+
+	setVGA();
+	initialize();
+
+	initObjects();
+	setupGame();
+
+	playGame();
+
+	return Common::kNoError;
+}
+
+int AccessEngine::getRandomNumber(int maxNumber) {
+	return _randomSource.getRandomNumber(maxNumber);
+}
+
+void AccessEngine::loadCells(const Common::Array<CellIdent> &cells) {
+	for (const auto &cell : cells) {
+		assert(_objectsTable[cell._cell] == nullptr); // ensure no leaks
+		_objectsTable[cell._cell] = new SpriteResource(this, cell._fileNum, cell._subFile);
+	}
+}
+
+void AccessEngine::freeCells() {
+	for (int i = 0; i < ARRAYSIZE(_objectsTable); ++i) {
+		delete _objectsTable[i];
+		_objectsTable[i] = nullptr;
+	}
+}
+
+void AccessEngine::speakText(BaseSurface *s, const Common::String &msg) {
+	Common::String lines = msg;
+	Common::String line;
+	int curPage = 0;
+	int soundsLeft = 0;
+
+	while (!shouldQuit()) {
+		soundsLeft = _countTbl[curPage];
+		_events->zeroKeysActions();
+
+		int width = 0;
+		bool lastLine = _fonts._font2->getLine(lines, s->_maxChars * 6, line, width);
+
+		// Set font colors
+		Font::_fontColors[0] = 0;
+		Font::_fontColors[1] = 28;
+		Font::_fontColors[2] = 29;
+		Font::_fontColors[3] = 30;
+
+		_fonts._font2->drawString(s, line, s->_printOrg);
+		s->_printOrg = Common::Point(s->_printStart.x, s->_printOrg.y + 9);
+
+		if ((s->_printOrg.y > _printEnd) && (!lastLine)) {
+			_events->clearEvents();
+			while (!shouldQuit()) {
+				_sound->freeSounds();
+				_sound->loadSoundTable(0, _narateFile + 99, _sndSubFile);
+				_sound->playSound(0);
+
+				while(_sound->isSFXPlaying() && !shouldQuit()) {
+					_events->pollEvents();
+					if (_events->peekAction() == kActionSkip) {
+						Common::CustomEventType action;
+						_events->getAction(action);
+						_sound->stopSound();
+					}
+				}
+
+				_scripts->cmdFreeSound();
+
+				if (_events->isKeyActionMousePressed()) {
+					_sndSubFile += soundsLeft;
+					break;
+				} else {
+					++_sndSubFile;
+					--soundsLeft;
+					if (soundsLeft == 0)
+						break;
+					_events->clearEvents();
+				}
+			}
+
+			s->copyBuffer(&_buffer2);
+			s->_printOrg.y = s->_printStart.y;
+			++curPage;
+			soundsLeft = _countTbl[curPage];
+		}
+
+		if (lastLine)
+			break;
+	}
+
+	while (soundsLeft) {
+		_sound->freeSounds();
+		_sound->loadAndAddSound(_narateFile + 99, _sndSubFile);
+		_sound->playSound(0);
+
+		while(_sound->isSFXPlaying() && !shouldQuit()) {
+			_events->pollEvents();
+			if (_events->peekAction() == kActionSkip) {
+				Common::CustomEventType action;
+				_events->getAction(action);
+				_sound->stopSound();
+			}
+		}
+
+		_scripts->cmdFreeSound();
+
+		if (_events->_leftButton) {
+			_events->debounceLeft();
+			_sndSubFile += soundsLeft;
+			break;
+		} else if (_events->isKeyActionPending()) {
+			_sndSubFile += soundsLeft;
+			break;
+		} else {
+			++_sndSubFile;
+			--soundsLeft;
+		}
+	}
+}
+
+void AccessEngine::printText(BaseSurface *s, const Common::String &msg) {
+	Common::String lines = msg;
+	Common::String line;
+	int width = 0;
+
+	for (;;) {
+		bool lastLine = _fonts._font2->getLine(lines, s->_maxChars * 6, line, width);
+
+		// Set font colors
+		Font::_fontColors[0] = 0;
+		Font::_fontColors[1] = 28;
+		Font::_fontColors[2] = 29;
+		Font::_fontColors[3] = 30;
+		_fonts._font2->drawString(s, line, s->_printOrg);
+
+		s->_printOrg = Common::Point(s->_printStart.x, s->_printOrg.y + 9);
+
+		if (s->_printOrg.y >_printEnd && !lastLine) {
+			_events->waitKeyActionMouse();
+			s->copyBuffer(&_buffer2);
+			s->_printOrg.y = s->_printStart.y;
+		}
+
+		if (lastLine)
+			break;
+	}
+	_events->waitKeyActionMouse();
+}
+
+void AccessEngine::addHotspotHighlights() {
+	// find the reddest color in the palette.
+	byte palbuf[Graphics::PALETTE_SIZE];
+	_screen->getPalette(palbuf);
+	Graphics::PaletteLookup lookup;
+	lookup.setPalette(palbuf, 256);
+	byte color = lookup.findBestColor(255, 0, 0);
+	for (const auto &block : _room->_plotter._blocks) {
+		_screen->BaseSurface::drawBox(block.left, block.top, block.right, block.bottom, color);
+	}
+}
+
+void AccessEngine::plotList() {
+	_player->calcPlayer();
+	plotList1();
+}
+
+void AccessEngine::plotList1() {
+	for (uint idx = 0; idx < _images.size(); ++idx) {
+		ImageEntry &ie = _images[idx];
+
+		bool imgUnscaled = (ie._flags & IMGFLAG_UNSCALED) != 0;
+		Common::Point pt = ie._position - _screen->_bufferStart;
+		const SpriteResource *sprites = ie._spritesPtr;
+		const SpriteFrame *frame = sprites->getFrame(ie._frameNumber);
+
+		Common::Rect bounds(pt.x, pt.y, pt.x + frame->w, pt.y + frame->h);
+		if (!imgUnscaled) {
+			int sizex = ie._sizeOverride.x ? ie._sizeOverride.x : _screen->_scaleTable1[frame->w];
+			int sizey = ie._sizeOverride.y ? ie._sizeOverride.y : _screen->_scaleTable1[frame->h];
+			bounds.setWidth(sizex);
+			bounds.setHeight(sizey);
+		}
+
+		// Make a copy - some of the drawing methods I've adapted need the full
+		// scaled dimensions on-screen, and handle clipping themselves
+		const Common::Rect destBounds = bounds;
+
+		if (_buffer2.clip(bounds)) {
+			ie._flags |= IMGFLAG_CROPPED;
+		} else {
+			ie._flags &= ~IMGFLAG_CROPPED;
+			if (_buffer2._leftSkip != 0 ||  _buffer2._rightSkip != 0
+				|| _buffer2._topSkip != 0 || _buffer2._bottomSkip != 0)
+				ie._flags |= IMGFLAG_CROPPED;
+
+			_newRects.push_back(bounds);
+
+			if (!imgUnscaled) {
+				int scale = ie._scaleOverride ? ie._scaleOverride : _scale;
+				_buffer2._rightSkip /= scale;
+				bounds.setWidth(bounds.width() / scale);
+
+				if (ie._flags & IMGFLAG_BACKWARDS) {
+					_buffer2.sPlotB(frame, destBounds);
+				} else {
+					_buffer2.sPlotF(frame, destBounds);
+				}
+			} else {
+				if (ie._flags & IMGFLAG_BACKWARDS) {
+					_buffer2.plotB(frame, Common::Point(destBounds.left, destBounds.top));
+				} else {
+					_buffer2.plotF(frame, Common::Point(destBounds.left, destBounds.top));
+				}
+			}
+		}
+
+		ie._flags |= IMGFLAG_DRAWN;
+	}
+}
+
+void AccessEngine::clearPlotImagesIn(int16 x, int16 y, int16 w, int16 h) {
+	const Common::Rect toClear = Common::Rect(Common::Point(x, y), w, h);
+	for (int idx = 0; idx < (int)_images.size(); idx++) {
+		const SpriteFrame *frame = _images[idx]._spritesPtr->getFrame(_images[idx]._frameNumber);
+		Common::Point topLeft = _images[idx]._position;
+		Common::Rect imgRect(topLeft, frame->w, frame->h);
+		if (toClear.intersects(imgRect)) {
+			_images.remove_at(idx);
+			_screen->addDirtyRect(imgRect);
+			idx--;
+		}
+	}
+}
+
+void AccessEngine::clearPlotVidsIn(int16 x, int16 y, int16 w, int16 h) {
+	warning("TODO: Implement AccessEngine::clearPlotVidsIn");
+}
+
+void AccessEngine::copyBlocks() {
+	// Copy the block list from the previous frame
+	for (const auto &rect : _oldRects) {
+		_screen->copyBlock(&_buffer2, rect);
+	}
+
+	copyRects();
+}
+
+void AccessEngine::copyRects() {
+	_oldRects.clear();
+	for (const auto &rect : _newRects) {
+		_screen->copyBlock(&_buffer2, rect);
+		_oldRects.push_back(rect);
+	}
+}
+
+void AccessEngine::drawOverlays() {
+	if (_hotspotFl)
+		addHotspotHighlights();
+}
+
+void AccessEngine::copyBF1BF2() {
+	_buffer2.copyRectToSurface(_buffer1, 0, 0,
+		Common::Rect(_scrollX, _scrollY,
+		_scrollX + _screen->_vWindowBytesWide,
+		_scrollY + _screen->_vWindowLinesTall));
+}
+
+void AccessEngine::copyBF2Vid() {
+	_screen->blitFrom(_buffer2,
+		Common::Rect(0, 0, _screen->_vWindowBytesWide, _screen->_vWindowLinesTall),
+		Common::Point(_screen->_windowXAdd, _screen->_windowYAdd));
+}
+
+void AccessEngine::playVideo(int videoNum, const Common::Point &pt) {
+	_video->setVideo(_screen, pt, FileIdent(96, videoNum), 10);
+
+	while (!shouldQuit() && !_video->_videoEnd) {
+		_video->playVideo();
+		_events->pollEventsAndWait();
+	}
+}
+
+void AccessEngine::freeChar() {
+	_scripts->freeScriptData();
+	_animation->clearTimers();
+	_animation->freeAnimationData();
+	_player->freeSprites();
+}
+
+void AccessEngine::syncSoundSettings() {
+	Engine::syncSoundSettings();
+	_midi->syncVolume();
+	_sound->syncVolume();
+}
+
+Common::Error AccessEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
+	Common::Serializer s(nullptr, stream);
+	return synchronize(s);
+}
+
+Common::Error AccessEngine::loadGameStream(Common::SeekableReadStream *stream) {
+	Common::Serializer s(stream, nullptr);
+	Common::Error result = synchronize(s);
+
+	// Set extra post-load state
+	_room->_function = FN_CLEAR1;
+	_timers._timersSavedFlag = false;
+	_events->clearEvents();
+
+	return result;
+}
+
+Common::Error AccessEngine::loadGameState(int slot) {
+	Common::InSaveFile *saveFile = g_system->getSavefileManager()->openForLoading(
+		getSaveStateName(slot));
+	if (!saveFile)
+		return Common::kReadingFailed;
+
+	Common::Serializer s(saveFile, nullptr);
+
+	// Load the savaegame header
+	AccessSavegameHeader header;
+	if (!readSavegameHeader(saveFile, header)) {
+		delete saveFile;
+		return Engine::loadGameState(slot);
+	}
+
+	// Load most of the savegame data
+	synchronize(s);
+	delete saveFile;
+
+	// Set total playTime (ms) from header
+	setTotalPlayTime(header._totalPlayTime * 1000);
+
+	// Set extra post-load state
+	_room->_function = FN_CLEAR1;
+	_timers._timersSavedFlag = false;
+	_events->clearEvents();
+
+	return Common::kNoError;
+}
+
+
+bool AccessEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+	return _canSaveLoad;
+}
+
+bool AccessEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	return _canSaveLoad;
+}
+
+Common::Error AccessEngine::synchronize(Common::Serializer &s) {
+	s.syncAsUint16LE(_conversation);
+	s.syncAsUint16LE(_currentMan);
+	s.syncAsUint32LE(_newTime);
+	s.syncAsUint32LE(_newDate);
+
+	for (int i = 0; i < 256; ++i)
+		s.syncAsUint16LE(_flags[i]);
+	for (int i = 0; i < 100; ++i)
+		s.syncAsByte(_establishTable[i]);
+
+	// Synchronize sub-objects
+	_timers.synchronize(s);
+	_inventory->synchronize(s);
+	_player->synchronize(s);
+
+	return Common::kNoError;
+}
+
+const char *const SAVEGAME_STR = "ACCESS";
+#define SAVEGAME_STR_SIZE 6
+
+
+bool AccessEngine::readSavegameHeader(Common::InSaveFile *in, AccessSavegameHeader &header, bool skipThumbnail) {
+	char saveIdentBuffer[SAVEGAME_STR_SIZE + 1];
+
+	// Validate the header Id
+	in->read(saveIdentBuffer, SAVEGAME_STR_SIZE + 1);
+	if (strncmp(saveIdentBuffer, SAVEGAME_STR, SAVEGAME_STR_SIZE))
+		return false;
+
+	// This legacy header format doesn't include _totalPlayTime
+	header._totalPlayTime = 0;
+
+	header._version = in->readByte();
+	if (header._version > ACCESS_SAVEGAME_VERSION)
+		return false;
+
+	// Read in the string
+	header._saveName = in->readString();
+
+	// Get the thumbnail
+	if (!Graphics::loadThumbnail(*in, header._thumbnail, skipThumbnail)) {
+		return false;
+	}
+
+	// Read in save date/time
+	header._year = in->readSint16LE();
+	header._month = in->readSint16LE();
+	header._day = in->readSint16LE();
+	header._hour = in->readSint16LE();
+	header._minute = in->readSint16LE();
+
+	// Read Totalframes
+	header._totalFrames = in->readUint32LE();
+
+	return true;
+}
+
+bool AccessEngine::shouldQuitOrRestart() {
+	return shouldQuit() || _restartFl;
+}
+
+static const AccessActionCode AMAZON_ACTION_CODES[] = {
+	{ kActionLook, 1 },
+	{ kActionUse, 2 },
+	{ kActionTake, 3 },
+	{ kActionInventory, 4 },
+	{ kActionClimb, 5 },
+	{ kActionTalk, 6 },
+	{ kActionWalk, 7 },
+	{ kActionHelp, 8 },
+	{ kActionSaveLoad, -2 },
+	{ kActionNone, -1 },
+};
+
+static const AccessActionCode MARTIAN_ACTION_CODES[] = {
+	{ kActionLook, 0 },
+	{ kActionOpen, 1 },
+	{ kActionMove, 2 },
+	{ kActionTake, 3 },
+	{ kActionUse, 4 },
+	{ kActionWalk, 5 },
+	{ kActionTalk, 6 },
+	{ kActionTravel, 7 },
+	{ kActionHelp, 8 },
+	{ kActionSaveLoad, -2 },
+	{ kActionNone, -1 },
+};
+
+static const AccessActionCode NOCTROPOLIS_ACTION_CODES[] = {
+	{ kActionLook,      0, },
+	{ kActionOpen,      1, },
+	{ kActionMove,      2, },
+	{ kActionTake,      3, },
+	{ kActionTalk,      4, },
+	{ kActionUse,       5, },
+	{ kActionWalk,      6, },
+	{ kActionInventory, 7, },
+	{ kActionTravel,    8, },
+	{ kActionOptions,   9, },
+	{ kActionSaveLoad,  10 },
+	{ kActionNone, -1 },
+};
+
+const AccessActionCode *AccessEngine::getActionCodes() {
+	switch (getGameID()) {
+	case kGameMartianMemorandum: return MARTIAN_ACTION_CODES;
+	case kGameAmazon: 			 return AMAZON_ACTION_CODES;
+	case kGameNoctropolis: 		 return NOCTROPOLIS_ACTION_CODES;
+	default: error("Unsupported game ID for action codes: %d", getGameID());
+	}
+}
+
+} // End of namespace Access

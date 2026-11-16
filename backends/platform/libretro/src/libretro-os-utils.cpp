@@ -1,0 +1,346 @@
+/* Copyright (C) 2023 Giovanni Cascione <ing.cascione@gmail.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+#define FORBIDDEN_SYMBOL_ALLOW_ALL
+
+#include <features/features_cpu.h>
+
+#include "common/tokenizer.h"
+#include "common/config-manager.h"
+#include "common/translation.h"
+#include "base/commandLine.h"
+#include "base/plugins.h"
+#include "engines/game.h"
+#include "engines/metaengine.h"
+
+#include "backends/platform/libretro/include/libretro-defs.h"
+#include "backends/platform/libretro/include/libretro-core.h"
+#include "backends/platform/libretro/include/libretro-os.h"
+#include "backends/platform/libretro/include/libretro-options-widget.h"
+#include "backends/platform/libretro/include/libretro-fs.h"
+
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
+void OSystem_libretro::getTimeAndDate(TimeDate &t, bool skipRecord) const {
+	uint32 curTime = (uint32)(cpu_features_get_time_usec() / 1000000);
+
+#define YEAR0 1900
+#define EPOCH_YR 1970
+#define SECS_DAY (24L * 60L * 60L)
+#define LEAPYEAR(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+#define YEARSIZE(year) (LEAPYEAR(year) ? 366 : 365)
+	const int _ytab[2][12] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}, {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
+	int year = EPOCH_YR;
+	unsigned long dayclock = (unsigned long)curTime % SECS_DAY;
+	unsigned long dayno = (unsigned long)curTime / SECS_DAY;
+	t.tm_sec = dayclock % 60;
+	t.tm_min = (dayclock % 3600) / 60;
+	t.tm_hour = dayclock / 3600;
+	t.tm_wday = (dayno + 4) % 7; /* day 0 was a thursday */
+	while (dayno >= YEARSIZE(year)) {
+		dayno -= YEARSIZE(year);
+		year++;
+	}
+	t.tm_year = year - YEAR0;
+	t.tm_mon = 0;
+	while (dayno >= _ytab[LEAPYEAR(year)][t.tm_mon]) {
+		dayno -= _ytab[LEAPYEAR(year)][t.tm_mon];
+		t.tm_mon++;
+	}
+	t.tm_mday = dayno + 1;
+}
+
+Common::Path OSystem_libretro::getDefaultConfigFileName() {
+	if (s_systemDir.empty())
+		return Common::Path("scummvm.ini");
+	else
+		return Common::Path(s_systemDir).appendComponent("scummvm.ini");
+}
+
+void OSystem_libretro::logMessage(LogMessageType::Type type, const char *message) {
+	retro_log_level loglevel = RETRO_LOG_INFO;
+	switch (type) {
+	case LogMessageType::kDebug:
+		loglevel = RETRO_LOG_DEBUG;
+		break;
+	case LogMessageType::kWarning:
+		loglevel = RETRO_LOG_WARN;
+		break;
+	case LogMessageType::kError:
+		loglevel = RETRO_LOG_ERROR;
+		break;
+	}
+
+	if (retro_log_cb)
+		retro_log_cb(loglevel, "%s\n", message);
+}
+
+
+bool OSystem_libretro::parseGameName(const Common::String &gameName, Common::String &engineId,
+                                     Common::String &gameId) {
+	Common::StringTokenizer tokenizer(gameName, ":");
+	Common::String token1, token2;
+
+	if (!tokenizer.empty()) {
+		token1 = tokenizer.nextToken();
+	}
+
+	if (!tokenizer.empty()) {
+		token2 = tokenizer.nextToken();
+	}
+
+	if (!tokenizer.empty()) {
+		return false; // Stray colon
+	}
+
+	if (!token1.empty() && !token2.empty()) {
+		engineId = token1;
+		gameId = token2;
+		return true;
+	} else if (!token1.empty()) {
+		engineId.clear();
+		gameId = token1;
+		return true;
+	}
+
+	return false;
+}
+
+bool OSystem_libretro::openUrl(const Common::String &url) {
+#ifdef EMSCRIPTEN
+	// Called on the emu thread; window.open() only exists on the main thread.
+	static char s_url[2048];
+	Common::strlcpy(s_url, url.c_str(), sizeof(s_url));
+	MAIN_THREAD_ASYNC_EM_ASM({ window.open(UTF8ToString($0), "_blank"); }, s_url);
+	return true;
+#else
+	return false;
+#endif
+}
+
+int OSystem_libretro::testGame(const char *filedata, bool autodetect) {
+	Common::String game_id;
+	Common::String engine_id;
+	Common::String data = filedata;
+	int res = TEST_GAME_KO_NOT_FOUND;
+
+	PluginManager::instance().init();
+	PluginManager::instance().loadAllPlugins();
+	PluginManager::instance().loadDetectionPlugin();
+
+	if (autodetect) {
+		Common::FSNode dir = Common::FSNode(Common::Path(data));
+		Common::FSList files;
+		dir.getChildren(files, Common::FSNode::kListAll);
+
+		DetectionResults detectionResults = EngineMan.detectGames(files);
+		if (!detectionResults.listRecognizedGames().empty()) {
+			res = TEST_GAME_OK_ID_AUTODETECTED;
+		}
+		if (detectionResults.foundUnknownGames())
+			logMessage(LogMessageType::kWarning, detectionResults.generateUnknownGameReport(false, 80).encode().c_str());
+
+	} else {
+
+		ConfMan.loadDefaultConfigFile(getDefaultConfigFileName().toString().c_str());
+		if (ConfMan.hasGameDomain(data)) {
+			res = TEST_GAME_OK_TARGET_FOUND;
+		} else {
+			parseGameName(data, engine_id, game_id);
+
+			QualifiedGameList games = EngineMan.findGamesMatching(engine_id, game_id);
+			if (games.size() == 1) {
+				res = TEST_GAME_OK_ID_FOUND;
+			} else if (games.size() > 1) {
+				res = TEST_GAME_KO_MULTIPLE_RESULTS;
+			}
+		}
+	}
+
+	PluginManager::destroy();
+	return res;
+}
+
+GUI::OptionsContainerWidget *OSystem_libretro::buildBackendOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &target) const {
+	if (target.equalsIgnoreCase(Common::ConfigManager::kApplicationDomain))
+		return new LibretroOptionsWidget(boss, name, target);
+	else
+		return nullptr;
+
+}
+
+bool OSystem_libretro::checkPathSetting(const char *setting, Common::String const &defaultPath, bool isDirectory) {
+	Common::String setPath;
+	if (ConfMan.hasKey(setting))
+		setPath = Common::Path::fromConfig(ConfMan.get(setting)).toString();
+	if (setPath.empty() || !(isDirectory ? LibRetroFilesystemNode(setPath).isDirectory() : LibRetroFilesystemNode(setPath).exists()))
+		ConfMan.removeKey(setting, Common::ConfigManager::kApplicationDomain);
+
+	if (! ConfMan.hasKey(setting))
+		if (defaultPath.empty())
+			return false;
+		else
+			ConfMan.set(setting, defaultPath);
+	return true;
+}
+
+void OSystem_libretro::setLibretroDir(const char *path, Common::String &var) {
+	var = Common::String(path ? path : "");
+	if (! var.empty())
+		if (! LibRetroFilesystemNode(var).isDirectory())
+			var.clear();
+	return;
+}
+
+void OSystem_libretro::applyBackendSettings() {
+	/* ScummVM paths checks at startup and on settings applied */
+	Common::String s_homeDir(LibRetroFilesystemNode::getDefaultDir());
+	Common::String s_themeDir(s_systemDir + "/" + SCUMMVM_SYSTEM_SUBDIR + "/" + SCUMMVM_THEME_SUBDIR);
+	Common::String s_extraDir(s_systemDir + "/" + SCUMMVM_SYSTEM_SUBDIR + "/" + SCUMMVM_EXTRA_SUBDIR);
+	Common::String s_soundfontPath(s_extraDir + "/" + DEFAULT_SOUNDFONT_FILENAME);
+
+	if (! LibRetroFilesystemNode(s_themeDir).isDirectory())
+		s_themeDir.clear();
+	if (! LibRetroFilesystemNode(s_extraDir).isDirectory())
+		s_extraDir.clear();
+	if (! LibRetroFilesystemNode(s_soundfontPath).exists())
+		s_soundfontPath.clear();
+
+	//Register default paths
+	if (! s_homeDir.empty()) {
+		ConfMan.registerDefault("browser_lastpath", s_homeDir);
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_DEBUG, "Default browser last path set to: %s\n", s_homeDir.c_str());
+	}
+	if (! s_saveDir.empty()) {
+		ConfMan.registerDefault("savepath", s_saveDir);
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_DEBUG, "Default save path set to: %s\n", s_saveDir.c_str());
+	}
+
+	//Check current path settings
+	if (!checkPathSetting("savepath", s_saveDir)) {
+		ConfMan.setAndFlush("savepath", s_systemDir);
+		retro_osd_notification("ScummVM save folder not found.", RETRO_LOG_WARN);
+	}
+	if (!checkPathSetting("themepath", s_themeDir))
+		retro_osd_notification("ScummVM theme folder not found.", RETRO_LOG_WARN);
+	if (!checkPathSetting("extrapath", s_extraDir))
+		retro_osd_notification("ScummVM extra folder not found. Some engines/features (e.g. Virtual Keyboard) will not work without relevant datafiles.", RETRO_LOG_WARN);
+	checkPathSetting("soundfont", s_soundfontPath, false);
+	{
+		Common::String lastPath;
+		if (ConfMan.hasKey("browser_lastpath"))
+			lastPath = Common::Path::fromConfig(ConfMan.get("browser_lastpath")).toString();
+
+		if (lastPath.empty() || !LibRetroFilesystemNode::isBrowserLastPathCompatible(lastPath)) {
+			if (s_homeDir.empty())
+				ConfMan.removeKey("browser_lastpath", Common::ConfigManager::kApplicationDomain);
+			else
+				ConfMan.setPath("browser_lastpath", Common::Path::fromConfig(s_homeDir));
+		}
+	}
+	checkPathSetting("libretro_playlist_path", s_playlistDir.empty() ? s_systemDir : s_playlistDir);
+	checkPathSetting("iconspath", "");
+}
+
+static const char *const helpTabs[] = {
+	_s("Libretro playlist"),
+	"",
+	_s(
+	    "## Libretro playlists for ScummVM core\n"
+	    "Playlists used in Libretro frontends (e.g. Retroarch) are plain text lists used to directly launch a game with a specific core from the user interface. Those lists are structured to pass to the core the path of a specific content file to be loaded (e.g. ROM).\n"
+	    "\n"
+	    "ScummVM core can accept as content the playlist-provided path to any of the files inside a valid game folder, the detection system will try to autodetect the game from the content file parent folder and run the game with default ScummVM options.\n"
+	    "\n"
+	    "The core also supports dedicated per game **hook** plain text files with **." CORE_EXTENSIONS "** extension, which can be used as target in the playlist to specify one of the following ScummVM identifiers:\n"
+	    "\n"
+	    "  - **target**: this is the game identifier of each entry in the internal Launcher list, hence corresponding to entries in ScummVM configuration file (e.g. 'scummvm.ini'). In this case the game must be added from ScummVM GUI first, and the hook files can be placed anywhere, as the path for the game files is already part of the target configuration. The game will be launched with the options set in ScummVM\n"
+	    "\n"
+	    "  - **game ID**: this is a unique identifier for any game supported by ScummVM. This identifier is hard coded in each engine source and can be subject to change, hence it is **not a recommended choice**. A list of current game IDs is available [here](https://scummvm.org/compatibility). In this case the game will be launched even if not added in ScummVM Launcher, the hook file must be placed in the game folder and the game will be launched with default ScummVM options\n"
+	    "\n"
+	    "## Creating ScummVM core playlist\n"
+	    "The recommended way to generate a ScummVM core playlist is from within the ScummVM Launcher (i.e. the interal core GUI) with the Playlist Generator tool. Both needed hook files and the playlist are created automatically, based on ScummVM Launcher games list.\n"
+	    "\n"
+	    " - Load the core from RetroArch and start it to reach the ScummVM GUI (i.e. the Launcher)\n"
+	    "\n"
+	    " - Add games to the list as required using the GUI buttons ('Mass Add' available).\n"
+	    "\n"
+	    " - Select **Global Options** and then the **Backend** tab.\n"
+	    "\n"
+	    " - Check or select the path of frontend playlists. A '" CORE_NAME ".lpl' file will be created or overwritten in there.\n"
+	    "\n"
+	    " - Check the 'Hooks location' setting, to have one '." CORE_EXTENSIONS "' in each game folder or all of them in a '" COMMON_HOOKS_FOLDER "' folder in the 'save' path.\n"
+	    "\n"
+	    " - Check the 'Playlist version' setting. JSON format should be selected, 6-lines format is deprecated and provided for backwards compatibility only.\n"
+	    "\n"
+	    " - Select the 'Clear existing hooks' checkbox to remove any existing '." CORE_EXTENSIONS "' file in the working folders.\n"
+	    "\n"
+	    " - Press the 'Generate playlist' button.\n"
+	    "\n"
+	    "Operation status will be shown in the same dialog, while details will be given in frontend logs."
+	),
+
+#ifdef ANDROID
+	_s("Android storage"),
+	"",
+	_s(
+	    "## Android storage access\n"
+	    "On Android modern versions apps can only access folders that have been explicitly authorized by the user through the system file picker (Storage Access Framework, SAF).\n"
+	    "\n"
+	    "The core can browse both the standard local filesystem and the folders authorized through the frontend (e.g. RetroArch). The starting location of the file browser is controlled by the **Browsing mode** core option.\n"
+	    "\n"
+	    "## Browsing mode\n"
+	    "This core option is available in the frontend core options (e.g. RetroArch 'Quick Menu > Core Options > System').\n"
+	    "\n"
+	    "  - **Authorized storage**: the file browser starts from a virtual root listing only the folders authorized through the frontend. This is the default on Android.\n"
+	    "\n"
+	    "  - **Local filesystem**: the file browser starts from the standard local path.\n"
+	    "\n"
+	    "## Authorizing folders\n"
+	    "  - Open the frontend file browser (e.g. in RetroArch, 'Load Content') and use the option to open/add a folder; the system file picker will appear.\n"
+	    "\n"
+	    "  - Grant access to the folder(s) that contain your games and exit the file browser (no need to actually select any content at this time). The authorization is persistent across reboots.\n"
+	    "\n"
+	    "  - Start the core; the authorized folders will be listed by the ScummVM file browser when **Browsing mode** is set to 'Authorized storage'.\n"
+	    "\n"
+	    "## Notes\n"
+	    "  - The authorized folder list is read when the core starts. If you authorize new folders while the core is running, restart (reload) the core to make them available.\n"
+	    "\n"
+	    "  - If **Browsing mode** is set to 'Authorized storage' but no folders have been authorized, the core falls back to the local filesystem and shows a notification.\n"
+	),
+#endif
+
+	0 // End of list
+};
+
+const char *const *OSystem_libretro::buildHelpDialogData() {
+	return helpTabs;
+}
+
+Common::String OSystem_libretro::getSaveDir(void) {
+	return s_saveDir;
+}
+
+void OSystem_libretro::addSysArchivesToSearchSet(Common::SearchSet &s, int priority) {
+	if (!s_systemDir.empty())
+		s.add("systemDir", new Common::FSDirectory(Common::FSNode(Common::Path(s_systemDir))), priority);
+	// Add the current dir as a very last resort (cf. bug #3984).
+	// TODO: check if it's really needed
+	s.addDirectory(".", ".", priority - 1);
+}

@@ -1,0 +1,23 @@
+[ScummVM-Miyoo README]
+
+Controls
+========
+Dpad - Mouse
+Dpad+R - Slow Mouse
+A - Left mouse click
+B - Right mouse click
+Y - Escape
+L - Game Menu (F5)
+Start - Global Menu
+Select - Virtual Keyboard
+
+All buttons are available for (re)mapping in keymapper
+
+Troubleshooting
+===============
+In case you need to submit a bugreport, you may find the log file at the
+following path:
+
+     SDCARD/.scummvm/scummvm.log
+
+The log file is being overwritten at every ScummVM run.

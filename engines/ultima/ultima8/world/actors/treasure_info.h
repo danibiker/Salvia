@@ -1,0 +1,54 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef WORLD_ACTORS_TREASUREINFO_H
+#define WORLD_ACTORS_TREASUREINFO_H
+
+#include "common/array.h"
+#include "common/str.h"
+
+namespace Ultima {
+namespace Ultima8 {
+
+struct TreasureInfo {
+	Common::String _special;
+	double _chance;
+	int _map;
+	Common::Array<uint32> _shapes;
+	Common::Array<uint32> _frames;
+	unsigned int _minCount, _maxCount;
+
+	TreasureInfo() : _chance(1), _map(0), _minCount(1), _maxCount(1) {}
+
+	void clear() {
+		_special.clear();
+		_chance = 1;
+		_map = 0;
+		_shapes.clear();
+		_frames.clear();
+		_minCount = _maxCount = 1;
+	}
+};
+
+} // End of namespace Ultima8
+} // End of namespace Ultima
+
+#endif
