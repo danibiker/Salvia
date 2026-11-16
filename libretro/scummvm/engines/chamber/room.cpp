@@ -1,0 +1,2232 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "chamber/chamber.h"
+#include "chamber/common.h"
+#include "chamber/room.h"
+#include "chamber/enums.h"
+#include "chamber/resdata.h"
+#include "chamber/cga.h"
+#include "chamber/ega.h"
+#include "chamber/ega_resource.h"
+#include "chamber/amiga.h"
+#include "chamber/print.h"
+#include "chamber/anim.h"
+#include "chamber/cursor.h"
+#include "chamber/script.h"
+#include "chamber/print.h"
+#include "chamber/input.h"
+#include "chamber/dialog.h"
+#include "chamber/portrait.h"
+#include "chamber/sound.h"
+#include "chamber/ifgm.h"
+
+namespace Chamber {
+
+// Spot-backup region, then the lutin/anim scratch (scratch_mem2).
+// backupSpotsImages() fills the spot-backup region from scratch_mem1 upward.
+// The original CGA budget for it is 1500 bytes, but EGA stores each backup as
+// CLUT8 (4 bytes per CGA byte), so it needs up to 4*1500 = 6000 bytes. With the
+// old 1500-byte gap the EGA backups spilled past scratch_mem2 and were then
+// clobbered by the next lutin load, corrupting the backup headers (garbage
+// stamped into the backbuffer's top rows). Use the EGA worst case for the gap.
+//
+// The scratch holds up to four simultaneous lutin slots (see getScratchBuffer).
+// CGA needs 4*1600 = 6400 there; EGA decodes lutins to CLUT8 so it needs
+// 4*3200 = 12800. Size scratch_mem1 for gap + EGA lutin worst case so neither a
+// big backup nor a big lutin can overrun into the adjacent sprites_list[].
+#define SCRATCH_SPOT_GAP 6000
+byte scratch_mem1[SCRATCH_SPOT_GAP + 12800];
+byte *scratch_mem2 = scratch_mem1 + SCRATCH_SPOT_GAP;
+
+rect_t room_bounds_rect = {0, 0, 0, 0};
+byte last_object_hint = 0;
+byte object_hint = 0;
+byte command_hint = 0;
+byte zone_name = 0;
+byte room_hint_bar_width = 0;
+byte last_command_hint = 0;
+byte zone_spr_index = 0;
+byte zone_obj_count = 0;
+
+byte cmd_hint_bar_width = 32;
+byte cmd_hint_bar_coords_x = 188 / 4;
+byte cmd_hint_bar_coords_y = 193;
+byte room_hint_bar_coords_x = 0;
+byte room_hint_bar_coords_y = 0;
+
+byte *sprites_list[MAX_SPRITES];
+
+spot_t *zone_spots;
+spot_t *zone_spots_end;
+spot_t *zone_spots_cur;
+
+vortanims_t *vortanims_ptr;
+turkeyanims_t *turkeyanims_ptr;
+pers_t *aspirant_ptr;
+spot_t *aspirant_spot;
+spot_t *found_spot;
+byte **spot_sprite;
+
+byte zone_palette;
+
+uint16 zsprite_draw_ofs;
+byte zsprite_w;
+byte zsprite_h;
+
+byte *lutin_mem;
+
+uint16 drops_cleanup_time = 0;
+
+byte in_de_profundis = 0;  /*TODO: useless?*/
+
+uint16 next_vorts_cmd = 0;
+uint16 next_vorts_ticks = 0;
+uint16 next_turkey_cmd = 0;
+uint16 next_turkey_ticks = 0;
+uint16 next_protozorqs_ticks = 0;
+
+byte skip_zone_transition;
+
+#define VORTANIMS_MAX 25
+
+/*
+Vorts room enter/leave animations
+*/
+vortanims_t vortsanim_list[VORTANIMS_MAX] = {
+	{ 2, { 3, {{52, 113}}}, { 8, {{43, 113}}}, {12, {{43, 113}}}, {16, {{43, 113}}}},
+	{ 3, { 6, {{58, 120}}}, { 7, {{33, 120}}}, {11, {{33, 120}}}, {15, {{33, 120}}}},
+	{ 4, { 2, {{26, 121}}}, { 9, {{43, 121}}}, {13, {{43, 121}}}, {17, {{43, 121}}}},
+	{ 5, { 1, {{32, 119}}}, {10, {{33, 119}}}, {14, {{33, 119}}}, {18, {{33, 119}}}},
+	{ 6, { 3, {{36, 115}}}, { 8, {{27, 115}}}, {12, {{27, 115}}}, {16, {{27, 115}}}},
+	{ 7, { 1, {{40, 123}}}, {10, {{41, 123}}}, {14, {{41, 123}}}, {18, {{41, 123}}}},
+	{ 8, {21, {{64, 132}}}, { 9, {{33, 132}}}, {13, {{33, 132}}}, {17, {{33, 132}}}},
+	{90, { 1, {{27, 129}}}, {10, {{28, 129}}}, {14, {{28, 129}}}, {18, {{28, 129}}}},
+	{91, { 3, {{44, 129}}}, { 8, {{35, 129}}}, {12, {{35, 129}}}, {16, {{35, 129}}}},
+	{10, {29, {{22, 156}}}, {30, {{22, 156}}}, {31, {{22, 156}}}, {32, {{22, 156}}}},
+	{11, {29, {{22, 156}}}, {30, {{22, 156}}}, {31, {{22, 156}}}, {32, {{22, 156}}}},
+	{12, {29, {{22, 156}}}, {30, {{22, 156}}}, {31, {{22, 156}}}, {32, {{22, 156}}}},
+	{13, {29, {{22, 156}}}, {30, {{22, 156}}}, {31, {{22, 156}}}, {32, {{22, 156}}}},
+	{18, {29, {{22, 156}}}, {30, {{22, 156}}}, {31, {{22, 156}}}, {32, {{22, 156}}}},
+	{35, {29, {{20, 156}}}, {30, {{20, 156}}}, {31, {{20, 156}}}, {32, {{20, 156}}}},
+	{42, {29, {{18, 156}}}, {30, {{18, 156}}}, {31, {{18, 156}}}, {32, {{18, 156}}}},
+	{51, {29, {{57, 144}}}, {30, {{57, 144}}}, {31, {{57, 144}}}, {32, {{57, 144}}}},
+	{53, {29, {{48, 156}}}, {30, {{48, 156}}}, {31, {{48, 156}}}, {32, {{48, 156}}}},
+	{54, {29, {{55, 139}}}, {30, {{55, 139}}}, {31, {{55, 139}}}, {32, {{55, 139}}}},
+	{56, {29, {{47, 115}}}, {30, {{47, 115}}}, {31, {{47, 115}}}, {32, {{47, 115}}}},
+	{57, {29, {{38, 136}}}, {30, {{38, 136}}}, {31, {{38, 136}}}, {32, {{38, 136}}}},
+	{58, {29, {{28, 125}}}, {30, {{28, 125}}}, {31, {{28, 125}}}, {32, {{28, 125}}}},
+	{59, {29, {{45, 132}}}, {30, {{45, 132}}}, {31, {{45, 132}}}, {32, {{45, 132}}}},
+	{60, {29, {{21, 150}}}, {30, {{21, 150}}}, {31, {{21, 150}}}, {32, {{21, 150}}}},
+	{61, {29, {{23, 123}}}, {30, {{23, 123}}}, {31, {{23, 123}}}, {32, {{23, 123}}}}
+};
+
+#define TURKEYANIMS_MAX 10
+
+turkeyanims_t turkeyanim_list[TURKEYANIMS_MAX] = {
+	{50, {61, {{14, 140}}}, {62, {{14, 140}}}},
+	{51, {61, {{14, 143}}}, {62, {{14, 143}}}},
+	{53, {61, {{20, 153}}}, {62, {{20, 153}}}},
+	{54, {61, {{16, 139}}}, {62, {{16, 139}}}},
+	{56, {61, {{24, 118}}}, {62, {{24, 118}}}},
+	{57, {61, {{27, 129}}}, {62, {{27, 129}}}},
+	{58, {61, {{39, 125}}}, {62, {{39, 125}}}},
+	{59, {61, {{29, 130}}}, {62, {{29, 130}}}},
+	{60, {61, {{49, 150}}}, {62, {{49, 150}}}},
+	{61, {61, {{56, 141}}}, {62, {{56, 141}}}}
+};
+
+static const byte cga_color_sels[] = {
+	0x30, 0x10, 0x30, 0x10, 0x30, 0x10, 0x10, 0x30, 0x10, 0x10, 0x10, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x10, 0x10, 0x10
+};
+
+void selectSpecificPalette(byte index) {
+	// Amiga composes the room palette from the zone palette_index
+	if (g_vm->getPlatform() == Common::kPlatformAmiga)
+		amigaApplyRoomPalette(index);
+	else
+		g_vm->_renderer->colorSelect(cga_color_sels[index]);
+}
+
+
+void selectPalette(void) {
+	if (g_vm->getPlatform() == Common::kPlatformAmiga)
+		amigaApplyRoomPalette(script_byte_vars.palette_index);
+	else
+		g_vm->_renderer->colorSelect(cga_color_sels[script_byte_vars.palette_index]);
+}
+
+/*
+Blit sprites to backbuffer
+*/
+void blitSpritesToBackBuffer(void) {
+	int16 i;
+	for (i = 0; i < MAX_SPRITES; i++) {
+		byte *sprite = sprites_list[i];
+		g_vm->_renderer->restoreImage(sprite, backbuffer);
+	}
+}
+
+/*
+Copy data at sprite's rect from screen to backbuffer
+*/
+void refreshSpritesData(void) {
+	int16 i;
+	for (i = 0; i < MAX_SPRITES; i++) {
+		byte *sprite = sprites_list[i];
+		g_vm->_renderer->refreshImageData(sprite);
+	}
+}
+
+/*
+Check if packed x/y coordinates are in rect
+*/
+int16 isInRect(byte x, byte y, rect_t *rect) {
+	if (x < rect->sx) return 0;
+	if (x >= rect->ex) return 0;
+	if (y < rect->sy) return 0;
+	if (y >= rect->ey) return 0;
+	return 1;
+}
+
+/*
+Check if cursor is in rect
+*/
+int16 isCursorInRect(rect_t *rect) {
+	return isInRect(cursor_x / 4, cursor_y, rect);
+}
+
+/*
+Find person for a current spot
+*/
+void findPerson(void) {
+	int16 i;
+	pers_t *pers = pers_list;
+	for (i = 0; i < PERS_MAX; i++, pers++) {
+		if ((pers->flags & 15) == script_byte_vars.cur_spot_idx) {
+			script_vars[kScrPool8_CurrentPers] = pers;
+			script_byte_vars.cur_pers = i + 1;
+			return;
+		}
+	}
+	script_byte_vars.cur_pers = 0;
+}
+
+/*
+Select a spot under cursor if its flags are matched given criteria
+*/
+void checkHotspots(byte m, byte v) {
+	int16 i;
+	spot_t *spot = zone_spots;
+	for (i = 0; spot != zone_spots_end; i++, spot++) {
+		if (isCursorInRect((rect_t *)spot) && (spot->flags & SPOTFLG_80) && ((spot->flags & m) == v)) {
+			script_byte_vars.cur_spot_idx = i + 1;
+			spot_sprite = sprites_list + i;
+			found_spot = spot;
+			script_byte_vars.cur_spot_flags = spot->flags;
+			object_hint = spot->hint;
+			cursor_color = 0xAA;
+			the_command = Swap16(spot->command);
+			findPerson();
+			return;
+		}
+	}
+	cursor_color = 0xFF;
+	object_hint = zone_name;    /*room name*/
+	script_byte_vars.cur_spot_idx = 0;
+}
+
+/*
+Select cursor shape for current spot
+*/
+void selectSpotCursor(void) {
+	int16 curs = CURSOR_TARGET;
+	checkHotspots(script_byte_vars.spot_m, script_byte_vars.spot_v);
+	if (cursor_color == 0xAA) {
+		curs = CURSOR_BODY;
+		if ((script_byte_vars.cur_spot_flags & (SPOTFLG_20 | SPOTFLG_10 | SPOTFLG_8)) != SPOTFLG_10) {
+			curs = CURSOR_ARROWS;
+			if ((script_byte_vars.cur_spot_flags & SPOTFLG_20) != 0)
+				curs = CURSOR_CROSSHAIR;
+		}
+	}
+	if (isEgaLikeRenderer())
+		cursor_shape = souri_data + curs * (CURSOR_WIDTH * CURSOR_HEIGHT / 4);
+	else
+		cursor_shape = souri_data + curs * CURSOR_WIDTH * CURSOR_HEIGHT * 2 / 4;
+	g_vm->_renderer->selectCursor(curs);
+}
+
+#define kBgW 8
+#define kBgH 30
+
+static const int16 *background_draw_steps;
+
+/*blocks draw order (clockwise inward spiral)*/
+static const int16 background_draw_steps_cga[] = {
+	kBgW, kBgW, kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW,
+	-kBgH / 2 * CGA_BYTES_PER_LINE, -kBgH / 2 * CGA_BYTES_PER_LINE, -kBgH / 2 * CGA_BYTES_PER_LINE, -kBgH / 2 * CGA_BYTES_PER_LINE,
+	kBgW, kBgW, kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE, kBgH / 2 * CGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW,
+	-kBgH / 2 * CGA_BYTES_PER_LINE, -kBgH / 2 * CGA_BYTES_PER_LINE,
+	kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * CGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, 0
+};
+
+/*blocks draw order (clockwise inward spiral)*/
+static const int16 background_draw_steps_hga[] = {
+	kBgW, kBgW, kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW,
+	-kBgH / 2 * HGA_BYTES_PER_LINE, -kBgH / 2 * HGA_BYTES_PER_LINE, -kBgH / 2 * HGA_BYTES_PER_LINE, -kBgH / 2 * HGA_BYTES_PER_LINE,
+	kBgW, kBgW, kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE, kBgH / 2 * HGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, -kBgW, -kBgW,
+	-kBgH / 2 * HGA_BYTES_PER_LINE, -kBgH / 2 * HGA_BYTES_PER_LINE,
+	kBgW, kBgW, kBgW, kBgW, kBgW,
+	kBgH / 2 * HGA_BYTES_PER_LINE,
+	-kBgW, -kBgW, -kBgW, -kBgW, 0
+};
+
+/*
+Draw main backgound pattern, in spiral-like order
+*/
+void drawBackground(byte *target, byte vblank) {
+	if (isEgaLikeRenderer()) {
+		ega_drawBackground(target);
+		return;
+	}
+	int16 i;
+	uint16 offs = (2 / 2) * CGA_BYTES_PER_LINE + 8;   /*TODO: calcxy?*/
+	byte *pixels = gauss_data + 0x3C8; /*TODO: better const*/
+	if (g_vm->_videoMode == Common::RenderMode::kRenderCGA) {
+		background_draw_steps = background_draw_steps_cga;
+	} else {
+		background_draw_steps = background_draw_steps_hga;
+	}
+	for (i = 0; i < 53; i++) {
+		/*draw a tile, alternating between two variants*/
+		g_vm->_renderer->blit(pixels + (i & 1 ? 0 : kBgW * kBgH), kBgW, kBgW, kBgH, target, offs);
+		offs += background_draw_steps[i];
+	}
+	if (vblank)
+		waitVBlank();
+
+	offs = (182 / 2) * CGA_BYTES_PER_LINE;  /*TODO: calcxy?*/
+	for (i = 0; i < 9; i++) {
+		g_vm->_renderer->blit(pixels, kBgW, kBgW, 9, target, offs);
+		offs += kBgW;
+	}
+}
+
+/*
+Load and initialize zone data
+*/
+void loadZone(void) {
+	byte *zptr, *zend;
+
+	zptr = seekToEntry(zones_data, script_byte_vars.zone_index - 1, &zend);
+	script_byte_vars.zone_area = *zptr++;
+	script_byte_vars.zone_room = *zptr++;
+	zone_name = object_hint = *zptr++;
+	zone_palette = script_byte_vars.palette_index = *zptr++;
+	zone_obj_count = *zptr++;
+	if (zone_obj_count != 0) {
+		uint16 i;
+		uint16 *zcmds = script_word_vars.zone_obj_cmds;
+#if 0
+		memset(script_word_vars.zone_obj_cmds, 0, 15 * 5 * sizeof(uint8));  /*Original code? - half of list: TODO: bug? wipe whole list?*/
+#else
+		memset(script_word_vars.zone_obj_cmds, 0, 15 * 5 * sizeof(uint16));  /* wipe whole list */
+#endif
+		for (i = 0; i < zone_obj_count; i++) {
+			/*load spot's reactions*/
+			uint16 flags = (*zptr++) << 8;
+			flags |= *zptr++;
+			if (flags & 0x10) {
+				zcmds[0] = zptr[0] | (zptr[1] << 8);    /*TODO: big-endian, but loaded here as le and converted later*/
+				zptr += 2;
+			}
+			if (flags & 8) {
+				zcmds[1] = zptr[0] | (zptr[1] << 8);
+				zptr += 2;
+			}
+			if (flags & 4) {
+				zcmds[2] = zptr[0] | (zptr[1] << 8);
+				zptr += 2;
+			}
+			if (flags & 2) {
+				zcmds[3] = zptr[0] | (zptr[1] << 8);
+				zptr += 2;
+			}
+			if (flags & 1) {
+				zcmds[4] = zptr[0] | (zptr[1] << 8);
+				zptr += 2;
+			}
+			zcmds += 5;
+		}
+	}
+
+	zone_spots = (spot_t *)zptr;
+	script_vars[kScrPool4_ZoneSpots] = (spot_t *)zptr;
+	zone_spots_end = (spot_t *)zend;
+	zone_spots_cur = (spot_t *)zptr;
+	zone_spr_index = 0;
+	script_byte_vars.dead_flag = 0;
+	script_byte_vars.bvar_25 = 0;
+	script_word_vars.next_aspirant_cmd = BE(0);
+	next_turkey_cmd = 0;
+	next_vorts_cmd = 0;
+	script_byte_vars.used_commands = 0;
+
+	// Apply the zone palette at load time for screens that skip refreshZone()
+	if (g_vm->getPlatform() == Common::kPlatformAmiga)
+		selectPalette();
+}
+
+void resetZone(void) {
+	script_byte_vars.bvar_43 = 0;
+	script_byte_vars.bvar_4B = 0;
+	script_byte_vars.bvar_61 = 0;
+	script_byte_vars.bvar_45 = 0;
+	script_byte_vars.bvar_0B = 0;
+	script_byte_vars.bvar_33 = 0;
+	script_byte_vars.bvar_34 = 0;
+	script_byte_vars.bvar_08 = 0;
+	script_byte_vars.aspirant_flags = 0;
+	script_word_vars.psi_cmds[0] = BE(0x9048);
+	script_word_vars.psi_cmds[1] = BE(0xA01D);
+	script_word_vars.psi_cmds[2] = BE(0);
+	script_word_vars.psi_cmds[3] = BE(0x00F7);
+	script_word_vars.psi_cmds[4] = BE(0x9048);
+	script_word_vars.psi_cmds[5] = BE(0x9048);
+	script_word_vars.wvar_0C = BE(0xA01C);
+	script_word_vars.wvar_0E = BE(0);
+	script_word_vars.wvar_AA = BE(0);
+}
+
+/*
+Load puzzl sprite to buffer, return next free buffer ptr
+*/
+byte *loadPuzzl(byte index, byte *buffer) {
+	if (script_byte_vars.palette_index == 14)
+		return loadSprite(index, puzzl_data + 4, buffer, 1);
+	else
+		return loadSprite(index, puzzl_data + 4, buffer, 0);
+}
+
+/*
+Load puzzl sprite to scratch buffer, return sprite ptr
+*/
+byte *loadPuzzlToScratch(byte index) {
+	byte *buffer = scratch_mem2;
+	loadPuzzl(index, buffer);
+	return buffer;
+}
+
+#define kNumDoorSprites 3
+
+typedef struct doorinfo_t {
+	byte flipped;
+	struct {
+		byte width;
+		byte height;
+		byte *pixels;
+		uint16 offs;
+	} layer[kNumDoorSprites];
+	byte width;
+	byte height;
+	uint16 offs;
+	byte sprites[1];   /*variable size*/
+} doorinfo_t;
+
+byte *doors_list[MAX_DOORS];
+byte arpla_y_step;
+
+/*
+Fill in sliding door animation information
+*/
+void initRoomDoorInfo(byte index) {
+	int16 i;
+	byte *aptr;
+	doorinfo_t *info = (doorinfo_t *)scratch_mem2;
+	rect_t bounds = {0xFF, 0, 0xFF, 0};
+
+	aptr = doors_list[index - 1];
+	info->flipped = (aptr[1] & 0x80) ? ~0 : 0;
+
+	if (isEgaLikeRenderer()) {
+		for (i = 0; i < kNumDoorSprites; i++) {
+			byte x, y, w, h, ox;
+			Graphics::Surface *surf = ega_puzzl_res->getSprite(aptr[0]);
+
+			x = aptr[1];
+			y = aptr[2];
+			w = surf->w / 4; /* CGA byte width */
+			h = surf->h;
+
+			ox = x & 0x7F;
+			/*EGA blitter uses left-edge offset; no rightmost-byte shift needed*/
+
+			y = (y * 2) & 0xFF;
+
+			if (ox < bounds.sx)
+				bounds.sx = ox;
+			if (ox + w >= bounds.ex)
+				bounds.ex = ox + w;
+
+			if (y < bounds.sy)
+				bounds.sy = y;
+			if (y + h >= bounds.ey)
+				bounds.ey = y + h;
+
+			info->layer[i].width = w;
+			info->layer[i].height = h;
+			info->layer[i].pixels = (byte *)surf->getPixels();
+			info->layer[i].offs = g_vm->_renderer->calcXY_p(ox, y);
+
+			aptr += 3;
+		}
+	} else {
+		byte *sprbuf = info->sprites;
+		for (i = 0; i < kNumDoorSprites; i++) {
+			byte x, y, w, h, ox;
+			byte *sprite = sprbuf;
+			sprbuf = loadPuzzl(aptr[0], sprbuf);
+
+			x = aptr[1];
+			y = aptr[2];
+			w = sprite[0];
+			h = sprite[1];
+
+			ox = x;
+			if (x & 0x80) {
+				x = (x + w - 1) & 0x7F;
+				ox &= 0x7F;
+			}
+
+			y = (y * 2) & 0xFF;
+
+			if (ox < bounds.sx)
+				bounds.sx = ox;
+			if (ox + w >= bounds.ex)
+				bounds.ex = ox + w;
+
+			if (y < bounds.sy)
+				bounds.sy = y;
+			if (y + h >= bounds.ey)
+				bounds.ey = y + h;
+
+			info->layer[i].width = w;
+			info->layer[i].height = h;
+			info->layer[i].pixels = sprite + 2;
+			info->layer[i].offs = g_vm->_renderer->calcXY_p(x, y);
+
+			aptr += 3;
+		}
+	}
+
+	info->width = bounds.ex - bounds.sx;
+	info->height = bounds.ey - bounds.sy;
+	info->offs = g_vm->_renderer->calcXY_p(bounds.sx, bounds.sy);
+}
+
+/*
+Draw sliding door
+*/
+void drawRoomDoor(void) {
+	int16 i;
+	doorinfo_t *info = (doorinfo_t *)scratch_mem2;
+	bool isEGA = (isEgaLikeRenderer());
+	for (i = 0; i < kNumDoorSprites; i++) {
+		byte w = info->layer[i].width;
+		byte h = info->layer[i].height;
+		byte *pixels = info->layer[i].pixels;
+		uint16 offs = info->layer[i].offs;
+		int16 pitch = isEGA ? w * 4 : w * 2;
+
+		if (!info->flipped)
+			g_vm->_renderer->blitSprite(pixels, pitch, w, h, backbuffer, offs);
+		else
+			g_vm->_renderer->blitSpriteFlip(pixels, pitch, w, h, backbuffer, offs);
+	}
+	g_vm->_renderer->copyScreenBlock(backbuffer, info->width, info->height, frontbuffer, info->offs);
+}
+
+/*
+Animate sliding door open
+*/
+void animRoomDoorOpen(byte index) {
+	int16 i;
+
+	byte oldheight;
+
+	doorinfo_t *info = (doorinfo_t *)scratch_mem2;
+
+	initRoomDoorInfo(index);
+
+	IFGM_PlaySample(29);
+
+	oldheight = info->layer[1].height;
+
+	for (i = 0; i < oldheight / 2; i++) {
+		drawRoomDoor();
+		waitVBlank();
+		info->layer[1].height -= 2;
+		if (isEgaLikeRenderer())
+			info->layer[1].pixels += info->layer[1].width * 4 * 2;
+		else
+			info->layer[1].pixels += info->layer[1].width * 2 * 2;
+	}
+
+	playSound(31);
+}
+
+/*
+Animate sliding door close
+*/
+void animRoomDoorClose(byte index) {
+	int16 i;
+
+	byte oldheight;
+	byte *oldpixels;
+
+	doorinfo_t *info = (doorinfo_t *)scratch_mem2;
+	initRoomDoorInfo(index);
+
+	IFGM_PlaySample(29);
+
+	oldheight = info->layer[1].height;
+	oldpixels = info->layer[1].pixels;
+
+	if (isEgaLikeRenderer()) {
+		info->layer[1].pixels += info->layer[1].width * 4 * (info->layer[1].height - 1);
+	} else {
+		info->layer[1].pixels += info->layer[1].width * 2 * (info->layer[1].height - 1);
+	}
+	info->layer[1].height = 1;
+
+	for (i = 0; i < oldheight / 2; i++) {
+#if 0
+		drawRoomDoor();
+		waitVBlank();
+#endif
+		info->layer[1].height += 2;
+		if (isEgaLikeRenderer())
+			info->layer[1].pixels -= info->layer[1].width * 4 * 2;
+		else
+			info->layer[1].pixels -= info->layer[1].width * 2 * 2;
+	}
+
+	info->layer[1].height = oldheight;
+	info->layer[1].pixels = oldpixels;
+	drawRoomDoor();
+
+	playSound(31);
+}
+
+/*Maybe FindRoomDoor?*/
+byte findInitialSpot(void) {
+	spot_t *spot;
+	byte index;
+	byte flags = script_byte_vars.last_door;
+	if (flags == 0)
+		return 0;
+	flags |= SPOTFLG_80 | SPOTFLG_8;
+	for (index = 1, spot = zone_spots; spot != zone_spots_end; index++, spot++) {
+		if (spot->flags == flags)
+			return index;
+	}
+	return 0;
+}
+
+/*
+Find first spot index that matches given flags
+*/
+byte findSpotByFlags(byte mask, byte value) {
+	spot_t *spot;
+	byte index;
+	for (index = 1, spot = zone_spots; spot != zone_spots_end; spot++, index++) {
+		if ((spot->flags & mask) == value)
+			return index;
+	}
+	return 0xFF;
+}
+
+/*
+Select person and its spot (if available)
+*/
+byte selectPerson(byte offset) {
+	/*TODO: replace offset arg with index?*/
+	byte index = offset / 5;   /* / sizeof(pers_t) */
+
+	script_vars[kScrPool8_CurrentPers] = &pers_list[index];
+
+	index = findSpotByFlags(0x3F, (pers_list[index].index & 7) | SPOTFLG_10);   /*TODO: return 0 if not found?*/
+	if (index == 0xFF)
+		return 0;
+
+	found_spot = &zone_spots[index - 1];
+	script_byte_vars.cur_spot_idx = index;
+	spot_sprite = &sprites_list[index - 1];
+	return 1;
+}
+
+/*
+Play animation at the selected spot or specified coordinates
+*/
+void animateSpot(const animdesc_t *info) {
+	byte *sprite = *spot_sprite;
+	g_vm->_renderer->restoreImage(sprite, backbuffer);
+	if (info->index & ANIMFLG_USESPOT) {
+		/*at selected spot*/
+		cursor_x = found_spot->sx * 4;
+		cursor_y = found_spot->sy;
+		if (info->params.desc)
+			drawMessage(seekToString(desci_data, info->params.desc), frontbuffer);
+
+		playAnim(info->index & ~ANIMFLG_USESPOT, found_spot->sx, found_spot->sy);
+	} else {
+		/*at specified coords*/
+		playAnim(info->index, info->params.coords.x, info->params.coords.y);
+	}
+}
+
+typedef struct lutinanim_t {
+	byte phase;
+	byte sprites[8];
+} lutinanim_t;
+
+lutinanim_t lutins_table[] = {
+	{0, { 55, 55, 55, 55, 55, 55, 55, 55} },
+	{0, { 41, 41, 41, 41, 41, 41, 41, 41} },
+	{0, {  6,  6,  6,  6,  6,  6,  6,  6} },
+	{0, { 33, 34, 33, 35, 33, 36, 33, 35} },
+	{0, { 10, 11, 10, 13, 10, 12, 10, 14} },
+	{0, { 15, 16, 17, 18, 19, 15, 20, 21} },
+	{0, { 80, 81, 80, 83, 80, 82, 80, 84} },
+	{0, {139, 140, 141, 142, 139, 140, 141, 142} },
+	{0, {133, 134, 133, 135, 133, 134, 133, 135} },
+	{0, {136, 137, 136, 138, 136, 137, 136, 138} },
+	{0, {144, 145, 144, 145, 144, 145, 144, 145} },
+	{0, { 33, 34, 33, 35, 33, 36, 33, 35} },
+	{0, {181, 182, 181, 183, 181, 182, 181, 183} },
+	{0, {178, 179, 178, 180, 178, 179, 178, 180} },
+	{0, {181, 182, 181, 183, 181, 182, 181, 183} },
+	{0, {185, 186, 187, 188, 185, 186, 187, 188} },
+	{0, {185, 186, 187, 188, 185, 186, 187, 188} },
+	{0, {164, 132, 164, 132, 164, 132, 164, 132} },
+	{0, {144, 145, 144, 145, 144, 145, 144, 145} },
+	{0, { 33, 34, 33, 35, 33, 36, 33, 35} },
+	{0, {199, 200, 201, 202, 199, 200, 201, 202} },
+	{0, {195, 196, 197, 198, 195, 196, 197, 198} },
+	{0, {203, 203, 203, 203, 203, 203, 203, 203} },
+	{0, {148, 148, 148, 148, 148, 148, 148, 148} },
+	{0, {185, 186, 187, 188, 185, 186, 187, 188} },
+	{0, {193, 193, 193, 193, 193, 193, 193, 193} },
+	{0, {165, 166, 167, 168, 165, 166, 167, 168} },
+	{0, { 33, 34, 33, 35, 33, 36, 33, 35} },
+	{0, {181, 182, 181, 183, 181, 182, 181, 183} },
+	{0, {178, 179, 178, 180, 178, 179, 178, 180} },
+	{0, { 91, 91, 91, 91, 91, 91, 91, 91} },
+	{0, {221, 221, 221, 221, 221, 221, 221, 221} },
+	{0, {  0,  0,  0,  0,  0,  0,  0,  0} }
+};
+
+void beforeChangeZone(byte index) {
+	byte oldspot;
+	static const animdesc_t anim57 = {ANIMFLG_USESPOT | 57, { { 0, 0 } }};
+	static const animdesc_t anim58 = {ANIMFLG_USESPOT | 58, { { 0, 0 } }};
+
+	script_byte_vars.need_draw_spots = 0;
+	if (pers_list[kPersScifi].area != script_byte_vars.zone_area)
+		return;
+	if (index < 59 || index >= 63)
+		return;
+
+	oldspot = script_byte_vars.cur_spot_idx;
+
+	script_byte_vars.need_draw_spots = 0xff;
+
+	selectPerson(PersonOffset(kPersScifi));
+	animateSpot(&anim57);
+
+	if (pers_list[kPersMonkey].area != 0) {
+		selectPerson(PersonOffset(kPersMonkey));
+		animateSpot(&anim58);
+	}
+
+	script_byte_vars.cur_spot_idx = oldspot;
+}
+
+void changeZone(byte index) {
+	byte spridx = 0;
+
+	script_byte_vars.prev_zone_index = script_byte_vars.zone_index;
+	script_byte_vars.zone_index = index;
+
+	if (script_byte_vars.bvar_6C != 0)
+		spridx = 229;
+	else if (script_byte_vars.zone_index == 129)
+		spridx = 221;
+	else if (script_byte_vars.zone_index == 130)
+		spridx = 222;
+
+	if (spridx != 0) {
+		int16 i;
+		lutinanim_t *la = &lutins_table[31];
+		for (i = 0; i < 8; i++)
+			la->sprites[i] = spridx;
+	}
+
+	loadZone();
+	resetZone();
+}
+
+
+void drawPersons(void) {
+	int16 i;
+	byte index, pidx;
+	spot_t *spot;
+
+	for (spot = zone_spots; spot != zone_spots_end; spot++) {
+		if ((spot->flags & 0x38) == SPOTFLG_10)
+			spot->flags &= ~SPOTFLG_80;
+	}
+
+	for (i = 0; i < PERS_MAX; i++) {
+		pers_list[i].flags &= ~0xF;
+
+		if (pers_list[i].area != script_byte_vars.zone_area)
+			continue;
+		if (pers_list[i].flags & PERSFLG_40)
+			continue;
+
+		pidx = (pers_list[i].index & 7) | SPOTFLG_10;
+		for (index = 1, spot = zone_spots; spot != zone_spots_end; spot++, index++) {
+			if ((spot->flags & ~SPOTFLG_40) == pidx) {
+				spot->flags |= SPOTFLG_80;
+				spot->hint = pers_list[i].name;
+				pers_list[i].flags |= index;
+				if (spot->flags & SPOTFLG_40)
+					drawZoneAniSprite((rect_t *)spot, index, backbuffer);
+				break;
+			}
+		}
+	}
+}
+
+/*
+Draw room's static object to backbuffer
+*/
+void drawRoomStaticObject(byte *aptr, byte *rx, byte *ry, byte *rw, byte *rh) {
+	if (isEgaLikeRenderer()) {
+		Graphics::Surface *surf = ega_puzzl_res->getSprite(aptr[0]);
+		byte x = aptr[1];
+		byte y = aptr[2];
+		uint16 w = surf->w;
+		uint16 h = surf->h;
+		byte wcga = w / 4;
+
+		*rx = x & 0x7F;
+		*ry = (y & 0x7F) * 2;
+		*rw = wcga;
+		*rh = h;
+
+		byte *pixels = (byte *)surf->getPixels();
+		int16 pitch = surf->pitch;
+
+		/*EGA blitter uses left-edge offset; no rightmost-byte shift needed*/
+		byte drawx = x & 0x7F;
+
+		if (y & 0x80) {
+			pixels += pitch * (h - 1);
+			pitch = -pitch;
+		}
+		y = (y * 2) & 0xFF;
+
+		if (aptr[0] == 83) {
+			if (arpla_y_step & 1)
+				y -= 8;
+			arpla_y_step >>= 1;
+		}
+
+		uint16 ofs = g_vm->_renderer->calcXY_p(drawx, y);
+		if (aptr[1] & 0x80)
+			g_vm->_renderer->blitSpriteFlip(pixels, pitch, wcga, h, backbuffer, ofs);
+		else
+			g_vm->_renderer->blitSprite(pixels, pitch, wcga, h, backbuffer, ofs);
+		return;
+	}
+
+	byte x, y, w, h;
+	int16 pitch;
+	byte *sprite = loadPuzzlToScratch(aptr[0]);
+	x = aptr[1];
+	y = aptr[2];
+	w = sprite[0];
+	h = sprite[1];
+
+	sprite += 2;
+
+	*rx = x & 0x7F;
+	*ry = (y & 0x7F) * 2;
+	*rw = w;
+	*rh = h;
+
+	pitch = w * 2;
+
+	if (x & 0x80) {
+		/*horizontal flip*/
+		x = (x + w - 1) & 0x7F;
+	}
+
+	if (y & 0x80) {
+		/*vertical flip*/
+		sprite += pitch * (h - 1);
+		pitch = -pitch;
+	}
+	y = (y * 2) & 0xFF;
+
+	if (aptr[0] == 83) { /*Hand sprite from Who Will Be Saved room*/
+		if (arpla_y_step & 1)
+			y -= 8;
+		arpla_y_step >>= 1;
+	}
+
+	/*TODO: adjust ry accordingly? SCR_11_DrawRoomObject uses offs from adjusted y, but DrawRoomStatics relies on original y*/
+	/*TODO: check if this results in any glitches in Who Will Be Saved*/
+
+	if (aptr[1] & 0x80)
+		g_vm->_renderer->blitSpriteFlip(sprite, pitch, w, h, backbuffer, g_vm->_renderer->calcXY_p(x, y));
+	else
+		g_vm->_renderer->blitSprite(sprite, pitch, w, h, backbuffer, g_vm->_renderer->calcXY_p(x, y));
+}
+
+/*
+Draw all room's static objects (decorations) to backbuffer
+Initialize room bounds rect to room's dimensions
+Draw room's name box and text
+*/
+void drawRoomStatics(void) {
+	byte *aptr, *aend;
+	byte doorcount = 0;
+	byte x, y, w, h;
+	uint16 xx, ww;
+
+	drawBackground(backbuffer, 0);
+	arpla_y_step = script_byte_vars.hands;
+
+	aptr = seekToEntry(arpla_data, script_byte_vars.zone_room - 1, &aend);
+	room_bounds_rect.sx = 0xFF;
+	room_bounds_rect.ex = 0;
+	room_bounds_rect.sy = 0xFF;
+	room_bounds_rect.ey = 0;
+
+	/*load and draw room decor*/
+	for (; aptr != aend; aptr += 3) {
+		byte index = *aptr;
+		/*a door ?*/
+		if (index >= 50 && index < 61) {
+			doors_list[doorcount++] = aptr - 3; /*TODO: check for list overflow?*/
+			if (doorcount == script_byte_vars.cur_spot_idx)
+				continue;
+		}
+		/*draw decor object*/
+		drawRoomStaticObject(aptr, &x, &y, &w, &h);
+
+		/*update room's bounding rect*/
+		if (x < room_bounds_rect.sx)
+			room_bounds_rect.sx = x;
+		if (x + w > room_bounds_rect.ex)
+			room_bounds_rect.ex = x + w;
+		if (y < room_bounds_rect.sy)
+			room_bounds_rect.sy = y;
+		if (y + h > room_bounds_rect.ey)
+			room_bounds_rect.ey = y + h;
+	}
+
+	/*place object hint box right under the room*/
+	room_hint_bar_width = room_bounds_rect.ex - room_bounds_rect.sx - 2;
+	char_draw_coords_x = room_bounds_rect.sx;
+	room_hint_bar_coords_x = room_bounds_rect.sx + 1;
+	char_draw_coords_y = room_bounds_rect.ey + 2;
+	room_hint_bar_coords_y = room_bounds_rect.ey + 2;
+	char_xlat_table = chars_color_wonb;
+
+	/*print room name*/
+	g_vm->_renderer->printChar(0x3B, backbuffer);
+	drawObjectHint();                       /* area name */
+	g_vm->_renderer->printChar(0x3C, backbuffer);
+
+	/*draw border around hint text*/
+	xx = (room_hint_bar_coords_x - 1) * 4;
+	y = room_hint_bar_coords_y;
+	ww = (room_hint_bar_width + 2) * 4;
+
+	g_vm->_renderer->drawHLine(xx, y - 2, ww, 2, backbuffer);
+	g_vm->_renderer->drawHLine(xx, y - 1, ww, 0, backbuffer);
+	g_vm->_renderer->drawHLine(xx, y + 6, ww, 2, backbuffer);
+	g_vm->_renderer->drawVLine(xx, y - 2, 9, 2, backbuffer);
+	g_vm->_renderer->drawVLine(xx + ww - 1, y - 2, 9, 2, backbuffer);
+}
+
+/*
+Redraw all room's static objects (decorations) to backbuffer
+*/
+void redrawRoomStatics(byte index, byte y_step) {
+	byte *aptr, *aend;
+	byte x, y, w, h;
+	arpla_y_step = y_step;
+
+	aptr = seekToEntry(arpla_data, index - 1, &aend);
+	for (; aptr != aend; aptr += 3) {
+		/*load room's bg objs*/
+		drawRoomStaticObject(aptr, &x, &y, &w, &h);
+	}
+}
+
+/*
+Draw "some item in the room" icon
+*/
+void drawRoomItemsIndicator(void) {
+	byte spridx = 172;
+	int16 i;
+	for (i = 0; i < MAX_INV_ITEMS; i++) {
+		if (inventory_items[i].flags == ITEMFLG_ROOM
+		        && inventory_items[i].area == script_byte_vars.zone_area) {
+			spridx = 173;
+			break;
+		}
+	}
+	drawSpriteN(spridx, 296 / 4, 14, SCREENBUFFER);
+	drawSpriteN(spridx, 296 / 4, 14, backbuffer);
+
+	/*recalculate the number of zapstiks we have*/
+	script_byte_vars.zapstiks_owned = 0;
+	for (i = 0; i < 14; i++) {
+		if (inventory_items[i + kItemZapstik1 - 1].flags == ITEMFLG_OWNED)
+			script_byte_vars.zapstiks_owned++;
+	}
+}
+
+void drawZoneSpots(void) {
+	static const animdesc_t anim59 = {ANIMFLG_USESPOT | 59, { { 0, 0 } }};
+	static const animdesc_t anim60 = {ANIMFLG_USESPOT | 60, { { 0, 0 } }};
+
+	byte oldspot = script_byte_vars.cur_spot_idx;
+
+	if (!script_byte_vars.need_draw_spots)
+		return;
+
+	selectPerson(PersonOffset(kPersScifi));
+	animateSpot(&anim59);
+
+	pers_list[kPersScifi].area = script_byte_vars.zone_area;
+
+	if (pers_list[kPersMonkey].area != 0) {
+		pers_list[kPersMonkey].area = script_byte_vars.zone_area;
+		selectPerson(PersonOffset(kPersMonkey));
+		animateSpot(&anim60);
+	}
+
+	script_byte_vars.cur_spot_idx = oldspot;
+
+	drawPersons();
+}
+
+/*
+The line-wipe zone transition only plays while moving through the corridor-like
+areas: The Ring and the Passages. Normal room entries stay instant (or use their
+own scripted drawIcone effect).
+*/
+static bool zoneHasWalkTransition(byte area) {
+	switch (area) {
+	case kAreaTheRing1: case kAreaTheRing2: case kAreaTheRing3:
+	case kAreaTheRing4: case kAreaTheRing5: case kAreaTheRing6:
+	case kAreaPassage1: case kAreaPassage2: case kAreaPassage3:
+	case kAreaPassage4: case kAreaPassage5: case kAreaPassage6: case kAreaPassage7:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void refreshZone(void) {
+	// Hide the mouse pointer while the new room is drawn and its entry
+	// animation plays. The game loop's selectCursor() re-shows it once it is
+	// waiting for player input again.
+	hideMouseCursor();
+
+	popDirtyRects(DirtyRectSprite);
+	popDirtyRects(DirtyRectBubble);
+	popDirtyRects(DirtyRectText);
+
+	// Reveal the new room with an animated transition unless this change asked to
+	// skip it (e.g. entering through an already-animated door). skip_zone_transition
+	// is set by SCR_42_LoadZone; plain zone changes (walking around The Ring / through
+	// passages via SCR_36_ChangeZone) leave it 0 and so get the dot-dissolve reveal.
+	if (!skip_zone_transition && isEgaLikeRenderer()
+	        && zoneHasWalkTransition(script_byte_vars.zone_area)) {
+		ega_zoneRevealWipe();
+	} else {
+		g_vm->_renderer->backBufferToRealFull();
+	}
+
+	in_de_profundis = 0;
+	IFGM_StopSample();
+	if (script_byte_vars.zone_area == 22) {
+		IFGM_PlaySample(131);
+		in_de_profundis = 1;
+	}
+
+	drawTheWallDoors();
+	selectPalette();
+	drawRoomItemsIndicator();
+	drawZoneSpots();
+	if (script_byte_vars.cur_spot_idx != 0)
+		animRoomDoorClose(script_byte_vars.cur_spot_idx);
+	blitSpritesToBackBuffer();
+}
+
+/*
+Draw object hint or zone name text to backbuffer
+*/
+void drawObjectHint(void) {
+	if (script_byte_vars.zone_index == 135)
+		return;
+	char_draw_max_width = room_hint_bar_width;
+	char_draw_coords_x = room_hint_bar_coords_x;
+	char_draw_coords_y = room_hint_bar_coords_y;
+	char_xlat_table = chars_color_wonb;
+	printStringCentered(seekToString(motsi_data, object_hint), backbuffer);
+
+#ifdef DEBUG_ZONE
+	g_vm->_renderer->printChar(0x20, backbuffer);
+	g_vm->_renderer->printChar(0x10 + script_byte_vars.zone_index / 100, backbuffer);
+	g_vm->_renderer->printChar(0x10 + (script_byte_vars.zone_index / 10) % 10, backbuffer);
+	g_vm->_renderer->printChar(0x10 + script_byte_vars.zone_index % 10, backbuffer);
+#endif
+}
+
+/*
+Copy object hint from backbuffer to screen
+*/
+void showObjectHint(byte *target) {
+	if (script_byte_vars.zone_index == 135)
+		return;
+	g_vm->_renderer->copyScreenBlock(backbuffer, room_hint_bar_width + 2, 9, target, g_vm->_renderer->calcXY_p(room_hint_bar_coords_x - 1, room_hint_bar_coords_y - 2));
+}
+
+/*
+Draw command hint text to backbuffer
+*/
+void drawCommandHint(void) {
+	char_draw_max_width = cmd_hint_bar_width;
+	char_draw_coords_x = cmd_hint_bar_coords_x;
+	char_draw_coords_y = cmd_hint_bar_coords_y;
+	char_xlat_table = chars_color_wonb;
+	printStringCentered(seekToString(vepci_data, command_hint), backbuffer);
+}
+
+/*
+Copy command hint from backbuffer to screen
+*/
+void showCommandHint(byte *target) {
+	g_vm->_renderer->copyScreenBlock(backbuffer, cmd_hint_bar_width + 2, 9, target, g_vm->_renderer->calcXY_p(cmd_hint_bar_coords_x - 1, cmd_hint_bar_coords_y - 2));
+}
+
+void loadLutinSprite(uint16 lutidx) {
+	byte *lutin_entry, *lutin_entry_end;
+	byte *buffer;
+	byte lutW, lutH;
+
+	lutin_entry = seekToEntry(lutin_data, lutidx, &lutin_entry_end);
+	lutW = *lutin_entry++; /* composite width in CGA bytes */
+	lutH = *lutin_entry++; /* composite height in pixels */
+
+	if (isEgaLikeRenderer()) {
+		/*EGA: build CLUT8 flat buffer in lutin_mem: [0]=lutW, [1]=lutH, then lutW*4 bytes/row*/
+		uint16 pw = (uint16)lutW * 4;
+		lutin_mem[0] = lutW;
+		lutin_mem[1] = lutH;
+		memset(lutin_mem + 2, 0, pw * lutH);
+
+		for (; lutin_entry != lutin_entry_end;) {
+			byte spridx = *lutin_entry++;
+			uint16 flags = *lutin_entry++;
+			flags |= (*lutin_entry++) << 8;
+
+			Graphics::Surface *surf = reinterpret_cast<Graphics::Surface *>(g_vm->_renderer->loadSprit(spridx));
+			byte *src = (byte *)surf->getPixels();
+			uint16 sw = surf->w;
+			uint16 sh = surf->h;
+			int16 spitch = surf->pitch;
+
+			/*decode CGA byte-offset to pixel position in lutin buffer*/
+			uint16 byteOfs = flags & 0x7FFF;
+			uint16 row = (lutW > 0) ? (byteOfs / lutW) : 0;
+			uint16 col = (lutW > 0) ? (byteOfs % lutW) : 0;
+			byte *dst = lutin_mem + 2 + row * pw + col * 4;
+
+			if (flags & 0x8000) { /*horizontal flip*/
+				for (uint16 y = 0; y < sh; y++) {
+					for (uint16 x = 0; x < sw; x++) {
+						byte p = src[sw - 1 - x];
+						if (p != 0) dst[x] = p;
+					}
+					src += spitch;
+					dst += pw;
+				}
+			} else {
+				for (uint16 y = 0; y < sh; y++) {
+					for (uint16 x = 0; x < sw; x++) {
+						byte p = src[x];
+						if (p != 0) dst[x] = p;
+					}
+					src += spitch;
+					dst += pw;
+				}
+			}
+		}
+		return;
+	}
+
+	/*CGA path: build CGA mask+pixel buffer in lutin_mem*/
+	buffer = lutin_mem;
+	for (uint16 i = 0; i < 800; i++) { /*TODO: fix size*/
+		buffer[i * 2] = 0xFF;   /*mask*/
+		buffer[i * 2 + 1] = 0;  /*pixels*/
+	}
+	*buffer++ = lutW;
+	*buffer++ = lutH;
+
+	for (; lutin_entry != lutin_entry_end;) {
+		byte spridx = *lutin_entry++;
+		uint16 flags = *lutin_entry++;
+		flags |= (*lutin_entry++) << 8;
+
+		byte *sprite = g_vm->_renderer->loadSprit(spridx);
+		byte sprw = *sprite++;
+		byte sprh = *sprite++;
+
+		buffer = lutin_mem + 2 + (flags & 0x7FFF) * 2;
+		if (flags & 0x8000)
+			mergeSpritesDataFlip(buffer, lutin_mem[0] * 2, sprite, sprw, sprh);
+		else
+			mergeSpritesData(buffer, lutin_mem[0] * 2, sprite, sprw, sprh);
+	}
+}
+
+/*
+EGA helper: draw a lutin composite by overlaying its sub-sprites directly
+on the target framebuffer (no scratch_mem2 packing). Works because
+ega_BlitSprite treats index 0 as transparent.
+*/
+static void egaDrawLutinComposite(uint16 lutidx, byte *target, uint16 baseOfs) {
+	byte *entry, *entry_end;
+	entry = seekToEntry(lutin_data, lutidx, &entry_end);
+	byte w = *entry++;  /* composite width in CGA bytes (1 byte = 4 px) */
+	entry++;            /* height (unused here) */
+	while (entry < entry_end) {
+		byte sub = *entry++;
+		uint16 flags = *entry++;
+		flags |= (*entry++) << 8;
+		uint16 byteOfs = flags & 0x7FFF;
+		uint16 yy = w ? (byteOfs / w) : 0;
+		uint16 xxBytes = w ? (byteOfs % w) : 0;
+		uint16 subOfs = baseOfs + yy * EGA_BYTES_PER_LINE + xxBytes * 4;
+		byte *sprite = g_vm->_renderer->loadSprit(sub);
+		if (flags & 0x8000)
+			g_vm->_renderer->drawSpriteFlip(sprite, target, subOfs);
+		else
+			g_vm->_renderer->drawSprite(sprite, target, subOfs);
+	}
+}
+
+/*
+Draw specific room's person idle sprite
+*/
+void drawCharacterSprite(byte spridx, byte x, byte y, byte *target) {
+	if (isEgaLikeRenderer()) {
+		egaDrawLutinComposite(spridx, target, g_vm->_renderer->calcXY_p(x, y));
+		return;
+	}
+	lutin_mem = scratch_mem2;
+
+	loadLutinSprite(spridx);
+
+	g_vm->_renderer->drawSprite(scratch_mem2, target, g_vm->_renderer->calcXY_p(x, y));
+}
+
+/*
+Draw room's person idle sprite and advance sprite's animation
+Return true if a sprite was drawn
+*/
+char drawZoneAniSprite(rect_t *rect, uint16 index, byte *target) {
+	int16 i;
+	byte spridx;
+	pers_t *pers = pers_list;
+	for (i = 0; i < PERS_MAX; i++, pers++) {
+		if ((pers->flags & 15) == index) {
+			lutinanim_t *la = &lutins_table[pers->index >> 3];
+			spridx = la->sprites[la->phase];
+			la->phase = (la->phase + 1) % 8;
+
+			zsprite_draw_ofs = g_vm->_renderer->calcXY_p(rect->sx, rect->sy);
+
+			if (isEgaLikeRenderer()) {
+				byte *entry, *entry_end;
+				entry = seekToEntry(lutin_data, spridx, &entry_end);
+				zsprite_w = entry[0]; /* CGA byte width */
+				zsprite_h = entry[1]; /* height in pixels */
+				egaDrawLutinComposite(spridx, target, zsprite_draw_ofs);
+				return ~0;
+			}
+
+			lutin_mem = scratch_mem2;
+
+			loadLutinSprite(spridx);
+
+			zsprite_w = scratch_mem2[0];
+			zsprite_h = scratch_mem2[1];
+
+			g_vm->_renderer->drawSprite(scratch_mem2, target, zsprite_draw_ofs);
+
+			return ~0;
+		}
+	}
+	return 0;
+}
+
+/*
+Initialize Aspirant
+*/
+void prepareAspirant(void) {
+	byte index;
+	byte hostility, appearance;
+	byte flags;
+
+	if (script_byte_vars.zone_area == kAreaDreamsOfSlime) {
+		pers_list[kPersAspirant1].area = kAreaDreamsOfSlime;
+		pers_list[kPersAspirant2].area = kAreaDreamsOfSlime;
+		pers_list[kPersAspirant3].area = kAreaDreamsOfSlime;
+		pers_list[kPersAspirant1].name = 50; /*DIVO*/
+		pers_list[kPersAspirant2].name = 50;
+		pers_list[kPersAspirant3].name = 50;
+		return;
+	}
+
+	pers_list[kPersAspirant1].area = kAreaNone;
+	pers_list[kPersAspirant2].area = kAreaNone;
+	pers_list[kPersAspirant3].area = kAreaNone;
+	pers_list[kPersAspirant4].area = kAreaNone;
+
+	if (script_byte_vars.bvar_26 >= 63)
+		return;
+
+	if (script_byte_vars.zone_area >= kAreaPassage1)
+		return;
+
+	index = findSpotByFlags(0x3F, 17);
+	if (index == 0xFF)
+		return;
+	aspirant_spot = &zone_spots[index - 1];
+
+	script_byte_vars.aspirant_pers_ofs += 5;   /*FIXME: this is sizeof(pers_t), but it's used in scripts, so hardcoded*/
+	if (script_byte_vars.aspirant_pers_ofs >= PersonOffset(kPersAspirant4 + 1))
+		script_byte_vars.aspirant_pers_ofs = PersonOffset(kPersAspirant1);
+	aspirant_ptr = &pers_list[script_byte_vars.aspirant_pers_ofs / 5];
+
+	if (aspirant_ptr->flags & PERSFLG_40)
+		return;
+
+	hostility = getRand();
+	appearance = getRand();
+	flags = 0;
+	/*
+	flags values:
+	     0 - passive
+		 1 - willing to trade
+		 2 - hostile
+		|4 - ?
+	*/
+
+	if (script_byte_vars.zone_area <= kAreaTheMastersOrbit3) {
+		/*at The Master's Orbit*/
+		if (hostility < 90 && aspirant_ptr->item) {
+			/* ROPE, STONE FLY, GOBLET, LANTERN, but not DAGGER*/
+			if ((aspirant_ptr->item >= kItemRope1 && aspirant_ptr->item <= kItemLantern4)
+			&& !(aspirant_ptr->item >= kItemDagger1 && aspirant_ptr->item <= kItemDagger4))
+				flags = 1;	/*willing to trade*/
+		}
+		if (appearance < 23) {
+			/*spawn in this room*/
+			aspirant_ptr->area = script_byte_vars.zone_area;
+			script_word_vars.next_aspirant_cmd = BE(0xA018);	/*leave*/
+			script_byte_vars.check_used_commands = 3;			/*after 3 actions*/
+			script_byte_vars.aspirant_flags = flags;
+			script_vars[kScrPool8_CurrentPers] = aspirant_ptr;
+		} else if (appearance < 52) {
+			script_word_vars.next_aspirant_cmd = BE(0xA019);
+			flags |= 4;
+			script_byte_vars.check_used_commands = 3;
+			script_byte_vars.aspirant_flags = flags;
+			script_vars[kScrPool8_CurrentPers] = aspirant_ptr;
+		} else {
+			/*do not spawn*/
+			script_byte_vars.aspirant_flags = 0;
+			return;
+		}
+	} else {
+		/*at other places*/
+		if (hostility < 39 && aspirant_ptr->item)
+			flags = 1;	/*willing to trade*/
+		if (hostility >= 166)
+			flags = 2;	/*hostile*/
+
+		if (appearance < 26) {
+			/*spawn in this room*/
+			aspirant_ptr->area = script_byte_vars.zone_area;
+			script_word_vars.next_aspirant_cmd = BE(0xA018);	/*leave*/
+			script_byte_vars.check_used_commands = 3;			/*after 3 actions*/
+			script_byte_vars.aspirant_flags = flags;
+			script_vars[kScrPool8_CurrentPers] = aspirant_ptr;
+		} else if (appearance < 52) {
+			script_word_vars.next_aspirant_cmd = BE(0xA019);
+			flags |= 4;
+			script_byte_vars.check_used_commands = 3;
+			script_byte_vars.aspirant_flags = flags;
+			script_vars[kScrPool8_CurrentPers] = aspirant_ptr;
+		} else {
+			/*do not spawn*/
+			script_byte_vars.aspirant_flags = 0;
+			return;
+		}
+	}
+}
+
+/*
+Initialize Vorts
+*/
+void prepareVorts(void) {
+	spot_t *spot;
+
+	if ((script_byte_vars.zone_area != kAreaTheReturn) || !(script_byte_vars.bvar_36 & 0x80)) {
+		pers_list[kPersVort].flags &= ~PERSFLG_40;
+		pers_list[kPersVort2].flags &= ~PERSFLG_40;
+		pers_list[kPersVort3].flags &= ~PERSFLG_40;
+
+		for (spot = zone_spots; spot != zone_spots_end; spot++) {
+			if ((spot->flags & ~SPOTFLG_80) == (SPOTFLG_40 | SPOTFLG_10)) {
+				int16 i;
+				for (i = 0; i < VORTANIMS_MAX; i++) {
+					if (vortsanim_list[i].room == script_byte_vars.zone_room) {
+						vortanims_ptr = &vortsanim_list[i];
+						if (script_byte_vars.zone_area == pers_list[kPersVort].area
+						        || script_byte_vars.zone_area == pers_list[kPersVort2].area
+						        || script_byte_vars.zone_area == pers_list[kPersVort3].area) {
+							next_vorts_cmd = 0xA015;                 /*VortLeave*/
+						} else {
+							pers_list[kPersVort].area = 0;
+							pers_list[kPersVort2].area = 0;
+							pers_list[kPersVort3].area = 0;
+							script_byte_vars.bvar_36 &= 0x80;    /*TODO: is this correct? |= ?*/
+							if (script_byte_vars.rand_value < 39) {
+								pers_list[kPersVort].area = script_byte_vars.zone_area;
+								next_vorts_cmd = 0xA015;             /*VortLeave*/
+							} else if (script_byte_vars.rand_value < 78)
+								next_vorts_cmd = 0xA014;             /*VortAppear*/
+							else
+								return;
+						}
+						script_byte_vars.bvar_36 |= 1;
+						next_vorts_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
+						return;
+					}
+				}
+				break;
+			}
+		}
+	}
+	pers_list[kPersVort].area = 0;
+	pers_list[kPersVort2].area = 0;
+	pers_list[kPersVort3].area = 0;
+	script_byte_vars.bvar_36 &= 0x80;    /*TODO: is this correct? |= ?*/
+}
+
+/*
+Initialize Turkey
+*/
+void prepareTurkey(void) {
+	spot_t *spot;
+
+	if (script_byte_vars.zone_area == kAreaPlacatingThePowers && script_byte_vars.bvar_4E == 0) {
+		pers_list[kPersTurkey].area = kAreaPlacatingThePowers;
+		return;
+	}
+
+	pers_list[kPersTurkey].flags &= ~PERSFLG_40;
+
+	for (spot = zone_spots; spot != zone_spots_end; spot++) {
+		if ((spot->flags & ~SPOTFLG_80) == (SPOTFLG_40 | SPOTFLG_10 | SPOTFLG_1)) {
+			int16 i;
+
+			for (i = 0; i < TURKEYANIMS_MAX; i++) {
+				if (turkeyanim_list[i].room == script_byte_vars.zone_room) {
+					turkeyanims_ptr = &turkeyanim_list[i];
+					if (script_byte_vars.zone_area == pers_list[kPersTurkey].area) {
+						next_turkey_cmd = 0xA01F;	/*leave*/
+						next_turkey_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
+					} else {
+						pers_list[kPersTurkey].area = 0;
+						if (script_byte_vars.rand_value >= 217) {
+							pers_list[kPersTurkey].area = script_byte_vars.zone_area;
+							next_turkey_cmd = 0xA01F;	/*leave*/
+							next_turkey_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
+						} else if (script_byte_vars.rand_value >= 178) {
+							next_turkey_cmd = 0xA01E;	/*appear*/
+							next_turkey_ticks = Swap16(script_word_vars.timer_ticks2) + 5;
+						}
+					}
+					return;
+				}
+			}
+			break;
+		}
+	}
+
+	pers_list[kPersTurkey].area = 0;
+}
+
+
+/*
+Load puzzl sprite to scratch and init draw params
+*/
+uint16 getPuzzlSprite(byte index, byte x, byte y, uint16 *w, uint16 *h, uint16 *ofs) {
+	if (isEgaLikeRenderer()) {
+		Graphics::Surface *surf = ega_puzzl_res->getSprite(index);
+		*w = surf->w / 4;
+		*h = surf->h;
+		*ofs = g_vm->_renderer->calcXY_p(x, y);
+		/*copy EGA pixel data into scratch_mem2+2 for blitScratchBackSprite*/
+		byte *dst = scratch_mem2 + 2;
+		for (int row = 0; row < surf->h; row++) {
+			memcpy(dst, (byte *)surf->getPixels() + row * surf->pitch, surf->w);
+			dst += surf->w;
+		}
+		return 0;
+	}
+	byte *spr = loadPuzzlToScratch(index);
+	*w = spr[0];
+	*h = spr[1];
+	*ofs = g_vm->_renderer->calcXY_p(x, y);
+	return 0;   /*sprite offset in scratch buf*/
+}
+
+/*
+Save specific fully drawn rooms to backbuffer
+*/
+void backupScreenOfSpecialRoom(void) {
+	switch (script_byte_vars.zone_room) {
+	case 41: /* THE POWERS OF THE ABYSS */
+	case 22: /* DE PROFUNDIS */
+	case 23: /* DE PROFUNDIS */
+	case 24: /* THE WALL */
+		g_vm->_renderer->realBufferToBackFull();
+		break;
+	}
+}
+
+/*
+Fully redraw specific rooms
+*/
+void restoreScreenOfSpecialRoom(void) {
+	switch (script_byte_vars.zone_room) {
+	case 23: /* DE PROFUNDIS */
+	case 24: /* DE PROFUNDIS */
+		redrawRoomStatics(script_byte_vars.zone_room, 0);
+		break;
+	}
+}
+
+/*
+Modify anim sprite 127
+*/
+void setAnim127Sprite(byte flags, byte spridx) {
+	byte *lutin_entry, *lutin_entry_end;
+	lutin_entry = seekToEntry(lutin_data, 127, &lutin_entry_end);
+	lutin_entry[2] = spridx;
+	switch (spridx) {
+	case 37:	/*DAGGER*/
+	case 58:	/*CHOPPER*/
+	case 40:	/*SACRIFICIAL BLADE*/
+		if (flags == ITEMFLG_OWNED)
+			script_byte_vars.bvar_66 += 1;
+		else
+			script_byte_vars.bvar_66 -= 1;
+		break;
+	}
+}
+
+/*
+Bounce current item to the room/inventory
+*/
+void bounceCurrentItem(byte flags, byte y) {
+	item_t *item = (item_t *)(script_vars[kScrPool3_CurrentItem]);
+
+	setAnim127Sprite(flags, item->sprite);
+	item->flags = flags;
+	item->area = script_byte_vars.zone_area;
+	backupScreenOfSpecialRoom();
+	playAnim(41, 176 / 4, y);
+	drawRoomItemsIndicator();
+	restoreScreenOfSpecialRoom();
+}
+
+/*
+Load The Wall gate sprites
+*/
+byte *loadMursmSprite(byte index) {
+	byte *pinfo, *end;
+	pinfo = seekToEntry(mursm_data, index, &end);
+
+	if (isEgaLikeRenderer()) {
+		/* EGA: build a CLUT8 buffer (80 px wide × 59 rows = 4720 bytes) */
+		const uint16 egaPitch = 80; /* 20 CGA bytes × 4 px/byte */
+		memset(sprit_load_buffer, 0, egaPitch * 59);
+
+		while (pinfo != end) {
+			byte sprIdx = *pinfo++;
+			uint16 flags = *pinfo++;
+			flags |= (*pinfo++) << 8;
+			uint16 cgaOfs = flags & 0x3FFF; /* byte offset into the CGA flat buffer (pitch = 20 bytes = 80 px) */
+
+			/* Convert CGA flat offset → EGA flat offset. Mirror the CGA path,
+			   which places the sub-sprite at byte cgaOfs in a 20-byte-pitch
+			   buffer: row = cgaOfs / 20, column = cgaOfs % 20 CGA bytes (× 4 px). */
+			uint16 row    = cgaOfs / 20;
+			uint16 colCga = cgaOfs % 20;
+			uint16 egaBufOfs = row * egaPitch + colCga * 4;
+
+			Graphics::Surface *surf = ega_puzzl_res->getSprite(sprIdx & 0x7F);
+			byte *src = (byte *)surf->getPixels();
+			uint16 sw = surf->w;
+			uint16 sh = surf->h;
+			int16 spitch = surf->pitch;
+			byte *dst = sprit_load_buffer + egaBufOfs;
+
+			if (sprIdx & 0x80) { /* horizontal flip */
+				for (uint16 y = 0; y < sh; y++) {
+					for (uint16 x = 0; x < sw; x++) {
+						byte p = src[sw - 1 - x];
+						if (p != 0) dst[x] = p;
+					}
+					src += spitch;
+					dst += egaPitch;
+				}
+			} else {
+				for (uint16 y = 0; y < sh; y++) {
+					for (uint16 x = 0; x < sw; x++) {
+						byte p = src[x];
+						if (p != 0) dst[x] = p;
+					}
+					src += spitch;
+					dst += egaPitch;
+				}
+			}
+		}
+
+		cur_frame_width = 20;
+		cur_image_coords_y = 32;
+		cur_image_size_w = 80 / 4;
+		cur_image_size_h = 59;
+		return sprit_load_buffer;
+	}
+
+	while (pinfo != end) {
+		uint16 flags;
+		int16 pitch;
+		byte *buffer, *sprite;
+		byte sprw, sprh;
+
+		index = *pinfo++;
+		flags = *pinfo++;
+		flags |= (*pinfo++) << 8;
+		buffer = sprit_load_buffer + (flags & 0x3FFF);
+		pitch = 20;
+
+		sprite = loadPuzzlToScratch(index & 0x7F);
+		sprw = *sprite++;
+		sprh = *sprite++;
+
+		if (index & 0x80)     /*horizontal flip*/
+			mergeImageAndSpriteDataFlip(buffer, pitch, sprite, sprw, sprh);
+		else
+			mergeImageAndSpriteData(buffer, pitch, sprite, sprw, sprh);
+	}
+
+	/*TODO: move this from globals to args/consts?*/
+	cur_frame_width = 20;
+	cur_image_coords_y = 32;
+	cur_image_size_w = 80 / 4;
+	cur_image_size_h = 59;
+
+	return sprit_load_buffer;
+}
+
+thewalldoor_t the_wall_doors[2];
+
+/*
+Open The Wall's right gate
+TODO: move this to CGA?
+*/
+void theWallOpenRightDoor(byte x, byte y, byte width, byte height, byte limit) {
+	uint16 offs = g_vm->_renderer->calcXY_p(x + width - 2, y);
+
+	while (--width) {
+		g_vm->_renderer->hideScreenBlockLiftToRight(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		if (width == limit)
+			return;
+	}
+
+	offs++;
+
+	/*hide remaining column*/
+	uint16 ooffs = offs;
+	byte oh = height;
+	while (height--) {
+		memcpy(frontbuffer + offs, backbuffer + offs, 1);
+
+		offs ^= g_vm->_line_offset;
+		if ((offs & g_vm->_line_offset) == 0)
+			offs += CGA_BYTES_PER_LINE;
+	}
+
+	g_vm->_renderer->blitToScreen(ooffs, 1, oh);
+}
+
+/*
+Open The Wall's left gate
+TODO: move this to CGA?
+*/
+void theWallOpenLeftDoor(byte x, byte y, byte width, byte height, byte limit) {
+	uint16 offs = g_vm->_renderer->calcXY_p(x + 1, y);
+
+	while (--width) {
+		g_vm->_renderer->hideScreenBlockLiftToLeft(1, SCREENBUFFER, backbuffer, width, height, SCREENBUFFER, offs);
+		if (width == limit)
+			return;
+	}
+
+	offs--;
+
+	/*hide remaining column*/
+	uint16 ooffs = offs;
+	byte oh = height;
+	while (height--) {
+		memcpy(frontbuffer + offs, backbuffer + offs, 1);
+
+		offs ^= g_vm->_line_offset;
+		if ((offs & g_vm->_line_offset) == 0)
+			offs += CGA_BYTES_PER_LINE;
+	}
+	g_vm->_renderer->blitToScreen(ooffs, 1, oh);
+}
+
+/*
+Animate The Wall doors
+Phase 3: Fully closed -> Half opened
+*/
+void theWallPhase3_DoorOpen1(void) {
+	script_byte_vars.zone_index = (script_byte_vars.zone_index == 95) ? 9 : 102;
+	loadZone();
+
+	theWallOpenRightDoor(144 / 4, 32, 80 / 4, 59, 40 / 4);
+	theWallOpenLeftDoor(64 / 4, 32, 80 / 4, 59, 40 / 4);
+
+	IFGM_StopSample();
+
+	/*TODO: fill in the_wall_door_* structures, as they are used by the original code and appear in savefile*/
+}
+
+/*
+Animate The Wall doors
+Phase 0: Half opened -> Fully opened
+*/
+void theWallPhase0_DoorOpen2(void) {
+	script_byte_vars.zone_index = (script_byte_vars.zone_index == 9) ? 24 : 30;
+	loadZone();
+
+	theWallOpenRightDoor((144 + 40) / 4, 32, (80 - 40) / 4, 59, 0);
+	theWallOpenLeftDoor(64 / 4, 32, (80 - 40) / 4, 59, 0);
+
+	IFGM_StopSample();
+
+	/*TODO: fill in the_wall_door_* structures, as they are used by the original code and appear in savefile*/
+}
+
+/*
+Animate The Wall doors
+Phase 1: Opened -> Half closed
+*/
+void theWallPhase1_DoorClose1(void) {
+	byte *spr;
+
+	script_byte_vars.zone_index = (script_byte_vars.zone_index == 24) ? 9 : 102;
+	loadZone();
+
+	spr = loadMursmSprite(0);
+	if (isEgaLikeRenderer())
+		spr += cur_frame_width * 4 - 4;
+	else
+		spr += cur_frame_width - 1;
+	cur_image_coords_x = 64 / 4;
+	g_vm->_renderer->animLiftToRight(10, spr, cur_frame_width, 1, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y));
+
+	spr = loadMursmSprite(1);
+	cur_image_coords_x = 220 / 4;
+	g_vm->_renderer->animLiftToLeft(10, spr, cur_frame_width, 1, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y));
+
+	IFGM_StopSample();
+
+	/*TODO: fill in the_wall_door_* structures, as they are used by the original code and appear in savefile*/
+}
+
+/*
+Animate The Wall doors
+Phase 2: Half closed -> Fully closed
+*/
+void theWallPhase2_DoorClose2(void) {
+	byte *spr;
+
+	script_byte_vars.zone_index = (script_byte_vars.zone_index == 9) ? 95 : 103;
+	loadZone();
+
+	spr = loadMursmSprite(0);
+	if (isEgaLikeRenderer())
+		spr += cur_frame_width * 4 - 4;
+	else
+		spr += cur_frame_width - 1;
+	cur_image_coords_x = 64 / 4;
+	if (isEgaLikeRenderer())
+		g_vm->_renderer->animLiftToRight(10, spr - 40, cur_frame_width, 1 + 10, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y));
+	else
+		g_vm->_renderer->animLiftToRight(10, spr - 10, cur_frame_width, 1 + 10, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y));
+
+	spr = loadMursmSprite(1);
+	cur_image_coords_x = 220 / 4;
+	if (isEgaLikeRenderer())
+		g_vm->_renderer->animLiftToLeft(10, spr, cur_frame_width, 1 + 10, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y) - 40);
+	else
+		g_vm->_renderer->animLiftToLeft(10, spr, cur_frame_width, 1 + 10, cur_image_size_h, frontbuffer, g_vm->_renderer->calcXY_p(cur_image_coords_x, cur_image_coords_y) - 10);
+
+	IFGM_PlaySample(30);
+
+	/*TODO: fill in the_wall_door_* structures, as they are used by the original code and appear in savefile*/
+}
+
+/*
+Draw default The Wall doors
+*/
+void drawTheWallDoors(void) {
+	switch (script_byte_vars.zone_index) {
+	case 9:
+	case 102:
+		if (isEgaLikeRenderer()) {
+			/* EGA buffer is 80 px wide; CGA +10 bytes = 40 EGA pixels */
+			g_vm->_renderer->blit(loadMursmSprite(0) + 40, 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(64 / 4, 32));
+			if (g_vm->getLanguage() == Common::EN_USA) {
+				g_vm->_renderer->blit(loadMursmSprite(1)     , 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(184 / 4, 32));
+			} else {
+				g_vm->_renderer->blit(loadMursmSprite(1)     , 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(180 / 4, 32));
+			}
+		} else {
+			g_vm->_renderer->blit(loadMursmSprite(0) + 10, 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(64 / 4, 32));
+			if (g_vm->getLanguage() == Common::EN_USA) {
+				/*This fixes odd black patch on the right gate door*/
+				g_vm->_renderer->blit(loadMursmSprite(1)     , 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(184 / 4, 32));
+			} else {
+				g_vm->_renderer->blit(loadMursmSprite(1)     , 20, 10, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(180 / 4, 32));
+			}
+		}
+		break;
+	case 95:
+	case 103:
+		g_vm->_renderer->blit(loadMursmSprite(0), 20, 20, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(64 / 4, 32));
+		g_vm->_renderer->blit(loadMursmSprite(1), 20, 20, 59, SCREENBUFFER, g_vm->_renderer->calcXY_p(144 / 4, 32));
+		break;
+	}
+}
+
+/*
+Superimpose source sprite data over target sprite data
+*/
+void mergeSpritesData(byte *target, uint16 pitch, byte *source, uint16 w, uint16 h) {
+	uint16 x;
+	while (h--) {
+		for (x = 0; x < w; x++) {
+			byte m = *source++;
+			*target++ &= m;
+			*target &= m;
+			*target++ |= *source++;
+		}
+		target -= w * 2;
+		target += pitch;
+	}
+}
+
+/*
+Superimpose horizontally-flipped source sprite data over target sprite data
+*/
+void mergeSpritesDataFlip(byte *target, uint16 pitch, byte *source, uint16 w, uint16 h) {
+	uint16 x;
+	target += w * 2 - 2;
+	while (h--) {
+		for (x = 0; x < w; x++) {
+			byte m = cga_pixel_flip[*source++];
+			*target++ &= m;
+			*target &= m;
+			*target |= cga_pixel_flip[*source++];
+			target -= 3;
+		}
+		target += w * 2;
+		target += pitch;
+	}
+}
+
+/*
+Save image at the rect to buffer
+Return current and next free buffer ptr
+*/
+byte *backupSpotImage(spot_t *spot, byte **spotback, byte *buffer) {
+	*spotback = buffer;
+	buffer = g_vm->_renderer->backupImage(backbuffer, g_vm->_renderer->calcXY_p(spot->sx, spot->sy), spot->ex - spot->sx, spot->ey - spot->sy, buffer);
+	return buffer;
+}
+
+/*
+Save zone spot images to sprites list
+*/
+void backupSpotsImages(void) {
+	spot_t *spot = zone_spots;
+	byte *buffer = scratch_mem1;
+	int16 i;
+	for (i = 0; i < MAX_SPRITES; i++)
+		sprites_list[i] = 0;
+	for (i = 0; spot != zone_spots_end; spot++, i++) { /*TODO: maybe don't advance it if spot is skipped?*/
+		if (spot->flags & SPOTFLG_40)
+			buffer = backupSpotImage(spot, &sprites_list[i], buffer);
+	}
+}
+
+/*
+Animate all room's persons, one per call
+TODO: rename me
+*/
+void drawSpots(byte *target) {
+	spot_t *spot = zone_spots_cur;
+	byte spridx = zone_spr_index;
+	if (spot == zone_spots_end) {
+		spot = zone_spots;
+		spridx = 0;
+	}
+
+	do {
+		spridx++;
+		if ((spot->flags & SPOTFLG_40) && ((spot->flags & ~7) == (SPOTFLG_80 | SPOTFLG_40 | SPOTFLG_10))) {
+			zone_spots_cur = spot + 1;
+			zone_spr_index = spridx;
+			/*TODO: subclass spot_t from rect_t*/
+			if (drawZoneAniSprite((rect_t *)spot, (spot - zone_spots) + 1, backbuffer)) {
+				updateCursor();
+				waitVBlank();
+				undrawCursor(target);
+				g_vm->_renderer->copyScreenBlock(backbuffer, zsprite_w, zsprite_h, target, zsprite_draw_ofs);
+				drawCursor(target);
+				g_vm->_renderer->restoreImage(sprites_list[zone_spr_index - 1], backbuffer);
+				return;
+			}
+			spridx = zone_spr_index;    /*TODO: not neded?*/
+		}
+		spot++;
+	} while (spot != zone_spots_end);
+	zone_spots_cur = spot;
+	zone_spr_index = spridx;
+}
+
+/*
+Animate room's persons at fixed rate
+TODO: rename me
+*/
+void animateSpots(byte *target) {
+	if (script_byte_vars.timer_ticks % 32 == 31)
+		drawSpots(target);
+}
+
+/*
+Draw cursor and hints text on screen
+*/
+void drawHintsAndCursor(byte *target) {
+	updateCursor();
+	waitVBlank();
+	undrawCursor(target);
+	if (object_hint != last_object_hint) {
+		showObjectHint(target);
+		last_object_hint = object_hint;
+	}
+
+	if (command_hint != last_command_hint) {
+		showCommandHint(target);
+		last_command_hint = command_hint;
+	}
+
+	drawCursor(target);
+}
+
+/*
+Hide a person
+*/
+void hidePerson(byte offset) {
+	selectPerson(offset);
+	found_spot->flags &= ~SPOTFLG_80;
+}
+
+const byte patrol_route[] = {
+	kAreaGuardRoom, kAreaTheConcourse,
+	kAreaPassage1, kAreaTheRing2,
+	kAreaTheRing1, kAreaTheRing6,
+	kAreaTheRing5, kAreaTheRing4,
+	kAreaTheRing3, kAreaTheRing2,
+	kAreaPassage1, kAreaTheConcourse};
+const byte *timed_seq_ptr = patrol_route;
+
+/*
+Update Protozorqs locations
+*/
+void updateProtozorqs(void) {
+	uint16 elapsed;
+
+	if (script_byte_vars.bvar_45 != 0)
+		return;
+
+	if (script_byte_vars.bvar_26 >= 63)
+		return;
+
+	script_word_vars.next_protozorqs_cmd = BE(0);
+
+	if (pers_list[kPersProtozorq5].flags & PERSFLG_40) {
+		pers_list[kPersProtozorq5].area = kAreaGuardRoom;
+		pers_list[kPersProtozorq5].flags &= ~(PERSFLG_10 | PERSFLG_20 | PERSFLG_40 | PERSFLG_80);
+		pers_list[kPersProtozorq5].index = 52;
+	}
+
+	if (pers_list[kPersProtozorq14].flags & PERSFLG_20)
+		script_byte_vars.bvar_30 |= 4;
+
+	elapsed = Swap16(script_word_vars.timer_ticks2);
+	if (elapsed < next_protozorqs_ticks)
+		return;
+
+	next_protozorqs_ticks = elapsed + 30;
+
+	script_byte_vars.bvar_3F = *timed_seq_ptr++;
+	if (timed_seq_ptr == patrol_route + sizeof(patrol_route))
+		timed_seq_ptr = patrol_route;
+	script_byte_vars.bvar_40 = *timed_seq_ptr++;
+
+	if (script_byte_vars.bvar_3F == kAreaGuardRoom) {
+		script_byte_vars.bvar_30 &= ~4;
+		pers_list[kPersProtozorq14].flags &= ~(PERSFLG_20 | PERSFLG_40 | PERSFLG_80);
+		pers_list[kPersProtozorq14].index = 55;
+		if (pers_list[kPersProtozorq5].area == kAreaGuardRoom) {
+			pers_list[kPersProtozorq5].flags &= ~(PERSFLG_20 | PERSFLG_40 | PERSFLG_80);
+			script_byte_vars.bvar_41 = 1;
+		}
+	}
+
+	if (script_byte_vars.bvar_3F == kAreaTheRing2 && script_byte_vars.bvar_40 == kAreaTheRing1) {
+		script_byte_vars.bvar_41 = 0;
+		if (pers_list[kPersProtozorq5].area == kAreaGuardRoom) {
+			script_byte_vars.bvar_40 = kAreaPassage1;
+			timed_seq_ptr = patrol_route + 4;
+		}
+
+	}
+
+	pers_list[kPersProtozorq14].area = script_byte_vars.bvar_40;
+
+	if (script_byte_vars.bvar_41 != 0) {
+		pers_list[kPersProtozorq5].area = script_byte_vars.bvar_40;
+		pers_list[kPersProtozorq12].area = script_byte_vars.bvar_40;
+		pers_list[kPersProtozorq13].area = script_byte_vars.bvar_40;
+
+		if (script_byte_vars.zone_area == script_byte_vars.bvar_3F) {
+			static const animdesc_t anim35 = {ANIMFLG_USESPOT | 35, { { 0, 0 } }};
+			updateUndrawCursor(frontbuffer);
+			refreshSpritesData();
+			hidePerson(PersonOffset(kPersProtozorq14));
+			hidePerson(PersonOffset(kPersProtozorq5));
+			hidePerson(PersonOffset(kPersProtozorq12));
+			hidePerson(PersonOffset(kPersProtozorq13));
+			animateSpot(&anim35);
+			blitSpritesToBackBuffer();
+			drawCursor(frontbuffer);
+			return;
+		}
+
+		if (script_byte_vars.zone_area == script_byte_vars.bvar_40) {
+			static const animdesc_t anim34 = {ANIMFLG_USESPOT | 34, { { 0, 0 } }};
+			updateUndrawCursor(frontbuffer);
+			refreshSpritesData();
+
+			selectPerson(PersonOffset(kPersProtozorq14));
+			animateSpot(&anim34);
+
+			if (selectPerson(PersonOffset(kPersProtozorq12))) {
+				animateSpot(&anim34);
+
+				selectPerson(PersonOffset(kPersProtozorq5));
+				animateSpot(&anim34);
+
+				selectPerson(PersonOffset(kPersProtozorq13));
+				animateSpot(&anim34);
+			}
+
+			drawPersons();
+			g_vm->_renderer->backBufferToRealFull();
+			blitSpritesToBackBuffer();
+			drawCursor(frontbuffer);
+
+			if (script_byte_vars.zapstiks_owned != 0)
+				script_word_vars.next_protozorqs_cmd = BE(0xC1FD);
+			else if (pers_list[kPersProtozorq14].flags & PERSFLG_20)
+				script_word_vars.next_protozorqs_cmd = BE(0xC1E5);
+			else if (script_byte_vars.zone_area == kAreaPassage1)
+				script_word_vars.next_protozorqs_cmd = BE(0xC060);
+
+			return;
+		}
+
+	} else {
+		if (pers_list[kPersProtozorq14].flags & PERSFLG_40)
+			return;
+
+		if (script_byte_vars.zone_area == script_byte_vars.bvar_3F) {
+			static const animdesc_t anim35 = {ANIMFLG_USESPOT | 35, { { 0, 0 } }};
+			updateUndrawCursor(frontbuffer);
+			refreshSpritesData();
+			hidePerson(PersonOffset(kPersProtozorq14));
+			animateSpot(&anim35);
+			blitSpritesToBackBuffer();
+			drawCursor(frontbuffer);
+			return;
+		}
+
+		if (script_byte_vars.zone_area == script_byte_vars.bvar_40) {
+			static const animdesc_t anim34 = {ANIMFLG_USESPOT | 34, { { 0, 0 } }};
+			updateUndrawCursor(frontbuffer);
+			refreshSpritesData();
+
+			selectPerson(PersonOffset(kPersProtozorq14));
+			animateSpot(&anim34);
+
+			drawPersons();
+			g_vm->_renderer->backBufferToRealFull();
+			blitSpritesToBackBuffer();
+			drawCursor(frontbuffer);
+
+			return;
+		}
+	}
+}
+
+/*
+Check how many time have passed and call the guards
+*/
+void checkGameTimeLimit(void) {
+	uint16 elapsed = Swap16(script_word_vars.timer_ticks2);
+
+	if (elapsed < 60 * 60)
+		return;
+
+	if (script_byte_vars.bvar_26 < 63) {
+		script_byte_vars.bvar_37 = 3;
+		script_byte_vars.bvar_26 = (script_byte_vars.zone_area < kAreaPassage1) ? 255 : 63;
+		pers_list[kPersProtozorq5].area = 0;
+		pers_list[kPersProtozorq6].area = 0;
+		pers_list[kPersProtozorq7].area = 0;
+		pers_list[kPersProtozorq8].area = 0;
+		pers_list[kPersProtozorq10].area = 0;
+		pers_list[kPersProtozorq11].area = kAreaGuardRoom;
+		pers_list[kPersProtozorq12].area = kAreaGuardRoom;
+		pers_list[kPersProtozorq13].area = kAreaGuardRoom;
+		pers_list[kPersProtozorq14].area = kAreaGuardRoom;
+		if (script_byte_vars.zone_area < kAreaDeProfundis)
+			script_word_vars.next_protozorqs_cmd = BE(0xC012);
+		return;
+	}
+
+	if (elapsed < 105 * 60)
+		return;
+
+	if (elapsed < 120 * 60) {
+		script_byte_vars.bvar_37 = 2;
+		script_byte_vars.bvar_4E = 1;
+		if ((script_byte_vars.zone_area != kAreaBirthOfADivineRace)
+		        && (script_byte_vars.zone_area >= kAreaPlacatingThePowers && script_byte_vars.zone_area <= kAreaCell4))
+			script_word_vars.next_protozorqs_cmd = BE(0xC012);
+		return;
+	}
+
+	script_word_vars.next_protozorqs_cmd = BE(0xC318);	/*game over*/
+}
+
+/*
+Clean up dropped items after some time
+*/
+void cleanupDroppedItems(void) {
+	int16 i;
+
+	if (Swap16(script_word_vars.timer_ticks2) - drops_cleanup_time < 180)
+		return;
+	drops_cleanup_time = Swap16(script_word_vars.timer_ticks2);
+
+	for (i = 0; i < MAX_INV_ITEMS; i++) {
+		if (inventory_items[i].flags & ITEMFLG_ROOM) {
+			if (inventory_items[i].area != script_byte_vars.zone_area && inventory_items[i].area < kAreaPassage4)
+				inventory_items[i].flags &= ~ITEMFLG_ROOM;
+		}
+	}
+}
+
+void resetAllPersons(void) {
+	int16 i;
+	for (i = 0; i < PERS_MAX; i++)
+		pers_list[i].flags &= ~PERSFLG_80;
+	script_byte_vars.dead_flag = 0;
+}
+
+} // End of namespace Chamber

@@ -1,0 +1,944 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/debug.h"
+#include "common/file.h"
+#include "common/system.h"
+#include "common/macresman.h"
+
+#include "graphics/macgui/macwindowmanager.h"
+
+#include "director/director.h"
+#include "director/archive.h"
+#include "director/cast.h"
+#include "director/debugger.h"
+#include "director/lingo/lingo.h"
+#include "director/lingo/lingo-profiler.h"
+#include "director/movie.h"
+#include "director/window.h"
+#include "director/score.h"
+#include "director/channel.h"
+#include "director/sound.h"
+#include "director/sprite.h"
+#include "director/castmember/castmember.h"
+#include "director/debugger/debugtools.h"
+#include "graphics/managed_surface.h"
+
+namespace Director {
+
+bool commandsWindowCallback(Graphics::WindowClick click, Common::Event &event, void *window) {
+	Window *w = (Window*)window;
+	return w->processWMEvent(click, event);
+}
+
+Window::Window(int id, bool scrollable, bool resizable, bool editable, Graphics::MacWindowManager *wm, DirectorEngine *vm, bool isStage)
+: Object<Window>("Window") {
+	_vm = vm;
+	_wm = wm;
+	_isStage = isStage;
+	_stageColor = _wm->_colorBlack;
+	_puppetTransition = nullptr;
+	_soundManager = new DirectorSound(this);
+	_lingoState = new LingoState;
+	_lingoPlayState = nullptr;
+
+	_currentMovie = nullptr;
+	_nextMovie.frameI = -1;
+	_newMovieStarted = true;
+	_newMovieFirstDraw = true;
+
+	_objType = kWindowObj;
+	_startFrame = _vm->getStartMovie().startFrame;
+
+	_windowType = -1;
+	_isModal = false;
+	_skipFrameAdvance = false;
+	_resetScreen = false;
+	_playbackPaused = false;
+
+	// Owned by the window manager
+	_window = new Graphics::MacWindow(id, scrollable, resizable, editable, wm);
+	_window->setDraggable(!_isStage);
+
+	_window->setCallback(commandsWindowCallback, this);
+
+	updateBorderType();
+}
+
+Window::~Window() {
+	delete _lingoState;
+	if (_lingoPlayState)
+		delete _lingoPlayState;
+	delete _soundManager;
+	delete _currentMovie;
+	for (uint i = 0; i < _frozenLingoStates.size(); i++)
+		delete _frozenLingoStates[i];
+	if (_puppetTransition)
+		delete _puppetTransition;
+	if (_isModal) {
+		_wm->setLockedWidget(nullptr);
+		_isModal = false;
+	}
+	g_director->_wm->removeWindow(_window);
+	g_director->_wm->removeMarked();
+	_window = nullptr;
+}
+
+void Window::invertChannel(Channel *channel, const Common::Rect &destRect) {
+	const Graphics::Surface *mask;
+
+	// in D3, we have inverted QDshape
+	if (channel->_sprite->isQDShape() && channel->_sprite->_ink == kInkTypeMatte)
+		mask = channel->_sprite->getQDMatte();
+	else
+		mask = channel->getMask(true);
+
+	Common::Rect srcRect = channel->getBbox();
+	srcRect.clip(destRect);
+
+	// let compiler to optimize it
+	int xoff = srcRect.left - channel->getBbox().left;
+	int yoff = srcRect.top - channel->getBbox().top;
+
+	Graphics::ManagedSurface *composeSurface = _window->getSurface();
+
+	if (_wm->_pixelformat.bytesPerPixel == 1) {
+		for (int i = 0; i < srcRect.height(); i++) {
+			byte *src = (byte *)composeSurface->getBasePtr(srcRect.left, srcRect.top + i);
+			const byte *msk = mask ? (const byte *)mask->getBasePtr(xoff, yoff + i) : nullptr;
+
+			for (int j = 0; j < srcRect.width(); j++, src++)
+				if (!mask || (msk && (*msk++)))
+					*src = _wm->inverter(*src);
+		}
+	} else if (_wm->_pixelformat.bytesPerPixel == 2) {
+		for (int i = 0; i < srcRect.height(); i++) {
+			uint16 *src = (uint16 *)composeSurface->getBasePtr(srcRect.left, srcRect.top + i);
+			const byte *msk = mask ? (const byte *)mask->getBasePtr(xoff, yoff + i) : nullptr;
+
+			for (int j = 0; j < srcRect.width(); j++, src++)
+				if (!mask || (msk && (*msk++)))
+					*src = _wm->inverter(*src);
+		}
+	} else {
+
+		for (int i = 0; i < srcRect.height(); i++) {
+			uint32 *src = (uint32 *)composeSurface->getBasePtr(srcRect.left, srcRect.top + i);
+			const byte *msk = mask ? (const byte *)mask->getBasePtr(xoff, yoff + i) : nullptr;
+
+			for (int j = 0; j < srcRect.width(); j++, src++)
+				if (!mask || (msk && (*msk++)))
+					*src = _wm->inverter(*src);
+		}
+	}
+}
+
+void Window::drawFrameCounter(Graphics::ManagedSurface *blitTo) {
+	const Graphics::Font *font = FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
+	Common::String msg = Common::String::format("Frame: %d", g_director->getCurrentMovie()->getScore()->getCurrentFrameNum());
+	uint32 width = font->getStringWidth(msg);
+
+	blitTo->fillRect(Common::Rect(blitTo->w - 3 - width, 1, blitTo->w - 1, font->getFontHeight() + 1), _wm->_colorBlack);
+	font->drawString(blitTo, msg, blitTo->w - 1 - width, 3, width, _wm->_colorBlack);
+	font->drawString(blitTo, msg, blitTo->w - 2 - width, 2, width, _wm->_colorWhite);
+}
+
+void Window::drawChannelBox(Director::Movie *currentMovie, Graphics::ManagedSurface *blitTo, int selectedChannel) {
+	const Graphics::Font *font = FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
+	Channel *channel = currentMovie->getScore()->_channels[selectedChannel];
+
+	if (!channel->isEmpty()) {
+		Common::Rect bbox = channel->getBbox();
+		blitTo->frameRect(bbox, g_director->_wm->_colorWhite);
+
+		font->drawString(blitTo, Common::String::format("m: %d, l: %d, ch: %d, fr: %d", channel->_sprite->_castId.member, channel->_sprite->_castId.castLib, selectedChannel, channel->_filmLoopFrame ? channel->_filmLoopFrame : channel->_movieTime), bbox.left + 3, bbox.top + 3, 128, g_director->_wm->_colorBlack);
+		font->drawString(blitTo, Common::String::format("m: %d, l: %d, ch: %d, fr: %d", channel->_sprite->_castId.member, channel->_sprite->_castId.castLib, selectedChannel, channel->_filmLoopFrame ? channel->_filmLoopFrame : channel->_movieTime), bbox.left + 2, bbox.top + 2, 128, g_director->_wm->_colorWhite);
+	}
+}
+
+void Window::renderChannel(Channel *channel, const Common::Rect &rect, Graphics::ManagedSurface *blitTo, bool invert) {
+	Score *score = _currentMovie->getScore();
+	if (rect.isEmpty())
+		return;
+	Common::Array<Channel *> dirtyChannels = score->getSpriteIntersections(rect);
+	Common::Array<Channel *> appendix;
+	Common::Rect r = rect;
+	r.clip(blitTo->getBounds());
+	size_t idx = 0;
+	// move direct-to-stage layers to the end of the list
+	while (idx < dirtyChannels.size()) {
+		Channel *ch = dirtyChannels[idx];
+		if (ch->isActiveVideo() && ch->isVideoDirectToStage()) {
+			appendix.push_back(ch);
+			dirtyChannels.remove_at(idx);
+			continue;
+		}
+		idx++;
+	}
+	for (auto &it : appendix) {
+		dirtyChannels.push_back(it);
+	}
+
+	size_t startIdx = 0;
+	if (channel->isTrail()) {
+		// trails mode, don't redraw anything stationary below the target
+		for (size_t i = 0; i < dirtyChannels.size(); i++) {
+			if (dirtyChannels[i] == channel) {
+				startIdx = i;
+				break;
+			}
+		}
+	} else {
+		blitTo->fillRect(r, _stageColor);
+	}
+	debugC(7, kDebugImages, "Window::renderChannel(): rect (%d, %d, %d, %d), %d overlapping channels", r.left, r.top, r.right, r.bottom, dirtyChannels.size());
+
+	for (size_t i = startIdx; i < dirtyChannels.size(); i++) {
+		Channel *ch = dirtyChannels[i];
+
+		if (ch->_visible && !ch->_hideFromStage) {
+			if (ch->hasSubChannels()) {
+				Common::Array<Channel> *list = ch->getSubChannels();
+				for (auto &k : *list) {
+					inkBlitFrom(&k, r, blitTo);
+				}
+			} else {
+				inkBlitFrom(ch, r, blitTo);
+				if ((ch == channel) && invert)
+					invertChannel(ch, r);
+			}
+		}
+	}
+	addDirtyRect(r);
+}
+
+bool Window::render(bool forceRedraw, Graphics::ManagedSurface *blitTo) {
+	if (!_currentMovie)
+		return false;
+
+	// An embedded movie is composited via getSubChannels(); it must never
+	// render the shared window itself (e.g. from its own updateStage), which
+	// would draw its channels at the embedded movie's native origin.
+	if (_currentMovie->_isEmbedded)
+		return false;
+
+	if (!blitTo)
+		blitTo = _window->getSurface();
+
+	Score *score = _currentMovie->getScore();
+
+	Channel *hiliteChannel = score->getChannelById(_currentMovie->_currentHiliteChannelId);
+
+	if (_resetScreen) {
+		_resetScreen = false;
+		forceRedraw = true;
+	}
+	if (_newMovieFirstDraw) {
+		_newMovieFirstDraw = false;
+		forceRedraw = true;
+	}
+
+	if (forceRedraw) {
+		blitTo->clear(_stageColor);
+		_window->markAllDirty();
+	}
+
+	// for each channel
+	// - check to see if it needs a redraw
+	// - if it does:
+	//	- if trails, just draw the sprite again
+	//	- if not:
+	//	 - draw every sprite underneath, then the sprite
+	//	- disable redraw flag
+	debugC(7, kDebugImages, "Window::render(): starting draw cycle for frame %d", score->getCurrentFrameNum());
+	uint32 renderStartTime = g_system->getMillis();
+
+	for (size_t i = 0; i < score->_channels.size(); i++) {
+		Channel *chan = score->_channels[i];
+		if (!chan->_needsDraw && !forceRedraw)
+			continue;
+		Common::Rect bbox = chan->getBbox();
+
+		debugC(7, kDebugImages, "Window::render(): drawing channel %d", (int)i);
+
+		if (!chan->_lastTrail) {
+			renderChannel(chan, chan->_lastRenderedBbox, blitTo, chan == hiliteChannel);
+		}
+		renderChannel(chan, bbox, blitTo, chan == hiliteChannel);
+		chan->_needsDraw = false;
+		chan->_lastRenderedBbox = bbox;
+		chan->_lastTrail = chan->isTrail();
+	}
+
+	Common::List<Common::Rect> &dirtyRects = _window->getDirtyRectList();
+
+	if (forceRedraw) {
+		_window->markAllDirty();
+	} else {
+		if (dirtyRects.size() == 0 && _currentMovie->_videoPlayback == false) {
+			if (g_director->_debugDraw & kDebugDrawFrame) {
+				drawFrameCounter(blitTo);
+				_window->setContentDirty(true);
+			}
+			return false;
+		}
+
+		_window->mergeDirtyRects();
+	}
+
+
+#ifdef USE_IMGUI
+	int selectedChannel = DT::getSelectedChannel();
+	if (selectedChannel > 0)
+		Window::drawChannelBox(_currentMovie, blitTo, selectedChannel);
+#endif
+
+	if (g_director->_debugDraw & kDebugDrawCast) {
+		const Graphics::Font *font = FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
+
+		for (uint i = 0; i < _currentMovie->getScore()->_channels.size(); i++) {
+			Channel *channel = _currentMovie->getScore()->_channels[i];
+			if (!channel->isEmpty()) {
+				Common::Rect bbox = channel->getBbox();
+				blitTo->frameRect(bbox, g_director->_wm->_colorWhite);
+
+				font->drawString(blitTo, Common::String::format("m: %d, l: %d, ch: %d, fr: %d", channel->_sprite->_castId.member, channel->_sprite->_castId.castLib, i, channel->_filmLoopFrame ? channel->_filmLoopFrame : channel->_movieTime), bbox.left + 3, bbox.top + 3, 128, g_director->_wm->_colorBlack);
+				font->drawString(blitTo, Common::String::format("m: %d, l: %d, ch: %d, fr: %d", channel->_sprite->_castId.member, channel->_sprite->_castId.castLib, i, channel->_filmLoopFrame ? channel->_filmLoopFrame : channel->_movieTime), bbox.left + 2, bbox.top + 2, 128, g_director->_wm->_colorWhite);
+			}
+		}
+	}
+
+	if (g_director->_debugDraw & kDebugDrawFrame)
+		drawFrameCounter(blitTo);
+
+	debugC(7, kDebugImages, "Window::render(): Draw cycle finished in %d ms, %d dirty rects",  g_system->getMillis() - renderStartTime, dirtyRects.size());
+
+	dirtyRects.clear();
+	_window->setContentDirty(true);
+
+	return true;
+}
+
+void Window::setStageColor(uint32 stageColor, bool forceReset) {
+	if (stageColor != _stageColor || forceReset) {
+		_stageColor = stageColor;
+		reset();
+		_window->markAllDirty();
+	}
+}
+
+void Window::setTitleVisible(bool titleVisible) {
+	_window->setTitleVisible(titleVisible);
+	updateBorderType();
+}
+
+Graphics::ManagedSurface *Window::getSurface() {
+	return _window->getSurface();
+}
+
+void Window::addDirtyRect(const Common::Rect &r) {
+	_window->addDirtyRect(r);
+}
+
+void Window::resizeInner(int w, int h) {
+	_window->resizeInner(w, h);
+}
+
+int Window::getId() {
+	return _window->getId();
+}
+
+void Window::setDirty(bool dirty) {
+	_window->setDirty(dirty);
+}
+
+void Window::disableBorder() {
+	_window->disableBorder();
+}
+
+void Window::center(bool toCenter) {
+	_window->center(toCenter);
+}
+
+Common::Point Window::getAbsolutePos() {
+	return _window->getAbsolutePos();
+}
+
+void Window::setTitle(const Common::String &title) {
+	_window->setTitle(title);
+}
+
+void Window::move(int x, int y) {
+	_window->move(x, y);
+}
+
+Datum Window::getStageRect() {
+	ensureMovieIsLoaded();
+
+	Common::Rect rect = _window->getInnerDimensions();
+	Datum d;
+	d.type = RECT;
+	d.u.farr = new FArray;
+	d.u.farr->arr.push_back(rect.left);
+	d.u.farr->arr.push_back(rect.top);
+	d.u.farr->arr.push_back(rect.right);
+	d.u.farr->arr.push_back(rect.bottom);
+
+	return d;
+}
+
+void Window::setStageRect(Datum datum) {
+	if (datum.type != RECT) {
+		warning("Window::setStageRect(): bad argument passed to rect field");
+		return;
+	}
+
+	// Unpack rect from datum
+	Common::Rect rect = Common::Rect(datum.u.farr->arr[0].asInt(), datum.u.farr->arr[1].asInt(), datum.u.farr->arr[2].asInt(), datum.u.farr->arr[3].asInt());
+
+	_window->setInnerDimensions(rect);
+}
+
+void Window::setModal(bool modal) {
+	if (_isModal && !modal) {
+		_wm->setLockedWidget(nullptr);
+		_isModal = false;
+	} else if (!_isModal && modal) {
+		if (_window->isVisible())
+			_wm->setLockedWidget(this->_window);
+		_isModal = true;
+	}
+}
+
+void Window::setFileName(Common::String filename) {
+	setNextMovie(filename);
+	ensureMovieIsLoaded();
+}
+
+void Window::reset() {
+	Graphics::ManagedSurface *composeSurface = _window->getSurface();
+	resizeInner(composeSurface->w, composeSurface->h);
+	_window->setContentDirty(true);
+	_resetScreen = true;
+}
+
+void Window::inkBlitFrom(Channel *channel, Common::Rect destRect, Graphics::ManagedSurface *blitTo) {
+	Common::Rect srcRect = channel->getBbox();
+	destRect.clip(srcRect);
+
+	DirectorPlotData pd = channel->getPlotData();
+	pd.destRect = destRect;
+	pd.dst = blitTo;
+
+	CastType castType = channel->_sprite->_cast ? channel->_sprite->_cast->_type : kCastTypeNull;
+
+	uint32 renderStartTime = 0;
+	if (debugChannelSet(8, kDebugImages)) {
+		debugC(8, kDebugImages, "Window::inkBlitFrom(): updating %dx%d @ %d,%d -> %dx%d @ %d,%d, type: %s, cast: %s, ink: %d",
+				srcRect.width(), srcRect.height(), srcRect.left, srcRect.top,
+				destRect.width(), destRect.height(), destRect.left, destRect.top,
+				castType2str(castType), channel->_sprite->_castId.asString().c_str(),
+				channel->_sprite->_ink);
+		renderStartTime = g_system->getMillis();
+	}
+
+	if (pd.ms) {
+		pd.inkBlitShape(srcRect);
+	} else if (pd.srf) {
+		pd.inkBlitSurface(srcRect, channel->getMask());
+	} else {
+		if (debugChannelSet(4, kDebugImages)) {
+			warning("Window::inkBlitFrom(): No source surface: spriteType: %d (%s), castType: %d (%s), castId: %s",
+				channel->_sprite->_spriteType, spriteType2str(channel->_sprite->_spriteType), castType, castType2str(castType),
+				channel->_sprite->_castId.asString().c_str());
+		}
+	}
+
+	if (debugChannelSet(8, kDebugImages)) {
+		debugC(8, kDebugImages, "Window::inkBlitFrom(): Draw finished in %d ms",  g_system->getMillis() - renderStartTime);
+	}
+}
+
+Common::Point Window::getMousePos() {
+	if (Director::DT::isMouseInputIgnored() && _currentMovie) {
+		return _currentMovie->_lastMousePos;
+	}
+
+	Common::Rect innerDims = _window->getInnerDimensions();
+	return g_system->getEventManager()->getMousePos() - Common::Point(innerDims.left, innerDims.top);
+}
+
+void Window::setVisible(bool visible, bool silent) {
+	// setting visible triggers movie load
+	if (!_currentMovie && !silent)
+		ensureMovieIsLoaded();
+
+	// If a modal window is not visible, release the locks it holds.
+	if (!visible && _isModal)
+		setModal(false);
+
+	_window->setVisible(visible);
+
+	if (visible)
+		_wm->setActiveWindow(getId());
+}
+
+void Window::ensureMovieIsLoaded() {
+	if (!_currentMovie) {
+		if (_fileName.empty()) {
+			Common::String movieName = getName();
+			setNextMovie(movieName);
+		}
+	} else if (_nextMovie.movie.empty()) { // The movie is loaded and no next movie to load
+		return;
+	}
+
+	if (_nextMovie.movie.empty()) {
+		warning("Window::ensureMovieIsLoaded(): No movie to load");
+		return;
+	}
+
+	if (_currentMovie) {
+		if (!_lingoState->callstack.empty())
+			freezeLingoState();
+		_currentMovie->getScore()->stopPlay();
+	}
+
+	loadNextMovie();
+
+	if (_currentMovie->getScore()->_playState == kPlayNotStarted)
+		step(); // we will load it here and move to kPlayLoaded state
+}
+
+bool Window::setNextMovie(Common::String &movieFilenameRaw) {
+	_fileName = findMoviePath(movieFilenameRaw);
+
+	bool fileExists = false;
+	Common::File file;
+	if (!_fileName.empty() && file.open(_fileName)) {
+		fileExists = true;
+		file.close();
+	}
+
+	debug(1, "Window::setNextMovie: '%s' -> '%s' -> '%s'", movieFilenameRaw.c_str(), convertPath(movieFilenameRaw).c_str(), _fileName.toString(Common::Path::kNativeSeparator).c_str());
+
+	if (!fileExists) {
+		warning("Movie %s does not exist", _fileName.toString(Common::Path::kNativeSeparator).c_str());
+		_fileName.clear();
+		return false;
+	}
+
+	_nextMovie.movie = _fileName.toString(g_director->_dirSeparator);
+
+	return true;
+}
+
+void Window::updateBorderType() {
+	if (_isStage) {
+		_window->setBorderType(3);
+	} else if (!_window->isTitleVisible()) {
+		_window->setBorderType(2);
+	} else {
+		_window->setBorderType(MAX(0, MIN(_windowType, 16)));
+	}
+}
+
+void Window::loadNewSharedCast(Cast *previousSharedCast) {
+	if (g_director->getVersion() >= 500)
+		return;
+
+	Common::Path previousSharedCastPath;
+	Common::Path newSharedCastPath = getSharedCastPath();
+	if (previousSharedCast && previousSharedCast->getArchive()) {
+		previousSharedCastPath = previousSharedCast->getArchive()->getPathName();
+	}
+
+	// Check if previous and new sharedCasts are the same
+	if (!previousSharedCastPath.empty() && previousSharedCastPath == newSharedCastPath) {
+		// Clear those previous widget pointers
+		previousSharedCast->releaseCastMemberWidget();
+		_currentMovie->_sharedCast = previousSharedCast;
+		previousSharedCast->setMovie(_currentMovie);
+
+		debugC(1, kDebugLoading, "Skipping loading already loaded shared cast, path: %s", previousSharedCastPath.toString(Common::Path::kNativeSeparator).c_str());
+		return;
+	}
+
+	// Clean up the previous sharedCast
+	if (previousSharedCast) {
+		debug(0, "@@   Clearing shared cast '%s'", previousSharedCastPath.toString().c_str());
+
+		g_director->_allSeenResFiles.erase(previousSharedCastPath);
+		g_director->_allOpenResFiles.remove(previousSharedCastPath);
+		delete previousSharedCast;
+	} else {
+		debug(0, "@@   No previous shared cast");
+	}
+
+	// Load the new sharedCast
+	if (!newSharedCastPath.empty()) {
+		_currentMovie->loadSharedCastsFrom(newSharedCastPath);
+	}
+}
+
+bool Window::loadNextMovie() {
+	_soundManager->changingMovie();
+	_newMovieStarted = true;
+	_newMovieFirstDraw = true;
+	_currentPath = Common::firstPathComponents(_nextMovie.movie, g_director->_dirSeparator);
+
+	Common::Path archivePath = Common::Path(_currentPath, g_director->_dirSeparator);
+	archivePath.appendInPlace(Common::lastPathComponent(_nextMovie.movie, g_director->_dirSeparator));
+
+	if (_currentMovie && archivePath == _currentMovie->getArchive()->getPathName()) {
+		debug(0, "Window::loadNextMovie: next movie '%s' is the same as current movie, skipping load", archivePath.toString(Common::Path::kNativeSeparator).c_str());
+
+		// Jump to the correct frame
+		_currentMovie->getScore()->_playState = kPlayStarted;
+		_nextMovie.movie.clear();
+		if (!_nextMovie.frameS.empty()) {
+			_currentMovie->getScore()->setStartToLabel(_nextMovie.frameS);
+			_nextMovie.frameS.clear();
+		}
+
+		if (_nextMovie.frameI != -1) {
+			_currentMovie->getScore()->setCurrentFrame(_nextMovie.frameI);
+			_nextMovie.frameI = -1;
+		}
+		return true;
+	}
+
+	Cast *previousSharedCast = nullptr;
+	if (_currentMovie) {
+		previousSharedCast = _currentMovie->getSharedCast();
+		_currentMovie->_sharedCast = nullptr;
+		if (previousSharedCast) {
+			previousSharedCast->setMovie(nullptr);
+		}
+	}
+
+	if (_currentMovie) {
+		debug(0, "@@@@   Unloading movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
+
+		delete _currentMovie;
+		_currentMovie = nullptr;
+	}
+
+	Common::SharedPtr<Archive> mov = g_director->openArchive(archivePath);
+
+	_nextMovie.movie.clear(); // Clearing it, so we will not attempt to load again
+
+	if (!mov)
+		return false;
+
+	probeResources(mov.get());
+
+	// Artificial delay for games that expect slow media, e.g. Spaceship Warlock
+	if (g_director->_loadSlowdownFactor && !debugChannelSet(-1, kDebugFast)) {
+		// Check that we're not cooling down from skipping a delay.
+		if (g_system->getMillis() > g_director->_loadSlowdownCooldownTime) {
+			uint32 delay = mov->getFileSize() * 1000 / g_director->_loadSlowdownFactor;
+			debugC(5, kDebugLoading, "Slowing load of next movie by %d ms", delay);
+			while (delay != 0) {
+				uint32 dec = MIN((uint32)10, delay);
+				// Skip delay if mouse is clicked
+				if (g_director->processSysEvents(true, true)) {
+					g_director->loadSlowdownCooloff();
+					break;
+				}
+				g_director->_wm->replaceCursor(Graphics::kMacCursorWatch);
+				g_director->draw();
+				g_system->delayMillis(dec);
+				delay -= dec;
+			}
+		}
+		// If this movie switch is within the cooldown time,
+		// don't add a delay. This is to allow for rapid navigation.
+		// User input events will call loadSlowdownCooloff() and
+		// extend the cooldown time.
+	}
+
+	_currentMovie = new Movie(this);
+	_currentMovie->setArchive(mov);
+
+	debug(0, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+	debug(0, "@@@@   Switching to movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
+	debug(0, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+
+	if (g_director->getVersion() < 500)
+		loadNewSharedCast(previousSharedCast);
+
+	return true;
+}
+
+bool Window::step() {
+	// finish last movie
+	if (_currentMovie && _currentMovie->getScore()->_playState == kPlayStopped) {
+		// attempt to thaw the lingo play state, if required
+		// For movie switches, we want to run it in the context of the new movie.
+		if (_nextMovie.movie.empty() && getLingoPlayState())
+			requeueLingoPlayState();
+		debugC(5, kDebugEvents, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+		debugC(5, kDebugEvents, "@@@@   Finishing movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
+		debugC(5, kDebugEvents, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+
+		_currentMovie->getScore()->stopPlay();
+		debugC(1, kDebugEvents, "Finished playback of movie '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str());
+
+		if (_vm->getGameGID() == GID_TESTALL) {
+			_nextMovie = getNextMovieFromQueue();
+		}
+	}
+
+	if (debugChannelSet(-1, kDebugFewFramesOnly) && g_director->_framesRan > kFewFamesMaxCounter)
+		return false;
+
+	// prepare next movie
+	if (!_nextMovie.movie.empty()) {
+		if (!loadNextMovie())
+			return (_vm->getGameGID() == GID_TESTALL);
+
+		g_lingo->resetLingo();
+		g_director->_lastPalette = CastMemberID();
+	}
+
+	// play current movie
+	if (_currentMovie) {
+		switch (_currentMovie->getScore()->_playState) {
+		case kPlayNotStarted:
+			{
+				debug(0, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+				debug(0, "@@@@   Loading movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
+				debug(0, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+
+				bool goodMovie = _currentMovie->loadArchive();
+				// If we've just started, switch to the default palette
+				if (g_director->_firstMovie)
+					g_director->setPalette(_currentMovie->getCast()->_defaultPalette);
+
+				// If we came in a loop, then skip as requested
+				if (!_nextMovie.frameS.empty()) {
+					_currentMovie->getScore()->setStartToLabel(_nextMovie.frameS);
+					_nextMovie.frameS.clear();
+				}
+
+				if (_nextMovie.frameI != -1) {
+					_currentMovie->getScore()->setCurrentFrame(_nextMovie.frameI);
+					_nextMovie.frameI = -1;
+				}
+
+				if (debugChannelSet(-1, kDebugPauseOnLoad) ||
+						(g_director->_firstMovie && debugChannelSet(-1, kDebugPaused))) {
+					_currentMovie->getScore()->_playState = kPlayPausedAfterLoading;
+					debug(0, "Window::step(): Putting score in paused state as requested");
+					g_system->displayMessageOnOSD(Common::U32String("Paused"));
+
+					g_director->_firstMovie = false;
+					return true;
+				}
+				g_director->_firstMovie = false;
+
+				if (!goodMovie)
+					return false;
+
+				_currentMovie->getScore()->_playState = kPlayLoaded;
+
+				return true;
+			}
+
+		case kPlayLoaded:
+			if (!debugChannelSet(-1, kDebugCompileOnly)) {
+				debugC(1, kDebugEvents, "Starting playback of movie '%s'", _currentMovie->getMacName().c_str());
+
+				if (_vm->getVersion() >= 600) {
+					// We need to call this before behavior scripts are instantiated
+					// or cast loaded
+					_currentMovie->getScore()->_disableGoPlayUpdateStage = true;
+					_currentMovie->processEvent(kEventPrepareMovie);
+					_currentMovie->getScore()->_disableGoPlayUpdateStage = false;
+				}
+
+				_currentMovie->getScore()->startPlay();
+				if (_startFrame != -1) {
+					_currentMovie->getScore()->setCurrentFrame(_startFrame);
+					_startFrame = -1;
+				}
+				g_debugger->movieHook();
+			} else {
+				return false;
+			}
+			// fall through
+		case kPlayStarted:
+			debugC(5, kDebugEvents, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+			debugC(5, kDebugEvents, "@@@@   Stepping movie '%s' in '%s'", utf8ToPrintable(_currentMovie->getMacName()).c_str(), _currentPath.c_str());
+			debugC(5, kDebugEvents, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+			_currentMovie->getScore()->step();
+			return true;
+		case kPlayPausedAfterLoading:
+		case kPlayPaused:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
+
+Common::Path Window::getSharedCastPath() {
+	Common::Array<Common::String> namesToTry;
+	if (_vm->getVersion() < 400) {
+		if (!_sharedCastFilenameHint.empty()) {
+			namesToTry.push_back(_sharedCastFilenameHint);
+		} else if (g_director->getPlatform() == Common::kPlatformWindows) {
+			namesToTry.push_back("SHARDCST.MMM");
+		} else {
+			namesToTry.push_back("Shared Cast");
+		}
+	} else if (_vm->getVersion() < 500) {
+		namesToTry.push_back("Shared.dir");
+		if (!_sharedCastFilenameHint.empty()) {
+			namesToTry.push_back(_sharedCastFilenameHint);
+		}
+	}
+
+	Common::Path result;
+	for (uint i = 0; i < namesToTry.size(); i++) {
+		debugC(2, kDebugPaths, "getSharedCastPath(): trying '%s'", namesToTry[i].c_str());
+		result = findMoviePath(namesToTry[i], true, true, _currentPath);
+		if (!result.empty()) {
+			debugC(2, kDebugPaths, "getSharedCastPath(): found '%s'", result.toString().c_str());
+			return result;
+		}
+	}
+
+	return result;
+}
+
+void Window::freezeLingoState() {
+	if (g_director->_lingoProfiler)
+		g_director->_lingoProfiler->onFreeze();
+	_frozenLingoStates.push_back(_lingoState);
+	_lingoState = new LingoState;
+	debugC(3, kDebugLingoExec, "Freezing Lingo state, depth %d", _frozenLingoStates.size());
+}
+
+void Window::thawLingoState() {
+	if (_frozenLingoStates.empty()) {
+		warning("Tried to thaw when there's no frozen state, ignoring");
+		return;
+	}
+	if (!_lingoState->callstack.empty()) {
+		warning("Can't thaw a Lingo state in mid-execution, ignoring");
+		return;
+	}
+	if (g_director->_lingoProfiler)
+		g_director->_lingoProfiler->onThaw();
+	delete _lingoState;
+	debugC(3, kDebugLingoExec, "Thawing Lingo state, depth %d", _frozenLingoStates.size());
+	_lingoState = _frozenLingoStates.back();
+	_frozenLingoStates.pop_back();
+}
+
+// When "play frame x" or "play frame movie" is called, something special happens.
+// The current Lingo state is frozen, in a different buffer to the normal frozen states.
+// That state is resumed if the Score play head reaches the end of the movie, or "play done"
+// is called. At that point, the current Lingo execution state is obliterated, and the
+// play state is introduced as the very first frozen state to process.
+
+void Window::freezeLingoPlayState() {
+	if (_lingoPlayState) {
+		warning("FIXME: Just clobbered the play state");
+		delete _lingoPlayState;
+	}
+	_lingoPlayState = _lingoState;
+	_lingoState = new LingoState;
+	debugC(3, kDebugLingoExec, "Freezing Lingo play state");
+}
+
+bool Window::requeueLingoPlayState() {
+	if (!_lingoPlayState) {
+		warning("Tried to requeue when there's no frozen play state, ignoring");
+		return false;
+	}
+	_frozenLingoStates.insert_at(0, _lingoPlayState);
+	_lingoPlayState = nullptr;
+	return true;
+}
+
+
+void Window::moveLingoState(Window *target) {
+	if (target == this)
+		return;
+	if (!target->_lingoState->callstack.empty())
+		target->freezeLingoState();
+	delete target->_lingoState;
+	target->_lingoState = _lingoState;
+	_lingoState = new LingoState();
+}
+
+
+// Check how many times enterFrame/stepMovie have been called recursively.
+// When Lingo encounters a go() call, it freezes the execution state and starts
+// processing the next frame. In the case of enterFrame/stepMovie, it is possible
+// to keep recursing without reaching a point where the frozen contexts are finished.
+// D4 and higher will only process recursive handlers to a depth of 2.
+// e.g. in a movie:
+// - frame 1 has an enterFrame handler that calls go(2)
+// - frame 2 has an enterFrame handler that calls go(3)
+// - frame 3 has an enterFrame handler that calls go(4)
+// The third enterFrame handler will be eaten and not called.
+// We can count the number of frozen states which started from enterFrame/stepMovie.
+uint32 Window::frozenLingoRecursionCount() {
+	uint32 count = 0;
+
+	bool stepFrameCanRecurse = _vm->getVersion() < 500;
+
+	for (int i = (int)_frozenLingoStates.size() - 1; i >= 0; i--) {
+		LingoState *state = _frozenLingoStates[i];
+		if (state->callstack.empty())
+			continue;
+		CFrame *frame = state->callstack.front();
+		if (frame->sp.name->equalsIgnoreCase("enterFrame") ||
+				frame->sp.name->equalsIgnoreCase("stepMovie") ||
+				(!stepFrameCanRecurse && frame->sp.name->equalsIgnoreCase("stepFrame"))) {
+			count++;
+		} else {
+			break;
+		}
+	}
+
+	return count;
+}
+
+Common::String Window::formatWindowInfo() {
+	Common::Rect dims = _window->getDimensions();
+	Common::Rect innerDims = _window->getInnerDimensions();
+	return Common::String::format(
+			"name: \"%s\", movie: \"%s\", currentPath: \"%s\", dims: (%d,%d) %dx%d, innerDims: (%d, %d) %dx%d, visible: %d\n  %s",
+			_name.c_str(), _currentMovie->getMacName().c_str(), _currentPath.c_str(),
+			dims.left, dims.top, dims.width(), dims.height(),
+			innerDims.left, innerDims.top, innerDims.width(), innerDims.height(),
+			_window->isVisible(), _currentMovie->formatMovieInfo().c_str()
+	);
+}
+
+} // End of namespace Director

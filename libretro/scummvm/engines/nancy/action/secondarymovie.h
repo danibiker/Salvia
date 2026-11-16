@@ -1,0 +1,433 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef NANCY_ACTION_SECONDARYMOVIE_H
+#define NANCY_ACTION_SECONDARYMOVIE_H
+
+#include "common/ptr.h"
+
+#include "engines/nancy/action/actionrecord.h"
+#include "engines/nancy/action/interactivevideo.h"
+#include "engines/nancy/movieplayer.h"
+
+namespace Nancy {
+namespace Action {
+
+class InteractiveVideo;
+
+// Plays an AVF or Bink video. Optionally supports:
+// - playing a sound;
+// - reverse playback;
+// - moving with the scene's background frame;
+// - hiding of player cursor (and thus, disabling input);
+// - setting event flags on a specific frame, as well as at the end of the video;
+// - changing the scene after playback ends
+// Mostly used for cinematics, with some occasional uses for background animations.
+//
+// Construct with `isRandom = true` for Nancy 11's AT_PLAY_RANDOM_MOVIE (AR 45):
+// the chunk holds a list of sequences and one is picked at readData() time.
+class PlaySecondaryMovie : public RenderActionRecord {
+public:
+	static const byte kMovieSceneChange			= 5;
+	static const byte kMovieNoSceneChange		= 6;
+
+	static const byte kPlayerCursorAllowed		= 1;
+	static const byte kNoPlayerCursorAllowed	= 2;
+
+	static const byte kPlayMovieForward			= 1;
+	static const byte kPlayMovieReverse			= 2;
+
+	struct FlagAtFrame {
+		int16 frameID;
+		FlagDescription flagDesc;
+	};
+
+	// What makes a next-sequence entry the one picked once the current sequence
+	// finishes. Entries carry a percent weight, unless the chunk tags them with
+	// one of the negative "special flag" values below; a tagged entry is picked
+	// whenever its condition holds, ahead of the weighted roll.
+	enum NextCondition {
+		kNextWeighted		= 0,	// ordinary percent weight
+		kNextEqualChance,			// -1: uniform share among the entries
+		kNextIfHovered,				// -2: the mouse is over the movie
+		kNextIfNotHovered,			// -3: it isn't
+		kNextIfChannel13Playing,	// -4
+		kNextIfChannel12Playing,	// -5
+		kNextIfCommanded			// -6: a movie was commanded; "commanded_movie" plays it, "random_movie" ignores it
+	};
+
+	// Name of the next sequence to chain to once the current one finishes,
+	// plus what makes it the one picked.
+	struct NextSequenceRef {
+		Common::Path name;
+		uint16 weight = 0;
+		NextCondition condition = kNextWeighted;
+	};
+
+	// `name` is both the sequence id and the movie filename.
+	struct RandomSequence {
+		Common::Path name;
+		int16 pauseFlag = -1;	// Nancy18: an event flag that is set for as long as the sequence pauses
+		uint16 startFrame = 0;
+		uint16 lastFrame = 0;
+		int32 minPauseMs = 0;
+		int32 maxPauseMs = 0;
+		// Weight assigned to "stay on this sequence" in the weighted random
+		// pick. A roll inside [0, stayWeight) means "don't transition";
+		// instead pause for [minPauseMs, maxPauseMs] before moving on.
+		uint16 stayWeight = 0;
+		Common::Array<NextSequenceRef> nextSequences;
+		// Every weighted entry takes an equal share of the pick.
+		bool equalChanceNext = false;
+	};
+
+	// Which of the action record types sharing this class is being played.
+	enum MovieType {
+		kSecondaryMovie,		// AR 53, up to Nancy13
+		kSecondaryMovieTerse,	// AR 41, Nancy13 and up
+		kRandomMovie,			// ARs 42, 43, 45
+		kMovieWithVolume,		// AR 44
+		kInteractiveMovie,		// AR 47
+		kMovieWithRandomPosition	// AR 48, Nancy16: AR 44 at a random spot inside its dest rect
+	};
+
+	PlaySecondaryMovie(MovieType movieType);
+	virtual ~PlaySecondaryMovie();
+
+	void init() override;
+	void onPause(bool pause) override;
+	void registerGraphics() override;
+	void updateGraphics() override;
+
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	bool getIsFinished() const { return _isFinished; }
+
+	// Enhancement: jump a cinematic straight to its end, as if it had finished
+	// playing on its own. Only cinematics are skipped; background animations
+	// the player isn't waiting on keep playing. Returns true when skipped.
+	bool skip();
+
+	Common::Path _videoName;
+	Common::Path _paletteName;
+	Common::Path _bitmapOverlayName;
+
+	// Container the record asks for; only meaningful from Nancy7 to Nancy12.
+	byte _videoPlaytype = kVideoPlaytypeAuto;
+
+	uint16 _videoFormat = kLargeVideoFormat;
+	uint16 _videoSceneChange = kMovieNoSceneChange;
+	byte _playerCursorAllowed = kPlayerCursorAllowed;
+	byte _playDirection = kPlayMovieForward;
+	uint16 _firstFrame = 0;
+	uint16 _lastFrame = 0;
+	// Nancy14-only: when non-zero, hide the movie once it reaches its last frame.
+	uint16 _hideOnFinish = 0;
+	// Nancy15 AR 44: a "play style" selector (1 or 3). Read but currently
+	// unused by playback.
+	uint16 _playStyle = 1;
+
+	// How many times the movie plays before the record finishes; 0 loops
+	// for as long as the scene lasts.
+	uint16 _numLoops = 1;
+	uint16 _playCount = 0;
+
+	// Volume of the movie's audio track, as a percentage. Carried by Nancy14+
+	// AR 44/47 only; every other record plays at full volume. SetMovieVolume
+	// (AR 150) can change it later.
+	byte _movieVolume = 100;
+
+	// How a kMovieWithRandomPosition movie picks its spot
+	enum RandomPosition : byte {
+		kFixedPosition			= 0,
+		kRandomPositionOnce		= 1,
+		kRandomPositionPerLoop	= 2
+	};
+
+	byte _randomPosition = kFixedPosition;
+	Common::Point _randomOffset;
+
+	// AR 47 "InteractiveVideo" (a PlaySecondaryMovie subclass): the movie's
+	// clickable areas live in an external .iv file, which lists them per movie
+	// frame and tags each one with a set ID. The record itself carries the name
+	// of that file and the table below, which turns a set ID into the event flag
+	// a click sets and the cursor shown while the mouse is over the area.
+	// From Nancy14 the sets are named instead of numbered; setID is then the
+	// index of that name in the .iv file's own set list, resolved at load.
+	struct InteractiveSet {
+		Common::String name;
+		int32 setID = 0;
+		FlagDescription flagDesc;
+		int16 cursorID = -1;
+	};
+	Common::Path _interactiveName;
+	Common::Array<InteractiveSet> _interactiveSets;
+	InteractiveVideoData _interactiveVideo;
+	Common::Array<FlagAtFrame> _frameFlags;
+	MultiEventFlagDescription _triggerFlags;
+	FlagDescription _videoStartFlag;
+
+	SoundDescription _sound;
+
+	SceneChangeDescription _sceneChange;
+	Common::Array<SecondaryVideoDescription> _videoDescs;
+
+	MoviePlayer _decoder;
+
+	MovieType _movieType;
+
+	bool isRandom() const { return _movieType == kRandomMovie; }
+
+	// Whether skip() applies: a movie the player is waiting through, either
+	// because it hides the cursor or because it covers the whole viewport.
+	bool isSkippable();
+
+	// Random-movie state (only populated for kRandomMovie).
+	// "RandomMovie" picks any sequence; otherwise it names the starting one.
+	Common::String _startingSequenceName;
+	// Nancy16: the name movie commands are left under, e.g. the wolf's commands
+	Common::String _playlistName;
+	uint16 _randomPlayerCursorAllowed = kPlayerCursorAllowed;
+	Common::Array<RandomSequence> _sequences;
+
+	// Nancy13+ carries one extra "secondary" movie after the sequence list: the
+	// character's recognition animation, played while the mouse hovers it.
+	RandomSequence _secondaryMovie;
+
+	// Nancy14 replaced that slot with a foreground mask: a still image blitted
+	// over the movie, so scenery standing in front of the character (a table,
+	// a counter) covers the lower part of it.
+	class ForegroundMask : public RenderObject {
+	public:
+		ForegroundMask() : RenderObject(9) {}
+		bool isViewportRelative() const override { return true; }
+	};
+
+	Common::Path _maskName;
+	Common::Array<SecondaryVideoDescription> _maskDescs;
+
+	// Talkable characters (Nancy13+): the scene to open when the character is
+	// clicked (its conversation). kNoScene means the character isn't clickable.
+	uint16 _talkSceneID = kNoScene;
+	// Hover cursor for the character (a raw cursor id from the chunk), or -1
+	// when the record doesn't name one.
+	int16 _talkCursorType = -1;
+
+	// Chain state. After a sequence's movie finishes the engine rolls a
+	// weighted pick: "stay" -> enter pause for a random duration and
+	// re-roll; valid next-sequence -> swap to that sequence's movie.
+	enum RandomChainState { kRandomPlaying, kRandomPaused };
+	// What ends the pause: its duration running out, or the mouse entering or
+	// leaving the movie (minPauseMs -2 / -3). A sequence waiting on the mouse
+	// holds its last frame on screen instead of hiding.
+	enum RandomPauseMode { kPauseTimed, kPauseUntilHovered, kPauseUntilNotHovered };
+	int _activeSequenceIndex = -1;
+	Common::Array<Common::Path> _commandedSequences;
+	RandomChainState _randomChainState = kRandomPlaying;
+	RandomPauseMode _randomPauseMode = kPauseTimed;
+	uint32 _randomPauseEndTime = 0;
+	int16 _randomPauseFlag = -1;	// the flag of the sequence that is pausing
+	bool _randomStopRequested = false;
+	bool _randomPaused = false;
+	bool _isHiddenByDependencies = false;	// Nancy18: taken off screen until the dependencies hold again
+
+	// Whether the mouse is over the movie (which drives both the hover-based
+	// sequence chain and the click that opens a character's conversation), and
+	// whether the recognition (secondary) movie is currently playing.
+	bool _isHovered = false;
+	bool _playingSecondary = false;
+
+	// Rewind state for the recognition movie. When the mouse leaves the
+	// character the movie is played backwards to its first frame so the
+	// character turns away again instead of snapping back to its idle pose.
+	// Bink can't be played in reverse by the decoder, so the frames are
+	// stepped through by hand.
+	bool _secondaryRewinding = false;
+	int _rewindFrame = 0;
+	uint32 _rewindLastFrameTime = 0;
+	uint32 _rewindFrameDelay = 66;
+
+	// Called by PlayRandomMovieControl::execute(). stopRandom() winds the AR
+	// down once the sequence that's playing finishes; stopRandomNow() ends it
+	// on the spot; pauseRandom() freezes the movie with the record still
+	// running.
+	void stopRandom() { _randomStopRequested = true; }
+	void stopRandomNow();
+	void pauseRandom(bool pause);
+
+	// Pick & start a fresh random sequence. No-op when not a random AR.
+	void playRandomSequence();
+
+	bool isViewportRelative() const override { return true; }
+
+	bool survivesSceneChange(bool nextSceneIsNoArt) const override;
+
+	// Nancy13 talkable characters expose the character's on-screen box as a
+	// clickable hotspot with a talk cursor; clicking opens _talkSceneID, and
+	// hovering plays the recognition ("turn around") movie.
+	void handleInput(NancyInput &input) override;
+	CursorManager::CursorType getHoverCursor() const override;
+	bool cursorSetFromScript() const override { return isRandom() && _talkSceneID != kNoScene && _talkCursorType >= 0; }
+
+	Common::String getRecordExtraInfo() const override {
+		return Common::String::format("Scene %d, file %s", _sceneChange.sceneID, _videoName.baseName().c_str());
+	}
+
+protected:
+	Common::String getRecordTypeName() const override {
+		return isRandom() ? "PlayRandomMovie" : "PlaySecondaryMovie";
+	}
+
+	// `ser` and `stream` must wrap the same input; `stream` is only
+	// needed for SecondaryVideoDescription::readData.
+	void readRandomMovieData(Common::Serializer &ser, Common::SeekableReadStream &stream);
+	// Nancy14 reworked the random-movie layout (confirmed identical in Nancy15):
+	// a larger header (shared with the non-random AR) and a tail of two
+	// blt-descriptor lists separated by the recognition movie's name, in place
+	// of Nancy13's secondaryMovie record + hotspot list.
+	void readRandomMovieDataNancy14(Common::Serializer &ser, Common::SeekableReadStream &stream);
+	void readRandomSequence(Common::Serializer &ser, RandomSequence &seq);
+	void readSecondaryRandomMovie(Common::Serializer &ser, RandomSequence &seq);
+
+	// Shared tail of the random-movie readers: pick the starting sequence
+	// (random or by name) and seed the flat playback fields from it.
+	void applyStartingRandomSequence();
+
+	// Nancy13 compacted the non-random layout: a z-order, an alpha selector,
+	// the cursor flag, a loop count, the frame range and the scene change.
+	// Direction follows from lastFrame preceding firstFrame, and a scene
+	// change is requested through the sceneID sentinel.
+	void readDataNancy13(Common::Serializer &ser, Common::SeekableReadStream &stream);
+
+	void readDataNancy14(Common::Serializer &ser, Common::SeekableReadStream &stream);
+
+	// AR 47 appends the name of its .iv file and the set table to the movie data.
+	void readInteractiveData(Common::Serializer &ser);
+	void resolveInteractiveSets();
+
+	// The set a hotspot belongs to, or nullptr if the record doesn't describe it.
+	const InteractiveSet *getInteractiveSet(int32 setID) const;
+
+	// Picks the hover cursor from the hotspots the .iv file lists for the frame
+	// currently on screen, and sets their event flag when one is clicked.
+	void handleInteractiveInput(NancyInput &input);
+
+	// Apply a RandomSequence's playback config to the PSM flat fields
+	// and reload the decoder. Returns true on success.
+	bool activateRandomSequence(int index);
+
+	// Load & start the recognition (secondary) movie in place of the idle loop.
+	bool activateSecondaryMovie();
+
+	// Start playing the recognition movie backwards from wherever it is now.
+	void beginSecondaryRewind();
+	// Advance the manual rewind; returns the frame to draw, or nullptr when
+	// the next frame isn't due yet.
+	const Graphics::Surface *updateSecondaryRewind();
+
+	// A Nancy13 talkable character: has a conversation scene and a recognition
+	// movie to swap to on hover.
+	bool isTalkable() const { return isRandom() && _talkSceneID != kNoScene && !_secondaryMovie.name.empty(); }
+
+	// Pick the next sequence (or "stay") per the weighted random rules.
+	// Returns -1 if "stay" was picked (and sets up the pause state),
+	// or the chosen sequence index otherwise.
+	int rollNextSequence();
+
+	// Pick the sequence to chain to, without rolling for "stay" first: the
+	// special-flag entries take priority over the weighted random pick.
+	// Returns the chosen sequence index, or -1 if nothing was picked.
+	int pickNextSequence();
+
+	// Enter the paused chain state for a random duration in the sequence's
+	// [minPauseMs, maxPauseMs] range, or until the mouse enters or leaves the
+	// movie. Always returns -1.
+	int beginRandomPause(const RandomSequence &seq);
+
+	// Whether whatever the current pause is waiting for has happened.
+	bool randomPauseElapsed() const;
+
+	// Find a sequence by name, warning and returning -1 if it isn't present.
+	int lookupSequence(const Common::Path &name) const;
+
+	// Resolve the -1/-2 "whole movie" sentinels in _firstFrame/_lastFrame
+	// against the loaded decoder's frame count. Random sequences only.
+	void resolveSentinelFrames();
+
+	// Show the foreground mask blit belonging to the given background frame,
+	// or hide it when the record doesn't describe one for that frame.
+	void updateMask(int viewportFrame);
+
+	// Place and show the movie for the current background frame, or hide it
+	// when the record doesn't describe one for that frame.
+	void updateViewportFrame();
+
+	// Crop the last decoded frame with the given video description and move
+	// the movie to its destination. -1 uses the whole frame at its current spot.
+	void applyVideoDesc(int descID);
+	Common::Rect getVideoDescDest(int descID) const;
+	void pickRandomPosition();
+
+	Graphics::ManagedSurface _fullFrame;
+	Graphics::ManagedSurface _maskImage;
+	ForegroundMask _mask;
+	int _curViewportFrame = -1;
+	bool _isFinished = false;
+};
+
+// Companion AR for the random-movie variant of PlaySecondaryMovie. When
+// executed it stops the currently-active random PlaySecondaryMovie and
+// optionally performs a scene change / event-flag set. From Nancy15 on the
+// record names the movie it controls, so it can also address an already-loaded
+// movie by filename.
+class PlayRandomMovieControl : public ActionRecord {
+public:
+	PlayRandomMovieControl() {}
+
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	enum RandomMovieControlMode : byte {
+		kStopNow = 0,
+		kPauseMovie = 1,
+		kResumeMovie = 2,
+		kStopAtEnd = 3,
+		kPauseAtEnd = 4
+	};
+
+protected:
+	Common::String getRecordTypeName() const override { return "PlayRandomMovieControl"; }
+
+	byte _mode = kStopNow;
+	SceneChangeWithFlag _sceneChange;
+	// Nancy13's record is the mode byte alone; earlier games append a scene
+	// change to it.
+	bool _hasSceneChange = true;
+	// Nancy15 prefixes the mode with the name of the movie to control.
+	Common::Path _movieName;
+	bool _isRandomMovie = true;
+};
+
+} // End of namespace Action
+} // End of namespace Nancy
+
+#endif // NANCY_ACTION_SECONDARYMOVIE_H

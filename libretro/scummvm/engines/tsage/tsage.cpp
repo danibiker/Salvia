@@ -1,0 +1,207 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/debug-channels.h"
+#include "engines/util.h"
+
+#include "tsage/tsage.h"
+#include "tsage/core.h"
+#include "tsage/dialogs.h"
+#include "tsage/events.h"
+#include "tsage/resources.h"
+#include "tsage/globals.h"
+
+namespace TsAGE {
+
+TSageEngine *g_vm = NULL;
+
+TSageEngine::TSageEngine(OSystem *system, const tSageGameDescription *gameDesc) : Engine(system),
+		_gameDescription(gameDesc) {
+	g_vm = this;
+
+#ifdef ENABLE_RINGWORLD
+	if (g_vm->getGameID() == GType_Ringworld) {
+		if (g_vm->getFeatures() & GF_DEMO)
+			setDebugger(new DemoDebugger());
+		else
+			setDebugger(new RingworldDebugger());
+	} else
+#endif
+#ifdef ENABLE_BLUEFORCE
+	if (g_vm->getGameID() == GType_BlueForce)
+		setDebugger(new BlueForceDebugger());
+	else
+#endif
+#ifdef ENABLE_RINGWORLD2
+	if (g_vm->getGameID() == GType_Ringworld2)
+		setDebugger(new Ringworld2Debugger());
+	else
+#endif
+		setDebugger(new DemoDebugger());
+}
+
+Common::Error TSageEngine::init() {
+	initGraphics(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	return Common::kNoError;
+}
+
+TSageEngine::~TSageEngine() {
+}
+
+bool TSageEngine::hasFeature(EngineFeature f) const {
+	return
+		(f == kSupportsReturnToLauncher) ||
+		(f == kSupportsLoadingDuringRuntime) ||
+		(f == kSupportsSavingDuringRuntime);
+}
+
+void TSageEngine::initialize() {
+	// Set up the correct graphics mode
+	init();
+
+	g_saver = new Saver();
+
+	// Set up the resource manager
+	g_resourceManager = new ResourceManager();
+#ifdef ENABLE_RINGWORLD
+	if (g_vm->getGameID() == GType_Ringworld) {
+		if (g_vm->getFeatures() & GF_DEMO) {
+			// Add the single library file associated with the demo
+			g_resourceManager->addLib(getPrimaryFilename());
+			g_globals = new Globals();
+		} else {
+			g_resourceManager->addLib("RING.RLB");
+			g_resourceManager->addLib("TSAGE.RLB");
+			g_globals = new Globals();
+		}
+	} else
+#endif
+#ifdef ENABLE_BLUEFORCE
+	if (g_vm->getGameID() == GType_BlueForce) {
+		g_resourceManager->addLib("BLUE.RLB");
+		if (g_vm->getFeatures() & GF_FLOPPY) {
+			g_resourceManager->addLib("FILES.RLB");
+			g_resourceManager->addLib("TSAGE.RLB");
+		}
+		g_globals = new BlueForce::BlueForceGlobals();
+
+		// Setup the user interface
+		T2_GLOBALS._uiElements.setup(Common::Point(0, UI_INTERFACE_Y - 2));
+
+		// Reset all global variables
+		BF_GLOBALS.reset();
+	} else
+#endif
+#ifdef ENABLE_RINGWORLD2
+	if (g_vm->getGameID() == GType_Ringworld2) {
+		g_resourceManager->addLib("R2RW.RLB");
+		g_globals = new Ringworld2::Ringworld2Globals();
+
+		// Setup the user interface
+		T2_GLOBALS._uiElements.setup(Common::Point(0, UI_INTERFACE_Y));
+
+		// Reset all global variables
+		R2_GLOBALS.reset();
+	} else
+#endif
+	if (g_vm->getGameID() == GType_Sherlock1) {
+#ifdef TSAGE_SHERLOCK_ENABLED
+		g_resourceManager->addLib("SF3.RLB");
+		g_globals = new Globals();
+
+		return;
+#endif
+	}
+
+	g_globals->gfxManager().setDefaults();
+
+	// Setup sound settings
+	syncSoundSettings();
+}
+
+void TSageEngine::deinitialize() {
+	delete g_globals;
+	delete g_resourceManager;
+	delete g_saver;
+	g_resourceManager = NULL;
+	g_saver = NULL;
+}
+
+Common::Error TSageEngine::run() {
+	// Basic initialization
+	initialize();
+
+	g_globals->_sceneHandler->registerHandler();
+	g_globals->_game->execute();
+
+	deinitialize();
+	return Common::kNoError;
+}
+
+/**
+ * Returns true if it is currently okay to restore a game
+ */
+bool TSageEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+	return (g_globals != NULL) && (g_globals->_game != NULL) && g_globals->_game->canLoadGameStateCurrently();
+}
+
+/**
+ * Returns true if it is currently okay to save the game
+ */
+bool TSageEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	return (g_globals != NULL) && (g_globals->_game != NULL) && g_globals->_game->canSaveGameStateCurrently();
+}
+
+/**
+ * Load the savegame at the specified slot index
+ */
+Common::Error TSageEngine::loadGameState(int slot) {
+	return g_saver->restore(slot);
+}
+
+/**
+ * Save the game to the given slot index, and with the given name
+ */
+Common::Error TSageEngine::saveGameState(int slot, const Common::String &desc, bool isAutosave) {
+	return g_saver->save(slot, desc);
+}
+
+void TSageEngine::syncSoundSettings() {
+	Engine::syncSoundSettings();
+
+	g_globals->_soundManager.syncSounds();
+}
+
+void TSageEngine::pauseEngineIntern(bool pause) {
+	// The sound server runs from a timer independently of the game loop. Stop it
+	// before pausing mixer channels so it cannot start a new stream while a
+	// modal dialog is open; reverse the order when resuming.
+	if (pause && g_globals)
+		g_globals->_soundManager.setPaused(true);
+
+	Engine::pauseEngineIntern(pause);
+
+	if (!pause && g_globals)
+		g_globals->_soundManager.setPaused(false);
+}
+
+} // End of namespace TsAGE

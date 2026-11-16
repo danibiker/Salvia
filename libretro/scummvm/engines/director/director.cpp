@@ -1,0 +1,519 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "backends/modular-backend.h"
+#include "backends/graphics/graphics.h"
+
+#include "common/config-manager.h"
+#include "common/debug-channels.h"
+#include "common/tokenizer.h"
+
+#include "graphics/macgui/macwindowmanager.h"
+#include "graphics/wincursor.h"
+
+#include "director/director.h"
+#include "director/debugger.h"
+#include "director/archive.h"
+#include "director/cast.h"
+#include "director/movie.h"
+#include "director/picture.h"
+#include "director/score.h"
+#include "director/sound.h"
+#include "director/window.h"
+#include "director/lingo/lingo-profiler.h"
+#include "director/debugger/debugtools.h"
+
+/**
+ * When detection is compiled dynamically, directory globs end up in detection plugin and
+ * engine cannot link to them so duplicate them in the engine in this case
+ */
+#ifndef DETECTION_STATIC
+#include "director/detection_paths.h"
+#endif
+
+namespace Director {
+
+DirectorEngine *g_director;
+
+DirectorEngine::DirectorEngine(OSystem *syst, const DirectorGameDescription *gameDesc) : Engine(syst), _gameDescription(gameDesc) {
+	g_director = this;
+	g_debugger = new Debugger();
+	setDebugger(g_debugger);
+	_lingoProfiler = new LingoProfiler();
+
+	// parseOptions depends on the _dirSeparator
+	_version = getDescriptionVersion();
+	if (getPlatform() == Common::kPlatformWindows && _version >= 400) {
+		_dirSeparator = '\\';
+	} else {
+		_dirSeparator = ':';
+	}
+
+	parseOptions();
+
+	// Setup mixer
+	syncSoundSettings();
+	_defaultVolume = _mixer->getVolumeForSoundType(Audio::Mixer::kSFXSoundType);
+
+	// Load Palettes
+	loadDefaultPalettes();
+
+	// Load Patterns
+	loadPatterns();
+
+	// Load key codes
+	loadKeyCodes();
+
+	memset(_currentPalette, 0, 768);
+	_currentPaletteLength = 0;
+	_stage = nullptr;
+	_mainArchive = nullptr;
+	_currentWindow = nullptr;
+	_cursorWindow = nullptr;
+	_lingo = nullptr;
+	_clipBoard = nullptr;
+	_fixStageSize = false;
+	_fixStageRect = Common::Rect();
+	_wmMode = 0;
+	_primitives = nullptr;
+
+	_wmWidth = 1024;
+	_wmHeight = 768;
+
+	_fpsLimit = 0;
+	_forceDate.tm_sec = -1;
+	_forceDate.tm_min = -1;
+	_forceDate.tm_hour = -1;
+	_forceDate.tm_mday = -1;
+	_forceDate.tm_mon = -1;
+	_forceDate.tm_year = -1;
+	_forceDate.tm_wday = -1;
+	_loadSlowdownFactor = 0;
+	_loadSlowdownCooldownTime = 0;
+	_fileIOType = 0;
+	_vfwPaletteHack = false;
+
+	_key = 0;
+	_keyCode = 0;
+	_keyFlags = 0;
+
+	_wm = nullptr;
+
+	_gameDataDir = Common::FSNode(ConfMan.getPath("path"));
+
+	SearchMan.addDirectory(_gameDataDir, 0, 5);
+
+	for (uint i = 0; Director::directoryGlobs[i]; i++) {
+		Common::String directoryGlob = directoryGlobs[i];
+		SearchMan.addSubDirectoryMatching(_gameDataDir, directoryGlob, 0, 5);
+	}
+
+	// Enable Macintosh gamma correction. This resolves the issue of Mac games appearing too dark.
+	// Enabled by default for Macintosh and Pippin games in the detection code.
+	// Right now only used in 8-bit mode to adjust the palette.
+	// FIXME: How do we add this to true color rendering without a heap of workarounds?
+	if ((getPlatform() == Common::kPlatformMacintosh) || (getPlatform() == Common::kPlatformPippin)) {
+		_gammaCorrection = ConfMan.getBool("gamma_correction");
+	} else {
+		// FIXME: It would be good if we could have this option for non-Mac, except not
+		// enabled by default.
+		_gammaCorrection = false;
+	}
+
+	switch (getPlatform()) {
+	case Common::kPlatformMacintoshII:
+		_machineType = 4;
+		break;
+	case Common::kPlatformPippin:
+		_machineType = 71;
+		break;
+	case Common::kPlatformWindows:
+		_machineType = 256;
+		break;
+	case Common::kPlatformMacintosh:
+	default:
+		_machineType = 9;	// Macintosh IIci
+	}
+
+	_centerStage = true;
+
+	_surface = nullptr;
+	_tickBaseline = 0;
+
+	_emulateMultiButtonMouse = false;
+}
+
+DirectorEngine::~DirectorEngine() {
+	delete _lingo;
+	delete _lingoProfiler;
+
+	clearPalettes();
+
+	for (auto &it : _windowList) {
+		it->decRefCount();
+	}
+	_stage->decRefCount();
+	_stage = nullptr;
+	if (_currentWindow) {
+		_currentWindow->decRefCount();
+		_currentWindow = nullptr;
+	}
+	delete _wm;
+	_allSeenResFiles.clear();
+	for (uint i = 0; i < _winCursor.size(); i++)
+		delete _winCursor[i];
+
+	delete _surface;
+	delete _primitives;
+}
+
+Movie *DirectorEngine::getCurrentMovie() const { return _currentWindow->getCurrentMovie(); }
+Common::String DirectorEngine::getCurrentPath() const { return _currentWindow->getCurrentPath(); }
+Common::String DirectorEngine::getCurrentAbsolutePath() {
+	Common::String currentPath = getCurrentPath();
+	Common::String result;
+	result += (getPlatform() == Common::kPlatformWindows && _version >= 400) ? "C:\\" : "@:";
+	result += convertPath(currentPath);
+	return result;
+}
+
+static bool buildbotErrorHandler(const char *msg) { return true; }
+
+Window *DirectorEngine::getOrCreateWindow(Common::String &name) {
+	for (auto &it : _windowList) {
+		if (it->getName().equalsIgnoreCase(name)) {
+			return it;
+		}
+	}
+	Window *window = new Window(_wm->getNextId(), false, false, false, _wm, g_director, false);
+	window->setName(name);
+	window->setTitle(name);
+	window->resizeInner(1, 1);
+	window->setVisible(false, true);
+	window->move(0, 0);
+	window->incRefCount();
+	_wm->addWindowInitialized(window->getMacWindow());
+	_windowList.push_back(window);
+	return window;
+}
+
+void DirectorEngine::forgetWindow(Window *window) {
+	for (auto &it : _windowsToForget) {
+		if (it == window)
+			return;
+	}
+	window->setVisible(false, true);
+	window->getSoundManager()->stopSound();
+	_windowsToForget.push_back(window);
+}
+
+bool DirectorEngine::isWindowRegistered(Window *window) const {
+	if (window == _stage) {
+		return true;
+	}
+	for (auto &it : _windowList) {
+		if (it == window) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void DirectorEngine::setCurrentWindow(Window *window) {
+	if (_currentWindow == window)
+		return;
+	window->incRefCount();
+	if (_currentWindow)
+		_currentWindow->decRefCount();
+	_currentWindow = window;
+}
+
+void DirectorEngine::setVersion(uint16 version) {
+	if (version == _version)
+		return;
+
+	debug("Switching to Director v%d", version);
+	_version = version;
+	_lingo->reloadBuiltIns();
+}
+
+#ifndef USE_IMGUI
+namespace DT {
+bool isMouseInputIgnored() { return false; }
+void setSelectedChannel(int channel) { }
+void renderPendingWindow() { }
+}
+#endif
+
+Common::Error DirectorEngine::run() {
+	debug("Starting v%d Director game", getVersion());
+
+	// We want to avoid GUI errors for buildbot, because they hang it
+	if (debugChannelSet(-1, kDebugFewFramesOnly))
+		Common::setErrorHandler(buildbotErrorHandler);
+
+	if (!_mixer->isReady()) {
+		return Common::kAudioDeviceInitFailed;
+	}
+
+	memset(_currentPalette, 0, 768);
+
+	//        we run mac-style menus     |   and we will redraw all widgets
+	_wmMode = Graphics::kWMModalMenuMode | Graphics::kWMModeManualDrawWidgets;
+
+	if (!debugChannelSet(-1, kDebugDesktop))
+		_wmMode |= Graphics::kWMModeFullscreen | Graphics::kWMModeNoDesktop;
+
+	if (ConfMan.getBool("true_color") || (getGameFlags() & GF_TRUECOLOR) || debugChannelSet(-1, kDebug32bpp)) {
+		// Both 16bpp and 32bpp formats are supported, but 32bpp is always reported to the scripts.
+		_pixelformat = g_system->getSupportedFormats().front();
+		_colorDepth = _pixelformat.isCLUT8() ? 8 : 32;
+	} else {
+		_pixelformat = Graphics::PixelFormat::createFormatCLUT8();
+		_colorDepth = 8;
+	}
+
+	debugC(1, kDebugImages, "Director pixelformat is: %s", _pixelformat.toString().c_str());
+
+	if (getGameFlags() & GF_DESKTOP)
+		_wmMode &= ~Graphics::kWMModeNoDesktop;
+
+	if (getGameFlags() & GF_640x480) {
+		_wmWidth = 640;
+		_wmHeight = 480;
+	}
+
+	_wm = new Graphics::MacWindowManager(_wmMode, &_director3QuickDrawPatterns, getLanguage(), _pixelformat);
+	_wm->setEngine(this);
+
+	gameQuirks(_gameDescription->desc.gameId, _gameDescription->desc.platform);
+	// Mix in all the saved files for the current target
+	// Assign higher priority to save games to load them before original game files
+	SearchMan.add(kSavedFilesArchive, new SavedArchive(_targetName), 1);
+
+	_wm->setDesktopMode(_wmMode);
+
+	_wm->printWMMode();
+
+	debugC(1, kDebugImages, "Director pixelformat is: %s", _pixelformat.toString().c_str());
+
+	_stage = new Window(_wm->getNextId(), false, false, false, _wm, this, true);
+	_stage->incRefCount();
+
+	// Set this as background so it doesn't come to foreground when multiple windows present
+	_wm->setBackgroundWindow(_stage->getMacWindow());
+
+	if (!desktopEnabled())
+		_stage->disableBorder();
+
+	_surface = new Graphics::ManagedSurface(1, 1);
+	_wm->setScreen(_surface);
+	_wm->addWindowInitialized(_stage->getMacWindow());
+	_wm->setActiveWindow(_stage->getId());
+	setPalette(CastMemberID(kClutSystemMac, -1));
+
+	setCurrentWindow(_stage);
+
+	_lingo = new Lingo(this);
+	_lingo->switchStateFromWindow();
+
+	if (getGameGID() == GID_TEST) {
+		_currentWindow->runTests();
+		return Common::kNoError;
+	} else if (getGameGID() == GID_TESTALL) {
+		_currentWindow->enqueueAllMovies();
+	}
+
+	if (getPlatform() == Common::kPlatformWindows)
+		_machineType = 256; // IBM PC-type machine
+
+	Common::Error err = _currentWindow->loadInitialMovie();
+
+	// Exit gracefully when run with buildbot
+	if (debugChannelSet(-1, kDebugFewFramesOnly) && err.getCode() == Common::kNoGameDataFoundError)
+		return Common::kNoError;
+
+	if (err.getCode() != Common::kNoError)
+		return err;
+
+	if (debugChannelSet(-1, kDebugConsole)) {
+		g_debugger->attach();
+		g_system->updateScreen();
+	}
+
+#ifdef USE_IMGUI
+	ImGuiCallbacks callbacks;
+	bool drawImGui = debugChannelSet(-1, kDebugImGui);
+	callbacks.init = DT::onImGuiInit;
+	callbacks.render = drawImGui ? DT::onImGuiRender : nullptr;
+	callbacks.cleanup = DT::onImGuiCleanup;
+	_system->setImGuiCallbacks(callbacks);
+#endif
+
+	bool loop = true;
+
+	while (loop) {
+		if (_stage->getCurrentMovie())
+			processSysEvents();
+
+		setCurrentWindow(_stage);
+		g_lingo->switchStateFromWindow();
+		loop = _currentWindow->step();
+
+		if (loop) {
+			for (auto &it : _windowList) {
+				setCurrentWindow(it);
+				g_lingo->switchStateFromWindow();
+				_currentWindow->step();
+			}
+		}
+
+		// service a debugger-requested redraw before compositing, so it
+		// is visible even when playback is paused and step() renders nothing
+		DT::renderPendingWindow();
+
+		draw();
+		while (!_windowsToForget.empty()) {
+			Window *window = _windowsToForget.back();
+			_windowsToForget.pop_back();
+			for (size_t i = 0; i < _windowList.size(); i++) {
+				if (_windowList[i] == window) {
+					_windowList.remove_at(i);
+					// FIXME: force window to be removed from WM
+					window->decRefCount();
+					break;
+				}
+			}
+		}
+
+		g_director->delayMillis(10);
+#ifdef USE_IMGUI
+		// For performance reasons, disable the renderer callback if the ImGui debug flag isn't set
+		if (debugChannelSet(-1, kDebugImGui) != drawImGui) {
+			drawImGui = !drawImGui;
+			callbacks.render = drawImGui ? DT::onImGuiRender : nullptr;
+			_system->setImGuiCallbacks(callbacks);
+		}
+#endif
+	}
+
+#ifdef USE_IMGUI
+	_system->setImGuiCallbacks(ImGuiCallbacks());
+#endif
+
+	if (debugChannelSet(10, kDebugSaving)) {
+		//_mainArchive->writeToFile(Common::String(""), getCurrentMovie());
+	}
+
+	return Common::kNoError;
+}
+
+Common::CodePage DirectorEngine::getPlatformEncoding() {
+	// Returns the default encoding for the platform we're pretending to be.
+	// (English Mac OS, Japanese Mac OS, English Windows, etc.)
+	return getEncoding(getPlatform(), getLanguage());
+}
+
+Common::String DirectorEngine::getRawEXEName() const {
+	if (!_gameDescription->desc.filesDescriptions[0].fileName)
+		return Common::String();
+
+	// Returns raw executable name (without getting overloaded from --start-movie option)
+	return Common::Path(_gameDescription->desc.filesDescriptions[0].fileName).toString(g_director->_dirSeparator);
+}
+
+Common::String DirectorEngine::getEXEName() const {
+	StartMovie startMovie = getStartMovie();
+	if (startMovie.startMovie.size() > 0)
+		return startMovie.startMovie;
+
+	return getRawEXEName();
+}
+
+void DirectorEngine::parseOptions() {
+	_options.startMovie.startFrame = -1;
+
+	if (!ConfMan.hasKey("start_movie"))
+		return;
+
+	Common::StringTokenizer tok(ConfMan.get("start_movie"), ",");
+
+	while (!tok.empty()) {
+		Common::String part = tok.nextToken();
+
+		int eqPos = part.findLastOf("=");
+		Common::String key;
+		Common::String value;
+
+		if ((uint)eqPos != Common::String::npos) {
+			key = part.substr(0, eqPos);
+			value = part.substr(eqPos + 1, part.size());
+		} else {
+			value = part;
+		}
+
+		if (key == "movie" || key.empty()) { // Format is movie[@startFrame]
+			if (!_options.startMovie.startMovie.empty()) {
+				warning("parseOptions(): Duplicate startup movie: %s", value.c_str());
+			}
+
+			int atPos = value.findLastOf("@");
+
+			if ((uint)atPos == Common::String::npos) {
+				_options.startMovie.startMovie = value;
+			} else {
+				_options.startMovie.startMovie = value.substr(0, atPos);
+				Common::String tail = value.substr(atPos + 1, value.size());
+				if (tail.size() > 0)
+					_options.startMovie.startFrame = atoi(tail.c_str());
+			}
+
+			_options.startMovie.startMovie = Common::Path(_options.startMovie.startMovie).punycodeDecode().toString(_dirSeparator);
+
+			debug(2, "parseOptions(): Movie is: %s, frame is: %d", _options.startMovie.startMovie.c_str(), _options.startMovie.startFrame);
+		} else if (key == "startup") {
+			_options.startupPath = value;
+
+			debug(2, "parseOptions(): Startup is: %s", value.c_str());
+		} else {
+			warning("parseOptions(): unknown option %s", part.c_str());
+		}
+
+	}
+}
+
+StartMovie DirectorEngine::getStartMovie() const {
+	return _options.startMovie;
+}
+
+Common::Path DirectorEngine::getStartupPath() const {
+	return Common::Path(_options.startupPath, g_director->_dirSeparator);
+}
+
+bool DirectorEngine::desktopEnabled() {
+	return !(_wmMode & Graphics::kWMModeNoDesktop);
+}
+
+PatternTile::~PatternTile() {
+	delete img;
+}
+
+} // End of namespace Director

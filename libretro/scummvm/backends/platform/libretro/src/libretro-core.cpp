@@ -1,0 +1,1370 @@
+/* Copyright (C) 2023 Giovanni Cascione <ing.cascione@gmail.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#define FORBIDDEN_SYMBOL_ALLOW_ALL
+
+#include "audio/mixer_intern.h"
+#include "base/main.h"
+#include "common/scummsys.h"
+#include "common/str.h"
+#include "common/fs.h"
+#include "common/error.h"
+#include "streams/file_stream.h"
+#include <file/file_path.h>
+#include <retro_dirent.h>
+#include "graphics/surface.h"
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
+#ifndef _MSC_VER
+/**
+ * Include libgen.h for basename() and dirname().
+ * @see http://linux.die.net/man/3/basename
+ */
+#include <libgen.h>
+#endif
+
+#include <features/features_cpu.h> // cpu_features_get_time_usec()
+#include <retro_atomic.h>
+#include <retro_miscellaneous.h> // PATH_MAX_LENGTH
+
+/**
+ * Include base/internal_version.h to allow access to SCUMMVM_VERSION.
+ * @see retro_get_system_info()
+ */
+#define INCLUDED_FROM_BASE_VERSION_CPP
+#include "base/internal_version.h"
+
+#include "graphics/managed_surface.h"
+
+#include "backends/platform/libretro/include/libretro-defs.h"
+#include "backends/platform/libretro/include/libretro-core.h"
+#include "backends/platform/libretro/include/libretro-gl-context-handoff.h"
+#include "backends/platform/libretro/include/libretro-threads.h"
+#include "backends/platform/libretro/include/libretro-core-options.h"
+#include "backends/platform/libretro/include/libretro-os.h"
+#include "backends/platform/libretro/include/libretro-fs.h"
+#include "backends/platform/libretro/include/libretro-mapper.h"
+
+static struct retro_game_info game_buf;
+static struct retro_game_info *game_buf_ptr;
+/* retro_game_info::path is a frontend-owned pointer; retro_reset() reuses
+ * game_buf_ptr to relaunch, so it must not depend on that pointer staying
+ * valid after the initial retro_load_game() call. Own a stable copy instead. */
+static char game_buf_path[PATH_MAX_LENGTH];
+
+retro_log_printf_t retro_log_cb = NULL;
+retro_input_state_t retro_input_cb = NULL;
+static retro_video_refresh_t video_cb = NULL;
+static retro_audio_sample_batch_t audio_batch_cb = NULL;
+static retro_environment_t environ_cb = NULL;
+static retro_input_poll_t poll_cb = NULL;
+static int retro_input_device = RETRO_DEVICE_JOYPAD;
+
+// MIDI interface
+struct retro_midi_interface *retro_midi_interface = nullptr;
+
+// Default deadzone: 15%
+static int analog_deadzone = (int)(0.15f * ANALOG_RANGE);
+
+static float gamepad_cursor_speed = 1.0f;
+static bool analog_response_is_quadratic = false;
+
+static float mouse_speed = 1.0f;
+static float gamepad_acceleration_time = 0.2f;
+static int mouse_fine_control_speed_reduction = 4;
+static int pointer_device = RETRO_DEVICE_JOYPAD; // default pointer/mouse device
+
+char cmd_params[20][200];
+char cmd_params_num;
+
+static uint8 video_hw_mode = 0;
+
+static unsigned base_width = RES_W_OVERLAY;
+static unsigned base_height = RES_H_OVERLAY;
+static unsigned gui_width = RES_W_OVERLAY;
+static unsigned gui_height = RES_H_OVERLAY;
+static unsigned max_width = RES_INIT_MAX_W;
+static unsigned max_height = RES_INIT_MAX_H;
+
+static uint16 av_status = AUDIO_STATUS_MUTE;
+
+static float frame_rate = 0;
+static uint16 sample_rate = 0;
+static float audio_samples_per_frame   = 0.0f; // length in samples per frame
+static float audio_samples_accumulator = 0.0f;
+static retro_time_t audio_last_time_usec = 0; // timestamp of the previous audio_run()
+
+static int16 *audio_sample_buffer = NULL; // pointer to output buffer
+
+static bool input_bitmask_supported = false;
+static bool browsing_mode_authorized = false;
+static bool updating_variables = false;
+
+#ifdef USE_OPENGL
+static struct retro_hw_render_callback hw_render;
+
+/* Set on the frontend thread by context_reset(), consumed on the emulation
+ * thread by retro_consume_context_reset(). */
+static retro_atomic_int_t context_reset_pending = RETRO_ATOMIC_INT_INITIALIZER(0);
+
+void retro_set_context_reset_pending(void) {
+	retro_atomic_store_release_int(&context_reset_pending, 1);
+}
+
+bool retro_consume_context_reset(void) {
+	if (!retro_atomic_load_acquire_int(&context_reset_pending))
+		return false;
+	retro_atomic_store_release_int(&context_reset_pending, 0);
+	return true;
+}
+
+static void context_reset(void) {
+	retro_log_cb(RETRO_LOG_DEBUG, "HW context reset\n");
+	/* The reset re-creates the GL context and reloads all GL entry points,
+	   which must happen on the emulation thread where the context is current.
+	   Defer it instead of calling it here on the frontend thread. */
+	if (retro_emu_thread_started())
+		retro_set_context_reset_pending();
+}
+
+static void context_destroy(void) {
+	retro_log_cb(RETRO_LOG_DEBUG, "HW context destroy\n");
+}
+
+uintptr_t retro_get_hw_fb(void) {
+	return hw_render.get_current_framebuffer();
+}
+
+void *retro_get_proc_address(const char *name) {
+	return (void *)(hw_render.get_proc_address(name));
+}
+#endif
+
+#ifdef USE_HIGHRES
+static void retro_gui_res_reset() {
+	if (retro_emu_thread_started()) {
+		LIBRETRO_G_SYSTEM->beginGFXTransaction();
+		LIBRETRO_G_SYSTEM->initSize(0, 0, nullptr);
+		LIBRETRO_G_SYSTEM->endGFXTransaction();
+	}
+}
+#endif
+
+/* Single-producer / single-consumer ring. The producer is ScummVM's MIDI
+   driver, the consumer is retro_midi_queue_drain() in retro_run(). */
+static retro_midi_event_t midi_queue[MIDI_QUEUE_SIZE];
+static retro_atomic_int_t midi_head = RETRO_ATOMIC_INT_INITIALIZER(0); /* published by producer */
+static retro_atomic_int_t midi_tail = RETRO_ATOMIC_INT_INITIALIZER(0); /* published by consumer */
+
+static void setup_hw_rendering(void) {
+
+	enum retro_pixel_format pixel_fmt;
+#ifdef USE_OPENGL
+	/* ScummVM issues its GL calls from the emulation thread, so the frontend's
+	   context has to travel with control at every thread switch. Without a
+	   backend for that handoff those calls would land on a thread with no
+	   current context, so stay on the software renderer instead. */
+	if ((video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_HW) && !retro_gl_context_handoff_available()) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "No GL context handoff backend available, falling back to software.\n");
+		retro_osd_notification("HW rendering unavailable on this platform.", RETRO_LOG_WARN);
+		video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
+	}
+
+	if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_HW) {
+		pixel_fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+		if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_fmt) && retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "RETRO_PIXEL_FORMAT_XRGB8888 not supported.\n");
+		hw_render.context_reset = context_reset;
+		hw_render.context_destroy = context_destroy;
+		hw_render.cache_context = false;
+		hw_render.bottom_left_origin = true;
+#if defined(HAVE_OPENGL)
+		hw_render.context_type = RETRO_HW_CONTEXT_OPENGL;
+		video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGL;
+#elif defined(HAVE_OPENGLES2)
+		hw_render.context_type = RETRO_HW_CONTEXT_OPENGLES2;
+		video_hw_mode |= VIDEO_GRAPHIC_MODE_HAVE_OPENGLES2;
+#endif
+		if (!environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render)) {
+			retro_log_cb(RETRO_LOG_WARN, "Failed to set up hardware rendering, falling back to software.\n");
+			retro_osd_notification("Failed to set up HW rendering.", RETRO_LOG_ERROR);
+			video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
+		}
+	}
+#endif
+	if ((video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) || !video_hw_mode) {
+		pixel_fmt = RETRO_PIXEL_FORMAT_RGB565;
+		if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_fmt) && retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "RETRO_PIXEL_FORMAT_RGB565 not supported.\n");
+	}
+}
+
+uint8 retro_get_video_hw_mode(void) {
+	return video_hw_mode;
+}
+
+void process_key_event_wrapper(bool down, unsigned keycode, uint32_t character, uint16_t key_modifiers) {
+	LIBRETRO_G_SYSTEM->processKeyEvent(down, keycode, character, key_modifiers);
+}
+
+static void log_scummvm_exit_code(void) {
+	if (retro_get_scummvm_res() == Common::kNoError)
+		retro_log_cb(RETRO_LOG_INFO, "ScummVM exited successfully.\n");
+	else if (retro_get_scummvm_res() < Common::kNoError)
+		retro_log_cb(RETRO_LOG_WARN, "Unknown ScummVM exit code.\n");
+	else
+		retro_log_cb(RETRO_LOG_ERROR, "ScummVM exited with error %d.\n", retro_get_scummvm_res());
+}
+
+static void audio_buffer_init(uint16 sample_rate, uint16 frame_rate) {
+	audio_samples_accumulator = 0.0f;
+	audio_last_time_usec      = cpu_features_get_time_usec();
+	audio_samples_per_frame   = (float)sample_rate / (float)frame_rate;
+	uint32 audio_sample_buffer_size  = ((uint32)retro_setting_get_audio_samples_buffer_size()) * 2 * sizeof(int16);
+	audio_sample_buffer       = audio_sample_buffer ? (int16 *)realloc(audio_sample_buffer, audio_sample_buffer_size) : (int16 *)malloc(audio_sample_buffer_size);
+
+	if (audio_sample_buffer)
+		memset(audio_sample_buffer, 0, audio_sample_buffer_size);
+	else
+		retro_log_cb(RETRO_LOG_ERROR, "audio_buffer_init error.\n");
+}
+
+static void audio_run(void) {
+	int16 *audio_buffer_ptr;
+	uint32 samples_to_read;
+	uint32 samples_produced;
+	uint16 samples_buffer_size = retro_setting_get_audio_samples_buffer_size();
+
+	/* Pace audio against elapsed wall time instead of a fixed sample_rate/frame_rate
+	 * batch, so output stays at sample_rate even when the frontend runs retro_run()
+	 * above or below frame_rate (a slow frontend would otherwise underrun the audio
+	 * buffer). Video stays frame-locked. */
+	retro_time_t now_usec = cpu_features_get_time_usec();
+	float samples_target = (float)sample_rate * (float)(now_usec - audio_last_time_usec) / 1000000.0f;
+	audio_last_time_usec = now_usec;
+
+	/* Samples_target is decimal; get integer component */
+	samples_to_read = (uint32)samples_target;
+
+	/* Account for fractional component */
+	audio_samples_accumulator += samples_target - (float)samples_to_read;
+
+	if (audio_samples_accumulator >= 1.0f) {
+		samples_to_read++;
+		audio_samples_accumulator -= 1.0f;
+	}
+
+	/* Bound the batch to the mix buffer: after a long stall (content load,
+	 * save-state) the elapsed interval would otherwise request a multi-second
+	 * batch and overrun audio_sample_buffer. */
+	if (samples_to_read > samples_buffer_size)
+		samples_to_read = samples_buffer_size;
+
+	samples_produced = ((Audio::MixerImpl *)g_system->getMixer())->mixCallback((byte *) audio_sample_buffer, samples_to_read * 2 * sizeof(int16));
+
+	/* Workaround as currently there's no way to detect silence-only buffers from the mixer */
+	if (samples_produced) {
+		int i = 0;
+		for (; i < samples_produced; i += 2)
+			/* SID streams constant crap */
+			if (READ_UINT16(audio_sample_buffer + i) > 32)
+				break;
+		samples_produced = i >= samples_produced ? 0 : samples_produced;
+	}
+
+	if (samples_produced)
+		av_status &= ~AUDIO_STATUS_MUTE;
+	else {
+		av_status |= AUDIO_STATUS_MUTE;
+		return;
+	}
+
+	/* Workaround for a RetroArch audio driver
+	 * limitation: a maximum of 1024 frames
+	 * can be written per call of audio_batch_cb(),
+	 * so we have to send samples in chunks */
+	audio_buffer_ptr = audio_sample_buffer;
+	while (samples_produced > 0) {
+		uint32 samples_to_write = (samples_produced > AUDIO_BATCH_FRAMES_MAX) ? AUDIO_BATCH_FRAMES_MAX : samples_produced;
+
+		audio_batch_cb(audio_buffer_ptr, samples_to_write);
+
+		samples_produced -= samples_to_write;
+		audio_buffer_ptr += samples_to_write << 1;
+	}
+}
+
+void retro_osd_notification(const char *msg, enum retro_log_level level) {
+	if (!msg || *msg == '\0')
+		return;
+	struct retro_message_ext retro_msg = {};
+	retro_msg.type = RETRO_MESSAGE_TYPE_NOTIFICATION;
+	retro_msg.target = RETRO_MESSAGE_TARGET_OSD;
+	retro_msg.duration = 3000;
+	retro_msg.priority = (level >= RETRO_LOG_WARN) ? 3 : 1;
+	retro_msg.level = level;
+	retro_msg.progress = -1;
+	retro_msg.msg = msg;
+	environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &retro_msg);
+}
+
+static void update_variables(void) {
+	struct retro_variable var;
+	updating_variables = true;
+
+	var.key = "scummvm_pointer_device";
+	var.value = NULL;
+	pointer_device = RETRO_DEVICE_JOYPAD;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "mouse") == 0)
+			pointer_device = RETRO_DEVICE_MOUSE;
+		else if (strcmp(var.value, "pointer") == 0)
+			pointer_device = RETRO_DEVICE_POINTER;
+		/* else if (strcmp(var.value, "retropad") == 0)
+			pointer_device = RETRO_DEVICE_JOYPAD; */
+	}
+
+	var.key = "scummvm_gamepad_cursor_speed";
+	var.value = NULL;
+	gamepad_cursor_speed = 1.0f;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		gamepad_cursor_speed = (float)atof(var.value);
+	}
+
+	var.key = "scummvm_gamepad_cursor_acceleration_time";
+	var.value = NULL;
+	gamepad_acceleration_time = 0.2f;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		gamepad_acceleration_time = (float)atof(var.value);
+	}
+
+	var.key = "scummvm_analog_response";
+	var.value = NULL;
+	analog_response_is_quadratic = false;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "quadratic") == 0)
+			analog_response_is_quadratic = true;
+	}
+
+	var.key = "scummvm_analog_deadzone";
+	var.value = NULL;
+	analog_deadzone = (int)(0.15f * ANALOG_RANGE);
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		analog_deadzone = (int)(atoi(var.value) * 0.01f * ANALOG_RANGE);
+	}
+
+	var.key = "scummvm_mouse_speed";
+	var.value = NULL;
+	mouse_speed = 1.0f;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mouse_speed = (float)atof(var.value);
+	}
+
+	var.key = "scummvm_mouse_fine_control_speed_reduction";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mouse_fine_control_speed_reduction = (int)atoi(var.value);
+	}
+
+	var.key = "scummvm_framerate";
+	var.value = NULL;
+	float old_frame_rate = frame_rate;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "disabled") == 0)
+			frame_rate = environ_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &frame_rate) ? frame_rate : DEFAULT_REFRESH_RATE;
+		else {
+			char frame_rate_var[3] = {0};
+			strncpy(frame_rate_var, var.value, 2);
+			frame_rate = (float)atof(frame_rate_var);
+		}
+	} else
+		frame_rate = DEFAULT_REFRESH_RATE;
+
+	var.key = "scummvm_samplerate";
+	var.value = NULL;
+	uint16 old_sample_rate = sample_rate;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		char sample_rate_var[6] = {0};
+		strncpy(sample_rate_var, var.value, 5);
+		sample_rate = atoi(sample_rate_var);
+	} else
+		sample_rate = DEFAULT_SAMPLE_RATE;
+
+	var.key = "scummvm_browsing_mode";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+		browsing_mode_authorized = (strcmp(var.value, "authorized") == 0);
+	else
+#ifdef ANDROID
+		browsing_mode_authorized = true;
+#else
+		browsing_mode_authorized = false;
+#endif
+
+	var.key = "scummvm_mapper_up";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_UP, var.value);
+	}
+
+	var.key = "scummvm_mapper_down";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_DOWN, var.value);
+	}
+
+	var.key = "scummvm_mapper_left";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LEFT, var.value);
+	}
+
+	var.key = "scummvm_mapper_right";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RIGHT, var.value);
+	}
+
+	var.key = "scummvm_mapper_a";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_A, var.value);
+	}
+
+	var.key = "scummvm_mapper_b";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_B, var.value);
+	}
+
+	var.key = "scummvm_mapper_x";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_X, var.value);
+	}
+
+	var.key = "scummvm_mapper_y";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_Y, var.value);
+	}
+
+	var.key = "scummvm_mapper_select";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_SELECT, var.value);
+	}
+
+	var.key = "scummvm_mapper_start";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_START, var.value);
+	}
+
+	var.key = "scummvm_mapper_l";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_L, var.value);
+	}
+
+	var.key = "scummvm_mapper_r";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_R, var.value);
+	}
+
+	var.key = "scummvm_mapper_l2";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_L2, var.value);
+	}
+
+	var.key = "scummvm_mapper_r2";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_R2, var.value);
+	}
+
+	var.key = "scummvm_mapper_l3";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_L3, var.value);
+	}
+
+	var.key = "scummvm_mapper_r3";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_R3, var.value);
+	}
+
+	var.key = "scummvm_mapper_lu";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LU, var.value);
+	}
+
+	var.key = "scummvm_mapper_ld";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LD, var.value);
+	}
+
+	var.key = "scummvm_mapper_ll";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LL, var.value);
+	}
+
+	var.key = "scummvm_mapper_lr";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LR, var.value);
+	}
+
+	var.key = "scummvm_mapper_ru";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RU, var.value);
+	}
+
+	var.key = "scummvm_mapper_rd";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RD, var.value);
+	}
+
+	var.key = "scummvm_mapper_rl";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RL, var.value);
+	}
+
+	var.key = "scummvm_mapper_rr";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RR, var.value);
+	}
+
+	var.key = "scummvm_video_hw_acceleration";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		if (strcmp(var.value, "enabled") == 0) {
+			if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) {
+				// video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_HW;
+				video_hw_mode |= VIDEO_GRAPHIC_MODE_RESET_PENDING;
+			} else if (!video_hw_mode)
+				video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_HW;
+		} else {
+			if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_HW) {
+				// video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
+				video_hw_mode |= VIDEO_GRAPHIC_MODE_RESET_PENDING;
+			} else if (!video_hw_mode)
+				video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
+		}
+	}
+
+#ifdef USE_HIGHRES
+	var.key = "scummvm_gui_h_res";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		uint16 new_gui_height = (int)atoi(var.value);
+		av_status |= new_gui_height != gui_height && LIBRETRO_G_SYSTEM && LIBRETRO_G_SYSTEM->inLauncher() ? AV_STATUS_UPDATE_GUI : 0;
+		gui_height = new_gui_height;
+	}
+
+	var.key = "scummvm_gui_aspect_ratio";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+		uint8 num = 4;
+		uint8 den = 3;
+		if (atoi(var.value)) {
+			num = 16;
+			den = 9;
+		}
+		uint16 new_gui_width = gui_height * num / den + (gui_height * num % den != 0);
+		av_status |= (new_gui_width != gui_width) && LIBRETRO_G_SYSTEM && LIBRETRO_G_SYSTEM->inLauncher() ? AV_STATUS_UPDATE_GUI : 0;
+		gui_width = new_gui_width;
+	}
+#endif
+
+	if (old_frame_rate != frame_rate || old_sample_rate != sample_rate) {
+		av_status |= AUDIO_STATUS_UPDATE_LATENCY;
+		audio_buffer_init(sample_rate, (uint16) frame_rate);
+		if (g_system)
+			av_status |= (AV_STATUS_UPDATE_AV_INFO | AV_STATUS_RESET_PENDING);
+	}
+
+	if (video_hw_mode & VIDEO_GRAPHIC_MODE_RESET_PENDING) {
+		/* TODO: evaluate if setting can be applied on the fly
+		setup_hw_rendering();
+		LIBRETRO_G_SYSTEM->resetGraphicsManager();
+		retro_reset(); */
+		retro_osd_notification("Core reload is needed to apply HW acceleration setting change.");
+		video_hw_mode &= ~VIDEO_GRAPHIC_MODE_RESET_PENDING;
+	}
+
+	updating_variables = false;
+}
+
+static void retro_set_options_display(void) {
+	/*struct retro_core_option_display option_display;
+
+	option_display.visible = opt_frameskip_threshold_display;
+	option_display.key = "scummvm_frameskip_threshold";
+	environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+
+	option_display.visible = opt_frameskip_no_display;
+	option_display.key = "scummvm_frameskip_no";
+	environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);*/
+}
+
+static bool retro_update_options_display(void) {
+	if (updating_variables)
+		return false;
+
+	/* Core options */
+	bool updated = false;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
+		update_variables();
+		LIBRETRO_G_SYSTEM->refreshRetroSettings();
+		retro_set_options_display();
+	}
+	return updated;
+}
+
+int retro_setting_get_analog_deadzone(void) {
+	return analog_deadzone;
+}
+
+float retro_setting_get_gamepad_cursor_speed(void) {
+	return gamepad_cursor_speed;
+}
+
+bool retro_setting_get_analog_response_is_quadratic(void) {
+	return analog_response_is_quadratic;
+}
+
+float retro_setting_get_mouse_speed(void) {
+	return mouse_speed;
+}
+
+int retro_setting_get_mouse_fine_control_speed_reduction(void) {
+	return mouse_fine_control_speed_reduction;
+}
+
+float retro_setting_get_gamepad_acceleration_time(void) {
+	return gamepad_acceleration_time;
+}
+
+int retro_setting_get_pointer_device(void) {
+	return pointer_device;
+}
+
+float retro_setting_get_frame_rate(void) {
+	return frame_rate;
+}
+
+int retro_setting_get_gui_res_w(void) {
+	return gui_width;
+}
+
+int retro_setting_get_gui_res_h(void) {
+	return gui_height;
+}
+
+bool retro_get_input_bitmask_supported(void) {
+	return input_bitmask_supported;
+}
+
+uint16 retro_setting_get_sample_rate(void) {
+	return sample_rate;
+}
+
+bool retro_setting_get_browsing_mode_authorized(void) {
+	return browsing_mode_authorized;
+}
+
+
+static uint32 next_pow2(uint32 x) {
+	if (x <= 1) return 1;
+	x--;
+	x |= x >> 1; x |= x >> 2; x |= x >> 4;
+	x |= x >> 8; x |= x >> 16;
+	return x + 1;
+}
+
+uint16 retro_setting_get_audio_samples_buffer_size(void) {
+	/* ScummVM audio buffer size is normally between 512 and 8192, but the value
+	must be one of: 256, 512, 1024, 2048, 4096, 8192, 16384, or 32768. */
+	static const uint16 allowed[] = {256,512,1024,2048,4096,8192,16384,32768};
+	uint32 target = (uint32)(audio_samples_per_frame * 2.0f + 0.5f); // stereo
+	uint32 pow2   = next_pow2(target);
+	for (uint16 v : allowed) {
+		if (pow2 <= v) return v;
+	}
+	return allowed[ARRAYSIZE(allowed) - 1];
+}
+
+void init_command_params(void) {
+	memset(cmd_params, 0, sizeof(cmd_params));
+	cmd_params_num = 1;
+	strcpy(cmd_params[0], "scummvm\0");
+}
+
+int retro_get_input_device(void) {
+	return retro_input_device;
+}
+
+/* Bounds-checked append to cmd_params: silently drops parameters past the
+ * fixed-size array capacity/width instead of overflowing them. */
+static bool append_command_param(const char *param) {
+	if (cmd_params_num >= ARRAYSIZE(cmd_params)) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Too many command line parameters, ignoring '%s'.\n", param);
+		return false;
+	}
+
+	size_t param_len = strlen(param);
+
+	if (param_len >= sizeof(cmd_params[cmd_params_num])) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Command line parameter too long, ignoring '%s'.\n", param);
+		return false;
+	}
+
+	memcpy(cmd_params[cmd_params_num], param, param_len + 1);
+	cmd_params_num++;
+	return true;
+}
+
+void parse_command_params(char *cmdline) {
+	int j = 0;
+	int cmdlen = strlen(cmdline);
+	bool quotes = false;
+
+	if (!cmdlen) return;
+
+	/* Append a new line to the end of the command to signify it's finished. */
+	cmdline[cmdlen] = '\n';
+	cmdline[++cmdlen] = '\0';
+
+	/* parse command line into array of arguments */
+	for (int i = 0; i < cmdlen; i++) {
+		switch (cmdline[i]) {
+		case '\"':
+			if (quotes) {
+				cmdline[i] = '\0';
+				append_command_param(cmdline + j);
+				quotes = false;
+			} else
+				quotes = true;
+			j = i + 1;
+			break;
+		case ' ':
+		case '\n':
+			if (!quotes) {
+				if (i != j && !quotes) {
+					cmdline[i] = '\0';
+					append_command_param(cmdline + j);
+				}
+				j = i + 1;
+			}
+			break;
+		}
+	}
+}
+
+static void exit_to_frontend(void) {
+	environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+}
+
+static void close_emu_thread(void) {
+	while (retro_emu_thread_started() && !retro_emu_thread_exited()) {
+		LIBRETRO_G_SYSTEM->requestQuit();
+		retro_switch_to_emu_thread();
+	}
+	retro_deinit_emu_thread();
+}
+
+#if defined(WIIU) || defined(__SWITCH__) || defined(_MSC_VER) || defined(_3DS)
+#include <stdio.h>
+#include <string.h>
+char *dirname(char *path) {
+	char *p;
+	if (path == NULL || *path == '\0')
+		return ".";
+	p = path + strlen(path) - 1;
+	while (*p == '/') {
+		if (p == path)
+			return path;
+		*p-- = '\0';
+	}
+	while (p >= path && *p != '/')
+		p--;
+	return p < path ? "." : p == path ? "/" : (*p = '\0', path);
+}
+#endif
+
+#if (defined(GEKKO) && !defined(WIIU)) || defined(__CELLOS_LV2__)
+int access(const char *path, int amode) {
+	RFILE *f;
+	int mode;
+
+	switch (amode) {
+	// we don't really care if a file exists but isn't readable
+	case F_OK:
+	case R_OK:
+		mode = RETRO_VFS_FILE_ACCESS_READ;
+		break;
+
+	case W_OK:
+		mode = RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
+		break;
+
+	default:
+		return -1;
+	}
+
+	f = filestream_open(path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+	if (f) {
+		filestream_close(f);
+		return 0;
+	}
+
+	return -1;
+}
+#endif
+
+void retro_set_video_refresh(retro_video_refresh_t cb) {
+	video_cb = cb;
+}
+
+void retro_set_audio_sample(retro_audio_sample_t cb) {}
+
+void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) {
+	audio_batch_cb = cb;
+}
+
+void retro_set_input_poll(retro_input_poll_t cb) {
+	poll_cb = cb;
+}
+
+void retro_set_input_state(retro_input_state_t cb) {
+	retro_input_cb = cb;
+}
+
+void retro_set_environment(retro_environment_t cb) {
+	environ_cb = cb;
+
+	bool tmp = true;
+	bool has_categories;
+	environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &tmp);
+	libretro_fill_options_mapper_data(environ_cb);
+	libretro_set_core_options(environ_cb, &has_categories);
+
+	/* Core option display callback */
+	struct retro_core_options_update_display_callback update_display_callback = {retro_update_options_display};
+	environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK, &update_display_callback);
+}
+
+unsigned retro_api_version(void) {
+	return RETRO_API_VERSION;
+}
+
+void retro_get_system_info(struct retro_system_info *info) {
+	info->library_name = CORE_NAME;
+#if defined GIT_TAG
+#define __GIT_VERSION GIT_TAG
+#elif defined GIT_HASH
+#define __GIT_VERSION GIT_HASH "-" SCUMMVM_VERSION
+#else
+#define __GIT_VERSION ""
+#endif
+	info->library_version = __GIT_VERSION;
+	info->valid_extensions = "scummvm";
+	info->need_fullpath = true;
+	info->block_extract = false;
+}
+
+void retro_set_size(unsigned width, unsigned height) {
+	if (base_width == width && base_height == height) {
+		return;
+	} else if (width > max_width || height > max_height) {
+		max_width = width;
+		max_height = height;
+		av_status |= AV_STATUS_UPDATE_AV_INFO;
+	} else
+		av_status |= AV_STATUS_UPDATE_GEOMETRY;
+
+	base_width = width;
+	base_height = height;
+}
+
+void retro_get_system_av_info(struct retro_system_av_info *info) {
+	info->geometry.base_width = base_width;
+	info->geometry.base_height = base_height;
+	info->geometry.max_width = max_width;
+	info->geometry.max_height = max_height;
+	info->geometry.aspect_ratio = (float)base_width / (float)base_height;
+	info->timing.fps = frame_rate;
+	info->timing.sample_rate = sample_rate;
+}
+
+const char *retro_get_core_dir(void) {
+	const char *coredir = NULL;
+
+	environ_cb(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH, &coredir);
+
+	return coredir;
+}
+
+const char *retro_get_system_dir(void) {
+	const char *sysdir = NULL;
+
+	environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &sysdir);
+
+	return sysdir;
+}
+
+const char *retro_get_file_browser_start_dir(void) {
+	const char *startdir = NULL;
+
+	if (!environ_cb || !environ_cb(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY, &startdir))
+		return NULL;
+
+	return startdir;
+}
+
+const char *retro_get_save_dir(void) {
+	const char *savedir = NULL;
+
+	environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &savedir);
+
+	return savedir;
+}
+
+const char *retro_get_playlist_dir(void) {
+	const char *playlistdir = NULL;
+
+	environ_cb(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY, &playlistdir);
+
+	return playlistdir;
+}
+
+void retro_midi_queue_push(uint8 byte, uint32 delta_us) {
+	/* The producer owns head, so it can read it plainly; tail needs an
+	   acquire load to pair with the consumer's release below. */
+	int head = retro_atomic_load_acquire_int(&midi_head);
+	int next = (head + 1) & (MIDI_QUEUE_SIZE - 1);
+
+	if (next == retro_atomic_load_acquire_int(&midi_tail)) {
+		/* Queue full → drop event (acceptable for MIDI) */
+		return;
+	}
+
+	midi_queue[head].byte     = byte;
+	midi_queue[head].delta_us = delta_us;
+
+	/* Release: the two stores above are visible to any thread that
+	   acquire-loads this index. */
+	retro_atomic_store_release_int(&midi_head, next);
+}
+
+static void retro_midi_queue_drain(void) {
+	if (!retro_midi_interface)
+		return;
+	if (!retro_midi_interface->output_enabled)
+		return;
+	if (!retro_midi_interface->output_enabled())
+		return;
+
+	bool did_write = false;
+	int tail = retro_atomic_load_acquire_int(&midi_tail);
+	int head = retro_atomic_load_acquire_int(&midi_head);
+
+	while (tail != head) {
+		retro_midi_event_t ev = midi_queue[tail];
+		tail = (tail + 1) & (MIDI_QUEUE_SIZE - 1);
+
+		retro_midi_interface->write(ev.byte, ev.delta_us);
+		did_write = true;
+	}
+
+	if (did_write) {
+		/* Publish once: the producer only needs to know the slots are
+		   free, not how far along the drain got. */
+		retro_atomic_store_release_int(&midi_tail, tail);
+		retro_midi_interface->flush();
+	}
+}
+
+/* Authorized storage roots (e.g. Android SAF trees) as granted through the
+ * frontend. */
+static void refresh_authorized_locations(void) {
+	LibRetroFilesystemNode::clearAuthorizedLocations();
+
+	struct retro_vfs_authorized_locations locations;
+	memset(&locations, 0, sizeof(locations));
+
+	if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VFS_AUTHORIZED_LOCATIONS, &locations) &&
+			locations.locations) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_DEBUG, "SAF locations count: %zu\n", locations.count);
+		for (size_t i = 0; i < locations.count; ++i) {
+			const char *path = locations.locations[i].path;
+			const char *label = locations.locations[i].label;
+
+			if (path && *path)
+				LibRetroFilesystemNode::addAuthorizedLocation(
+						Common::String(path),
+						label ? Common::String(label) : Common::String());
+		}
+	}
+}
+
+void retro_init(void) {
+	struct retro_log_callback log;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
+		retro_log_cb = log.log;
+	else
+		retro_log_cb = NULL;
+
+	if (retro_log_cb)
+		retro_log_cb(RETRO_LOG_DEBUG, "ScummVM core version: %s\n", __GIT_VERSION);
+
+	struct retro_vfs_interface_info vfs_iface;
+	vfs_iface.required_interface_version = STAT64_REQUIRED_VFS_VERSION;
+	vfs_iface.iface = nullptr;
+
+	bool vfs_ok = environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface);
+
+	if (vfs_ok) {
+		filestream_vfs_init(&vfs_iface);
+		path_vfs_init(&vfs_iface);
+		dirent_vfs_init(&vfs_iface);
+	}
+
+	refresh_authorized_locations();
+
+	update_variables();
+
+	if (retro_setting_get_browsing_mode_authorized() && !LibRetroFilesystemNode::hasAuthorizedLocations()) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "Browsing mode set to 'Authorized storage' but no authorized locations are available; falling back to local filesystem. Authorize folders from the frontend and restart the core.\n");
+		retro_osd_notification("No authorized storage available, using local filesystem.", RETRO_LOG_WARN);
+	}
+
+	max_width = gui_width > max_width ? gui_width : max_width;
+	max_height = gui_height > max_height ? gui_height : max_height;
+
+	retro_set_options_display();
+
+	init_command_params();
+
+	setup_hw_rendering();
+
+	environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, retro_input_desc);
+
+	environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)retro_controller_lists);
+
+	retro_keyboard_callback cb = {process_key_event_wrapper};
+	environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &cb);
+
+	if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
+		input_bitmask_supported = true;
+
+	// Initialize MIDI interface
+	static struct retro_midi_interface midi_interface;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_MIDI_INTERFACE, &midi_interface)) {
+		retro_midi_interface = &midi_interface;
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "MIDI interface initialized\n");
+	} else {
+		retro_midi_interface = nullptr;
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "MIDI interface unavailable\n");
+	}
+
+	g_system = new OSystem_libretro();
+}
+
+void retro_deinit(void) {
+	LIBRETRO_G_SYSTEM->destroy();
+
+	if (audio_sample_buffer)
+		free(audio_sample_buffer);
+
+	audio_sample_buffer       = NULL;
+	audio_samples_per_frame   = 0.0f;
+	audio_samples_accumulator = 0.0f;
+	log_scummvm_exit_code();
+}
+
+void retro_set_controller_port_device(unsigned port, unsigned device) {
+	if (port != 0) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "Invalid controller port %d, expected port 0 (#1)\n", port);
+		return;
+	}
+
+	switch (device) {
+	case RETRO_DEVICE_JOYPAD:
+	case RETRO_DEVICE_MOUSE:
+	case RETRO_DEVICE_KEYBOARD:
+	case RETRO_DEVICE_ANALOG:
+	case RETRO_DEVICE_POINTER:
+		retro_input_device = device;
+		break;
+	default:
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "Invalid controller device class %d.\n", device);
+		break;
+	}
+}
+
+bool retro_load_game(const struct retro_game_info *game) {
+	if (!g_system) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Failed to initialize ScummVM.\n");
+		return false;
+	}
+
+#ifdef LIBRETRO_DEBUG
+	char debug_buf[] = "--debuglevel=11";
+	parse_command_params(debug_buf);
+#endif
+
+	if (game) {
+		game_buf_ptr = &game_buf;
+		memcpy(game_buf_ptr, game, sizeof(retro_game_info));
+		if (game->path) {
+			strncpy(game_buf_path, game->path, sizeof(game_buf_path) - 1);
+			game_buf_path[sizeof(game_buf_path) - 1] = '\0';
+		} else {
+			game_buf_path[0] = '\0';
+		}
+		game_buf.path = game_buf_path;
+		// Retrieve the game path.
+		Common::FSNode detect_target = Common::FSNode(game->path);
+		Common::FSNode parent_dir = detect_target.getParent();
+		char target_id[400] = {0};
+		char buffer[400] = {0};
+		int test_game_status = TEST_GAME_KO_NOT_FOUND;
+
+		const char *target_file_ext = ".scummvm";
+		int target_file_ext_pos = strlen(game->path) - strlen(target_file_ext);
+
+		// See if we are loading a .scummvm file.
+		if (!(target_file_ext_pos < 0) && strstr(game->path + target_file_ext_pos, target_file_ext) != NULL) {
+			// Open the file.
+			RFILE *gamefile = filestream_open(game->path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+			if (!gamefile) {
+				retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Failed to load given game file '%s'.\n", game->path);
+				return false;
+			}
+
+			// Load the file data.
+			if (filestream_gets(gamefile, target_id, sizeof(target_id)) == NULL) {
+				filestream_close(gamefile);
+				retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Failed to load contents of game file '%s'.\n", game->path);
+				return false;
+			}
+			filestream_close(gamefile);
+
+			Common::String tmp = target_id;
+			tmp.trim();
+			strcpy(target_id, tmp.c_str());
+
+			if (strlen(target_id) == 0) {
+				retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Game file '%s' does not contain any target id.\n", game->path);
+				return false;
+			}
+
+			test_game_status = LIBRETRO_G_SYSTEM->testGame(target_id, false);
+		} else {
+			if (detect_target.isDirectory()) {
+				parent_dir = detect_target;
+			} else {
+				// If this node has no parent node, then it returns a duplicate of this node.
+				if (detect_target.getPath().equals(parent_dir.getPath())) {
+					retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Autodetect not possible. No parent directory detected in '%s'.\n", game->path);
+					return false;
+				}
+			}
+
+			test_game_status = LIBRETRO_G_SYSTEM->testGame(parent_dir.getPath().toString().c_str(), true);
+		}
+
+		// Preliminary game scan results
+		switch (test_game_status) {
+		case TEST_GAME_OK_ID_FOUND:
+			snprintf(buffer, sizeof(buffer), "-p \"%s\" %s", parent_dir.getPath().toString().c_str(), target_id);
+			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via target id and game dir\n");
+			break;
+		case TEST_GAME_OK_TARGET_FOUND:
+			snprintf(buffer, sizeof(buffer), "%s", target_id);
+			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via target id and scummvm.ini\n");
+			break;
+		case TEST_GAME_OK_ID_AUTODETECTED:
+			snprintf(buffer, sizeof(buffer), "-p \"%s\" --auto-detect", parent_dir.getPath().toString().c_str());
+			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via autodetect\n");
+			break;
+		case TEST_GAME_KO_MULTIPLE_RESULTS:
+			retro_log_cb(RETRO_LOG_WARN, "[scummvm] Multiple targets found for '%s' in scummvm.ini\n", target_id);
+			retro_osd_notification("Multiple targets found", RETRO_LOG_WARN);
+			break;
+		case TEST_GAME_KO_NOT_FOUND:
+		default:
+			retro_log_cb(RETRO_LOG_WARN, "[scummvm] Game not found. Check path and content of '%s'\n", game->path);
+			retro_osd_notification("Game not found", RETRO_LOG_ERROR);
+		}
+
+		parse_command_params(buffer);
+	} else {
+		game_buf_ptr = NULL;
+	}
+
+	if (!retro_init_emu_thread()) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Failed to initialize emulation thread!\n");
+		return false;
+	}
+	return true;
+}
+
+bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info) {
+	return false;
+}
+
+void retro_run(void) {
+	/* Settings change is covered by RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK
+	except in case of core options reset to defaults, for which the following call is needed*/
+	retro_update_options_display();
+
+	if (av_status & AV_STATUS_RESET_PENDING) {
+		av_status &= ~AV_STATUS_RESET_PENDING;
+		retro_reset();
+		return;
+	}
+
+#ifdef USE_HIGHRES
+	if (av_status & AV_STATUS_UPDATE_GUI) {
+		retro_gui_res_reset();
+		av_status &= ~AV_STATUS_UPDATE_GUI;
+	}
+#endif
+
+	if (av_status & (AV_STATUS_UPDATE_AV_INFO | AV_STATUS_UPDATE_GEOMETRY)) {
+		struct retro_system_av_info info;
+		retro_get_system_av_info(&info);
+		if (av_status & AV_STATUS_UPDATE_AV_INFO)
+			environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
+		else
+			environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
+
+		av_status &= ~(AV_STATUS_UPDATE_AV_INFO | AV_STATUS_UPDATE_GEOMETRY);
+	}
+
+	if (av_status & AUDIO_STATUS_UPDATE_LATENCY) {
+		uint32 audio_latency;
+		float frame_time_msec = 1000.0f / frame_rate;
+
+		audio_latency = (uint32)((8.0f * frame_time_msec) + 0.5f);
+		audio_latency = (audio_latency + 0x1F) & ~0x1F;
+
+		/* This can only be called from within retro_run() */
+		environ_cb(RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY, &audio_latency);
+		av_status &= ~AUDIO_STATUS_UPDATE_LATENCY;
+	}
+
+	/* Setting RA's video or audio driver to null will disable video/audio bits */
+	int audio_video_enable = 0;
+	if (!environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &audio_video_enable))
+		/* If this flag is not supported, the core assumes that the frontend will not skip any steps, as per API contract */
+		audio_video_enable = RETRO_AV_ENABLE_VIDEO | RETRO_AV_ENABLE_AUDIO;
+
+	if (g_system) {
+		/* Switch to ScummVM thread */
+		retro_switch_to_emu_thread();
+
+		if (retro_emu_thread_exited()) {
+			exit_to_frontend();
+			return;
+		}
+
+		/* Retrieve audio */
+		if (audio_video_enable & 2)
+			audio_run();
+
+		/* Retrieve video */
+		if (audio_video_enable & 1) {
+			if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) {
+				const Graphics::ManagedSurface *screen;
+				LIBRETRO_G_SYSTEM->getScreen(screen);
+				video_cb(screen->getPixels(), screen->w, screen->h, screen->pitch);
+			} else
+				video_cb(RETRO_HW_FRAME_BUFFER_VALID, LIBRETRO_G_SYSTEM->getScreenWidth(),  LIBRETRO_G_SYSTEM->getScreenHeight(), 0);
+
+		}
+
+		poll_cb();
+		LIBRETRO_G_SYSTEM->processInputs();
+	}
+
+	retro_midi_queue_drain();
+}
+
+void retro_unload_game(void) {
+	close_emu_thread();
+}
+
+void retro_reset(void) {
+	close_emu_thread();
+	init_command_params();
+	refresh_authorized_locations();
+	if (!retro_load_game(game_buf_ptr) && retro_log_cb)
+		retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Failed to reinitialize emulation thread on reset.\n");
+	LIBRETRO_G_SYSTEM->resetQuit();
+}
+
+// Stubs
+void *retro_get_memory_data(unsigned type) {
+	return NULL;
+}
+size_t retro_get_memory_size(unsigned type) {
+	return 0;
+}
+size_t retro_serialize_size(void) {
+	return 0;
+}
+bool retro_serialize(void *data, size_t size) {
+	return false;
+}
+bool retro_unserialize(const void *data, size_t size) {
+	return false;
+}
+void retro_cheat_reset(void) {}
+void retro_cheat_set(unsigned unused, bool unused1, const char *unused2) {}
+
+unsigned retro_get_region(void) {
+	return RETRO_REGION_NTSC;
+}

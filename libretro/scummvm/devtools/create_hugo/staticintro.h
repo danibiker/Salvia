@@ -1,0 +1,110 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * This code is based on original Hugo Trilogy source code
+ *
+ * Copyright (c) 1989-1995 David P. Gray
+ *
+ */
+
+#ifndef STATICINTRO_H
+#define STATICINTRO_H
+
+#define NUM_INTRO_TEXT_DUMMY 1
+#define NUM_INTRO_TEXT_V3 3
+
+// Hugo1 DOS have 11 intro ticks, Hugo3 DOS and Hugo3 have 36
+#define NUM_INTRO_TICK_DUMMY 1
+#define NUM_INTRO_TICK_V1D 11
+#define NUM_INTRO_TICK_V3 36
+
+// We use intro_tick as an index into the following coordinate list for the plane path.
+// This is only used in v3.
+// v1 Dos uses TICKS too, for displaying the texts at a specific pace. x and y arrays
+// are dummy
+const byte x_intro_dummy[] = { 0 };
+
+const byte x_intro_v1d[NUM_INTRO_TICK_V1D] = {
+	0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+	0
+};
+
+const byte x_intro_v3[NUM_INTRO_TICK_V3] = {
+	210, 204, 198, 192, 186, 180, 174, 168, 162, 156,
+	152, 149, 152, 158, 165, 171, 170, 165, 161, 157,
+	150, 144, 138, 134, 133, 134, 138, 144, 146, 142,
+	137, 132, 128, 124, 120, 115
+};
+
+const byte y_intro_dummy[] = { 0 };
+
+const byte y_intro_v1d[NUM_INTRO_TICK_V1D] = {
+	0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+	0
+};
+
+const byte y_intro_v3[NUM_INTRO_TICK_V3] = {
+	61,  61,  61,  61,  61,  61,  61,  61,  61,  61,
+	63,  66,  71,  74,  72,  75,  80,  82,  83,  84,
+	84,  84,  85,  89,  94,  99, 103, 104, 100,  98,
+	100, 103, 106, 109, 111, 112
+};
+
+// Only Hugo 3 uses texts during intro
+const char *textIntro_dummy[NUM_INTRO_TEXT_DUMMY] = {""};
+const char *textIntro_v3[NUM_INTRO_TEXT_V3] = {
+	"Hugo and Penelope are returning\nhome from their vacation at the\ncottage of Great Uncle Horace.",
+	"Suddenly, a freak magnetic storm\ncauses the compass in their light\naircraft to spin wildly!  Unable\nto navigate, Hugo loses all sense\nof direction...",
+	"Finally, hopelessly lost over a\nSouth American Jungle, the plane\nabout to run out of gas, Hugo\nspots a clearing just big enough\nto land it.\n\nWith fingers clenching the controls\nhe shouts:  Hold on Penelope, we're\ngoing down...!"
+};
+
+// Hugo1 DOS "Hugo's" logo. Original drew this using the "Script" vector font
+// and the Microsoft QuickC runtime. This can be removed if Graphics::WinFont
+// ever supports Win 1.0 vector fonts (there are only three), using the same
+// line drawing algorithm as QuickC, the same resizing algorithm as QuickC,
+// while also supporting characters that extend beyond their bounding box.
+const byte logo_intro_v1d[] = {
+	0x07, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x08, 0xc0, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00,
+	0x10, 0x20, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00,
+	0x10, 0x20, 0x4c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x08, 0x20, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00,
+	0x06, 0x20, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0xf0, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00,
+	0x03, 0x81, 0x01, 0x01, 0x03, 0xc4, 0x0f, 0x00, 0x00, 0x20, 0x00,
+	0x00, 0x81, 0x01, 0x01, 0x0c, 0x34, 0x32, 0xc0, 0x00, 0x60, 0x00,
+	0x01, 0x01, 0x0b, 0x02, 0x08, 0x08, 0x62, 0x21, 0x00, 0x98, 0x20,
+	0x02, 0x02, 0x11, 0x06, 0x18, 0x08, 0xa1, 0x26, 0x00, 0x04, 0x40,
+	0x84, 0x02, 0x22, 0x1c, 0x28, 0x13, 0x20, 0xf8, 0x00, 0x04, 0x80,
+	0x88, 0x02, 0x42, 0x64, 0xc8, 0x74, 0x21, 0x80, 0x01, 0x0f, 0x00,
+	0x70, 0x01, 0x83, 0x83, 0x07, 0xf8, 0x1e, 0x00, 0x00, 0xfc, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x03, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x08, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x08, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+#endif

@@ -1,0 +1,612 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "engines/nancy/cif.h"
+#include "engines/nancy/decompress.h"
+#include "engines/nancy/util.h"
+#include "engines/nancy/nancy.h"
+
+#include "common/fs.h"
+#include "common/memstream.h"
+#include "common/substream.h"
+#include "common/serializer.h"
+#include "common/config-manager.h"
+
+namespace Nancy {
+
+// Reads the data common to standalone .cif files and the ones embedded in a ciftree
+static void syncCifInfo(Common::Serializer &ser, CifInfo &info, bool tree) {
+	// gross switch of what "version means"
+	uint ver = ser.getVersion();
+	ser.setVersion(g_nancy->getGameType());
+	readRect(ser, info.src, kGameTypeNancy2);
+	readRect(ser, info.dest, kGameTypeNancy2);
+	ser.setVersion(ver);
+
+	ser.syncAsUint16LE(info.width);
+	ser.syncAsUint16LE(info.pitch);
+	ser.syncAsUint16LE(info.height);
+	ser.syncAsByte(info.depth);
+
+	ser.syncAsByte(info.comp);
+
+	if (tree) {
+		ser.syncAsUint32LE(info.dataOffset, 0, 1);
+	}
+
+	ser.syncAsUint32LE(info.size);
+	ser.skip(4); // A 2nd size for obsolete Cif type 1
+	ser.syncAsUint32LE(info.compressedSize);
+
+	ser.syncAsByte(info.type);
+
+	if (!tree) {
+		info.dataOffset = ser.bytesSynced();
+	}
+
+	// From Nancy4 on, the original decides compression from the resource type
+	// (image and script resources are always LZSS-compressed) and ignores the
+	// 'comp' byte, which isn't reliably written in the later games. Only Nancy2
+	// and Nancy3 actually key off the 'comp' byte read above.
+	if (g_nancy->getGameType() >= kGameTypeNancy4)
+		info.comp = (info.type == CifInfo::kResTypeImage || info.type == CifInfo::kResTypeScript) ?
+			CifInfo::kResCompression : CifInfo::kResCompressionNone;
+}
+
+// Reads the data for ciftree cif files
+static void syncCiftreeInfo(Common::Serializer &ser, CifInfo &info) {
+	uint nameSize = g_nancy->getGameType() <= kGameTypeNancy2 ? 9 : 33;
+	byte name[34];
+	if (ser.isSaving()) {
+		memcpy(name, info.name.toString('/').c_str(), nameSize);
+		name[nameSize] = 0;
+	}
+
+	ser.syncBytes(name, nameSize);
+	name[nameSize] = 0;
+	info.name = (char *)name;
+
+	ser.skip(2); // Index of this block
+
+	ser.syncAsUint32LE(info.dataOffset, 2);
+	ser.skip(2, 2); // Next id in chain
+
+	syncCifInfo(ser, info, true);
+
+	ser.skip(2, 0, 1); // Next id in chain
+}
+
+enum {
+	kHashMapSize = 1024
+};
+
+// The version number stored inside CifFile and CifTree headers. Nancy12 bumped it
+// to 2, and Nancy16 to 3, without changing the layout of either structure.
+// Nancy18 uses a different header, which is handled separately
+static uint16 getCifVersion() {
+	GameType gameType = g_nancy->getGameType();
+
+	if (gameType <= kGameTypeNancy1) {
+		return 0;
+	} else if (gameType <= kGameTypeNancy11) {
+		return 1;
+	} else if (gameType <= kGameTypeNancy15) {
+		return 2;
+	}
+
+	return 3;
+}
+
+// Nancy18 rewrote the format. A tree is now a list of whole CifFiles, followed
+// by an index of their names and offsets, and both start with the same header
+static bool syncCifHeaderNancy18(Common::Serializer &ser) {
+	if (!ser.matchBytes("CIF FILE HerInteractive", 24)) {
+		return false;
+	}
+
+	uint16 ver = 3;
+	uint16 verHi = 0;
+	ser.syncAsUint16LE(ver);
+	ser.syncAsUint16LE(verHi);
+
+	return ver == 3 && verHi == 0;
+}
+
+// Reads a whole Nancy18 CifFile header. The data is never compressed by the
+// container, since images are stored as PNG files
+static bool syncCifFileNancy18(Common::Serializer &ser, CifInfo &info) {
+	if (!syncCifHeaderNancy18(ser)) {
+		return false;
+	}
+
+	uint32 hasAlpha = info.depth == 32;
+
+	ser.syncAsUint32LE(info.type);
+	ser.syncAsUint32LE(info.width);
+	ser.syncAsUint32LE(info.height);
+	ser.syncAsUint32LE(hasAlpha);
+	ser.syncAsUint32LE(info.size);
+
+	if (info.type == CifInfo::kResTypeImage) {
+		info.depth = hasAlpha ? 32 : 24;
+	} else {
+		info.depth = 0;
+	}
+
+	info.pitch = info.width * info.depth / 8;
+	info.comp = CifInfo::kResCompressionNone;
+	info.compressedSize = info.size;
+	info.dataOffset = ser.bytesSynced();
+
+	return true;
+}
+
+CifFile::CifFile(Common::SeekableReadStream *stream, const Common::Path &name) {
+	assert(stream);
+	_stream = stream;
+
+	_info.name = name;
+	Common::Serializer ser(stream, nullptr);
+	if (!sync(ser)) {
+		return;
+	}
+}
+
+CifFile::~CifFile() {
+	delete _stream;
+}
+
+Common::SeekableReadStream *CifFile::createReadStream() const {
+	byte *buf = (byte *)malloc(_info.size);
+
+	bool success = true;
+
+	if (_info.comp == CifInfo::kResCompression) {
+		// Decompress the data into the buffer
+		if (_stream->seek(_info.dataOffset)) {
+			Common::MemoryWriteStream write(buf, _info.size);
+			Common::SeekableSubReadStream read(_stream, _info.dataOffset, _info.dataOffset + _info.compressedSize);
+			Decompressor dec;
+			success = dec.decompress(read, write);
+		} else {
+			success = false;
+		}
+	} else {
+		if (!_stream->seek(_info.dataOffset) || _stream->read(buf, _info.size) < _info.size) {
+			success = false;
+		}
+	}
+
+	if (!success) {
+		warning("Failed to read data for CifFile '%s'", _info.name.toString().c_str());
+		free(buf);
+		buf = nullptr;
+		_stream->clearErr();
+		return nullptr;
+	}
+
+	return new Common::MemoryReadStream(buf, _info.size, DisposeAfterUse::YES);
+}
+
+Common::SeekableReadStream *CifFile::createReadStreamRaw() const {
+	uint size = (_info.comp == CifInfo::kResCompression ? _info.compressedSize : _info.size);
+	byte *buf = new byte[size];
+
+	if (!_stream->seek(_info.dataOffset) || _stream->read(buf, size) < size) {
+		warning("Failed to read data for CifFile '%s'", _info.name.toString().c_str());
+	}
+
+	return new Common::MemoryReadStream(buf, size, DisposeAfterUse::YES);
+}
+
+bool CifFile::sync(Common::Serializer &ser) {
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		if (!syncCifFileNancy18(ser, _info)) {
+			warning("Invalid id string or version found in CifFile '%s'", _info.name.toString().c_str());
+			return false;
+		}
+
+		return true;
+	}
+
+	if (g_nancy->getGameType() <= kGameTypeNancy11 && ser.matchBytes("CIF FILE WayneSikes", 20)) {
+		ser.skip(4);	// 4 bytes unused
+	} else if (g_nancy->getGameType() >= kGameTypeNancy12 && ser.matchBytes("CIF FILE HerInteractive", 24)) {
+		// Nancy 12+
+	} else {
+		warning("Invalid id string found in CifFile '%s'", _info.name.toString().c_str());
+		return false;
+	}
+
+	// Version high bytes. These do not change
+	uint16 hi = 2;
+	ser.syncAsUint16LE(hi);
+
+	uint32 ver = getCifVersion();
+	ser.syncAsUint16LE(ver);
+
+	if (ver > 3) {
+		warning("Unsupported version %d found in CifFile '%s'", ver, _info.name.toString().c_str());
+		return false;
+	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy6) {
+		++ver; // nancy6 made changes to the CifTree structure, but didn't bump the file version
+	}
+
+	ser.setVersion(ver);
+
+	syncCifInfo(ser, _info, false);
+	return true;
+}
+
+CifTree::CifTree(Common::SeekableReadStream *stream, const Common::Path &name) :
+		_name(name),
+		_stream(stream) {}
+
+CifTree::CifTree(const Common::ArchiveMemberPtr &member, const Common::Path &name) :
+		_name(name),
+		_stream(nullptr),
+		_member(member) {}
+
+CifTree::~CifTree() {
+	delete _stream;
+}
+
+Common::SeekableReadStream *CifTree::openStream() const {
+	return _member ? _member->createReadStream() : _stream;
+}
+
+void CifTree::closeStream(Common::SeekableReadStream *stream) const {
+	if (_member) {
+		delete stream;
+	}
+}
+
+const CifInfo &CifTree::getCifInfo(const Common::Path &name) const {
+	return _fileMap[name];
+}
+
+bool CifTree::hasFile(const Common::Path &path) const {
+	return _fileMap.contains(path);
+}
+
+int CifTree::listMembers(Common::ArchiveMemberList &list) const {
+	for (auto &f : _fileMap) {
+		list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(f._key, *this)));
+	}
+
+	return list.size();
+}
+
+const Common::ArchiveMemberPtr CifTree::getMember(const Common::Path &path) const {
+	if (!hasFile(path)) {
+		return Common::ArchiveMemberPtr();
+	}
+
+	return Common::ArchiveMemberPtr(new Common::GenericArchiveMember(path, *this));
+}
+
+Common::SeekableReadStream *CifTree::createReadStreamForMember(const Common::Path &path) const {
+	if (!hasFile(path)) {
+		return nullptr;
+	}
+
+	const CifInfo &info = _fileMap[path];
+	Common::SeekableReadStream *stream = openStream();
+	if (!stream) {
+		warning("Failed to open CifTree '%s'", _name.toString().c_str());
+		return nullptr;
+	}
+
+	byte *buf = (byte *)malloc(info.size);
+
+	bool success = true;
+
+	if (info.comp == CifInfo::kResCompression) {
+		// Decompress the data into the buffer
+		if (stream->seek(info.dataOffset)) {
+			Common::MemoryWriteStream write(buf, info.size);
+			Common::SeekableSubReadStream read(stream, info.dataOffset, info.dataOffset + info.compressedSize);
+			Decompressor dec;
+			success = dec.decompress(read, write);
+		} else {
+			success = false;
+		}
+	} else {
+		if (!stream->seek(info.dataOffset) || stream->read(buf, info.size) < info.size) {
+			success = false;
+		}
+	}
+
+	if (!success) {
+		warning("Failed to read data for '%s' from CifTree '%s'", info.name.toString().c_str(), _name.toString().c_str());
+		free(buf);
+		buf = nullptr;
+		stream->clearErr();
+		closeStream(stream);
+		return nullptr;
+	}
+
+	closeStream(stream);
+	return new Common::MemoryReadStream(buf, info.size, DisposeAfterUse::YES);
+}
+
+Common::SeekableReadStream *CifTree::createReadStreamRaw(const Common::Path &path) const {
+	if (!hasFile(path)) {
+		return nullptr;
+	}
+
+	const CifInfo &info = _fileMap[path];
+	Common::SeekableReadStream *stream = openStream();
+	if (!stream) {
+		warning("Failed to open CifTree '%s'", _name.toString().c_str());
+		return nullptr;
+	}
+
+	uint32 size = (info.comp == CifInfo::kResCompression ? info.compressedSize : info.size);
+	byte *buf = new byte[size];
+
+	if (!stream->seek(info.dataOffset) || stream->read(buf, size) < size) {
+		warning("Failed to read data for '%s' from CifTree '%s'", info.name.toString().c_str(), _name.toString().c_str());
+	}
+
+	closeStream(stream);
+	return new Common::MemoryReadStream(buf, size, DisposeAfterUse::YES);
+}
+
+CifTree *CifTree::makeCifTreeArchive(const Common::String &name, const Common::String &ext) {
+	Common::Path path(name);
+	path.appendInPlace('.' + ext);
+
+	Common::Archive *container = nullptr;
+	Common::ArchiveMemberPtr member = SearchMan.getMember(path, &container);
+
+	if (!member) {
+		return nullptr;
+	}
+
+	CifTree *ret = nullptr;
+	if (dynamic_cast<Common::FSDirectory *>(container)) {
+		ret = new CifTree(member, path);
+	} else {
+		Common::SeekableReadStream *stream = member->createReadStream();
+		if (!stream) {
+			return nullptr;
+		}
+
+		ret = new CifTree(stream, path);
+	}
+
+	Common::SeekableReadStream *headerStream = ret->openStream();
+	if (!headerStream) {
+		delete ret;
+		return nullptr;
+	}
+
+	bool synced;
+	if (g_nancy->getGameType() >= kGameTypeNancy18) {
+		synced = ret->readIndex(*headerStream);
+	} else {
+		Common::Serializer ser(headerStream, nullptr);
+		synced = ret->sync(ser);
+	}
+
+	ret->closeStream(headerStream);
+
+	if (!synced) {
+		delete ret;
+		return nullptr;
+	}
+
+	return ret;
+}
+
+bool CifTree::sync(Common::Serializer &ser) {
+	if (g_nancy->getGameType() <= kGameTypeNancy11 && ser.matchBytes("CIF TREE WayneSikes", 20)) {
+		// Nancy 1-11
+		ser.skip(4); // 4 bytes unused
+	} else if (g_nancy->getGameType() >= kGameTypeNancy12 && ser.matchBytes("CIF TREE HerInteractive", 24)) {
+		// Nancy 12+
+	} else {
+		warning("Invalid id string found in CifTree '%s'", _name.toString().c_str());
+		return false;
+	}
+
+	// Version high bytes. These do not change
+	uint16 hi = 2;
+	ser.syncAsUint16LE(hi);
+
+	uint32 ver = getCifVersion();
+	ser.syncAsUint16LE(ver);
+
+	if (ver > 3) {
+		warning("Unsupported version %d found in CifTree '%s'", ver, _name.toString().c_str());
+		return false;
+	}
+
+	if (g_nancy->getGameType() >= kGameTypeNancy6) {
+		++ver; // nancy6 made changes to the CifTree structure, but didn't bump the file version
+	}
+
+	ser.setVersion(ver);
+
+	uint16 infoBlockCount = _writeFileMap.size();
+	ser.syncAsUint16LE(infoBlockCount);
+	ser.skip(2, 1);
+
+	// We will be doing our own hashing, so skip the table built into the tree
+	ser.skip(kHashMapSize * 2);
+
+	CifInfo info;
+	for (int i = 0; i < infoBlockCount; i++) {
+		if (ser.isLoading()) {
+			syncCiftreeInfo(ser, info);
+			if (info.size && info.type != CifInfo::kResTypeEmpty) {
+				_fileMap.setVal(info.name, info);
+			}
+		} else {
+			syncCiftreeInfo(ser, _writeFileMap[i]);
+		}
+	}
+
+	return true;
+}
+
+// Nancy20 made room for longer names in the index
+static uint getIndexNameSize() {
+	return g_nancy->getGameType() >= kGameTypeNancy20 ? 64 : 33;
+}
+
+bool CifTree::readIndex(Common::SeekableReadStream &stream) {
+	const uint kNameSize = getIndexNameSize();
+	const uint kIndexEntrySize = kNameSize + 4;
+
+	Common::Serializer headerSer(&stream, nullptr);
+	if (!syncCifHeaderNancy18(headerSer)) {
+		warning("Invalid id string or version found in CifTree '%s'", _name.toString().c_str());
+		return false;
+	}
+
+	// The index sits at the end of the tree, and is followed by its own size,
+	// which includes the file count in front of it
+	if (!stream.seek(-4, SEEK_END)) {
+		warning("Failed to read the index of CifTree '%s'", _name.toString().c_str());
+		return false;
+	}
+
+	const uint32 indexSize = stream.readUint32LE();
+	if (indexSize + 4 > stream.size() || !stream.seek(stream.size() - 4 - indexSize)) {
+		warning("Failed to read the index of CifTree '%s'", _name.toString().c_str());
+		return false;
+	}
+
+	const uint32 numFiles = stream.readUint32LE();
+	if ((uint64)numFiles * kIndexEntrySize + 4 != indexSize) {
+		warning("Invalid index found in CifTree '%s'", _name.toString().c_str());
+		return false;
+	}
+
+	Common::Array<CifInfo> infos(numFiles);
+	for (CifInfo &info : infos) {
+		info.name = stream.readString(0, kNameSize);
+		info.dataOffset = stream.readUint32LE();
+	}
+
+	// The rest of the info is inside the header of each file
+	for (CifInfo &info : infos) {
+		const uint32 fileOffset = info.dataOffset;
+		if (!stream.seek(fileOffset)) {
+			warning("Failed to read '%s' from CifTree '%s'", info.name.toString().c_str(), _name.toString().c_str());
+			return false;
+		}
+
+		Common::Serializer ser(&stream, nullptr);
+		if (!syncCifFileNancy18(ser, info)) {
+			warning("Invalid file header for '%s' in CifTree '%s'", info.name.toString().c_str(), _name.toString().c_str());
+			return false;
+		}
+
+		info.dataOffset += fileOffset;
+
+		if (info.size && info.type != CifInfo::kResTypeEmpty) {
+			_fileMap.setVal(info.name, info);
+		}
+	}
+
+	return true;
+}
+
+void CifTree::write(Common::SeekableWriteStream &stream, const Common::Array<Common::SeekableReadStream *> &fileData) {
+	const uint kNameSize = getIndexNameSize();
+	const uint kIndexEntrySize = kNameSize + 4;
+
+	assert(fileData.size() == _writeFileMap.size());
+
+	Common::Serializer ser(nullptr, &stream);
+	syncCifHeaderNancy18(ser);
+
+	for (uint i = 0; i < _writeFileMap.size(); ++i) {
+		// The index points to the header of each file, not to its data
+		_writeFileMap[i].dataOffset = stream.pos();
+
+		CifInfo info = _writeFileMap[i];
+		syncCifFileNancy18(ser, info);
+		stream.writeStream(fileData[i]);
+	}
+
+	stream.writeUint32LE(_writeFileMap.size());
+
+	for (const CifInfo &info : _writeFileMap) {
+		char name[64] = {};
+		Common::strlcpy(name, info.name.baseName().c_str(), kNameSize);
+		stream.write(name, kNameSize);
+		stream.writeUint32LE(info.dataOffset);
+	}
+
+	stream.writeUint32LE(_writeFileMap.size() * kIndexEntrySize + 4);
+}
+
+Common::Array<Common::Path> CifTree::getPathsForType(CifInfo::ResType type) const {
+	Common::Array<Common::Path> pathList;
+
+	for (auto &it : _fileMap) {
+		if (type == CifInfo::kResTypeAny || it._value.type == type) {
+			pathList.push_back(it._key);
+		}
+	}
+
+	return pathList;
+}
+
+bool PatchTree::hasFile(const Common::Path &path) const {
+	if (CifTree::hasFile(path)) {
+		// An association is just a Pair of two StringArrays
+		// The first member is an array of Pairs of Strings: a ConfMan property name, and the required value for that ConfMan property
+		// The second member is an array with the names of the files to be enabled if all the ConfMan property requirements are satisfied
+		for (auto &assoc : _associations) {
+			auto &confManProps = assoc.first;
+			auto &filenames = assoc.second;
+			for (const Common::Path &s : filenames) {
+				if (s == path) {
+					bool satisfied = true;
+
+					for (uint i = 0; i < confManProps.size(); ++i) {
+						// Check all
+						if (ConfMan.get(confManProps[i].first, ConfMan.getActiveDomainName()) != confManProps[i].second) {
+							satisfied = false;
+							break;
+						}
+					}
+
+					return satisfied;
+				}
+			}
+		}
+
+		// Files without an associated ConfMan ID are always marked as present
+		return true;
+	}
+
+	return false;
+}
+
+} // End of namespace Nancy

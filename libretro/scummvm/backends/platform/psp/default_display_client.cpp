@@ -1,0 +1,269 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/scummsys.h"
+#include "backends/platform/psp/psppixelformat.h"
+#include "backends/platform/psp/display_client.h"
+#include "backends/platform/psp/default_display_client.h"
+
+//#define __PSP_DEBUG_FUNCS__	/* For debugging the stack */
+//#define __PSP_DEBUG_PRINT__
+
+#include "backends/platform/psp/trace.h"
+
+// Class DefaultDisplayClient ---------------------------------------------
+
+bool DefaultDisplayClient::allocate(bool bufferInVram /* = false */, bool paletteInVram /* = false */) {
+	DEBUG_ENTER_FUNC();
+
+	if (!_buffer.allocate(bufferInVram)) {
+		PSP_ERROR("Couldn't allocate buffer.\n");
+		return false;
+	}
+
+	if (_buffer.hasPalette()) {
+		PSP_DEBUG_PRINT("_palette[%p]\n", &_palette);
+
+		if (!_palette.allocate()) {
+			PSP_ERROR("Couldn't allocate palette.\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void DefaultDisplayClient::deallocate() {
+	_buffer.deallocate();
+	if (_buffer.hasPalette())
+		_palette.deallocate();
+}
+
+
+void DefaultDisplayClient::clearBuffer() {
+	DEBUG_ENTER_FUNC();
+	_buffer.clear();
+	setDirty();
+}
+
+inline void DefaultDisplayClient::clearPalette() {
+	DEBUG_ENTER_FUNC();
+	_palette.clear();
+	setDirty();
+}
+
+void DefaultDisplayClient::init() {
+	DEBUG_ENTER_FUNC();
+	_renderer.setBuffer(&_buffer);
+	_renderer.setPalette(&_palette);
+}
+
+void DefaultDisplayClient::copyFromRect(const byte *buf, int pitch, int destX, int destY, int recWidth, int recHeight) {
+	DEBUG_ENTER_FUNC();
+	_buffer.copyFromRect(buf, pitch, destX, destY, recWidth, recHeight);
+	setDirty();
+}
+
+void DefaultDisplayClient::copyToArray(byte *dst, int pitch) {
+	DEBUG_ENTER_FUNC();
+	_buffer.copyToArray(dst, pitch);
+}
+
+// Class Overlay -------------------------------------------------------
+
+void Overlay::init() {
+	DEBUG_ENTER_FUNC();
+
+	DefaultDisplayClient::init();
+	_renderer.setAlphaBlending(true);
+	_renderer.setColorTest(false);
+	_renderer.setUseGlobalScaler(false);
+	_renderer.setFullScreen(true);	// speeds up render slightly
+}
+
+void Overlay::setBytesPerPixel(uint32 size) {
+	DEBUG_ENTER_FUNC();
+
+	switch (size) {
+	case 1:
+		_buffer.setPixelFormat(PSPPixelFormat::Type_Palette_8bit);
+		_palette.setPixelFormats(PSPPixelFormat::Type_4444, PSPPixelFormat::Type_Palette_8bit);
+		break;
+	case 2:
+		_buffer.setPixelFormat(PSPPixelFormat::Type_4444);
+		break;
+	case 4:
+		_buffer.setPixelFormat(PSPPixelFormat::Type_8888);
+		break;
+	}
+}
+
+void Overlay::setSize(uint32 width, uint32 height) {
+	DEBUG_ENTER_FUNC();
+	_buffer.setSize(width, height, Buffer::kSizeBySourceSize);
+	_renderer.setDrawWholeBuffer();	// We need to let the renderer know how much to draw
+}
+
+void Overlay::copyToArray(void *buf, int pitch) {
+	DEBUG_ENTER_FUNC();
+	_buffer.copyToArray((byte *)buf, pitch);
+}
+
+void Overlay::copyFromRect(const void *buf, int pitch, int x, int y, int w, int h) {
+	DEBUG_ENTER_FUNC();
+
+	_buffer.copyFromRect((const byte *)buf, pitch, x, y, w, h);
+	// debug
+	//_buffer.print(0xFF);
+	setDirty();
+}
+
+bool Overlay::allocate() {
+	DEBUG_ENTER_FUNC();
+
+	bool ret = DefaultDisplayClient::allocate(true, false);	// buffer in VRAM
+
+	return ret;
+}
+
+// Class Screen -----------------------------------------------------------
+
+void Screen::init() {
+	DEBUG_ENTER_FUNC();
+
+	DefaultDisplayClient::init();
+	_renderer.setAlphaBlending(false);
+	_renderer.setColorTest(false);
+	_renderer.setUseGlobalScaler(true);
+	_renderer.setFullScreen(true);
+}
+
+void Screen::setShakePos(int shakeXOffset, int shakeYOffset) {
+	_shakeXOffset = shakeXOffset;
+	_shakeYOffset = shakeYOffset;
+	_renderer.setOffsetOnScreen(shakeXOffset, shakeYOffset);
+	setDirty();
+}
+
+void Screen::setSize(uint32 width, uint32 height) {
+	DEBUG_ENTER_FUNC();
+
+	_buffer.setSize(width, height, Buffer::kSizeBySourceSize);
+	_renderer.setDrawWholeBuffer();	// We need to let the renderer know how much to draw
+}
+
+void Screen::setScummvmPixelFormat(const Graphics::PixelFormat *format) {
+	DEBUG_ENTER_FUNC();
+	PSP_DEBUG_PRINT("format[%p], _buffer[%p], _palette[%p]\n", format, &_buffer, &_palette);
+
+	if (!format) {
+		_srcFormat = Graphics::PixelFormat::createFormatCLUT8();
+	} else {
+		_srcFormat = *format;
+	}
+
+	PSPPixelFormat::Type bufferFormat, paletteFormat;
+	bool fakeAlpha = false;
+
+	PSPPixelFormat::convertFromScummvmPixelFormat(format, bufferFormat, paletteFormat, fakeAlpha);
+	_buffer.setPixelFormat(bufferFormat);
+	_palette.setPixelFormats(paletteFormat, bufferFormat);
+
+	if (paletteFormat == PSPPixelFormat::Type_None) {
+		_dstFormat = PSPPixelFormat::convertToScummvmPixelFormat(bufferFormat, fakeAlpha);
+		_blitFunc = Graphics::getFastBlitFunc(_dstFormat, _srcFormat);
+		_convert = (_srcFormat != _dstFormat);
+	} else {
+		_dstFormat = Graphics::PixelFormat::createFormatCLUT8();
+		_blitFunc = nullptr;
+		_convert = false;
+	}
+}
+
+Graphics::Surface *Screen::lockAndGetForEditing() {
+	DEBUG_ENTER_FUNC();
+
+	// We'll set to dirty once we unlock the screen
+
+	return &_frameBuffer;
+}
+
+void Screen::unlock() {
+
+	// set dirty here because of changes
+
+	_dirtyRects.emplace_back(getWidth(), getHeight());
+	setDirty();
+}
+
+void Screen::copyFromRect(const byte *buf, int pitch, int destX, int destY, int recWidth, int recHeight) {
+	DEBUG_ENTER_FUNC();
+	_frameBuffer.copyRectToSurface(buf, pitch, destX, destY, recWidth, recHeight);
+	_dirtyRects.emplace_back(destX, destY, destX + recWidth, destY + recHeight);
+	setDirty();
+}
+
+bool Screen::allocate() {
+	DEBUG_ENTER_FUNC();
+
+	if (!DefaultDisplayClient::allocate(true, false))	// buffer in VRAM
+		return false;
+
+	if (_convert) {
+		_frameBuffer.create(_buffer.getSourceWidth(), _buffer.getSourceHeight(), _srcFormat);
+	} else {
+		_frameBuffer.init(_buffer.getSourceWidth(), _buffer.getSourceHeight(), _buffer.getWidthInBytes(),
+		                  _buffer.getPixels(), _srcFormat);
+	}
+
+	return true;
+}
+
+void Screen::deallocate() {
+	if (_convert)
+		_frameBuffer.free();
+	else
+		_frameBuffer.setPixels(nullptr);
+	DefaultDisplayClient::deallocate();
+}
+
+void Screen::render() {
+	if (_convert && !_dirtyRects.empty()) {
+		_dirtyRects.merge();
+
+		for (const Common::Rect &r : _dirtyRects) {
+			const byte *src = (const byte *)_frameBuffer.getBasePtr(r.left, r.top);
+			byte *dst = (byte *)_buffer.getBasePtr(r.left, r.top);
+
+			if (_blitFunc) {
+				_blitFunc(dst, src, _buffer.getWidthInBytes(),
+				          _frameBuffer.pitch, r.width(), r.height());
+			} else {
+				Graphics::crossBlit(dst, src, _buffer.getWidthInBytes(),
+				                    _frameBuffer.pitch, r.width(), r.height(),
+				                    _dstFormat, _srcFormat);
+			}
+		}
+	}
+	_dirtyRects.clear();
+
+	DefaultDisplayClient::render();
+}

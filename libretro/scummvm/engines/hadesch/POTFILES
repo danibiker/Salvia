@@ -1,0 +1,4 @@
+engines/hadesch/hadesch.cpp
+engines/hadesch/rooms/daedalus.cpp
+engines/hadesch/rooms/medisle.cpp
+engines/hadesch/rooms/troy.cpp

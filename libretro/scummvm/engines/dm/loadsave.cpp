@@ -1,0 +1,477 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * Based on the Reverse Engineering work of Christophe Fontanel,
+ * maintainer of the Dungeon Master Encyclopaedia (http://dmweb.free.fr/)
+ */
+
+#include "common/system.h"
+#include "common/savefile.h"
+#include "graphics/thumbnail.h"
+#include "gui/saveload.h"
+
+#include "dm/dm.h"
+#include "dm/dungeonman.h"
+#include "dm/timeline.h"
+#include "dm/group.h"
+#include "dm/champion.h"
+#include "dm/menus.h"
+#include "dm/eventman.h"
+#include "dm/projexpl.h"
+#include "dm/dialog.h"
+
+namespace DM {
+
+Common::Error DMEngine::loadGameStream(Common::SeekableReadStream *file) {
+
+	struct {
+		SaveTarget _saveTarget;
+		int32 _saveVersion;
+		OriginalSaveFormat _saveFormat;
+		OriginalSavePlatform _savePlatform;
+		uint16 _dungeonId;
+	} dmSaveHeader;
+
+	dmSaveHeader._saveTarget = (SaveTarget)file->readSint32BE();
+	dmSaveHeader._saveVersion = file->readSint32BE();
+	dmSaveHeader._saveFormat = (OriginalSaveFormat)file->readSint32BE();
+	dmSaveHeader._savePlatform = (OriginalSavePlatform)file->readSint32BE();
+
+	// Skip _gameId, which was useless
+	file->readSint32BE();
+	dmSaveHeader._dungeonId = file->readUint16BE();
+
+	_gameTime = file->readSint32BE();
+	// G0349_ul_LastRandomNumber = L1371_s_GlobalData.LastRandomNumber;
+	_championMan->_partyChampionCount = file->readUint16BE();
+	_dungeonMan->_partyMapX = file->readSint16BE();
+	_dungeonMan->_partyMapY = file->readSint16BE();
+	_dungeonMan->_partyDir = (Direction)file->readUint16BE();
+	_dungeonMan->_partyMapIndex = file->readByte();
+	_championMan->_leaderIndex = (ChampionIndex)file->readSint16BE();
+	_championMan->_magicCasterChampionIndex = (ChampionIndex)file->readSint16BE();
+	_timeline->_eventCount = file->readUint16BE();
+	_timeline->_firstUnusedEventIndex = file->readUint16BE();
+	_timeline->_eventMaxCount = file->readUint16BE();
+	_groupMan->_currActiveGroupCount = file->readUint16BE();
+	_projexpl->_lastCreatureAttackTime = file->readSint32BE();
+	_projexpl->_lastPartyMovementTime = file->readSint32BE();
+	_disabledMovementTicks = file->readSint16BE();
+	_projectileDisableMovementTicks = file->readSint16BE();
+	_lastProjectileDisabledMovementDirection = file->readSint16BE();
+	uint16 handVal = file->readUint16BE();
+	_championMan->_leaderHandObject = (handVal == 0) ? _thingNone : Thing(handVal);
+	_groupMan->_maxActiveGroupCount = file->readUint16BE();
+	if (!_restartGameRequest) {
+		_timeline->initTimeline();
+		_groupMan->initActiveGroups();
+	}
+
+	_groupMan->loadActiveGroupPart(file);
+	_championMan->loadPartyPart2(file);
+	_timeline->loadEventsPart(file);
+	_timeline->loadTimelinePart(file);
+
+	// read sentinel
+	uint32 sentinel = file->readUint32BE();
+	if (sentinel != 0x6f85e3d3) {
+		warning("Savegame is corrupted (sentinel mismatch)");
+		return Common::kReadingFailed;
+	}
+
+	_dungeonId = dmSaveHeader._dungeonId;
+
+	if (file->err())
+		return Common::kReadingFailed;
+
+	return Common::kNoError;
+}
+
+LoadgameResult DMEngine::loadgame(int16 slot) {
+	if (slot >= 0)
+		_gameMode = kDMModeLoadSavedGame;
+
+	if (slot == -1 && _gameMode == kDMModeLoadSavedGame)
+		return kDMLoadgameFailure;
+
+	bool fadePalette = true;
+	Common::InSaveFile *file = nullptr;
+
+	if (_gameMode != kDMModeLoadSavedGame) {
+		//L1366_B_FadePalette = !F0428_DIALOG_RequireGameDiskInDrive_NoDialogDrawn(C0_DO_NOT_FORCE_DIALOG_DM_CSB, true);
+		_restartGameAllowed = false;
+		_championMan->_partyChampionCount = 0;
+		_championMan->_leaderHandObject = _thingNone;
+	} else {
+		file = _system->getSavefileManager()->openForLoading(getSaveStateName(slot));
+		if (!file)
+			return kDMLoadgameFailure;
+
+		Common::Error err = loadGameStream(file);
+		if (err.getCode() != Common::kNoError) {
+			delete file;
+			return kDMLoadgameFailure;
+		}
+	}
+
+	_dungeonMan->loadDungeonFile(file);
+	delete file;
+
+	if (_gameMode != kDMModeLoadSavedGame) {
+		_timeline->initTimeline();
+		_groupMan->initActiveGroups();
+
+		if (fadePalette) {
+			_displayMan->startEndFadeToPalette(_displayMan->_blankBuffer);
+			delay(1);
+			_displayMan->fillScreen(kDMColorBlack);
+			_displayMan->startEndFadeToPalette(_displayMan->_paletteTopAndBottomScreen);
+		}
+	} else {
+		_restartGameAllowed = true;
+
+		switch (getGameLanguage()) { // localized
+		case Common::DE_DEU:
+			_dialog->dialogDraw(nullptr, "SPIEL WIRD GELADEN . . .", nullptr, nullptr, nullptr, nullptr, true, true, true);
+			break;
+		case Common::FR_FRA:
+			_dialog->dialogDraw(nullptr, "CHARGEMENT DU JEU . . .", nullptr, nullptr, nullptr, nullptr, true, true, true);
+			break;
+		default:
+			_dialog->dialogDraw(nullptr, "LOADING GAME . . .", nullptr, nullptr, nullptr, nullptr, true, true, true);
+			break;
+		}
+	}
+	_championMan->_partyDead = false;
+
+	return kDMLoadgameSuccess;
+}
+
+
+void DMEngine::saveGame() {
+	_menuMan->drawDisabledMenu();
+	_eventMan->showMouse();
+
+	switch (getGameLanguage()) { // localized
+	default:
+	case Common::EN_ANY:
+		_dialog->dialogDraw(nullptr, nullptr, "SAVE AND PLAY", "SAVE AND QUIT", "CANCEL", "LOAD", false, false, false);
+		break;
+	case Common::DE_DEU:
+		_dialog->dialogDraw(nullptr, nullptr, "SICHERN/SPIEL", "SICHERN/ENDEN", "WIDERRUFEN", "LADEN", false, false, false);
+		break;
+	case Common::FR_FRA:
+		_dialog->dialogDraw(nullptr, nullptr, "GARDER/JOUER", "GARDER/SORTIR", "ANNULLER", "CHARGER", false, false, false);
+		break;
+	}
+
+	enum SaveAndPlayChoice {
+		kSaveAndPlay = 1,
+		kSaveAndQuit = 2,
+		kCancel = 3,
+		kLoad = 4
+	};
+
+	SaveAndPlayChoice saveAndPlayChoice = (SaveAndPlayChoice)_dialog->getChoice(4, kDMDialogCommandSetViewport, 0, kDMDialogChoiceNone);
+
+	if (saveAndPlayChoice == kLoad) {
+		GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(false);
+		int loadSlot = dialog->runModalWithCurrentTarget();
+		delete dialog;
+		if (loadSlot >= 0) {
+			_loadSaveSlotAtRuntime = loadSlot;
+			return;
+		}
+
+		saveAndPlayChoice = kCancel;
+	}
+
+	if (saveAndPlayChoice == kSaveAndQuit || saveAndPlayChoice == kSaveAndPlay) {
+		GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(true);
+		int16 saveSlot = dialog->runModalWithCurrentTarget();
+		Common::String saveDescription = dialog->getResultString();
+		if (saveDescription.empty())
+			saveDescription = "Nice save ^^";
+		delete dialog;
+
+		if (saveSlot >= 0) {
+			switch (getGameLanguage()) { // localized
+			default:
+			case Common::EN_ANY:
+				_dialog->dialogDraw(nullptr, "SAVING GAME . . .", nullptr, nullptr, nullptr, nullptr, false, false, false);
+				break;
+			case Common::DE_DEU:
+				_dialog->dialogDraw(nullptr, "SPIEL WIRD GESICHERT . . .", nullptr, nullptr, nullptr, nullptr, false, false, false);
+				break;
+			case Common::FR_FRA:
+				_dialog->dialogDraw(nullptr, "UN MOMENT A SAUVEGARDER DU JEU...", nullptr, nullptr, nullptr, nullptr, false, false, false);
+				break;
+			}
+
+			uint16 champHandObjWeight = 0;
+			if (!_championMan->_leaderEmptyHanded) {
+				champHandObjWeight = _dungeonMan->getObjectWeight(_championMan->_leaderHandObject);
+				_championMan->_champions[_championMan->_leaderIndex]._load -= champHandObjWeight;
+			}
+
+			Common::Error saveErr = saveGameState(saveSlot, saveDescription);
+			if (saveErr.getCode() != Common::kNoError) {
+				_dialog->dialogDraw(nullptr, "Unable to open file for saving", "OK", nullptr, nullptr, nullptr, false, false, false);
+				_dialog->getChoice(1, kDMDialogCommandSetViewport, 0, kDMDialogChoiceNone);
+			}
+
+			if (!_championMan->_leaderEmptyHanded) {
+				_championMan->_champions[_championMan->_leaderIndex]._load += champHandObjWeight;
+			}
+		} else
+			saveAndPlayChoice = kCancel;
+	}
+
+
+	if (saveAndPlayChoice == kSaveAndQuit) {
+		_eventMan->hideMouse();
+		endGame(false);
+	}
+
+	_restartGameAllowed = true;
+	_menuMan->drawEnabledMenus();
+	_eventMan->hideMouse();
+}
+
+Common::String DMEngine::getSavefileName(uint16 slot) {
+	return Common::String::format("%s.%03u", _targetName.c_str(), slot);
+}
+
+#define SAVEGAME_ID       MKTAG('D', 'M', '2', '1')
+#define SAVEGAME_VERSION  1
+
+Common::Error DMEngine::saveGameStream(Common::WriteStream *file, bool isAutosave) {
+	return writeCompleteSaveFile(file);
+}
+
+Common::Error DMEngine::writeCompleteSaveFile(Common::WriteStream *file) {
+
+	file->writeSint32BE(_gameVersion->_saveTargetToWrite);
+	file->writeSint32BE(1); // save version
+	file->writeSint32BE(_gameVersion->_origSaveFormatToWrite);
+	file->writeSint32BE(_gameVersion->_origPlatformToWrite);
+
+	// Was _gameID, useless.
+	file->writeSint32BE(0);
+	file->writeUint16BE(_dungeonId);
+
+	// write C0_SAVE_PART_GLOBAL_DATA part
+	file->writeSint32BE(_gameTime);
+	//L1348_s_GlobalData.LastRandomNumber = G0349_ul_LastRandomNumber;
+	file->writeUint16BE(_championMan->_partyChampionCount);
+	file->writeSint16BE(_dungeonMan->_partyMapX);
+	file->writeSint16BE(_dungeonMan->_partyMapY);
+	file->writeUint16BE(_dungeonMan->_partyDir);
+	file->writeByte(_dungeonMan->_partyMapIndex);
+	file->writeSint16BE(_championMan->_leaderIndex);
+	file->writeSint16BE(_championMan->_magicCasterChampionIndex);
+	file->writeUint16BE(_timeline->_eventCount);
+	file->writeUint16BE(_timeline->_firstUnusedEventIndex);
+	file->writeUint16BE(_timeline->_eventMaxCount);
+	file->writeUint16BE(_groupMan->_currActiveGroupCount);
+	file->writeSint32BE(_projexpl->_lastCreatureAttackTime);
+	file->writeSint32BE(_projexpl->_lastPartyMovementTime);
+	file->writeSint16BE(_disabledMovementTicks);
+	file->writeSint16BE(_projectileDisableMovementTicks);
+	file->writeSint16BE(_lastProjectileDisabledMovementDirection);
+	file->writeUint16BE(_championMan->_leaderHandObject.toUint16());
+	file->writeUint16BE(_groupMan->_maxActiveGroupCount);
+
+	// write C1_SAVE_PART_ACTIVE_GROUP part
+	_groupMan->saveActiveGroupPart(file);
+	// write C2_SAVE_PART_PARTY part
+	_championMan->savePartyPart2(file);
+	// write C3_SAVE_PART_EVENTS part
+	_timeline->saveEventsPart(file);
+	// write C4_SAVE_PART_TIMELINE part
+	_timeline->saveTimelinePart(file);
+
+	// write sentinel
+	file->writeUint32BE(0x6f85e3d3);
+
+	// save _g278_dungeonFileHeader
+	DungeonFileHeader &header = _dungeonMan->_dungeonFileHeader;
+	file->writeUint16BE(header._ornamentRandomSeed);
+	file->writeUint16BE(header._rawMapDataSize);
+	file->writeByte(header._mapCount);
+	file->writeByte(0); // to match the structure of dungeon.dat, will be discarded
+	file->writeUint16BE(header._textDataWordCount);
+	file->writeUint16BE(header._partyStartLocation);
+	file->writeUint16BE(header._squareFirstThingCount);
+	for (uint16 i = 0; i < 16; ++i)
+		file->writeUint16BE(header._thingCounts[i]);
+
+	// save _g277_dungeonMaps
+	for (uint16 i = 0; i < _dungeonMan->_dungeonFileHeader._mapCount; ++i) {
+		Map &map = _dungeonMan->_dungeonMaps[i];
+
+		file->writeUint16BE(map._rawDunDataOffset);
+		file->writeUint32BE(0); // to match the structure of dungeon.dat, will be discarded
+		file->writeByte(map._offsetMapX);
+		file->writeByte(map._offsetMapY);
+
+		uint16 tmp;
+		tmp = ((map._height & 0x1F) << 11) | ((map._width & 0x1F) << 6) | (map._level & 0x3F);
+		file->writeUint16BE(tmp);
+
+		tmp = ((map._randFloorOrnCount & 0xF) << 12) | ((map._floorOrnCount & 0xF) << 8)
+			| ((map._randWallOrnCount & 0xF) << 4) | (map._wallOrnCount & 0xF);
+		file->writeUint16BE(tmp);
+
+		tmp = ((map._difficulty & 0xF) << 12) | ((map._creatureTypeCount & 0xF) << 4) | (map._doorOrnCount & 0xF);
+		file->writeUint16BE(tmp);
+
+		tmp = ((map._doorSet1 & 0xF) << 12) | ((map._doorSet0 & 0xF) << 8)
+			| ((map._wallSet & 0xF) << 4) | (map._floorSet & 0xF);
+		file->writeUint16BE(tmp);
+	}
+
+	// save _g280_dungeonColumnsCumulativeSquareThingCount
+	for (uint16 i = 0; i < _dungeonMan->_dungeonColumCount; ++i)
+		file->writeUint16BE(_dungeonMan->_dungeonColumnsCumulativeSquareThingCount[i]);
+
+	// save _g283_squareFirstThings
+	for (uint16 i = 0; i < _dungeonMan->_dungeonFileHeader._squareFirstThingCount; ++i)
+		file->writeUint16BE(_dungeonMan->_squareFirstThings[i].toUint16());
+
+	// save _g260_dungeonTextData
+	for (uint16 i = 0; i < _dungeonMan->_dungeonFileHeader._textDataWordCount; ++i)
+		file->writeUint16BE(_dungeonMan->_dungeonTextData[i]);
+
+	// save _g284_thingData
+	for (uint16 thingIndex = 0; thingIndex < 16; ++thingIndex) {
+		uint16 count = _dungeonMan->_dungeonFileHeader._thingCounts[thingIndex];
+		for (uint16 i = 0; i < count; ++i) {
+			switch (thingIndex) {
+			case kDMThingTypeDoor: {
+				Door &door = _dungeonMan->_doors[i];
+				file->writeUint16BE(door._nextThing.toUint16());
+				file->writeUint16BE(door._attributes);
+				break;
+			}
+			case kDMThingTypeTeleporter: {
+				Teleporter &tele = _dungeonMan->_teleporters[i];
+				file->writeUint16BE(tele._nextThing.toUint16());
+				file->writeUint16BE(tele._attributes);
+				file->writeUint16BE(tele._destMapIndex);
+				break;
+			}
+			case kDMstringTypeText: {
+				TextString &text = _dungeonMan->_textStrings[i];
+				file->writeUint16BE(text._nextThing.toUint16());
+				file->writeUint16BE(text._textDataRef);
+				break;
+			}
+			case kDMThingTypeSensor: {
+				Sensor &sens = _dungeonMan->_sensors[i];
+				file->writeUint16BE(sens._nextThing.toUint16());
+				file->writeUint16BE(sens._datAndType);
+				file->writeUint16BE(sens._attributes);
+				file->writeUint16BE(sens._action);
+				break;
+			}
+			case kDMThingTypeGroup: {
+				Group &grp = _dungeonMan->_groups[i];
+				file->writeUint16BE(grp._nextThing.toUint16());
+				file->writeUint16BE(grp._slot.toUint16());
+				file->writeUint16BE((uint16)grp._type);
+				file->writeUint16BE(grp._cells);
+				file->writeUint16BE(grp._health[0]);
+				file->writeUint16BE(grp._health[1]);
+				file->writeUint16BE(grp._health[2]);
+				file->writeUint16BE(grp._health[3]);
+				file->writeUint16BE(grp._flags);
+				break;
+			}
+			case kDMThingTypeWeapon: {
+				Weapon &weap = _dungeonMan->_weapons[i];
+				file->writeUint16BE(weap._nextThing.toUint16());
+				file->writeUint16BE(weap._desc);
+				break;
+			}
+			case kDMThingTypeArmour: {
+				Armour &arm = _dungeonMan->_armours[i];
+				file->writeUint16BE(arm._nextThing.toUint16());
+				file->writeUint16BE(arm._attributes);
+				break;
+			}
+			case kDMThingTypeScroll: {
+				Scroll &scr = _dungeonMan->_scrolls[i];
+				file->writeUint16BE(scr._nextThing.toUint16());
+				file->writeUint16BE(scr._attributes);
+				break;
+			}
+			case kDMThingTypePotion: {
+				Potion &pot = _dungeonMan->_potions[i];
+				file->writeUint16BE(pot._nextThing.toUint16());
+				file->writeUint16BE(pot._attributes);
+				break;
+			}
+			case kDMThingTypeContainer: {
+				Container &cont = _dungeonMan->_containers[i];
+				file->writeUint16BE(cont._nextThing.toUint16());
+				file->writeUint16BE(cont._slot.toUint16());
+				file->writeUint16BE(cont._type);
+				file->writeUint16BE(0); // unused 4th word
+				break;
+			}
+			case kDMThingTypeJunk: {
+				Junk &jnk = _dungeonMan->_junks[i];
+				file->writeUint16BE(jnk._nextThing.toUint16());
+				file->writeUint16BE(jnk._attributes);
+				break;
+			}
+			case kDMThingTypeProjectile: {
+				Projectile &proj = _dungeonMan->_projectiles[i];
+				file->writeUint16BE(proj._nextThing.toUint16());
+				file->writeUint16BE(proj._slot.toUint16());
+				file->writeUint16BE(proj._kineticEnergy);
+				file->writeUint16BE(proj._attack);
+				file->writeUint16BE(proj._eventIndex);
+				break;
+			}
+			case kDMThingTypeExplosion: {
+				Explosion &expl = _dungeonMan->_explosions[i];
+				file->writeUint16BE(expl._nextThing.toUint16());
+				file->writeUint16BE(expl._attributes);
+				break;
+			}
+			}
+		}
+	}
+
+	// save _g276_dungeonRawMapData
+	for (uint32 i = 0; i < _dungeonMan->_dungeonFileHeader._rawMapDataSize; ++i)
+		file->writeByte(_dungeonMan->_dungeonRawMapData[i]);
+
+	if (file->err())
+		return Common::kWritingFailed;
+
+	return Common::kNoError;
+}
+
+}

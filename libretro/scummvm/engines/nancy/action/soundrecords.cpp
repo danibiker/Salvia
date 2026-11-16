@@ -1,0 +1,764 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/random.h"
+#include "common/config-manager.h"
+#include "common/system.h"
+
+#include "engines/nancy/nancy.h"
+#include "engines/nancy/movieplayer.h"
+#include "engines/nancy/sound.h"
+#include "engines/nancy/util.h"
+
+#include "engines/nancy/action/soundrecords.h"
+
+#include "engines/nancy/state/scene.h"
+
+namespace Nancy {
+namespace Action {
+
+// A name beginning with '*' is the forced selection (the marker is stripped);
+// otherwise the played sound is picked at random. The choice is made once, when
+// the record is loaded.
+static uint selectRandomSound(Common::Array<Common::String> &soundNames) {
+	for (uint i = 0; i < soundNames.size(); ++i) {
+		if (soundNames[i].hasPrefix("*")) {
+			soundNames[i].deleteChar(0);
+			return i;
+		}
+	}
+
+	return g_nancy->_randomSource->getRandomNumber(soundNames.size() - 1);
+}
+
+// Some entries hold nothing but markup: "silence", which scenes play as a
+// placeholder, is just "<n>". Showing one would clear the textbox and put a
+// blank line in it, wiping whatever caption is up.
+static bool hasVisibleText(const Common::String &text) {
+	bool inToken = false;
+
+	for (uint i = 0; i < text.size(); ++i) {
+		if (text[i] == '<') {
+			inToken = true;
+		} else if (text[i] == '>') {
+			inToken = false;
+		} else if (!inToken && !Common::isSpace(text[i])) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Nancy13+ subtitles are no longer stored inside the sound record. Instead, the
+// engine looks the played sound's name up in the CVTX text chunks when the sound
+// starts and, if a matching entry exists, shows it in the game textbox. The
+// autotext chunk (narration/observations) is searched first, then the convo chunk.
+static Common::String resolveSoundSubtitle(const Common::String &soundName) {
+	if (soundName.empty() || soundName.equalsIgnoreCase("NO SOUND")) {
+		return Common::String();
+	}
+
+	const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+	if (autotext) {
+		Common::String text = autotext->texts.getValOrDefault(soundName, "");
+		if (hasVisibleText(text)) {
+			return text;
+		}
+	}
+
+	const CVTX *convo = (const CVTX *)g_nancy->getEngineData("CONVO");
+	if (convo) {
+		Common::String text = convo->texts.getValOrDefault(soundName, "");
+		if (hasVisibleText(text)) {
+			return text;
+		}
+	}
+
+	// Enhancement: the muffled takes of a few Nancy16 lines have no text of their
+	// own (e.g. "NIC312_muffled" in scene 4735), so show the text of the clear take
+	static const char *const kMuffledSuffix = "_muffled";
+	if (soundName.hasSuffixIgnoreCase(kMuffledSuffix)) {
+		return resolveSoundSubtitle(soundName.substr(0, soundName.size() - strlen(kMuffledSuffix)));
+	}
+
+	return Common::String();
+}
+
+void SetVolume::readData(Common::SeekableReadStream &stream) {
+	channel = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		volume = CLIP<int32>(stream.readSint32LE(), 0, 100);
+	} else {
+		volume = stream.readByte();
+	}
+}
+
+void SetVolume::execute() {
+	g_nancy->_sound->setVolume(channel, volume);
+	_isDone = true;
+}
+
+void SetMovieVolume::readData(Common::SeekableReadStream &stream) {
+	readFilename(stream, movieName);
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		volume = CLIP<int32>(stream.readSint32LE(), 0, 100);
+	} else {
+		volume = MIN<byte>(stream.readByte(), 100);
+	}
+}
+
+void SetMovieVolume::execute() {
+	MoviePlayer *movie = MoviePlayer::findLoadedMovie(movieName);
+	if (movie) {
+		movie->setVolume(volume);
+	}
+
+	_isDone = true;
+}
+
+void FadeSoundToSilence::readData(Common::SeekableReadStream &stream) {
+	channel = stream.readUint16LE();
+
+	if (g_nancy->getGameType() <= kGameTypeNancy15) {
+		stream.skip(2); // pad / flag
+	}
+
+	fadeTimeMs = stream.readUint32LE();
+}
+
+void FadeSoundToSilence::execute() {
+	switch (_state) {
+	case kBegin:
+		_startVolume = g_nancy->_sound->getVolume(channel);
+		_startTime = g_system->getMillis();
+		_state = kRun;
+		break;
+	case kRun: {
+		const uint32 elapsed = g_system->getMillis() - _startTime;
+		if (fadeTimeMs == 0 || elapsed >= fadeTimeMs) {
+			g_nancy->_sound->setVolume(channel, 0);
+			_state = kActionTrigger;
+			break;
+		}
+		const uint16 v = (uint16)((uint32)_startVolume * (fadeTimeMs - elapsed) / fadeTimeMs);
+		g_nancy->_sound->setVolume(channel, v);
+		break;
+	}
+	case kActionTrigger:
+		finishExecution();
+		break;
+	}
+}
+
+void Update3DSound::readData(Common::SeekableReadStream &stream) {
+	_channelID = stream.readUint16LE();
+	_posX = stream.readSint32LE();
+	_posY = stream.readSint32LE();
+	_posZ = stream.readSint32LE();
+	_minDistance = stream.readSint32LE();
+	_maxDistance = stream.readSint32LE();
+}
+
+void Update3DSound::execute() {
+	if (_posX != kNoChange && _posY != kNoChange && _posZ != kNoChange) {
+		g_nancy->_sound->update3DSoundPosition(_channelID, _posX, _posY, _posZ);
+	}
+
+	if (_minDistance != kNoChange) {
+		g_nancy->_sound->update3DSoundMinDistance(_channelID, _minDistance);
+	}
+
+	if (_maxDistance != kNoChange) {
+		g_nancy->_sound->update3DSoundMaxDistance(_channelID, _maxDistance);
+	}
+
+	_isDone = true;
+}
+
+void Set3DSoundListenerPosition::readData(Common::SeekableReadStream &stream) {
+	_posX = stream.readSint32LE();
+	_posY = stream.readSint32LE();
+	_posZ = stream.readSint16LE();
+}
+
+void Set3DSoundListenerPosition::execute() {
+	g_nancy->_sound->setListenerPosition(Math::Vector3d(_posX, _posY, _posZ));
+	_isDone = true;
+}
+
+void PlaySound::readData(Common::SeekableReadStream &stream) {
+	if (g_nancy->getGameType() >= kGameTypeNancy13) {
+		readDataNancy13(stream);
+		return;
+	}
+
+	_sound.readDIGI(stream);
+
+	if (g_nancy->getGameType() >= kGameTypeNancy3) {
+		_soundEffect = new SoundEffectDescription;
+		_soundEffect->readData(stream);
+
+		if (g_nancy->getGameType() >= kGameTypeNancy6) {
+			_changeSceneImmediately = stream.readByte();
+		}
+	}
+
+	_sceneChange.readData(stream, g_nancy->getGameType() == kGameTypeVampire);
+
+	_flag.label = stream.readSint16LE();
+	_flag.flag = stream.readByte();
+	stream.skip(2); // VIDEO_STOP_RENDERING, VIDEO_CONTINUE_RENDERING
+}
+
+void readMultiNameSound(Common::SeekableReadStream &stream, SoundDescription &sound, Common::String &ccText) {
+	const uint16 numNames = stream.readUint16LE();
+	if (numNames == 0) {
+		return;
+	}
+
+	Common::Array<Common::String> names;
+	names.resize(numNames);
+	for (uint16 i = 0; i < numNames; ++i) {
+		readFilename(stream, names[i]);
+	}
+
+	sound.channelID = stream.readUint16LE();
+	sound.numLoops = stream.readUint32LE();
+	sound.volume = stream.readUint16LE();
+
+	sound.name = names[selectRandomSound(names)];
+
+	// Subtitles are keyed by the played sound's name in the CVTX chunks.
+	ccText = resolveSoundSubtitle(sound.name);
+}
+
+void PlaySound::readDataNancy13(Common::SeekableReadStream &stream) {
+	readMultiNameSound(stream, _sound, _ccText);
+
+	// No inline SoundEffectDescription anymore, and the scene change is just a
+	// scene ID (frame/vertical offset stay 0).
+	_changeSceneImmediately = stream.readByte();
+	_sceneChange.sceneID = stream.readUint16LE();
+	_sceneChange.continueSceneSound = kContinueSceneSound;	// sounds keep playing into the new scene
+	_afterSoundAction = stream.readByte();	// overlay-refresh control; unused
+
+	// The single event flag became a list of { label, value } pairs.
+	const uint16 numFlags = stream.readUint16LE();
+	_flags.resize(numFlags);
+	for (uint16 i = 0; i < numFlags; ++i) {
+		_flags[i].label = stream.readSint16LE();
+		_flags[i].flag = (byte)stream.readSint16LE();
+	}
+}
+
+void PlaySound::execute() {
+	switch (_state) {
+	case kBegin:
+		// The channel is always unloaded and reloaded, so a sound that is still
+		// playing restarts from the beginning instead of being left alone
+		g_nancy->_sound->loadSound(_sound, &_soundEffect, true);
+		g_nancy->_sound->playSound(_sound);
+
+		// Nancy13+ shows the sound's subtitle (resolved from its name) in the
+		// game textbox. Earlier games use the explicit PlaySoundCC records instead.
+		if (g_nancy->getGameType() >= kGameTypeNancy13 && !_ccText.empty() &&
+				ConfMan.getBool("subtitles", ConfMan.getActiveDomainName())) {
+			NancySceneState.getTextbox().clear();
+			NancySceneState.getTextbox().addTextLine(_ccText);
+		}
+
+		if (g_nancy->getGameType() >= kGameTypeNancy13) {
+			// Nancy13 sets a list of event flags.
+			for (const FlagDescription &flag : _flags) {
+				NancySceneState.setEventFlag(flag);
+			}
+		} else if (g_nancy->getGameType() >= kGameTypeNancy8) {
+			NancySceneState.setEventFlag(_flag);
+		}
+
+		// A looping sound with no scene change and no event flag is started and then
+		// left to play; the record is marked done at once instead of waiting on a sound
+		// that never ends.
+		if (_sceneChange.sceneID == kNoScene && _flag.label == kEvNoEvent && _sound.numLoops == 0) {
+			_isDone = true;
+			break;
+		}
+
+		// Nancy16 asks for the scene change as soon as the sound has started. Waiting for
+		// the next pass wouldn't do: the flags set above can be among the record's own
+		// dependencies (scene 2343, where Nancy first meets the wolf), and the record
+		// then never runs again.
+		if (g_nancy->getGameType() >= kGameTypeNancy16 && _changeSceneImmediately) {
+			_state = kActionTrigger;
+			execute();
+			break;
+		}
+
+		_state = kRun;
+		break;
+	case kRun:
+		// changeSceneImmediately means the record doesn't wait for the sound to
+		// end, not that the scene changes within this same pass; the records
+		// between this one and the end of the list still get to run first
+		if (_changeSceneImmediately || !g_nancy->_sound->isSoundPlaying(_sound)) {
+			_state = kActionTrigger;
+		}
+
+		break;
+	case kActionTrigger:
+		applyAfterSoundAction();
+		NancySceneState.changeScene(_sceneChange);
+
+		if (g_nancy->getGameType() <= kGameTypeNancy7) {
+			NancySceneState.setEventFlag(_flag);
+		}
+
+		if (!_changeSceneImmediately) {
+			g_nancy->_sound->stopSound(_sound);
+		}
+
+		finishExecution();
+		break;
+	}
+}
+
+void PlaySound::applyAfterSoundAction() {
+	// Nancy13: afterSoundAction 1 dismisses the game text box overlay. Value 2
+	// flashes a second overlay that ScummVM doesn't model.
+	if (g_nancy->getGameType() >= kGameTypeNancy13 && _afterSoundAction == 1) {
+		NancySceneState.getTextbox().clear();
+	}
+}
+
+Common::String PlaySound::getRecordExtraInfo() const {
+	Common::String info = Common::String::format("Sound %s, channel %u, loops %u, volume %u, scene %d%s",
+		_sound.name.c_str(), _sound.channelID, _sound.numLoops, _sound.volume, _sceneChange.sceneID,
+		_changeSceneImmediately ? " (without waiting)" : "");
+
+	Common::Array<FlagDescription> flags = _flags;
+	if (flags.empty()) {
+		flags.push_back(_flag);
+	}
+
+	for (uint i = 0; i < flags.size(); ++i) {
+		if (flags[i].label == kFlagNoLabel) {
+			continue;
+		}
+
+		info += Common::String::format("; flag %d, %s -> %s", flags[i].label,
+			g_nancy->getEventFlagName(flags[i].label).c_str(), flags[i].flag == g_nancy->_true ? "true" : "false");
+	}
+
+	return info;
+}
+
+Common::String PlaySound::getRecordTypeName() const {
+	if (g_nancy->getGameType() <= kGameTypeNancy2) {
+		return "PlayDigiSoundAndDie";
+	} else if (g_nancy->getGameType() <= kGameTypeNancy5) {
+		return "PlayDigiSound";
+	} else {
+		return "PlaySound";
+	}
+}
+
+void PlaySoundCC::readData(Common::SeekableReadStream &stream) {
+	PlaySound::readData(stream);
+	readCCText(stream, _ccText);
+}
+
+void PlaySoundCC::execute() {
+	// Nancy13+ resolves the subtitle from the sound name in PlaySound::execute.
+	if (g_nancy->getGameType() < kGameTypeNancy13 &&
+			_state == kBegin && _ccText.size() && ConfMan.getBool("subtitles", ConfMan.getActiveDomainName())) {
+		NancySceneState.getTextbox().clear();
+		NancySceneState.getTextbox().addTextLine(_ccText);
+	}
+	PlaySound::execute();
+}
+
+void PlaySoundCC::readCCText(Common::SeekableReadStream &stream, Common::String &out) {
+	int16 textSize = stream.readUint16LE();
+
+	if (textSize > 0) {
+		char *strBuf = new char[textSize];
+		stream.read(strBuf, textSize);
+		assembleTextLine(strBuf, out, textSize);
+		delete[] strBuf;
+	} else if (textSize == -1) {
+		// Text is in Autotext chunk
+		Common::String key;
+		readFilename(stream, key);
+		const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+		assert(autotext);
+
+		out = autotext->texts.getValOrDefault(key, "");
+	}
+}
+
+Common::String PlaySoundCC::getRecordTypeName() const {
+	if (g_nancy->getGameType() <= kGameTypeNancy5) {
+		return "PlayDigiSoundCC";
+	} else {
+		return "PlaySoundCC";
+	}
+}
+
+void PlaySoundTerse::readData(Common::SeekableReadStream &stream) {
+	_sound.readTerse(stream);
+	_changeSceneImmediately = stream.readByte();
+	_sceneChange.sceneID = stream.readUint16LE();
+
+	_sceneChange.continueSceneSound = kContinueSceneSound;
+	_soundEffect = new SoundEffectDescription;
+
+	readCCText(stream, _ccText);
+}
+
+void PlaySoundEventFlagTerse::readData(Common::SeekableReadStream &stream) {
+	_sound.readTerse(stream);
+	_changeSceneImmediately = stream.readByte();
+	_sceneChange.sceneID = stream.readUint16LE();
+	_flag.label = stream.readUint16LE();
+	_flag.flag = stream.readByte();
+
+	_sceneChange.continueSceneSound = kContinueSceneSound;
+	_soundEffect = new SoundEffectDescription;
+
+	readCCText(stream, _ccText);
+}
+
+void PlaySoundFrameAnchor::readData(Common::SeekableReadStream &stream) {
+	_sound.readDIGI(stream);
+	stream.skip(2);
+	_sound.isPanning = true;
+}
+
+void PlaySoundFrameAnchor::execute() {
+	g_nancy->_sound->loadSound(_sound);
+	g_nancy->_sound->playSound(_sound);
+	_isDone = true;
+}
+
+Common::String PlaySoundFrameAnchor::getRecordTypeName() const {
+	if (g_nancy->getGameType() <= kGameTypeNancy2) {
+		return "PlaySoundPanFrameAnchorAndDie";
+	} else {
+		return "PlaySoundFrameAnchor";
+	}
+}
+
+void PlaySoundMultiHS::readData(Common::SeekableReadStream &stream) {
+	_sound.readNormal(stream);
+
+	if (g_nancy->getGameType() != kGameTypeVampire) {
+		_sceneChange.readData(stream);
+		_flag.label = stream.readSint16LE();
+		_flag.flag = stream.readByte();
+		stream.skip(2);
+	} else {
+		_flag.label = kEvNoEvent;
+		_sceneChange.sceneID = kNoScene;
+	}
+
+	uint16 numHotspots = stream.readUint16LE();
+
+	_hotspots.reserve(numHotspots);
+	for (uint i = 0; i < numHotspots; ++i) {
+		_hotspots.push_back(HotspotDescription());
+		_hotspots.back().frameID = stream.readUint16LE();
+		readRect(stream, _hotspots.back().coords);
+	}
+}
+
+void PlaySoundMultiHS::execute() {
+	switch (_state) {
+	case kBegin:
+		_state = kRun;
+		// fall through
+	case kRun: {
+		_hasHotspot = false;
+		uint currentFrame = NancySceneState.getSceneInfo().frameID;
+
+		for (uint i = 0; i < _hotspots.size(); ++i) {
+			if (_hotspots[i].frameID == currentFrame) {
+				_hotspot = _hotspots[i].coords;
+				_hasHotspot = true;
+				break;
+			}
+		}
+
+		break;
+	}
+	case kActionTrigger:
+		g_nancy->_sound->loadSound(_sound);
+		g_nancy->_sound->playSound(_sound);
+		NancySceneState.changeScene(_sceneChange);
+		NancySceneState.setEventFlag(_flag);
+		finishExecution();
+		break;
+	}
+}
+
+void StopSound::readData(Common::SeekableReadStream &stream) {
+	_channelID = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		// Nancy16 cut the scene change down to its scene and frame IDs
+		_sceneChange._sceneChange.sceneID = stream.readUint16LE();
+		_sceneChange._sceneChange.frameID = stream.readUint16LE();
+		_sceneChange._sceneChange.continueSceneSound = kContinueSceneSound;
+		_sceneChange._sceneChange.listenerFrontVector.set(0, 0, 1);
+		_sceneChange._flag.label = stream.readSint16LE();
+		_sceneChange._flag.flag = stream.readUint16LE();
+	} else {
+		_sceneChange.readData(stream);
+	}
+}
+
+void StopSound::execute() {
+	g_nancy->_sound->stopSound(_channelID);
+	_sceneChange.execute();
+}
+
+void PlayRandomSound::readData(Common::SeekableReadStream &stream) {
+	uint16 numSounds = stream.readUint16LE();
+	readFilenameArray(stream, _soundNames, numSounds - 1);
+
+	PlaySound::readData(stream);
+	_soundNames.push_back(_sound.name);
+
+	_selectedSound = selectRandomSound(_soundNames);
+	_sound.name = _soundNames[_selectedSound];
+}
+
+void PlayRandomSoundTerse::readData(Common::SeekableReadStream &stream) {
+	uint16 numSounds = stream.readUint16LE();
+	readFilenameArray(stream, _soundNames, numSounds - 1);
+
+	PlaySoundTerse::readData(stream);
+
+	// The call above will have read the last sound name and the first cc text
+	_soundNames.push_back(_sound.name);
+	_ccTexts.push_back(_ccText);
+
+	for (int i = 0; i < numSounds - 1; ++i) {
+		_ccTexts.push_back(Common::String());
+		readCCText(stream, _ccTexts.back());
+	}
+
+	_selectedSound = selectRandomSound(_soundNames);
+	_sound.name = _soundNames[_selectedSound];
+	_ccText = _ccTexts[_selectedSound];
+}
+
+void TableIndexPlaySound::readData(Common::SeekableReadStream &stream) {
+	_tableIndex = stream.readUint16LE();
+	PlaySound::readData(stream); // Data does NOT contain captions, so we call the PlaySound version
+}
+
+void TableIndexPlaySound::execute() {
+	TableData *playerTable = (TableData *)NancySceneState.getPuzzleData(TableData::getTag());
+	assert(playerTable);
+	auto *tabl = GetEngineData(TABL);
+	assert(tabl);
+
+	if (_lastIndexVal != playerTable->singleValues[_tableIndex - 1]) {
+		g_nancy->_sound->stopSound(_sound);
+		NancySceneState.getTextbox().clear();
+		_lastIndexVal = playerTable->singleValues[_tableIndex - 1];
+		_sound.name = Common::String::format("%s%u", tabl->soundBaseName.c_str(), playerTable->singleValues[_tableIndex - 1]);
+		_ccText = tabl->strings[playerTable->singleValues[_tableIndex - 1] - 1];
+	}
+
+	PlaySoundCC::execute();
+}
+
+void ConcatMultiSound::readData(Common::SeekableReadStream &stream) {
+	// Sound records split into groups; each group declares its size.
+	int16 remaining = stream.readSint16LE();
+	while (remaining > 0) {
+		int16 groupSize = stream.readSint16LE();
+		if (groupSize <= 0) {
+			break;
+		}
+
+		_groups.push_back(SoundGroup());
+		SoundGroup &group = _groups.back();
+		for (int16 i = 0; i < groupSize; ++i) {
+			group.sounds.push_back(SequencedSound());
+			SequencedSound &sound = group.sounds.back();
+			readFilename(stream, sound.name);	// 33-byte field
+			sound.flag = stream.readByte();
+			sound.delay = stream.readSint16LE();
+		}
+
+		// ConcatSound: flag pairs per group.
+		if (perGroupFlags()) {
+			int16 numFlags = stream.readSint16LE();
+			for (int16 i = 0; i < numFlags; ++i) {
+				group.flags.push_back(FlagDescription());
+				group.flags.back().label = stream.readSint16LE();
+				group.flags.back().flag = (byte)stream.readSint16LE();
+			}
+		}
+
+		remaining -= groupSize;
+	}
+
+	// Shared sound descriptor.
+	_sound.channelID = stream.readUint16LE();
+	_sound.numLoops = (uint16)stream.readSint32LE();	// stored as an int32 on disk
+	_sound.volume = stream.readUint16LE();
+	_exitSceneID = stream.readSint16LE();
+	_subtitleMode = stream.readByte();
+
+	// MultiSound: one shared set of flag pairs.
+	if (!perGroupFlags()) {
+		int16 numFlags = stream.readSint16LE();
+		for (int16 i = 0; i < numFlags; ++i) {
+			_sharedFlags.push_back(FlagDescription());
+			_sharedFlags.back().label = stream.readSint16LE();
+			_sharedFlags.back().flag = (byte)stream.readSint16LE();
+		}
+	}
+
+	_sound.name = "NO SOUND";
+}
+
+void ConcatMultiSound::showGroupSubtitle() {
+	if (_subtitleMode == kSubtitleModeNone) {
+		return;
+	}
+
+	// A group is captioned as a single block: the text of each of its sounds, in
+	// playback order, with a line break after every sound whose flag is set.
+	// Sounds with no text of their own contribute nothing.
+	Common::String text;
+	for (const SequencedSound &sound : _groups[_currentGroup].sounds) {
+		Common::String part = resolveSoundSubtitle(sound.name);
+		if (part.empty()) {
+			continue;
+		}
+
+		text += part;
+		if (sound.flag) {
+			text += "<n>";
+		}
+	}
+
+	if (!text.empty()) {
+		showSubtitle(text + "<e>");
+	}
+}
+
+void ConcatMultiSound::startCurrentSound() {
+	SoundGroup &group = _groups[_currentGroup];
+	SequencedSound &sound = group.sounds[_currentSound];
+
+	// ConcatSound: apply the group's flags on its first sound.
+	if (perGroupFlags() && _currentSound == 0) {
+		for (const FlagDescription &flag : group.flags) {
+			NancySceneState.setEventFlag(flag);
+		}
+	}
+
+	// The whole group is subtitled at once, as its first sound starts.
+	if (_currentSound == 0) {
+		showGroupSubtitle();
+	}
+
+	_sound.name = sound.name;
+	if (!_sound.name.empty() && _sound.name != "NO SOUND") {
+		g_nancy->_sound->loadSound(_sound);
+		g_nancy->_sound->playSound(_sound);
+	}
+
+	_delayEnd = g_nancy->getTotalPlayTime() + (sound.delay > 0 ? (uint32)sound.delay * 1000 : 0);
+}
+
+void ConcatMultiSound::execute() {
+	switch (_state) {
+	case kBegin:
+		_currentGroup = 0;
+		_currentSound = 0;
+		_soundStarted = false;
+
+		// MultiSound: apply the shared flags up front.
+		if (!perGroupFlags()) {
+			for (const FlagDescription &flag : _sharedFlags) {
+				NancySceneState.setEventFlag(flag);
+			}
+		}
+
+		_state = kRun;
+		break;
+	case kRun:
+		if (_currentGroup >= _groups.size()) {
+			_state = kActionTrigger;
+			break;
+		}
+
+		if (_currentSound >= _groups[_currentGroup].sounds.size()) {
+			++_currentGroup;
+			_currentSound = 0;
+			_soundStarted = false;
+			break;
+		}
+
+		if (!_soundStarted) {
+			// Wait for the channel to fall silent, even when the sound playing on it
+			// belongs to another record (e.g. Nancy14 scenes 0 -> 6401)
+			if (g_nancy->_sound->isSoundPlaying(_sound.channelID)) {
+				break;
+			}
+
+			startCurrentSound();
+			_soundStarted = true;
+		} else {
+			// Advance once the sound finishes and its delay elapses.
+			bool soundDone = !g_nancy->_sound->isSoundPlaying(_sound);
+			bool delayDone = g_nancy->getTotalPlayTime() >= _delayEnd;
+			if (soundDone && delayDone) {
+				++_currentSound;
+				_soundStarted = false;
+			}
+		}
+
+		break;
+	case kActionTrigger:
+		if (_exitSceneID != kNoScene) {
+			SceneChangeDescription desc;
+			desc.sceneID = _exitSceneID;
+			desc.continueSceneSound = kContinueSceneSound;
+			NancySceneState.changeScene(desc);
+		}
+
+		finishExecution();
+		break;
+	}
+}
+
+} // End of namespace Action
+} // End of namespace Nancy

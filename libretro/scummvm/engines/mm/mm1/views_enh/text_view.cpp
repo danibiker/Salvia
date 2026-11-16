@@ -1,0 +1,290 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "mm/mm1/globals.h"
+#include "mm/mm1/gfx/gfx.h"
+#include "mm/mm1/views_enh/text_view.h"
+#include "mm/mm1/mm1.h"
+#include "mm/shared/utils/strings.h"
+
+namespace MM {
+namespace MM1 {
+namespace ViewsEnh {
+
+#define ROW_HEIGHT 9
+#define TEXT_COLOR 9
+
+TextView::TextView(const Common::String &name) :
+		UIElement(name, g_engine) {
+}
+
+TextView::TextView(const Common::String &name, UIElement *owner) :
+		UIElement(name, owner) {
+}
+
+byte TextView::setTextColor(byte col) {
+	byte oldColor = _colorsNum;
+	_colorsNum = col;
+	return oldColor;
+}
+
+XeenFont *TextView::getFont() const {
+	return _fontReduced ? &g_globals->_fontReduced :
+		&g_globals->_fontNormal;
+}
+
+void TextView::writeChar(unsigned char c) {
+	XeenFont::setColors(_colorsNum);
+	XeenFont &font = *getFont();
+
+	if (c == '\r' || c == '\n') {
+		_textPos.x = 0;
+		_textPos.y += font.getFontHeight();
+	} else {
+		Graphics::ManagedSurface s = getSurface();
+		if (c != ' ')
+			font.drawChar(&s, c,
+				_bounds.borderSize() + _textPos.x,
+				_bounds.borderSize() + _textPos.y,
+				TEXT_COLOR);
+
+		_textPos.x += font.getCharWidth(c);
+		if (_textPos.x >= _innerBounds.width()) {
+			_textPos.x = 0;
+			_textPos.y += font.getFontHeight();
+		}
+	}
+}
+
+void TextView::writeChar(int x, int y, unsigned char c) {
+	_textPos.x = x;
+	_textPos.y = y;
+	writeChar(c);
+}
+
+void TextView::rawWriteString(const Common::String &str) {
+	int y = _textPos.y;
+
+	for (const char *s = (const char *)str.c_str(); *s; ++s) {
+		char c = *s;
+
+		if (c == '\x01') {
+			// Highlight next character for buttons
+			int colNum = atoi(Common::String(s + 1, s + 3).c_str());
+			byte oldCol = setTextColor(colNum);
+			s += 3;
+			writeChar(*s);
+			setTextColor(oldCol);
+
+		} else if (c == '\x02') {
+			int colNum = atoi(Common::String(s + 1, s + 3).c_str());
+			setTextColor(colNum);
+			s += 2;
+
+		} else {
+			writeChar(c);
+		}
+	}
+
+	_textPos.y = y;
+}
+
+void TextView::writeString(const Common::String &str, TextAlign align) {
+	if (_textPos.x == 0) {
+		if (align == ALIGN_RIGHT)
+			_textPos.x = _innerBounds.width();
+		else if (align == ALIGN_MIDDLE)
+			_textPos.x = _innerBounds.width() / 2;
+	}
+
+	// Figure out line widths
+	int lineWidth;
+	switch (align) {
+	case ALIGN_RIGHT:
+		lineWidth = _textPos.x;
+		break;
+	case ALIGN_MIDDLE:
+		lineWidth = MIN(_textPos.x, (int16)(_innerBounds.width() - _textPos.x)) * 2;
+		break;
+	default:
+		lineWidth = _innerBounds.width() - _textPos.x;
+		break;
+	}
+
+	// Split the string into lines
+	Common::StringArray lines = splitLines(str, lineWidth);
+
+	int xStart = _textPos.x;
+	for (const auto &line : lines) {
+		if (line != lines.front()) {
+			newLine();
+			_textPos.x = xStart;
+		}
+
+		if (align != ALIGN_LEFT) {
+			int strWidth = getFont()->getStringWidth(line);
+
+			if (align == ALIGN_MIDDLE)
+				_textPos.x = xStart - strWidth / 2;
+			else
+				// Right align
+				_textPos.x = xStart - strWidth;
+		}
+
+		rawWriteString(line);
+	}
+}
+
+void TextView::writeString(int x, int y, const Common::String &str,
+		TextAlign align) {
+	_textPos.x = x;
+	_textPos.y = y;
+
+	writeString(str, align);
+}
+
+void TextView::writeNumber(int val) {
+	writeString(Common::String::format("%d", val));
+}
+
+void TextView::writeNumber(int x, int y, int val) {
+	_textPos.x = x;
+	_textPos.y = y;
+	writeNumber(val);
+}
+
+void TextView::writeLine(int lineNum, const Common::String &str,
+		TextAlign align, int xp) {
+	writeString(xp, lineNum * ROW_HEIGHT, str, align);
+}
+
+size_t TextView::getStringWidth(const Common::String &str) {
+	return getFont()->getStringWidth(str);
+}
+
+Common::String TextView::truncateString(const Common::String &str, int maxWidth) {
+	Common::String result = str;
+	const Common::String ellipsis = "...";
+
+	if ((int)getStringWidth(result) <= maxWidth)
+		return result;
+
+	const int ellipsisWidth = (int)getStringWidth(ellipsis);
+	while (!result.empty() && (int)getStringWidth(result) + ellipsisWidth > maxWidth)
+		result.deleteLastChar();
+
+	return result.empty() && ellipsisWidth > maxWidth ? Common::String() :
+		result + ellipsis;
+}
+
+void TextView::newLine() {
+	_textPos.x = 0;
+	_textPos.y += ROW_HEIGHT;
+}
+
+Common::StringArray TextView::splitLines(const Common::String &str,
+		int lineWidth) {
+	XeenFont &font = _fontReduced ?
+		g_globals->_fontReduced : g_globals->_fontNormal;
+	const Common::String CONTROL_CHARS = "\x01\x02";
+	bool hasControlChars = str.findFirstOf(CONTROL_CHARS) != Common::String::npos;
+	const char *startP = str.c_str();
+	const char *endP;
+
+	if (lineWidth == -1)
+		lineWidth = _innerBounds.width();
+
+	Common::StringArray lines;
+	if (str.empty())
+		return lines;
+
+	do {
+		bool forceSplit = false;
+		endP = strchr(startP, '\n');
+		const char *lineEndP = endP;
+		int strWidth = font.getStringWidth(endP ?
+			Common::String(startP, endP) : Common::String(startP));
+
+		if (strWidth > lineWidth) {
+			// Find the last space before a full line
+			endP = startP + (lineEndP ? lineEndP - startP : (int)strlen(startP)) - 1;
+			while (strWidth > lineWidth) {
+				// Move back to a prior space
+				for (--endP; endP > startP && *endP != ' '; --endP) {
+					if (hasControlChars) {
+						// Strings can have a byte value of 1 or 2 (for changing the
+						// color of the next character/all text), followed by 2 characters
+						// for the color. So in such cases, skip over the digits
+						size_t p = Common::String(startP).findLastOf(CONTROL_CHARS);
+						if (p != Common::String::npos && endP >= (startP + p) &&
+							endP < (startP + p + 3))
+							endP = startP + p;
+					}
+				}
+
+				if (endP <= startP) {
+					// No place to word wrap, and it's longer than the width.
+					// Split an unbroken word near the visual center.
+					const char *wordEndP = lineEndP ? lineEndP : startP + strlen(startP);
+					endP = startP + (wordEndP - startP) / 2;
+
+					while (endP > startP + 1 &&
+							font.getStringWidth(Common::String(startP, endP)) > lineWidth)
+						--endP;
+					if (endP <= startP)
+						endP = startP + 1;
+
+					forceSplit = true;
+					break;
+				}
+
+				strWidth = font.getStringWidth(Common::String(startP, endP));
+			}
+		}
+
+		// Add line to results
+		lines.push_back(endP ? Common::String(startP, endP) : Common::String(startP));
+
+		if (!endP)
+			break;
+
+		// Start next line after space or carriage return
+		startP = forceSplit ? endP : endP + 1;
+
+	} while (*startP);
+
+	return lines;
+}
+
+void TextView::clearSurface() {
+	UIElement::clearSurface();
+	_textPos.x = _textPos.y = 0;
+}
+
+void TextView::drawGraphic(int gfxNum) {
+	const Graphics::ManagedSurface img =
+		g_globals->_monsters->getMonsterImage(gfxNum);
+	getSurface().blitFrom(img, Common::Point(64, 30));
+}
+
+} // namespace ViewsEnh
+} // namespace MM1
+} // namespace MM

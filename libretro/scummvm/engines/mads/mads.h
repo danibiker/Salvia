@@ -1,0 +1,228 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef MADS_ENGINE_H
+#define MADS_ENGINE_H
+
+#include "audio/mixer.h"
+#include "common/events.h"
+#include "common/serializer.h"
+#include "common/stack.h"
+#include "common/random.h"
+#include "common/util.h"
+#include "engines/engine.h"
+#include "mads/detection.h"
+#include "graphics/screen.h"
+#include "mads/core/sound_manager.h"
+#include "mads/core/game.h"
+#include "mads/core/speech.h"
+
+namespace MADS {
+
+#define DEBUG_BASIC 1
+#define DEBUG_INTERMEDIATE 2
+#define DEBUG_DETAILED 3
+
+enum MADSDebugChannels {
+	kDebugPath = 1,
+	kDebugScripts,
+	kDebugGraphics,
+	kDebugConversations
+};
+
+enum MADSActions {
+	kActionNone,
+	kActionEscape,
+	kActionGameMenu,
+	kActionSave,
+	kActionRestore,
+	kActionScrollUp,
+	kActionScrollDown,
+	kActionStartGame,
+	kActionResumeGame,
+	kActionShowIntro,
+	kActionCredits,
+	kActionQuotes,
+	kActionRestartAnimation
+};
+
+typedef void (*TimerFunction)();
+
+class MADSEngine : public Engine {
+private:
+	uint16 _shakeRandom = 0x4D2;
+
+	void initGlobals();
+	void syncGame(Common::Serializer &s);
+	bool isSpecialKey(Common::KeyCode key) const;
+	void updateScreen();
+
+protected:
+	const MADSGameDescription *_gameDescription;
+	Common::RandomSource _randomSource;
+	Graphics::Screen *_screen = nullptr;
+	Common::Stack<Common::KeyState> _keyEvents;
+	uint32 _nextFrameTime = 0;
+	Common::Point _mousePos;
+	int _mouseButtons = 0;
+	Audio::SoundHandle _speechHandle;
+	TimerFunction _timerFunction = nullptr;
+	uint32 _nextTimerTime = 0;
+	Graphics::Surface _savegameThumbnail;
+
+	virtual Common::Point screenToGame(const Common::Point &point) const;
+	virtual Common::Point gameToScreen(const Common::Point &point) const;
+	virtual void presentScreen(int shakeOffset);
+
+	virtual bool handleMacEvent(Common::Event &event) { return false; }
+	virtual void serviceMacintoshUI() {}
+	virtual void serviceMacintoshSound() {}
+
+	bool hasFeature(EngineFeature f) const override;
+
+	void pollEvents(bool presentScreen = true);
+	void checkForTimerFunction();
+
+public:
+	MADS::SoundManager *_soundManager = nullptr;
+	bool _musicFlag = true;
+	bool _soundFlag = true;
+	bool &_speechFlag = speech_on;
+
+public:
+	MADSEngine(OSystem *syst, const MADSGameDescription *gameDesc);
+	~MADSEngine() override;
+	void initializePath(const Common::FSNode &gamePath) override;
+
+	uint32 getFeatures() const;
+	Common::Language getLanguage() const;
+	Common::Platform getPlatform() const;
+	uint16 getVersion() const;
+	uint32 getGameID() const;
+	uint32 getGameFeatures() const;
+	bool isDemo() const;
+	bool isCDROM() const;
+
+	void readConfigFile();
+	int getRandomNumber(int maxNumber);
+	int getRandomNumber(int minNumber, int maxNumber);
+
+	Graphics::Screen *getScreen() const {
+		return _screen;
+	}
+
+	bool hasPendingKey(bool presentScreen = true);
+	int getKey();
+	void flushKeys();
+
+	int getMouseState(int &x, int &y);
+	void warpMouse(int x, int y);
+	void updateDisplay();
+
+	void pauseEngineIntern(bool pause) override;
+
+	const Graphics::Surface &getSavegameThumbnail() const {
+		return _savegameThumbnail;
+	}
+	void setSavegameThumbnail();
+	void clearSavegameThumbnail();
+
+	/**
+	 * Get the elapsed time in milliseconds
+	 */
+	uint32 getMillis();
+
+	/* Callback routines in game-specific MAIN module */
+	int main_cheating_key(int mykey) const {
+		return mykey;
+	}
+	int main_normal_key(int mykey) const {
+		return mykey;
+	}
+	virtual int main_copy_verify() {
+		return COPY_SUCCEED;
+	}
+
+	bool canLoadGameStateCurrently(Common::U32String *msg) override;
+	bool canSaveGameStateCurrently(Common::U32String *msg) override {
+		return canLoadGameStateCurrently(msg);
+	}
+	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave) override;
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+	virtual void syncRoom(Common::Serializer &s) = 0;
+	SaveStateList listSaves() const;
+
+	virtual void global_init_code() = 0;
+	virtual void section_music(int section_num) = 0;
+	virtual void global_section_constructor() = 0;
+	virtual void global_daemon_code() = 0;
+	virtual void global_pre_parser_code() = 0;
+	virtual void global_parser_code() = 0;
+	virtual void global_error_code() = 0;
+	virtual void global_room_init() = 0;
+	virtual void global_sound_driver() = 0;
+	virtual void global_game_main_loop() {}
+	virtual void global_verb_filter() {}
+
+	int getMessageTextWidth(FontPtr font, const char *text, int spacing) const;
+
+	// Optional Macintosh presentation hooks. Defaults preserve the shared
+	// MADS rendering path used by DOS releases.
+	virtual bool hasInterfaceAnimations() const { return true; }
+	virtual bool drawPopup() { return false; }
+	virtual int editMacintoshPopup(char *, int) { return -1; }
+	virtual void onPopupDestroyed() {}
+	virtual int getMacintoshTextWidth(FontPtr, const char *, int) const {
+		return -1;
+	}
+	virtual bool drawMacintoshText(FontPtr, Buffer *, const char *, int,
+		int, int, int) const { return false; }
+	virtual bool getInterfaceSentenceColor(byte &) const {
+		return false;
+	}
+	virtual bool hasMacintoshInterface() const { return false; }
+	virtual bool setMacintoshPalette(const RGBcolor *, int, int) {
+		return false;
+	}
+	virtual bool getMacintoshPalette(RGBcolor *, int, int) const {
+		return false;
+	}
+
+	virtual void player_keep_walking();
+
+	void playSpeech(Audio::AudioStream *stream);
+	void stopSpeech();
+	bool isSpeechPlaying() const;
+	void syncSoundSettings() override;
+
+	/**
+	 * Sets the timer function to call at 60Hz
+	 */
+	void setTimerFunction(TimerFunction fn) {
+		_timerFunction = fn;
+	}
+};
+
+extern MADSEngine *g_engine;
+
+} // namespace MADS
+
+#endif

@@ -1,0 +1,211 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "mm/mm1/views/title.h"
+#include "mm/mm1/gfx/gfx.h"
+#include "mm/mm1/gfx/screen_decoder.h"
+#include "mm/mm1/mm1.h"
+
+namespace MM {
+namespace MM1 {
+namespace Views {
+
+#define FADE_SEGMENTS 20
+#define FADE_SEGMENT_X (SCREEN_W / 2 / FADE_SEGMENTS)
+#define FADE_SEGMENT_Y (SCREEN_H / 2 / FADE_SEGMENTS)
+#define FIRST_SCENE_SCREEN 2
+#define FIRST_TEXT_SCENE_SCREEN 5
+#define SCENE_SECONDS 5
+#define TEXT_SCENE_SECONDS 12
+
+static constexpr Common::Rect START_GAME_BOUNDS(Common::Point(23, 164), 157 - 23, 173 - 164);
+static constexpr Common::Rect SCENES_BOUNDS(Common::Point(162, 164), 292 - 162, 173 - 164);
+
+Title::Title() : UIElement("Title", g_engine) {
+	_bounds = Common::Rect(0, 0, SCREEN_W, SCREEN_H);
+}
+
+bool Title::msgFocus(const FocusMessage &msg) {
+	Gfx::ScreenDecoder decoder;
+	decoder._indexes[0] = 0;
+	decoder._indexes[1] = 2;
+	decoder._indexes[2] = 4;
+	decoder._indexes[3] = 15;
+
+	for (int i = 0; i < SCREENS_COUNT; ++i) {
+		if (i == 2) {
+			decoder._indexes[1] = 3;
+			decoder._indexes[2] = 5;
+		}
+
+		if (decoder.loadFile(Common::Path(
+			Common::String::format(g_engine->isEnhanced() ?
+				"gfx/screen%d" : "screen%d", i)))) {
+			_screens[i].copyFrom(*decoder.getSurface());
+		} else {
+			error("Could not load title screen");
+		}
+	}
+
+	_screenNum = -1;
+	_fadeIndex = 0;
+
+	if (!g_engine->isEnhanced())
+		Sound::sound2(SOUND_TITLE);
+
+	return true;
+}
+
+bool Title::msgUnfocus(const UnfocusMessage & msg) {
+	if (!g_engine->isEnhanced())
+		Sound::stopSound();
+
+	for (int i = 0; i < SCREENS_COUNT; ++i)
+		_screens[i].clear();
+
+	return true;
+}
+
+void Title::draw() {
+	Graphics::ManagedSurface surf = getSurface();
+
+	if (_screenNum == -1) {
+		// Initially, display the entire first screen
+		surf.blitFrom(_screens[0]);
+
+		// Start up fading in the second one
+		_screenNum = 1;
+		_fadeIndex = 0;
+		delaySeconds(1);
+
+	} else if (_screenNum < 2 && _fadeIndex == 0) {
+		// Brief pause before starting next screen scroll in
+		delaySeconds(1);
+
+	} else if (_screenNum < 2) {
+		// Gradually displaying more of the next screen
+		int deltaX = _fadeIndex * FADE_SEGMENT_X;
+		int deltaY = _fadeIndex * FADE_SEGMENT_Y;
+
+		const Graphics::ManagedSurface &src = _screens[_screenNum];
+		const Common::Rect top(0, 0, SCREEN_W, deltaY);
+		const Common::Rect left(0, 0, deltaX, SCREEN_H);
+		const Common::Rect right(SCREEN_W - deltaX, 0, SCREEN_W, SCREEN_H);
+		const Common::Rect bottom(0, SCREEN_H - deltaY, SCREEN_W, SCREEN_H);
+
+		surf.blitFrom(src, top, top);
+		surf.blitFrom(src, left, left);
+		surf.blitFrom(src, right, right);
+		surf.blitFrom(src, bottom, bottom);
+
+		delayFrames(2);
+
+	} else {
+		// Scene screens
+		const Graphics::ManagedSurface &src = _screens[_screenNum];
+		surf.blitFrom(src);
+
+		delaySeconds(_screenNum >= FIRST_TEXT_SCENE_SCREEN ? TEXT_SCENE_SECONDS : SCENE_SECONDS);
+	}
+}
+
+void Title::timeout() {
+	if (_screenNum < FIRST_SCENE_SCREEN) {
+		if (_fadeIndex++ == FADE_SEGMENTS) {
+			_screenNum = (_screenNum == 0) ? 1 : 0;
+			_fadeIndex = 0;
+		}
+	} else {
+		advanceSlideshow();
+	}
+
+	redraw();
+}
+
+bool Title::msgKeypress(const KeypressMessage &msg) {
+	if (msg.keycode == Common::KEYCODE_SPACE)
+		msgAction(ActionMessage(KEYBIND_SELECT));
+
+	return true;
+}
+
+bool Title::msgAction(const ActionMessage &msg) {
+	if (msg._action == KEYBIND_ESCAPE) {
+		g_events->replaceView(g_engine->isEnhanced() ?
+			"MainMenu" : "AreYouReady");
+		return true;
+	} else if (msg._action == KEYBIND_SELECT) {
+		if (_screenNum >= FIRST_SCENE_SCREEN) {
+			cancelDelay();
+			advanceSlideshow();
+			redraw();
+		} else {
+			startSlideshow();
+		}
+		return true;
+	}
+
+	return false;
+}
+
+bool Title::msgMouseUp(const MouseUpMessage &msg) {
+	if (msg._button == MouseMessage::MB_RIGHT) {
+		_screenNum = -1;
+		_fadeIndex = 0;
+		cancelDelay();
+		redraw();
+		return true;
+	}
+
+	if (msg._button != MouseMessage::MB_LEFT)
+		return false;
+
+	Common::Point pos = msg._pos;
+	pos -= Common::Point(_bounds.left, _bounds.top);
+
+	if (_screenNum >= FIRST_SCENE_SCREEN) {
+		msgAction(ActionMessage(KEYBIND_SELECT));
+	} else if (START_GAME_BOUNDS.contains(pos)) {
+		msgAction(ActionMessage(KEYBIND_ESCAPE));
+	} else if (SCENES_BOUNDS.contains(pos)) {
+		msgAction(ActionMessage(KEYBIND_SELECT));
+	}
+
+	return true;
+}
+
+void Title::startSlideshow() {
+	cancelDelay();
+	_screenNum = FIRST_SCENE_SCREEN;
+	_fadeIndex = 0;
+	redraw();
+}
+
+void Title::advanceSlideshow() {
+	if (++_screenNum >= SCREENS_COUNT) {
+		_screenNum = -1;
+		_fadeIndex = 0;
+	}
+}
+
+} // namespace Views
+} // namespace MM1
+} // namespace MM

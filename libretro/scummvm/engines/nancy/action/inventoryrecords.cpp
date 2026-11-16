@@ -1,0 +1,298 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "engines/nancy/nancy.h"
+#include "engines/nancy/util.h"
+#include "engines/nancy/resource.h"
+#include "engines/nancy/sound.h"
+
+#include "engines/nancy/action/inventoryrecords.h"
+
+#include "engines/nancy/state/scene.h"
+
+#include "engines/nancy/ui/ndui/manager.h"
+
+namespace Nancy {
+namespace Action {
+
+// Nancy17 names the character an item belongs to; anything that isn't a
+// character's name stands for whoever is being played
+static byte readCharacterName(Common::SeekableReadStream &stream) {
+	Common::String name;
+	readFilename(stream, name);
+
+	const PCUI *pcui = GetEngineData(PCUI);
+	for (uint i = 0; pcui && i < pcui->characters.size(); ++i) {
+		if (pcui->characters[i].name.equalsIgnoreCase(name)) {
+			return i;
+		}
+	}
+
+	return kPlayerCharacterActive;
+}
+
+void AddInventoryNoHS::readData(Common::SeekableReadStream &stream) {
+	_itemID = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy17) {
+		_characterIndex = readCharacterName(stream);
+		_setCursor = stream.readByte();
+	} else if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		// The character the item goes to took the first half of the cursor flag
+		_characterIndex = stream.readByte();
+		_setCursor = stream.readByte();
+
+		// Nancy16 dropped the force cursor field
+		if (g_nancy->getGameType() == kGameTypeNancy15) {
+			_forceCursor = stream.readUint16LE();
+		}
+	} else if (g_nancy->getGameType() >= kGameTypeNancy6) {
+		_setCursor = stream.readUint16LE();
+		_forceCursor = stream.readUint16LE();
+	}
+}
+
+void AddInventoryNoHS::execute() {
+	uint characterIndex = _characterIndex == kPlayerCharacterActive ?
+		g_nancy->getPlayerCharacter() : _characterIndex;
+
+	NancySceneState.giveItemToCharacter(characterIndex, _itemID, _setCursor, _forceCursor);
+
+	_isDone = true;
+}
+
+void RemoveInventoryNoHS::readData(Common::SeekableReadStream &stream) {
+	_itemID = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy17) {
+		_characterIndex = readCharacterName(stream);
+	} else if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		_characterIndex = stream.readByte();
+	}
+}
+
+void RemoveInventoryNoHS::execute() {
+	uint characterIndex = _characterIndex == kPlayerCharacterActive ?
+		g_nancy->getPlayerCharacter() : _characterIndex;
+
+	NancySceneState.removeItemFromCharacterInventory(characterIndex, _itemID);
+
+	_isDone = true;
+}
+
+void ShowInventoryItem::init() {
+	g_nancy->_resource->loadImage(_imageName, _fullSurface);
+
+	_drawSurface.create(_fullSurface, _blitDescriptions[0].src);
+
+	RenderObject::init();
+}
+
+void ShowInventoryItem::readData(Common::SeekableReadStream &stream) {
+	GameType gameType = g_nancy->getGameType();
+	_objectID = stream.readUint16LE();
+	readFilename(stream, _imageName);
+
+	uint16 numFrames = stream.readUint16LE();
+	if (gameType >= kGameTypeNancy3) {
+		stream.skip(2);
+	}
+
+	_blitDescriptions.resize(numFrames);
+	for (uint i = 0; i < numFrames; ++i) {
+		if (gameType <= kGameTypeNancy2) {
+			_blitDescriptions[i].readData(stream);
+		} else {
+			_blitDescriptions[i].frameID = i;
+			readRect(stream, _blitDescriptions[i].src);
+			readRect(stream, _blitDescriptions[i].dest);
+		}
+	}
+}
+
+void ShowInventoryItem::execute() {
+	switch (_state) {
+	case kBegin:
+		init();
+		registerGraphics();
+		_state = kRun;
+		// fall through
+	case kRun: {
+		int newFrame = -1;
+
+		for (uint i = 0; i < _blitDescriptions.size(); ++i) {
+			if (_blitDescriptions[i].frameID == NancySceneState.getSceneInfo().frameID) {
+				newFrame = i;
+				break;
+			}
+		}
+
+		if (newFrame != _drawnFrameID) {
+			_drawnFrameID = newFrame;
+
+			if (newFrame != -1) {
+				_hasHotspot = true;
+				_hotspot = _blitDescriptions[newFrame].dest;
+				_drawSurface.create(_fullSurface, _blitDescriptions[newFrame].src);
+				_screenPosition = _blitDescriptions[newFrame].dest;
+				setVisible(true);
+			} else {
+				_hasHotspot = false;
+				setVisible(false);
+			}
+		}
+
+		break;
+	}
+	case kActionTrigger:
+		g_nancy->_sound->playSound("BUOK");
+		NancySceneState.addItemToInventory(_objectID);
+		setVisible(false);
+		_hasHotspot = false;
+		finishExecution();
+		break;
+	}
+}
+
+void InventorySoundOverride::readData(Common::SeekableReadStream &stream) {
+	_command = stream.readByte();
+	_itemID = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		_characterIndex = stream.readByte();
+		stream.skip(1);
+	} else {
+		stream.skip(2);
+	}
+
+	char buf[61];
+	stream.read(buf, 60);
+	buf[60] = '\0';
+	_caption = buf;
+	_sound.readNormal(stream);
+}
+
+void InventorySoundOverride::execute() {
+	NancySceneState.installInventorySoundOverride(_command, _sound, _caption, _itemID, _characterIndex);
+	_isDone = true;
+}
+
+void EnableDisableInventory::readData(Common::SeekableReadStream &stream) {
+	_itemID = stream.readUint16LE();
+
+	if (g_nancy->getGameType() >= kGameTypeNancy15) {
+		_characterIndex = stream.readByte();
+	}
+
+	bool disabled = stream.readUint16LE();
+	bool playSound = stream.readUint16LE();
+
+	if (disabled) {
+		++_disabledState;
+		if (playSound) {
+			++_disabledState;
+		}
+	}
+}
+
+void EnableDisableInventory::execute() {
+	uint characterIndex = _characterIndex == kPlayerCharacterActive ?
+		g_nancy->getPlayerCharacter() : _characterIndex;
+
+	if (g_nancy->getGameType() >= kGameTypeNancy15 &&
+			_itemID >= kInvItemGroupAll && _itemID <= kInvItemGroupPortable) {
+		// Nancy15 can enable or disable a whole group of items at once
+		auto *inventoryData = GetEngineData(INV);
+		assert(inventoryData);
+
+		for (uint i = 0; i < inventoryData->itemDescriptions.size(); ++i) {
+			bool isViewable = inventoryData->itemDescriptions[i].keepItem == kInvItemNewSceneView;
+
+			if ((_itemID == kInvItemGroupViewable && !isViewable) ||
+					(_itemID == kInvItemGroupPortable && isViewable)) {
+				continue;
+			}
+
+			NancySceneState.setCharacterItemDisabledState(characterIndex, i, _disabledState);
+		}
+	} else {
+		NancySceneState.setCharacterItemDisabledState(characterIndex, _itemID, _disabledState);
+	}
+
+	_isDone = true;
+}
+
+void PopInvViewPriorScene::readData(Common::SeekableReadStream &stream) {
+	stream.skip(1);
+}
+
+void PopInvViewPriorScene::execute() {
+	NancySceneState.popScene(true);
+	_isDone = true;
+}
+
+void GoInvViewScene::readData(Common::SeekableReadStream &stream) {
+	_itemID = stream.readUint16LE();
+
+	// Nancy17 only names the item
+	if (g_nancy->getGameType() <= kGameTypeNancy16) {
+		_addToInventory = stream.readUint16LE();
+	}
+}
+
+void GoInvViewScene::execute() {
+	if (g_nancy->getGameType() >= kGameTypeNancy16) {
+		// The inventory of the UI has taken over what the item data of the earlier
+		// games said about the items. Every record of Nancy16 adds its item.
+		NancySceneState.getNDUI()->viewInventoryItem(_itemID);
+		_isDone = true;
+		return;
+	}
+
+	auto *inv = GetEngineData(INV);
+	assert(inv);
+
+	const INV::ItemDescription &item = inv->itemDescriptions[_itemID];
+	byte disabled = NancySceneState.getItemDisabledState(_itemID);
+
+	if (!disabled && item.keepItem == kInvItemNewSceneView) {
+		if (_addToInventory || NancySceneState.hasItem(_itemID)) {
+			NancySceneState.pushScene(_itemID);
+			// Viewing an item's close-up takes it out of the inventory; the
+			// re-add on return (popScene, or a cancel scene's AddInventory
+			// record) is what plays the "returned to inventory" click.
+			NancySceneState.removeItemFromInventory(_itemID, false);
+		} else {
+			// Do not add the item to the inventory, only go to its scene
+			NancySceneState.pushScene();
+		}
+
+		SceneChangeDescription sceneChange;
+		sceneChange.sceneID = item.sceneID;
+		sceneChange.continueSceneSound = item.sceneSoundFlag;
+		NancySceneState.changeScene(sceneChange);
+	}
+
+	_isDone = true;
+}
+
+} // End of namespace Action
+} // End of namespace Nancy

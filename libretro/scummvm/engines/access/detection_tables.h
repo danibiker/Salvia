@@ -1,0 +1,218 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+namespace Access {
+
+static const uint FEATURE_NOCT_MULTI_LANG = 1;
+
+static const AccessGameDescription gameDescriptions[] = {
+	{
+		// Amazon Guardians of Eden - Floppy English
+		// 3.5" and 5.25" floppies provided by Strangerke had the same md5
+		// Except the sound file. The executable is also identical
+		{
+			"amazon",
+			0,
+			AD_ENTRY1s("c00.ap", "dcabf69d5a0d911168cb73511ebaead0", 331481),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_NO_FLAGS,
+			GUIO1(GUIO_NONE)
+		},
+		kGameAmazon,
+		0
+	},
+
+	{
+		// Amazon Guardians of Eden - Spanish
+		// Provided by dianiu in bug report #6958
+		{
+			"amazon",
+			0,
+			AD_ENTRY1s("c00.ap", "aeb429ff015596144c0df06886c84825", 303753),
+			Common::ES_ESP,
+			Common::kPlatformDOS,
+			ADGF_NO_FLAGS,
+			GUIO1(GUIO_NONE)
+		},
+		kGameAmazon,
+		0
+	},
+
+	// Amazon Guardians of Eden - Demo English
+	{
+		{
+			"amazon",
+			"Demo",
+			AD_ENTRY1s("c25.ap", "5baba0c052d22157499bfa05cb1ed5b7", 65458),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_DEMO,
+			GUIO1(GUIO_NONE)
+		},
+		kGameAmazon,
+		0
+	},
+
+	{
+		// Amazon: Guardians of Eden - CD English
+		{
+			"amazon",
+			"CD",
+			AD_ENTRY1s("checksum.crc", "bef85478132fec74cb5d9067f3a37d24", 8),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_CD,
+			GUIO1(GUIO_NONE)
+		},
+		kGameAmazon,
+		0
+	},
+
+	{
+		// Martian Memorandum
+		{
+			"martian",
+			nullptr,
+			AD_ENTRY1s("r01.ap", "c081daca9b0cfd710157cf946e343df6", 39352),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_NO_FLAGS,
+			GUIO1(GUIO_NONE)
+		},
+		kGameMartianMemorandum,
+		0
+	},
+
+	{
+		// Martian Memorandum from "Lasersoft Top Tracks Vol 1" CD
+		{
+			"martian",
+			nullptr,
+			AD_ENTRY1s("r01.ap", "1052fc0e5bd979ae2e18b03ed58fda8e", 39349),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_NO_FLAGS,
+			GUIO1(GUIO_NONE)
+		},
+		kGameMartianMemorandum,
+		0
+	},
+
+	{
+		// Martian Memorandum
+		{
+			"martian",
+			"Demo",
+			AD_ENTRY1s("r01.rm", "c2facf9c43047211289044ee39a2322a", 2313),
+			Common::EN_ANY,
+			Common::kPlatformDOS,
+			ADGF_DEMO | ADGF_UNSTABLE,
+			GUIO1(GUIO_NONE)
+		},
+		kGameMartianMemorandum,
+		0
+	},
+
+	{
+		// Noctropolis Demo
+		{
+			"noctropolis",
+			"Demo/Sep 24",
+			AD_ENTRY2s("demo/scene01.ap", "3a154bf58e10cd7ace14cab1bf5adf4a", 145796,
+					   "demo/scene04.ap", "3ee5e24db63bf8029a6d0c91268f5e6e", 96268),
+			Common::EN_ANY,
+			Common::kPlatformWindows,
+			ADGF_TESTING | ADGF_DEMO,
+			GUIO1(GUIO_NONE)
+		},
+		kGameNoctropolis,
+		0
+	},
+
+	{
+		// Noctropolis Demo
+		{
+			"noctropolis",
+			"Demo/Sep 26",
+			AD_ENTRY2s("demo/scene01.ap", "3a154bf58e10cd7ace14cab1bf5adf4a", 145796,
+					   "demo/scene04.ap", "ee72734c5bdc62e1ef76841f5f451713", 96289),
+			Common::EN_ANY,
+			Common::kPlatformWindows,
+			ADGF_TESTING | ADGF_DEMO,
+			GUIO1(GUIO_NONE)
+		},
+		kGameNoctropolis,
+		0
+	},
+
+	{
+		// Noctropolis - original release
+		{
+			"noctropolis",
+			nullptr,
+			AD_ENTRY2s("dark/scene01.ap", "3a154bf58e10cd7ace14cab1bf5adf4a", 147954,
+					   "dark/scene13.ap", "0f02b3f1472beb7fb36e4293009baac0", 327959),
+			Common::EN_ANY,
+			Common::kPlatformWindows,
+			ADGF_TESTING,
+			GUIO1(GUIO_NONE)
+		},
+		kGameNoctropolis,
+		0
+	},
+
+	{
+		// Noctropolis - original release, German
+		{
+			"noctropolis",
+			nullptr,
+			AD_ENTRY2s("dark/scene01.ap", "3a154bf58e10cd7ace14cab1bf5adf4a", 147954,
+					   "dark/scene13.ap", "261c65ea702c6088ab3ed6e39e217d64", 328430),
+			Common::DE_DEU,
+			Common::kPlatformWindows,
+			ADGF_TESTING,
+			GUIO1(GUIO_NONE)
+		},
+		kGameNoctropolis,
+		0
+	},
+
+	{
+		// Noctropolis - GOG/Steam version (multi-language support)
+		{
+			"noctropolis",
+			"Rerelease",
+			AD_ENTRY2s("dark/scene01.ap", "3a154bf58e10cd7ace14cab1bf5adf4a", 147954,
+					   "dark/scene13.ap", "0d400713ed30e692d63af4d28ba42c5e", 327980),
+			Common::UNK_LANG,
+			Common::kPlatformWindows,
+			ADGF_TESTING,
+			GUIO1(GUIO_GAMEOPTIONS1)
+		},
+		kGameNoctropolis,
+		FEATURE_NOCT_MULTI_LANG
+	},
+
+	{ AD_TABLE_END_MARKER, 0, 0 }
+};
+
+} // End of namespace Access

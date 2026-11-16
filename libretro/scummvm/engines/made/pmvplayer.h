@@ -1,0 +1,86 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef MADE_PMVPLAYER_H
+#define MADE_PMVPLAYER_H
+
+#include "audio/mixer.h"
+#include "made/sound.h"
+
+namespace Common {
+class File;
+}
+
+namespace Graphics {
+struct Surface;
+}
+
+namespace Audio {
+class QueuingAudioStream;
+}
+
+namespace Made {
+
+class MadeEngine;
+
+class PmvPlayer {
+public:
+	PmvPlayer(MadeEngine *vm, Audio::Mixer *mixer);
+	~PmvPlayer();
+
+	// individual file actions
+	bool load(const char *filename);
+	bool decode_frame();
+	void close();
+
+	// wrapper for all three above - Returns true if the movie was played till the end
+	bool play(const char *filename);
+
+	// currently open file
+	Common::File *_fd;
+	// info about currently playing movie
+	uint32 frameCount, frameNumber;
+	uint16 frameDelay, soundFreq;
+
+protected:
+	// ptrs to caller objects
+	MadeEngine *_vm;
+	Audio::Mixer *_mixer;
+
+	// decode destination objects
+	//  image
+	byte _paletteRGB[768];
+	Graphics::Surface *_surface;
+	byte *frameData;
+	uint32 frameDataSize;
+	//  audio
+	Audio::QueuingAudioStream *_audioStream;
+	Audio::SoundHandle _audioStreamHandle;
+	SoundDecoderData *soundDecoderData;
+
+	// helper funcs
+	void readChunk(uint32 &chunkType, uint32 &chunkSize);
+	void decompressPalette(byte *palData, byte *outPal, uint32 palDataSize);
+};
+
+}
+
+#endif /* MADE_PMVPLAYER_H */

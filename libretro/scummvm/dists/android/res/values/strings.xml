@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="app_name">ScummVM</string>
+	<string name="app_name_debug">ScummVM (debug)</string>
+	<string name="app_desc">Graphic adventure game engine</string>
+	<string name="quit">Quit</string>
+
+	<string name="no_log_file_title">Log File Error</string>
+	<string name="no_log_file">Unable to read ScummVM log file or create a new one!</string>
+	<string name="no_config_file_title">Config File Error</string>
+	<string name="no_config_file">Unable to read ScummVM config file or create a new one!</string>
+	<string name="no_save_path_title">Save Path Error</string>
+	<string name="no_save_path_configured">Unable to create or access default save path!</string>
+	<string name="no_icons_path_title">Icons Path Error</string>
+	<string name="no_icons_path_configured">Unable to create or access default icons and shaders path!</string>
+	<!-- <string name="no_plugins_title">No plugins found</string> -->
+	<!-- <string name="no_plugins_found">ScummVM requires at least one <i>game
+		engine</i> to be useful. Engines are available as separate plugin
+		packages, from wherever you found ScummVM.</string> -->
+	<!-- <string name="to_market">To Market</string> -->
+
+	<!-- Copy from AOSP (Android Open Source Project) -->
+	<!-- CustomKeyboardView - accessibility support -->
+	<!-- Description of the Alt button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_alt">Alt</string>
+	<!-- Description of the Cancel button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_cancel">Cancel</string>
+	<!-- Description of the Delete button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_delete">Delete</string>
+	<!-- Description of the Done button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_done">Done</string>
+	<!-- Description of the Mode change button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_mode_change">Mode change</string>
+	<!-- Description of the Shift button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_shift">Shift</string>
+	<!-- Description of the Enter button in a KeyboardView. [CHAR LIMIT=NONE] -->
+	<string name="customkeyboardview_keycode_enter">Enter</string>
+	<!-- End of copy from AOSP -->
+	<string name="customkeyboardview_popup_close">Close popup</string>
+
+	<string name="local_net_permission_denied">Local network access permission was denied: Web server won\'t be reachable</string>
+	<string name="http_service_description">ScummVM Web server</string>
+
+	<string name="tts_voice_name">Default voice</string>
+
+	<string name="ini_parsing_error">Configuration file could not be parsed</string>
+	<string name="shortcut_creator_title">Run a game</string>
+	<string name="shortcut_creator_search_game">Search a game</string>
+	<string name="shortcut_creator_no_games">No games (yet)\nOpen ScummVM and add your games here.</string>
+	<string name="shortcut_creator_game_item_icon">Game icon</string>
+	<string name="shortcut_creator_customize_game_name_hint">Shortcut label</string>
+	<string name="shortcut_creator_customize_game_icon_description">Shortcut icon</string>
+</resources>

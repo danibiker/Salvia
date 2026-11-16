@@ -1,0 +1,41 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "m4/riddle/rooms/section9/section9_room.h"
+#include "m4/riddle/vars.h"
+
+namespace M4 {
+namespace Riddle {
+namespace Rooms {
+
+void Section9Room::escapePressed(void *, void *) {
+	// This runs from the event handler, outside of the daemon/parser dispatch,
+	// so the trigger mode has to be put back or the next trigger the parser
+	// issues would be delivered to the daemon instead
+	const KernelTriggerType oldMode = _G(kernel).trigger_mode;
+	_G(kernel).trigger_mode = KT_DAEMON;
+	disable_player_commands_and_fade_init(56);
+	_G(kernel).trigger_mode = oldMode;
+}
+
+} // namespace Rooms
+} // namespace Riddle
+} // namespace M4

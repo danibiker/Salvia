@@ -1,0 +1,390 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * This file is dual-licensed.
+ * In addition to the GPLv3 license mentioned above, this code is also
+ * licensed under LGPL 2.1. See LICENSES/COPYING.LGPL file for the
+ * full text of the license.
+ *
+ */
+
+/* Detection tables for the ADI / Addy 4 series. */
+/* This Game uses the DEV6 Engine, more Information can be found here: https://wiki.scummvm.org/index.php?title=DEV6_Information */
+/* These games are part of the Adi series. For more information, refer to our wiki: https://wiki.scummvm.org/index.php?title=Adi_Games */
+
+#ifndef GOB_DETECTION_TABLES_ADI4_H
+#define GOB_DETECTION_TABLES_ADI4_H
+
+// -- French: Adi --
+
+{
+	{
+		"adi4",
+		"Adi 4.00 Collège",
+		AD_ENTRY1s("intro.stk", "a3c35d19b2d28ea261d96321d208cb5a", 6021466),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Adi 4.00",
+		AD_ENTRY1s("intro.stk", "44491d85648810bc6fcf84f9b3aa47d5", 5834944),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Adi 4.00 École",
+		AD_ENTRY1s("intro.stk", "29374c0e3c10b17dd8463b06a55ad093", 6012072),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Adi 4.00 Limited Edition",
+		AD_ENTRY1s("intro.stk", "ebbbc5e28a4adb695535ed989c1b8d66", 5929644),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"ADI 4.10",
+		AD_ENTRY1s("intro.stk", "6afc2590856433b9f5295b032f2b205d", 5923112),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"ADI 4.11",
+		AD_ENTRY1s("intro.stk", "6296e4be4e0c270c24d1330881900c7f", 5921234),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"ADI 4.21",
+		AD_ENTRY1s("intro.stk", "c5b9f6222c0b463f51dab47317c5b687", 5950490),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// -- German: Addy --
+
+{
+	{ // Supplied by Indy4-Fan
+		"adi4",
+		"Addy 4.00 Erdkunde",
+		AD_ENTRY1s("intro.stk", "fda1566d233ee55d65b2ad014c1cb485", 188),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, "GA2INTRO.TOT", 0
+},
+{
+	{ // Supplied by fischbeck
+		"adi4",
+		"Addi Simule", // That is not an typo in the name "Addi" that's how this version is called.
+		AD_ENTRY1s("simule.stk", "66d97fe54bbf8ea4bbb18534cb28b13f", 2523796),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_NO_FLAGS,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	"simule.stk", "INTRODD.TOT", 0 // INTRODD.TOT brings up a main menu to select various environmental learning tasks.
+},
+{
+	{
+		"adi4",
+		"Addy 4 Grundschule Basisprogramm",
+		AD_ENTRY1s("intro.stk", "d2f0fb8909e396328dc85c0e29131ba8", 5847588),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Addy 4.01 Sekundarstufe Basisprogramm",
+		AD_ENTRY1s("intro.stk", "367340e59c461b4fa36651cd74e32c4e", 5847378),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Addy 4.21 Sekundarstufe Basisprogramm",
+		AD_ENTRY1s("intro.stk", "534f0b674cd4830df94a9c32c4ea7225", 6878034),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// -- English: ADI --
+
+{
+	{
+		"adi4",
+		"ADI 4.10",
+		AD_ENTRY1s("intro.stk", "3e3fa9656e37d802027635ace88c4cc5", 5359144),
+		EN_GRB,
+		kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// -- Demos --
+
+{
+	{
+		"adi4",
+		"Adi 4.00 Interactive Demo",
+		AD_ENTRY1s("intro.stk", "89ace204dbaac001425c73f394334f6f", 2413102),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_DEMO | ADGF_UNSTABLE,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, 0, 0
+},
+{
+	{
+		"adi4",
+		"Adi 4.00 / Adibou 2 Demo",
+		AD_ENTRY1s("intro.stk", "d41d8cd98f00b204e9800998ecf8427e", 0),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_DEMO,
+		GUIO1(GUIO_NOASPECT)
+	},
+	kFeaturesTrueColor | kFeatures640x480,
+	0, 0, 0
+},
+
+
+// -- Add-ons : "Math & Language" --
+// 8-9 years
+{
+	{
+		"adi4mathlanguage89",
+		"", // Français Maths CE2
+		AD_ENTRY2s("ADIF91.STK", "f5e4d0e38e96cb9ea3fdb122548a7775", 19707056,
+				   "ADIM91.STK", "2f839dffcded30680456d0e881f16f31", 27322360),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// 9-10 years
+
+// 10-11 years
+{
+	{
+		"adi4mathlanguage1011",
+		"", // Français Maths CM2
+		AD_ENTRY2s("ADIF71.STK", "a0dc766e42025271df54f4e705e530e5", 13668920,
+				   "ADIM71.STK", "d093bf3b38c668d9f89ae1118b2dfc95", 21544420),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// 11-12 years
+
+// 12-13 years
+
+// 13-14 years
+
+// 14-15 years
+
+// -- Add-ons : "Anglais" (English for non-native speakers) --
+// 7-9 years
+
+// 9-11 years
+{
+	{
+		"adi4anglais911",
+		"",
+		AD_ENTRY2s("A71RAN.STK", "1c16f54d71ed3d2fa49fe4d8ff4884ae", 100144,
+				   "ADIA71.STK", "9cc17a7ccbf157c1742387ce133205fd", 21661580),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// 11-12 years
+
+// 12-13 years
+{
+	{
+		"adi4anglais1213",
+		"",
+		AD_ENTRY2s("A52RAN.STK", "5a55f6ceb6e7b197e9da909f71ac47b3", 91078,
+				   "ADIA52.STK", "ced8138cb3aee93093c62d2b91ffc9d2", 12256800),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// 13-14 years
+{
+	{
+		"adi4anglais1314",
+		"",
+		AD_ENTRY2s("A32RAN.STK", "fb25085c82385192726cdbf8f407e04c", 80477,
+				   "ADIA32.STK", "e5b42890cfb03a48864d84cf1522f2ab", 11673330),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// 14-15 years
+
+// -- Add-ons : Geography --
+{
+	{
+		"adi4geo",
+		"", // Géographie
+		AD_ENTRY2s("INTROGEO.STK", "d86d0f53818dd285bebff25925627b8c", 3170680,
+				   "INTROGEO.ITK", "5daacbf8840f811e48b99e1d92933873", 20084736),
+		FR_FRA,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+{
+	{
+		"adi4geo",
+		"", // Erdkunde
+		AD_ENTRY2s("INTROGEO.STK", "f01ffe9366df86a7ea5ed425b41081ba", 3284478,
+				   "INTROGEO.ITK", "998bb8e759d5b8b4e7aa22d6030f2dad", 22046720),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+// -- Add-ons : Sciences --
+
+// -- Add-ons : Euro --
+{
+	{
+		"adi4euro",
+		"", // Der Euro
+		AD_ENTRY2s("EURO.STK", "7dac3823570036c6eda57cc2c872aa59", 681944,
+				   "EURO.ITK", "09629a0aa35a00f68211f6429bd43e9f", 25409536),
+		DE_DEU,
+		kPlatformWindows,
+		ADGF_ADDON | ADGF_UNSTABLE,
+		GUIO0()
+	},
+	kFeatures640x480,
+	0, 0, 0
+},
+
+#endif // GOB_DETECTION_TABLES_ADI4_H

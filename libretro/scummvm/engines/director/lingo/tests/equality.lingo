@@ -1,0 +1,260 @@
+scummvmAssert(VOID = VOID)
+scummvmAssert(not(VOID < VOID))
+scummvmAssert(VOID <= VOID)
+scummvmAssert(not(VOID > VOID))
+scummvmAssert(VOID >= VOID)
+
+scummvmAssert(VOID = 0)
+scummvmAssert(VOID < 0)
+scummvmAssert(VOID <= 0)
+scummvmAssert(not(VOID > 0))
+scummvmAssert(not(VOID >= 0))
+
+scummvmAssert(not(0 = VOID))
+scummvmAssert(0 > VOID)
+scummvmAssert(0 >= VOID)
+scummvmAssert(not(0 < VOID))
+scummvmAssert(not(0 <= VOID))
+
+scummvmAssert(1 = 1)
+scummvmAssert(1 = "1")
+scummvmAssert(1 = 1.0)
+scummvmAssert(cast 1  = cast 1)
+scummvmAssert("test" = "test")
+scummvmAssert(#test = #test)
+set string = the text of field 1
+scummvmAssert(field 1 = string)
+scummvmAssert(0 = "")
+scummvmAssert(1 <> cast 1)
+scummvmAssert("test" <> #test)
+
+-- If string parses as a float, coerce to float
+scummvmAssert("2000" > 25)
+scummvmAssert(25 < "2000")
+scummvmAssert("2000.5" > 25)
+scummvmAssert(25 < "2000.5")
+scummvmAssert("20e5" > 25)
+scummvmAssert(25 < "20e5")
+scummvmAssert("      2000" > 25)
+scummvmAssert(25 < "      2000")
+scummvmAssert("2000" > 2.5)
+scummvmAssert(25 < "2000")
+scummvmAssert("2000.5" > 2.5)
+scummvmAssert(2.5 < "2000.5")
+scummvmAssert("20e5" > 2.5)
+scummvmAssert(2.5 < "20e5")
+scummvmAssert("      2000" > 2.5)
+scummvmAssert(2.5 < "      2000")
+
+-- If a string doesn't parse as a float, coerce the number to a string
+scummvmAssert("2/" < 20)
+scummvmAssert(20 > "2/")
+scummvmAssert("2000 e" < 25)
+scummvmAssert(25 > "2000 e")
+
+-- Two strings, treat with normal string ordering rules
+scummvmAssert("2000" <> "2000.0")
+scummvmAssert("2000" < "25")
+scummvmAssert("abc" < "abcd")
+scummvmAssert("abc" < "def")
+
+-- Non-coercable string is always bigger than a number or void
+scummvmAssert("test" > 3000)
+scummvmAssert(3000 < "test")
+scummvmAssert("test" > 300.0)
+scummvmAssert(300.0 < "test")
+scummvmAssert("test" > VOID)
+scummvmAssert(VOID < "test")
+
+
+-- Mimic an object
+scummvmAssert("<Object:#FileIO" > 0)
+
+-- Invalid comparisons should return FALSE
+scummvmAssert(not (#test <= 0))
+
+-- Picture comparisons are always false, even between the exact same cast.
+-- set a to the picture of cast 1
+-- scummvmAssert(a <> a)
+-- scummvmAssert(a <> the picture of cast 1)   -- always false
+
+
+-- String comparison
+scummvmAssert("a" = "A")
+scummvmAssert(not("a" < "A"))
+scummvmAssert(not("a" <= "A"))
+scummvmAssert("a" > "A")
+scummvmAssert("a" >= "A")
+
+scummvmAssert(not("a" = "Z"))
+scummvmAssert("a" < "Z")
+scummvmAssert("a" <= "Z")
+scummvmAssert(not("a" > "Z"))
+scummvmAssert(not("a" >= "Z"))
+
+scummvmAssert(not("Z" = "a"))
+scummvmAssert(not("Z" < "a"))
+scummvmAssert(not("Z" <= "a"))
+scummvmAssert("Z" > "a")
+scummvmAssert("Z" >= "a")
+
+scummvmAssert(not("a" = "Bubba"))
+scummvmAssert("a" < "Bubba")
+scummvmAssert("a" <= "Bubba")
+scummvmAssert(not("a" > "Bubba"))
+scummvmAssert(not("a" >= "Bubba"))
+
+scummvmAssert("z" = "Z")
+scummvmAssert(not("z" < "Z"))
+scummvmAssert(not("z" <= "Z"))
+scummvmAssert("z" > "Z")
+scummvmAssert("z" >= "Z")
+
+scummvmAssert("abba" = "Abba")
+scummvmAssert(not("abba" < "Abba"))
+scummvmAssert(not("abba" <= "Abba"))
+scummvmAssert("abba" > "Abba")
+scummvmAssert("abba" >= "Abba")
+
+scummvmAssert("Erwin's Catalyst" = "Erwin's Catalyst")
+scummvmAssert(not("Erwin's Catalyst" < "Erwin's Catalyst"))
+scummvmAssert("Erwin's Catalyst" <= "Erwin's Catalyst")
+scummvmAssert(not("Erwin's Catalyst" > "Erwin's Catalyst"))
+scummvmAssert("Erwin's Catalyst" >= "Erwin's Catalyst")
+
+-- Char 213 resolves to U+2018 LEFT SINGLE QUOTATION MARK under D4-mac
+scummvmAssert("Erwin's Catalyst" = ("Erwin" & numToChar(213) & "s Catalyst"))
+scummvmAssert("Erwin's Catalyst" < ("Erwin" & numToChar(213) & "s Catalyst"))
+scummvmAssert("Erwin's Catalyst" <= ("Erwin" & numToChar(213) & "s Catalyst"))
+scummvmAssert(not("Erwin's Catalyst" > ("Erwin" & numToChar(213) & "s Catalyst")))
+scummvmAssert(not("Erwin's Catalyst" >= ("Erwin" & numToChar(213) & "s Catalyst")))
+
+
+-- Array comparison with coercion
+scummvmAssert([] = [])
+scummvmAssert(not([] <> []))
+scummvmAssert([1, 2] = [1, 2])
+scummvmAssert(not([1, 2] <> [1, 2]))
+scummvmAssert([1, 2] = [1, "2"])
+scummvmAssert(not([1, 2] <> [1, "2"]))
+scummvmAssert([1, 2, 3] = [1, "2", 3.0])
+scummvmAssert(not([1, 2, 3] <> [1, "2", 3.0]))
+scummvmAssert(["testa", "testb"] = ["testa", "TESTB"])
+scummvmAssert([#a: "testa", #b: "testb"] = [#a: "testa", #b: "TESTB"])
+
+scummvmAssert(("" = []))
+scummvmAssert(("sausages" = []))
+scummvmAssert(not("" = ["sausages"]))
+scummvmAssert(("sausages" = ["sausages"]))
+
+set the scummvmVersion to 600
+scummvmAssert(not("" = []))
+scummvmAssert(not("sausages" = []))
+scummvmAssert(not("" = ["sausages"]))
+scummvmAssert(not("sausages" = ["sausages"]))
+
+-- D4 has a quirk where only the left side list elements are checked
+set the scummvmVersion to 400
+scummvmAssert([] = [1, "2", 4])
+scummvmAssert(not([] <> [1, "2", 4]))
+scummvmAssert([1, 2] = [1, "2", 4])
+scummvmAssert(not([1, 2] <> [1, "2", 4]))
+scummvmAssert([1, 2, 3] <> [1, "2", 4])
+scummvmAssert(not([1, 2, 3] = [1, "2", 4]))
+scummvmAssert([1, 2, 3] <> [1, "2"])
+scummvmAssert(not([1, 2, 3] = [1, "2"]))
+scummvmAssert([:] = [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([:] <> [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2] = [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([#a: 1, #b: 2] <> [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2, #c: 3] <> [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([#a: 1, #b: 2, #c: 3] = [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2, #c: 3] <> [#a: 1, #b: "2"])
+scummvmAssert(not([#a: 1, #b: 2, #c: 3] = [#a: 1, #b: "2"]))
+
+set the scummvmVersion to 500
+scummvmAssert([] <> [1, "2", 4])
+scummvmAssert(not([] = [1, "2", 4]))
+scummvmAssert([1, 2] <> [1, "2", 4])
+scummvmAssert(not([1, 2] = [1, "2", 4]))
+scummvmAssert([1, 2, 3] <> [1, "2", 4])
+scummvmAssert(not([1, 2, 3] = [1, "2", 4]))
+scummvmAssert([1, 2, 3] <> [1, "2"])
+scummvmAssert(not([1, 2, 3] = [1, "2"]))
+scummvmAssert([:] <> [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([:] = [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2] <> [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([#a: 1, #b: 2] = [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2, #c: 3] <> [#a: 1, #b: "2", #c: 4])
+scummvmAssert(not([#a: 1, #b: 2, #c: 3] = [#a: 1, #b: "2", #c: 4]))
+scummvmAssert([#a: 1, #b: 2, #c: 3] <> [#a: 1, #b: "2"])
+scummvmAssert(not([#a: 1, #b: 2, #c: 3] = [#a: 1, #b: "2"]))
+
+-- single-element equality check, check to see if all list elements match
+scummvmAssert(0 = [])
+scummvmAssert([] = 0)
+scummvmAssert(not(0 <> []))
+scummvmAssert(not([] <> 0))
+scummvmAssert(2 = [])
+scummvmAssert([] = 2)
+scummvmAssert(not(2 <> []))
+scummvmAssert(not([] <> 2))
+scummvmAssert(2 = [2, 2.0, "2", "2.0"])
+scummvmAssert([2, 2.0, "2", "2.0"] = 2)
+scummvmAssert(2 <> [2, 2.0, "2", "2.1"])
+scummvmAssert([2, 2.0, "2", "2.1"] <> 2)
+
+scummvmAssert(0 = [:])
+scummvmAssert([:] = 0)
+scummvmAssert(not(0 <> [:]))
+scummvmAssert(not([:] <> 0))
+scummvmAssert(2 = [:])
+scummvmAssert([:] = 2)
+scummvmAssert(not(2 <> [:]))
+scummvmAssert(not([:] <> 2))
+scummvmAssert(2 = [#a: 2, #b: 2.0, #c: "2", #d: "2.0"])
+scummvmAssert([#a: 2, #b: 2.0, #c: "2", #d: "2.0"] = 2)
+scummvmAssert(2 <> [#a: 2, #b: 2.0, #c: "2", #d: "2.1"])
+scummvmAssert([#a: 2, #b: 2.0, #c: "2", #d: "2.1"] <> 2)
+
+scummvmAssert(0 = point(0, 0))
+scummvmAssert(point(0, 0) = 0)
+scummvmAssert(2 = point(2, 2))
+scummvmAssert(point(2, 2) = 2)
+scummvmAssert(2 <> point(2, 3))
+scummvmAssert(point(2, 3) <> 2)
+
+scummvmAssert(0 = rect(0, 0, 0, 0))
+scummvmAssert(rect(0, 0, 0, 0) = 0)
+scummvmAssert(2 = rect(2, 2, 2, 2))
+scummvmAssert(rect(2, 2, 2, 2) = 2)
+scummvmAssert(2 <> rect(2, 2, 2, 3))
+scummvmAssert(rect(2, 2, 2, 3) <> 2)
+
+
+
+-- Void comparison
+set v1 = value("!")
+set v2 = value("!")
+
+scummvmAssert(v1 = v2)
+scummvmAssert(not(v1 < v2))
+scummvmAssert(not(v1 > v2))
+
+scummvmAssert(v1 = 0)
+scummvmAssert(v1 < 0)
+scummvmAssert(not(v1 > 0))
+
+scummvmAssert(not(v1 = 0.0))
+scummvmAssert(v1 < 0.0)
+scummvmAssert(not(v1 > 0.0))
+
+scummvmAssert(not(v1 = "0"))
+scummvmAssert(v1 < "0")
+scummvmAssert(not(v1 > "0"))
+
+scummvmAssert(not(v1 = "what"))
+scummvmAssert(v1 < "what")
+scummvmAssert(not(v1 > "what"))
+
+

@@ -1,0 +1,64 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef MACS2_DETECTION_TABLES_H
+#define MACS2_DETECTION_TABLES_H
+
+namespace Macs2 {
+
+const PlainGameDescriptor macs2Games[] = {
+	{"sis", "Der Schatz im Silbersee"},
+	{0, 0}};
+
+const ADGameDescription gameDescriptions[] = {
+	{"sis",
+	 nullptr,
+	 // Original file
+	 AD_ENTRY1s("RESOURCE.MCS", "b8646d5cc2e45442a414220b1a65ba73", 8621636),
+	 Common::DE_DEU,
+	 Common::kPlatformDOS,
+	 ADGF_TESTING,
+	 GUIO4(GAMEOPTION_ORIGINAL_SAVELOAD, GAMEOPTION_TTS, GAMEOPTION_ENHANCEMENTS, GAMEOPTION_TRANSLATION)},
+
+	// GMACS II Interpreter V1.00 - Written & Copyright (C) 1993 by Arndt Hasch - Copyright by LINEL
+	{"sis",
+	 "Demo",
+	 AD_ENTRY1s("RESOURCE.MCS", "779c5f7d11ac61b7b941ec0f1778d837", 2376278),
+	 Common::DE_DEU,
+	 Common::kPlatformDOS,
+	 ADGF_DEMO | ADGF_TESTING,
+	 GUIO4(GAMEOPTION_ORIGINAL_SAVELOAD, GAMEOPTION_TTS, GAMEOPTION_ENHANCEMENTS, GAMEOPTION_TRANSLATION)},
+
+	// Amiga demo - DataA (MXMF) + Mdir (MXDR). GMACS II / LINEL.
+	{"sis",
+	 "Demo",
+	 AD_ENTRY2s("DataA", "30ce5b1b30f7ef60f412c0475a25b0cb", 736670,
+	            "Mdir", "269f4c31a50395e3ec6ae69b86e426bd", 598),
+	 Common::DE_DEU,
+	 Common::kPlatformAmiga,
+	 ADGF_DEMO | ADGF_UNSTABLE,
+	 GUIO3(GAMEOPTION_ORIGINAL_SAVELOAD, GAMEOPTION_TTS, GAMEOPTION_ENHANCEMENTS)},
+
+	AD_TABLE_END_MARKER};
+
+} // End of namespace Macs2
+
+#endif // MACS2_DETECTION_TABLES_H

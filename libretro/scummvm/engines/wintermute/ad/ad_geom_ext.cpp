@@ -1,0 +1,154 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
+ * This file is based on WME.
+ * http://dead-code.org/redir.php?target=wme
+ * Copyright (c) 2003-2013 Jan Nedoma and contributors
+ */
+
+#include "engines/wintermute/ad/ad_geom_ext.h"
+#include "engines/wintermute/ad/ad_geom_ext_node.h"
+#include "engines/wintermute/ad/ad_types.h"
+#include "engines/wintermute/base/base_file_manager.h"
+#include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/base/base_parser.h"
+#include "engines/wintermute/utils/utils.h"
+#include "engines/wintermute/dcgf.h"
+
+namespace Wintermute {
+
+//////////////////////////////////////////////////////////////////////////
+AdGeomExt::AdGeomExt(BaseGame *in_game) : BaseClass(in_game) {
+}
+
+//////////////////////////////////////////////////////////////////////////
+AdGeomExt::~AdGeomExt() {
+	for (int32 i = 0; i < _nodes.getSize(); i++) {
+		SAFE_DELETE(_nodes[i]);
+	}
+	_nodes.removeAll();
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool AdGeomExt::loadFile(char *filename) {
+	char *buffer = (char *)BaseFileManager::getEngineInstance()->readWholeFile(filename);
+	if (buffer == nullptr) {
+		_game->LOG(0, "AdGeomExt::LoadFile failed for file '%s'", filename);
+		return false;
+	}
+
+	bool ret = loadBuffer(buffer);
+	if (!ret) {
+		_game->LOG(0, "Error parsing geometry description file '%s'", filename);
+	}
+
+	delete[] buffer;
+
+	return ret;
+}
+
+TOKEN_DEF_START
+	TOKEN_DEF(GEOMETRY)
+	TOKEN_DEF(NODE)
+TOKEN_DEF_END
+//////////////////////////////////////////////////////////////////////////
+bool AdGeomExt::loadBuffer(char *buffer) {
+	TOKEN_TABLE_START(commands)
+		TOKEN_TABLE(GEOMETRY)
+		TOKEN_TABLE(NODE)
+	TOKEN_TABLE_END
+
+	char *params;
+	int cmd;
+	BaseParser parser(_game);
+
+	if (parser.getCommand(&buffer, commands, &params) != TOKEN_GEOMETRY) {
+		_game->LOG(0, "'GEOMETRY' keyword expected.");
+		return false;
+	}
+
+	buffer = params;
+
+	while ((cmd = parser.getCommand(&buffer, commands, &params)) > 0) {
+		switch (cmd) {
+		case TOKEN_NODE: {
+			AdGeomExtNode *node = new AdGeomExtNode(_game);
+
+			if (node && node->loadBuffer(params, false)) {
+				_nodes.add(node);
+			} else {
+				SAFE_DELETE(node);
+				cmd = PARSERR_GENERIC;
+				}
+			}
+			break;
+		}
+	}
+
+	if (cmd == PARSERR_TOKENNOTFOUND) {
+		_game->LOG(0, "Syntax error in geometry description file");
+		return false;
+	}
+	if (cmd == PARSERR_GENERIC) {
+		_game->LOG(0, "Error loading geometry description");
+		return false;
+	}
+
+	addStandardNodes();
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////////
+bool AdGeomExt::addStandardNodes() {
+	AdGeomExtNode *node;
+
+	node = new AdGeomExtNode(_game);
+	node->setupNode("walk_*", GEOM_WALKPLANE, true);
+	_nodes.add(node);
+
+	node = new AdGeomExtNode(_game);
+	node->setupNode("blk_*", GEOM_BLOCKED, false);
+	_nodes.add(node);
+
+	node = new AdGeomExtNode(_game);
+	node->setupNode("wpt_*", GEOM_WAYPOINT, false);
+	_nodes.add(node);
+
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////////
+AdGeomExtNode *AdGeomExt::matchName(const char *name) {
+	if (!name) {
+		return nullptr;
+	}
+
+	for (int32 i = 0; i < _nodes.getSize(); i++) {
+		if (_nodes[i]->matchesName(name)) {
+			return _nodes[i];
+		}
+	}
+
+	return nullptr;
+}
+
+} // namespace Wintermute

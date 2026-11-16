@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en-us">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name=viewport>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="scummvm-192.png">
+  <title>ScummVM</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: none;
+      background-color: #000;
+    }
+
+    .emscripten {
+      padding-right: 0;
+      margin-left: auto;
+      margin-right: auto;
+      display: block;
+    }
+
+    textarea.emscripten {
+      font-family: monospace;
+      width: 80%;
+    }
+
+    div.emscripten {
+      text-align: center;
+    }
+
+    div.emscripten_border {
+      border: 1px solid black;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+    canvas.emscripten {
+      border: 0px none;
+      background: url("logo.svg");
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #cc6600;
+      position: absolute;
+      top: 0px;
+      left: 0px;
+      margin: 0px;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: block;
+    }
+
+    @media (orientation: landscape) {
+      canvas.emscripten {
+        background-size: auto 33%;
+      }
+    }
+
+    @media (orientation: portrait) {
+      canvas.emscripten {
+        background-size: 80% auto;
+      }
+    }
+
+    #progress {
+      top: 0px;
+      left: 0px;
+      height: 10px;
+      width: 100%;
+      overflow: hidden;
+      display: block;
+      position: absolute;
+      z-index: 2;
+      border: 0px;
+      background: #c60
+    }
+
+    progress::-moz-progress-bar {
+      background: #f6e08a;
+    }
+
+    progress::-webkit-progress-value {
+      background: #f6e08a;
+    }
+
+    progress {
+      color: #f6e08a;
+    }
+
+    #status {
+      position: absolute;
+      bottom: 5em;
+      right: 0px;
+      padding: 5px;
+      text-align: right;
+      border-top-left-radius: 1em;
+      border-bottom-left-radius: 1em;
+      padding-left: 1em;
+      padding-right: 1em;
+      z-index: 3;
+      border: 3px solid black;
+      border-right: none;
+      background: #f6e08a;
+      font: bold large/1.4 "Trebuchet MS", Verdana, Tahoma, Sans-Serif;
+    }
+
+    #status.error {
+      background: red
+    }
+  </style>
+</head>
+
+<body>
+  <div class=emscripten>
+    <progress hidden id=progress max=100 value=0></progress>
+  </div>
+  <div class="emscripten" id="status">Downloading ScummVM...</div>
+
+  <div class=emscripten_border>
+    <canvas class=emscripten id=canvas oncontextmenu=event.preventDefault() tabindex=-1></canvas>
+  </div>
+
+  <hr>
+  <textarea class="emscripten" id="output" rows="8"></textarea>
+
+  <script type='text/javascript'>
+
+    var statusElement = document.getElementById('status');
+    var progressElement = document.getElementById('progress');
+
+    function loadingDoneMessage() {
+      document.getElementById("progress").style.zIndex = 0;
+      return "All downloads complete."
+    }
+
+
+    var Module = {
+      preRun: [],
+      postRun: [],
+      print: (function () {
+        var element = document.getElementById('output');
+        if (element) element.value = ''; // clear browser cache
+        return function (text) {
+          if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+          // These replacements are necessary if you render to raw HTML
+          //text = text.replace(/&/g, "&amp;");
+          //text = text.replace(/</g, "&lt;");
+          //text = text.replace(/>/g, "&gt;");
+          //text = text.replace('\n', '<br>', 'g');
+          console.log(text);
+          if (element) {
+            element.value += text + "\n";
+            element.scrollTop = element.scrollHeight; // focus on bottom
+          }
+        };
+      })(),
+      printErr: function (text) {
+        if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+        console.error(text);
+      },
+      canvas: (function () {
+        var canvas = document.getElementById('canvas');
+
+        // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+        // application robust, you may want to override this behavior before shipping!
+        // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+        canvas.addEventListener("webglcontextlost", function (e) { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
+
+        return canvas;
+      })(),
+      setStatus: function (text) {
+        if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+        if (text === Module.setStatus.last.text) return;
+        var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        var now = Date.now();
+        if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
+        Module.setStatus.last.time = now;
+        Module.setStatus.last.text = text;
+        if (m) {
+          text = m[1];
+          progressElement.value = parseInt(m[2]) * 100;
+          progressElement.max = parseInt(m[4]) * 100;
+          progressElement.hidden = false;
+
+        } else {
+          progressElement.value = null;
+          progressElement.max = null;
+          progressElement.hidden = true;
+        }
+        if (text && text.length > 0) {
+          console.log((new Date()).toLocaleTimeString() + " " + text)
+          text += "⚡️"
+          statusElement.style.display = "block";
+        } else {
+          statusElement.style.display = "none";
+        }
+        statusElement.innerHTML = text;
+      },
+      totalDependencies: 0,
+      monitorRunDependencies: function (left) {
+        this.totalDependencies = Math.max(this.totalDependencies, left);
+        Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : loadingDoneMessage());
+      }
+    };
+    Module.setStatus('Downloading ScummVM...');
+    window.onerror = function () {
+      statusElement.classList.add("error")
+      Module.setStatus('Exception thrown, see JavaScript console');
+      Module.setStatus = function (text) {
+        if (text) Module.printErr('[post-exception status] ' + text);
+      };
+    };
+
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
+
+</html>
