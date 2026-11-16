@@ -94,6 +94,7 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"reload.png",								// ico_reload
 	"input_TURBO.png",							// ico_turbo
 	"menu_download.png",						// ico_download
+	"menu_updater.png",							// ico_updater
 	"input_DPAD-U.png",							// ico_input_dpad_u
 	"input_DPAD-D.png",							// ico_input_dpad_d
 	"input_DPAD-L.png",							// ico_input_dpad_l
@@ -132,6 +133,7 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"SNK - Neo Geo Pocket Color-content.png",								  // cart_neogeo_pocket
 	"Sinclair - ZX Spectrum-content.png",									  // cart_zx
 	"Microsoft - MSX-content.png",											  // cart_msx
+	"Microsoft - MSX2-content.png",											  // cart_msx2
 	"DOS-content.png",														  // cart_dos
 	"DOOM-content.png",														  // cart_doom
 	"NEC - PC Engine SuperGrafx-content.png",								  // cart_supergrafx
@@ -142,6 +144,7 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"Nintendo - Virtual Boy-content.png",									  // cart_virtualboy
 	"Atari - Lynx-content.png",												  // cart_atarilynx
 	"Atari - 800-content.png",												  // cart_atari800
+	"Atari - 2600-content.png",												  // cart_atari2600
 	"Atari - 5200-content.png",												  // cart_atari5200
 	"Commodore - 64-content.png",											  // cart_c64
 	"Sharp - X68000-content.png",											  // cart_x68k
@@ -170,6 +173,7 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"SNK - Neo Geo Pocket Color",                      // cart_neogeo_pocket
 	"Sinclair - ZX Spectrum",                          // cart_zx
 	"Microsoft - MSX",                                 // cart_msx
+	"Microsoft - MSX2",                                // cart_msx2
 	"",                                                // cart_dos
 	"",                                                // cart_doom
 	"NEC - PC Engine SuperGrafx",                      // cart_supergrafx
@@ -180,6 +184,7 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"Nintendo - Virtual Boy",                          // cart_virtualboy
 	"Atari - Lynx",									   // cart_atarilynx
 	"Atari - 8-bit Family",							   // cart_atari800
+	"Atari - 2600",									   // cart_atari2600
 	"Atari - 5200",									   // cart_atari5200
 	"",												   // cart_c64
 	"",												   // cart_x68k

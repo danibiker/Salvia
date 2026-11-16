@@ -30,6 +30,8 @@ git subtree add --prefix=libretro/cannonball https://github.com/libretro/cannonb
 git subtree add --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
 git subtree add --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
 git subtree add --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
+git subtree add --prefix=libretro/mgba https://github.com/libretro/mgba master --squash
+git subtree add --prefix=libretro/stella2014 https://github.com/libretro/stella2014-libretro master --squash
 
 ###########################################################################################################
 # External libraries
@@ -71,7 +73,8 @@ git subtree pull --prefix=libretro/cannonball https://github.com/libretro/cannon
 git subtree pull --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
 git subtree pull --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
 git subtree pull --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
-
+git subtree pull --prefix=libretro/mgba https://github.com/libretro/mgba master --squash
+git subtree pull --prefix=libretro/stella2014 https://github.com/libretro/stella2014-libretro master --squash
 
 ###########################################################################################################
 # Merging conflicts

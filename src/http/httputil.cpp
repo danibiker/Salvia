@@ -326,6 +326,11 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	pData.progressVar = progressPtr;
 	if (progressPtr) *progressPtr = 0.0f;
 
+	#ifdef NET_DEBUG
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
+	#endif
+
 	// Configuracion de la URL y SSL
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);

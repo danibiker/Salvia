@@ -25,6 +25,10 @@
 
 #include <math.h>
 
+#if defined(_MSC_VER) && _MSC_VER < 1700 && !defined(_HUGE)
+double _HUGE = 1.7976931348623158e+308; // Valor de HUGE_VAL para VS2010
+#endif
+
 #ifndef SQLITE_AMALGAMATION
 #define SQLITE_CORE 1
 #define SQLITE_AMALGAMATION 1

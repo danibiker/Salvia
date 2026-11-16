@@ -189,6 +189,11 @@ class Joystick{
 
 		//Array para poder detectar la pulsacion del start en xbox360
 		int8_t startHoldFrames[MAX_PLAYERS];
+		//Array para retrasar la actuacion del habilitador de hotkeys y hacer 
+		//que no se procese por el core hasta que se haya soltado
+		int8_t hotkeyEnabler[MAX_PLAYERS];
+		int8_t hotkeyKeyPressed[MAX_PLAYERS];
+		int8_t hotkeySendToCore[MAX_PLAYERS];
 		//Joysticks abiertos
 		SDL_Joystick* g_joysticks[MAX_PLAYERS];
 		//Type of the controller ports

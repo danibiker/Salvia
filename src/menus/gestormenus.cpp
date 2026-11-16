@@ -19,7 +19,9 @@
 #include <cheats/cheatmanager.h>
 #include <video/HLSLBackground.h>
 #include <http/scrapper.h>
+#include <unzip/unziptool.h>
 
+#include <http/pugixml.hpp>
 
 SDL_Surface* GestorMenus::imgText;
 
@@ -43,6 +45,9 @@ extern std::string downloadCheatWithProgress();
 extern std::string lastCheatSourceName();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
+static std::string TXT_BIOSFOUND = "found";
+static std::string TXT_BIOSNOTFOUND = "not found";
+
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
@@ -163,6 +168,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	Menu* menuSearchGamesGuide = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuRaiz);
 	Menu* parentAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.title"), menuRaiz);
+	Menu* menuUpdater = new Menu(LanguageManager::instance()->get("menu.updater.title"), menuRaiz);
+
 
 	//Rellenamos algunas listas necesarias
 	rellenarVideoShaderStrings();
@@ -180,6 +187,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	poblarMenuPad(menuEntrada, refConfig, joystick);
 	//Menu del scrapper que rellena los idiomas y lenguas
 	poblarMenuScrapper(refConfig, menuScrapper);
+	//Menu que rellena las opciones del actualizador
+	poblarMenuUpdater(menuUpdater, refConfig);
 
 	//Poblar menu ask
 	std::vector<std::string> askOptions;
@@ -206,7 +215,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
-	menuRaiz->opciones.push_back(submenuSearchGuides);
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.title"), menuUpdater, ico_updater));
 	//Acciones del menu principal para guardar las opciones, volver al juego y salir de Salvia
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_resume, this));
@@ -320,6 +329,177 @@ void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig)
 	listaLang->callback = &GestorMenus::selectLang;
 	listaLang->context  = langMenuData;
 
+}
+
+std::string GestorMenus::fillBiosMenuAction(void* inst){
+	GestorMenus* gestorMenus = static_cast<GestorMenus*>(inst);
+
+	if (!gestorMenus->menuUpdaterBios->opciones.empty()){
+		return "";
+	}
+	
+	std::string systemName;
+	std::vector<t_bios_data> biosDatabase;
+	std::string bios_xml_path = dirutil::getPathPrefix("assets\\extra\\system_bios.xml");
+	std::string system_path = dirutil::getPathPrefix("system");
+	
+	gestorMenus->parse_sysbios_xml(bios_xml_path, biosDatabase);
+	
+	dirutil dir;
+	
+	for (std::size_t i=0; i < biosDatabase.size(); i++){
+		systemName = biosDatabase[i].system;
+		Menu* menuBiosForSystem = new Menu(systemName, gestorMenus->menuUpdaterBios);
+		gestorMenus->todosLosMenus.push_back(menuBiosForSystem);
+		gestorMenus->menuUpdaterBios->opciones.push_back(new OpcionSubMenu(systemName, menuBiosForSystem));
+	
+		t_biosForSystem *biosForSystem = new t_biosForSystem();
+		biosForSystem->system = systemName;
+		biosForSystem->url = biosDatabase[i].url;
+	
+		//Boton para descargar las bios
+		menuBiosForSystem->opciones.push_back(new OpcionExec<t_biosForSystem>(LanguageManager::instance()->get("menu.updater.bios.sys.save"), 
+			&GestorMenus::downloadBios, biosForSystem, ico_saving, gestorMenus));
+	
+		//Add the required bios files for the system
+		for (std::size_t j=0; j < biosDatabase[i].listBios.size(); j++){
+			t_bios *bios = new t_bios();
+	
+			std::string biosFullPath = system_path;
+			std::string biosRelativePath;
+	
+			biosFullPath += Constant::getFileSep();
+			if (!biosDatabase[i].dir.empty()){
+				biosRelativePath += biosDatabase[i].dir + Constant::getFileSep();
+			}
+			biosRelativePath += biosDatabase[i].listBios[j].file;
+			biosFullPath += biosRelativePath;
+	
+			if (dir.fileExists(biosFullPath.c_str())){
+				bios->textFound = TXT_BIOSFOUND;
+				bios->found = true;
+			} else {
+				bios->textFound = TXT_BIOSNOTFOUND;
+				bios->found = false;
+				biosForSystem->allFound = false;
+			}
+	
+			menuBiosForSystem->opciones.push_back(new OpcionTxtAndDynValue(biosDatabase[i].listBios[j].file, bios->textFound));
+			bios->filepath = biosFullPath;
+			bios->urlpath = biosDatabase[i].listBios[j].url;
+			biosForSystem->list.push_back(bios);
+		}
+	}
+	return "";
+}
+
+void GestorMenus::poblarMenuUpdater(Menu* menuEntrada, CfgLoader *refConfig){
+	this->menuUpdaterBios = new Menu(LanguageManager::instance()->get("menu.updater.bios"), menuEntrada);
+	todosLosMenus.push_back(this->menuUpdaterBios);
+	OpcionSubMenu *submenuUpdater = new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.bios"), this->menuUpdaterBios);
+	//Rellenamos el menu en un callback para que no afecte a la velocidad de arranque del emulador
+	submenuUpdater->callback = &GestorMenus::fillBiosMenuAction;
+	submenuUpdater->context = this;	
+	menuEntrada->opciones.push_back(submenuUpdater);
+}
+
+std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
+	LOG_DEBUG("Descargando bios..");
+	LOG_DEBUG("Bios for system: %s with url %s", biosForSystem->system.c_str(), biosForSystem->url.c_str());
+	
+	if (biosForSystem->allFound){
+		return "All bios are already downloaded";
+	}
+	
+	dirutil dir;
+	CurlClient downloader;
+	float progress = 0.0f;
+	const std::string tempDir = Constant::getTmpDir();
+	const std::string localPath = tempDir + Constant::getFileSep() + "BiosDownload.zip";
+	bool ok = true;
+	
+	if (biosForSystem->url.find(".zip") != std::string::npos || biosForSystem->url.find("https://archive.org/compress/") != std::string::npos){
+		if (!dir.fileExists(localPath.c_str())){
+			ok = downloader.fetchFile(biosForSystem->url, localPath, &progress);
+			LOG_DEBUG("Download bios %s", ok ? "OK" : "FAILED");
+		}
+	
+		std::vector<string> pathsToExtract;
+		for (std::size_t i=0; i < biosForSystem->list.size(); i++){
+			if (!biosForSystem->list[i]->found){
+				pathsToExtract.push_back(biosForSystem->list[i]->filepath);
+			}
+		}
+		extractFiles(localPath, pathsToExtract);
+	} else{
+		for (std::size_t i=0; i < biosForSystem->list.size(); i++){
+			int tries = 0;
+			bool biosOk = false;
+
+			while (!dir.fileExists(biosForSystem->list[i]->filepath.c_str()) && tries < 2 && !biosOk){
+				LOG_DEBUG("Downloading url bios: %s", biosForSystem->url + biosForSystem->list[i]->urlpath);
+
+				std::string dirBios = dir.getFolder(biosForSystem->list[i]->filepath);
+				if (!dir.dirExists(dirBios.c_str()))
+					dir.createDirRecursive(dirBios.c_str());
+
+				biosOk = downloader.fetchFile(biosForSystem->url + biosForSystem->list[i]->urlpath, 
+					biosForSystem->list[i]->filepath, &progress);
+				tries++;
+			}
+		}
+	}
+
+	for (std::size_t i=0; i < biosForSystem->list.size(); i++){
+		if (dir.fileExists(biosForSystem->list[i]->filepath.c_str())){
+			LOG_DEBUG("Found bios: %s", biosForSystem->list[i]->filepath.c_str());
+			biosForSystem->list[i]->textFound = TXT_BIOSFOUND;
+			biosForSystem->list[i]->found = true;
+		} else {
+			LOG_DEBUG("Bios not found: %s", biosForSystem->list[i]->filepath.c_str());
+			biosForSystem->list[i]->textFound = TXT_BIOSNOTFOUND;
+			biosForSystem->list[i]->found = false;
+		}
+	}
+	
+	if (ok && !localPath.empty()){
+		dir.borrarArchivo(localPath);
+		return "Bios downloaded and extracted";
+	}
+	
+	if (!ok){
+		return "Problem downloading resource";
+	}
+	
+	return "";
+}
+
+inline void GestorMenus::parse_sysbios_xml(const std::string& filepath, std::vector<t_bios_data>& biosDatabase){
+	pugi::xml_document doc;
+	if (!doc.load_file(filepath.c_str())) return;
+	
+	pugi::xml_node mame = doc.child("system");
+	const char* nodeFile = "file";
+	const char* nodeBios = "bios";
+	
+	for (pugi::xml_node game = mame.child(nodeFile); game; game = game.next_sibling(nodeFile)) 
+	{
+		t_bios_data data;
+		data.system = game.attribute("name").value();
+		data.url = game.attribute("url").value();
+		data.dir = game.child_value("dir");
+		LOG_DEBUG("System: %s", data.system.c_str());
+	
+		for (pugi::xml_node bios = game.child(nodeBios); bios; bios = bios.next_sibling(nodeBios)) 
+		{
+			LOG_DEBUG("Bios file: %s", bios.text().get());
+			t_file_url fileOrUrl;
+			fileOrUrl.file = bios.text().get();
+			fileOrUrl.url = bios.attribute("url").value();
+			data.listBios.push_back(fileOrUrl);
+		}
+		biosDatabase.push_back(data);
+	}
 }
 
 void GestorMenus::poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystick *joystick){
@@ -2369,10 +2549,12 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			}
 		} else if (option->tipo == OPC_SHOW_DYNTXT_VAL){
 			line = option->titulo;
-			value = *((OpcionTxtAndDynValue *)option)->valor;
-
-			if (((OpcionTxtAndDynValue *)option)->callback == NULL){
-				valueColor = Constant::colors[clHighligtOption].sdlColor;
+			OpcionTxtAndDynValue *OptVal = static_cast<OpcionTxtAndDynValue *>(option);
+			if (OptVal != NULL){
+				value = *(OptVal->valor);
+				if (OptVal->callback == NULL){
+					valueColor = Constant::colors[clHighligtOption].sdlColor;
+				}
 			}
 		} else {
 			line = option->titulo;

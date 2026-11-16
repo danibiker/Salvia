@@ -70,6 +70,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IntDir>$(Configuration)\$(Platform)\$(TargetName)\</IntDir>
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
   </PropertyGroup>
   <!-- Debug|Xbox 360 paths -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
@@ -81,8 +82,8 @@
   <!-- Release|Win32 paths -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IntDir>$(OutDir)$(Platform)\$(ProjectName)\</IntDir>
-    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(Configuration)\$(Platform)\$(TargetName)\</IntDir>
+    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
   <!-- Release|Xbox 360 paths -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
@@ -258,6 +259,7 @@
     <ClInclude Include="..\..\wolfssl\wolfcrypt\chacha.h" />
     <ClInclude Include="..\..\wolfssl\wolfcrypt\poly1305.h" />
     <ClInclude Include="..\..\IDE\XBOX360\user_settings.h" />
+    <ClInclude Include="..\WIN32\user_settings.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

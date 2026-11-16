@@ -100,4 +100,13 @@
 /* TLS 1.3 middlebox compatibility */
 #define WOLFSSL_TLS13_MIDDLEBOX_COMPAT
 
+/* SONDA temporal: log de depuracion de wolfSSL. Salvia lo recoge en
+ * src/http/httputil.cpp (wolfSSL_SetLoggingCb) y lo escribe en su log,
+ * para ver en que certificado/campo falla SSL_connect (-140 ASN_PARSE_E). */
+//#define DEBUG_WOLFSSL
+
+/* Aceptar certificados con numero de serie 0 (archive.org envia uno en su
+ * cadena; sin esto SSL_connect falla con -140 ASN_PARSE_E). */
+#define WOLFSSL_ASN_ALLOW_0_SERIAL
+
 #endif /* _WIN32_USER_SETTINGS_H_ */

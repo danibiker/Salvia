@@ -53,6 +53,9 @@ Joystick::Joystick(){
 	setCursor(cursor_hidden);
 	hotkeys = new Hotkeys(&this->inputs);
 	memset(startHoldFrames, 0, sizeof(startHoldFrames));
+	memset(hotkeyEnabler, 0, MAX_PLAYERS);
+	memset(hotkeyKeyPressed, 0, MAX_PLAYERS);
+	memset(hotkeySendToCore, 0, MAX_PLAYERS);
 	infoButtonsDirty = true;
 }
 
@@ -895,6 +898,8 @@ bool Joystick::pollKeys(int gameStatus){
 
 	inputs.mouse_rel_x = 0;
 	inputs.mouse_rel_y = 0;
+	//Por defecto ponemos el detector del habilitador de hotkeys a 0
+	memset(hotkeySendToCore, 0, MAX_PLAYERS);
 
 	#ifdef _XBOX
     // Optimización: Solo iterar si hay algún frame pendiente de liberar
@@ -922,15 +927,39 @@ bool Joystick::pollKeys(int gameStatus){
 				if (p >= MAX_PLAYERS) break;
                 const unsigned int btn = (unsigned int)event.jbutton.button;
                 if (btn < MAX_SDL_BUTTONS) {
-                    bool isDown = (event.type == SDL_JOYBUTTONDOWN);
-                    inputs.btn_state[p][btn] = isDown;
+                    const bool isDown = (event.type == SDL_JOYBUTTONDOWN);
+					const int sdlModifier = inputs.mapperHotkeys.getSdlBtn(p, HK_MODIFIER);
+					inputs.btn_state[p][btn] = isDown;
                     
                     #ifdef _XBOX
-                    // Solo entramos si el botón pulsado es el mapeado como START
+                    // Solo entramos si el botón pulsado es el mapeado como START. Esto lo hacemos
+					//porque en xbox 360 no hay evento keydown para el boton de start
                     if (isDown && btn == (unsigned int)inputs.mapperCore.getSdlBtn(p, RETRO_DEVICE_ID_JOYPAD_START)) {
                         startHoldFrames[p] = 3;
                     }
                     #endif
+
+					if (sdlModifier == btn) {
+						//Detectamos pulsacion del habilitador de hotkeys
+						if (isDown){
+							//Marcamos el habilitador como pulsado
+							hotkeyEnabler[p] = 1;
+						} else if (hotkeyKeyPressed[p] == 1){
+							//Marcamos que hemos detectado una hotkey pulsada mientras 
+							//el habilitador de hotkeys estaba pulsado
+							LOG_DEBUG("Hotkey detectada");
+							hotkeyKeyPressed[p] = 0;
+						} else {
+							//En este caso marcamos que el boton asignado al habilitador de hotkeys deberia
+							//procesarse por el core normalmente
+							LOG_DEBUG("Hotkey enabler soltado pero sin hotkey pulsada. Deberia procesarse como pulsado");
+							hotkeySendToCore[p] = 1;
+						}
+					} else if (hotkeyEnabler[p] == 1){
+						//Si hemos pulsado algun otro boton y se habia detectado la pulsacion del habilitador de hotkeys
+						LOG_DEBUG("Pulsacion de hotkey detectada");
+						hotkeyKeyPressed[p] = 1;
+					}
                 }
                 break;
             }

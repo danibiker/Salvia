@@ -649,8 +649,7 @@ void retro_set_environment(retro_environment_t cb) {
 			  { "scph5500.bin", "SCPH-5500 JPN (v3.0) (Recommended)" }, 
 			  { "scph7000.bin", "SCPH-7000 JPN (v4.0)" }, 
 			  { "scph1002.bin", "SCPH-1002 EUR (v2.0)" }, 
-			  { "scph5502.bin", "SCPH-5502 EUR (v3.0)" }, 
-			  { "scph7502.bin", "SCPH-7502 EUR (v4.1) (Recommended)" }, 
+			  { "scph5502.bin", "SCPH-5502 EUR (v3.0) (Recommended)" }, 
 			  { "scph102.bin",  "SCPH-102 EUR (v4.5)" }, 
 			  { NULL, NULL }},			  
             "scph5501.bin"

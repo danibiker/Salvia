@@ -471,6 +471,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_gg;
 		case 25:
 			return cart_neogeo_pocket;
+		case 26:
+			return cart_atari2600;
 		case 28:
 			return cart_atarilynx;
 		case 29:
@@ -500,6 +502,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_supergrafx;
 		case 113:
 			return cart_msx;
+		case 117:
+			return cart_msx2;
 		case 114:
 			return cart_pce_cd;
 		case 130:

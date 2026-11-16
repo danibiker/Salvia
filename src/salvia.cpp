@@ -223,6 +223,19 @@ static int16_t g_midiMixBuf[MIDI_MIX_FRAMES * 2];
 /* Flanco de entrada en fast-forward, para cortar el MIDI una sola vez. */
 static bool g_midiFastForwardCut = false;
 
+/* Frame duplicado: libretro permite que el core llame a video_refresh con
+ * data == NULL cuando no ha dibujado nada nuevo (frameskip).  En ese caso no
+ * hay nada que presentar, y presentar de todas formas hace que el Present
+ * espere al vblank en un frame que el core se habia saltado justo para ganar
+ * tiempo: el frameskip acababa frenando en vez de acelerar.  El bucle principal
+ * consulta este indicador para no presentar los frames duplicados. */
+static bool g_coreFrameDuped = false;
+static int  g_dupedSeguidos  = 0;
+/* Tope de presentaciones seguidas que se pueden omitir.  Asi los overlays del
+ * frontend (FPS, mensajes, mira) nunca se quedan congelados si un core manda
+ * muchos duplicados seguidos. */
+#define MAX_DUPED_SIN_PRESENTAR 5
+
 // ─────────────────────────────────────────────
 // Helper: split "opt1|opt2|opt3" → vector
 // ─────────────────────────────────────────────
@@ -1914,20 +1927,6 @@ static inline void hw_refresh(const void *data, unsigned width,
     SDL_UnlockSurface(screen);
 }
 
-
-/* Frame duplicado: libretro permite que el core llame a video_refresh con
- * data == NULL cuando no ha dibujado nada nuevo (frameskip).  En ese caso no
- * hay nada que presentar, y presentar de todas formas hace que el Present
- * espere al vblank en un frame que el core se habia saltado justo para ganar
- * tiempo: el frameskip acababa frenando en vez de acelerar.  El bucle principal
- * consulta este indicador para no presentar los frames duplicados. */
-static bool g_coreFrameDuped = false;
-static int  g_dupedSeguidos  = 0;
-/* Tope de presentaciones seguidas que se pueden omitir.  Asi los overlays del
- * frontend (FPS, mensajes, mira) nunca se quedan congelados si un core manda
- * muchos duplicados seguidos. */
-#define MAX_DUPED_SIN_PRESENTAR 5
-
 static void retro_video_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
 	g_coreFrameDuped = (data == NULL);
@@ -2002,23 +2001,16 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		// 2. Respuesta al Core
 		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) {
 			int16_t mask = 0;
-			if (!modifierPressed) {
-				// Fast path: sin modifier, lectura directa sin getSdlBtn por iteracion
-				for (int i = 0; i < maxJoyTargets; i++) {
-					if (inputs->getCoreAny(port, i)) {
-						// Disparo rapido: suprime el bit durante medio ciclo
-						if (inputs->rapidFire[port][i] && !inputs->turboPhaseOn) continue;
-						mask |= (int16_t)(1 << i);
-					}
-				}
-			} else {
-				// Slow path: con modifier activo, filtramos botones
-				for (int i = 0; i < maxJoyTargets; i++) {
-					if (inputs->mapperCore.getSdlBtn(port, i) != sdlModifier)
-						continue;
-					if (inputs->getCoreAny(port, i)) {
-						mask |= (int16_t)(1 << i);
-					}
+			for (int i = 0; i < maxJoyTargets; i++) {
+				if (!modifierPressed && inputs->getCoreAny(port, i)) {
+					// Disparo rapido: suprime el bit durante medio ciclo
+					if (inputs->rapidFire[port][i] && !inputs->turboPhaseOn) continue;
+					mask |= (int16_t)(1 << i);
+				} else if (inputs->mapperCore.getSdlBtn(port, i) == sdlModifier && gameMenu->joystick->hotkeySendToCore[port] == 1){
+					//Hemos detectado que el habilitador de hotkeys se ha soltado y no se habia pulsado 
+					//ningun boton con hotkey asignada, gracias a hotkeySendToCore. Asi que enviamos la pulsacion al core
+					//LOG_DEBUG("Hotkey enabler should be processed in the core");
+					mask |= (int16_t)(1 << i);
 				}
 			}
 			return mask;
@@ -2030,7 +2022,9 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 					if (inputs->rapidFire[port][id] && !inputs->turboPhaseOn) return 0;
 					return 1;
 				}
-				return (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier ||
+				//Si el boton es el modificador, solo lo enviamos al core si previamente se habia soltado
+				//y no se habia pulsado ninguna hotkey, segun el valor de hotkeySendToCore
+				return ( (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier && gameMenu->joystick->hotkeySendToCore[port] == 1) ||
 						inputs->getCoreAny(port, id)) ? 1 : 0;
 			}
 			return 0;

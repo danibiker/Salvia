@@ -525,7 +525,7 @@ Options > Audio
 | Option | What it does |
 | --- | --- |
 | **MIDI synthesizer** | Turns it on or off |
-| **SoundFont (.sf2)** | Which bank to use, from the ones found in `system`. It also lists **Roland SC-55** when its ROMs are found (see below) |
+| **SoundFont (.sf2)** | Which bank to use, from the ones found in `system`. It also lists **Roland SC-55**, **Roland MT-32** and **Roland CM-32L** when their ROMs are found (see below) |
 | **MIDI volume** | Music volume, in 10% steps |
 | **MIDI module** | Leave it on *Auto-detect*. See the MT-32 note below |
 
@@ -546,6 +546,21 @@ A few things to know:
 - Emulating the unit is much heavier than a SoundFont, so it runs on its own CPU thread and never slows the emulator down. If that thread cannot keep up, you will hear gaps in the music, not a slower game.
 - If you change the option while a song is playing, the module picks up the song where it was.
 
+### Roland MT-32 / CM-32L
+Salvia can also emulate a real **Roland MT-32** or **CM-32L** (Munt, the same emulator the px68k core uses). This is the module most X68000 games and many DOS games were written for, so with it they sound like the original hardware, custom instruments included, instead of being translated to General MIDI. As with the SC-55, you need the dumps of the unit's ROMs; the frontend does not include them. Use the same file names as px68k:
+
+| Model | Files |
+| --- | --- |
+| MT-32 | `MT32_CONTROL.ROM` `MT32_PCM.ROM` |
+| CM-32L | `CM32L_CONTROL.ROM` `CM32L_PCM.ROM` |
+
+Lowercase names and the `.BIN` extension also work. Copy them into `system`, or into one of these subfolders of it: `mt32`, `cm32l`, `cm64`, `roland`, `munt` or `prboom`. Each complete pair adds **Roland MT-32** or **Roland CM-32L** to the **SoundFont (.sf2)** list, after the SC-55. Only full ROM images are accepted, not dumps split into several files.
+
+A few things to know:
+- Like the SC-55, the module gets the game's MIDI stream untouched and runs on its own CPU thread, and it picks up the song where it was if you change the option while it plays.
+- The game has to be set up for an MT-32 (in DOS games, choose *Roland MT-32*, *LAPC-1* or *CM-32L* in the game's sound setup). A game that sends General MIDI will play the wrong instruments, just like on the real module.
+- Pick the CM-32L for games that use its extra sound effects; otherwise both play the same music.
+
 ### Turning it on in each core
 
 The synthesizer is only half of it: each core has to be told to send its music out as MIDI.
@@ -563,9 +578,9 @@ The synthesizer is only half of it: each core has to be told to send its music o
 **DOS (DOSBox-Pure)** — set its `MIDI Output` core option to `Frontend MIDI driver`. Careful: if you leave it on a `.sf2`, it uses its own synthesizer instead of Salvia's, which also works fine.
 
 ### A note about MT-32 games
-Most X68000 games, and many DOS ones, were written for a **Roland MT-32**, which is a different kind of synthesizer, not a General MIDI one. Salvia detects those games and translates their instruments to the closest General MIDI equivalents, so the music plays correctly and in tune, but it will not sound exactly like a real MT-32. Games that load their own custom instruments will differ the most.
+Most X68000 games, and many DOS ones, were written for a **Roland MT-32**, which is a different kind of synthesizer, not a General MIDI one. With a SoundFont, Salvia detects those games and translates their instruments to the closest General MIDI equivalents, so the music plays correctly and in tune, but it will not sound exactly like a real MT-32. Games that load their own custom instruments will differ the most. For the real sound, use the **Roland MT-32** or **Roland CM-32L** entry described above.
 
-If a game sounds wrong and you know which module it expects, you can force it with the **MIDI module** option.
+If a game sounds wrong with a SoundFont and you know which module it expects, you can force it with the **MIDI module** option.
 
 ## Games artwork and titles
 ### Built-in scraper

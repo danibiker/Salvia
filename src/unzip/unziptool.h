@@ -10,6 +10,7 @@
 #include <minizip/unzip.h>
 #include <zlib/zlib.h>
 #include "unziptool_common.h"
+#include <io/dirutil.h>
 
 const int WRITE_BUFFER_SIZE = 65536;
 const std::size_t MAX_MEM_SIZE = 64 * 1024 * 1024; // 64 MB
@@ -281,3 +282,111 @@ inline unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::strin
     return ret;
 }
 
+inline unzippedFileInfo extractFiles(const std::string& filepath, const std::vector<std::string>& filesToExtract) {
+    dirutil dir;
+	unzippedFileInfo ret;
+    ret.originalPath = filepath;
+    ret.errorCode = -1; // Por defecto error
+    ret.memoryBuffer = NULL;
+    ret.romsize = 0;
+
+    // 1. Detección de ZIP por Magic Number (Endian-Safe)
+    FILE* fTest = fopen(filepath.c_str(), "rb");
+    if (!fTest) {
+        LOG_DEBUG("Unable to open file: %s\n", filepath.c_str());
+        return ret;
+    }
+    uint32_t magic = 0;
+    fread(&magic, 4, 1, fTest);
+    fclose(fTest);
+
+    // En Xbox (Big Endian), el magic de PKZip (0x50 0x4B 0x03 0x04) 
+    // se lee de forma distinta. Normalizamos para la comparación.
+    #ifdef _XBOX
+        magic = _byteswap_ulong(magic); 
+    #endif
+
+    // --- CASO 1: NO ES UN ZIP ---
+    if (magic != 0x04034b50) {
+        return ret;
+    }
+
+    // --- CASO 2: ES UN ZIP (Extracción con Minizip) ---
+    LOG_DEBUG("Zip detected. Searching for files...\n");
+    unzFile uf = unzOpen(filepath.c_str());
+    if (!uf) return ret;
+
+    bool found = false;
+    int res = unzGoToFirstFile(uf);
+    while (res == UNZ_OK) {
+        char filenameInZip[256];
+        unz_file_info fileInfo;
+        unzGetCurrentFileInfo(uf, &fileInfo, filenameInZip, sizeof(filenameInZip), NULL, 0, NULL, 0);
+
+        std::string currentFile = filenameInZip;
+        std::transform(currentFile.begin(), currentFile.end(), currentFile.begin(), ::tolower);
+
+        // Comprobacion del nombre
+        bool match = false;
+        for (std::size_t i = 0; i < filesToExtract.size(); ++i) {
+			std::string fileNameInZip = dir.getFileName(filesToExtract[i]);
+			std::transform(fileNameInZip.begin(), fileNameInZip.end(), fileNameInZip.begin(), ::tolower);
+            if (fileNameInZip == currentFile) {
+                match = true;
+				ret.extractedPath = filesToExtract[i];
+                break;
+            }
+        }
+
+        if (match) {
+            if (unzOpenCurrentFile(uf) == UNZ_OK) {
+                ret.romsize = fileInfo.uncompressed_size;
+                ret.fileNameInsideZip = currentFile;
+
+				std::string extractDir = dir.getFolder(ret.extractedPath);
+				if (!extractDir.empty() && !dir.dirExists(extractDir.c_str())){
+					dir.createDirRecursive(extractDir.c_str());
+				}
+
+                // Extracción a disco (Temp)
+                FILE* fout = fopen(ret.extractedPath.c_str(), "wb");
+                if (fout) {
+                    // Buffer de 64KB: Óptimo para el DMA del HDD de Xbox 360
+                    char writeBuf[WRITE_BUFFER_SIZE]; 
+                    int bytesRead;
+                    while ((bytesRead = unzReadCurrentFile(uf, writeBuf, WRITE_BUFFER_SIZE)) > 0) {
+						if (fwrite(writeBuf, 1, bytesRead, fout) != (size_t)bytesRead) {
+							LOG_DEBUG("Error de escritura en disco (disco lleno?)\n");
+							break;
+						}
+					}
+					if (bytesRead < 0) {
+						LOG_DEBUG("Error en la descompresión: %d\n", bytesRead);
+						found = false;
+					} else {
+						found = true;
+					}
+
+                    fflush(fout);
+                    #ifdef _XBOX
+                        _commit(_fileno(fout)); 
+                    #endif
+                    fclose(fout);
+                } else {
+					LOG_DEBUG("Error extracting to file\n");
+				}
+
+                unzCloseCurrentFile(uf); 
+                if (ret.errorCode == -2) break;
+            }
+        }
+        res = unzGoToNextFile(uf);
+    }
+
+    unzClose(uf);
+    if (found) {
+        ret.errorCode = 0;
+        LOG_DEBUG("Extraction successful");
+    }
+    return ret;
+}

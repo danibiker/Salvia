@@ -14,6 +14,7 @@
 #include <vector>
 #include <string>
 
+
 // --- Definicion de tipos de opciones ---
 enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SHOW_DYNTXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
 	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
@@ -408,6 +409,45 @@ struct MenuStatus{
 	Menu *menu;
 };
 
+
+
+struct t_bios{
+	std::string filepath;
+	std::string urlpath;
+	std::string textFound;
+	bool found;
+
+	t_bios(){
+		found = false;
+	}
+};
+
+struct t_biosForSystem{
+	std::vector<t_bios *> list;
+	std::string system;
+	std::string url;
+	bool allFound;
+	
+	t_biosForSystem(){
+		allFound = true;
+	}
+};
+
+struct t_file_url{
+	std::string file;
+	std::string url;
+};
+
+struct t_bios_data{
+	std::string filepath;
+	std::string url;
+	std::string system;
+	std::string dir;
+	std::vector<t_file_url> listBios;
+	t_bios_data(){
+	}
+};
+
 // --- Clase Principal de Gestion de Menus ---
 class GestorMenus : public Object{
 private:
@@ -448,6 +488,8 @@ private:
 	// recrean en cada poblarCoreOptions; hay que liberarlos a mano antes de repoblar
 	// (OpcionSubMenu no borra su destino). Runtime only.
 	std::vector<Menu*> coreOptionSubmenus;
+	std::vector<std::string> biosFileStatus;
+
 	Menu* menuCheats;
 	Menu* menuSavestates;
 	Menu* menuAskSavestates;
@@ -462,6 +504,7 @@ private:
 	Menu* menuGuides;
 	Menu* menuGuideText;
 	Menu *menuOverscan;
+	OpcionSubMenu* submenuUpdater;
 
 	CONFIG_STATUS status;
 	int marginX;
@@ -489,7 +532,6 @@ private:
 	std::vector<std::string> menuLangs;
 	int menuLangsIdx;
 	SDL_Surface *selecAlphaRec;
-
 
 	int getScreenNumLines();
 	void clearSelectedText();
@@ -523,9 +565,12 @@ private:
 	void poblarMenuAudio(Menu* menuLightgun, CfgLoader *refConfig);
 	void poblarMenuLogros(Menu* parentAchievements, CfgLoader *refConfig);
 	void poblarMenuLightgun(Menu* menuAudio, CfgLoader *refConfig);
+	void poblarMenuUpdater(Menu* menuEntrada, CfgLoader *refConfig);
 	void checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx);
 	void addMusicOptionList(CfgLoader *refConfig, int posCore, std::vector<Opcion*> &opciones);
 	void buscarIdiomasMenu(std::string selectedLang);
+
+	void addCoreOptionsByCategory(Menu *parent, const std::vector<std::pair<std::string, std::string> > &categories, const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
 
 	std::string guardarJoysticks(Joystick* joy);
 	std::string guardarGameJoysticks(Joystick* joy);
@@ -541,11 +586,14 @@ private:
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);	
-	void addCoreOptionsByCategory(Menu *parent, const std::vector<std::pair<std::string, std::string> > &categories, const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
+	std::string downloadBios(t_biosForSystem *);
+	
+	
 
 public:
     GestorMenus(int screenw, int screenh);
 	~GestorMenus();
+
     // Inicializa la estructura de menus
     void inicializar(CfgLoader *, Joystick *);
     // Logica de navegacion Arriba/Abajo
@@ -571,12 +619,14 @@ public:
 	void poblarJoystickTypes(Joystick *joystick);
 	void poblarMenuOverscan(Menu *menu);
 	void poblarMenuDiscos(int options);
+	inline void parse_sysbios_xml(const std::string& filepath, std::vector<t_bios_data>& biosDatabase);
 	void setGameLoaded(std::string gn){
 		this->gameFaqsMenu.gameName = gn;
 	}
 	std::string trOrDefault(const std::string &key, const char *fallback);
 
 	Menu* menuGameFilter;
+	Menu* menuUpdaterBios;
 	void iniciarFiltros(GameDataFields& gameDataFieldsFilter);
 
 	std::string stopScrapping(CONFIG_STATUS *st);
@@ -665,7 +715,7 @@ public:
 	static std::string selectResolution(void* inst, void *index, void *values);
 	static std::string selectLang(void* inst, void *index, void *values);
 	static std::string selectSync(void* inst, void *index, void *values);
-
+	static std::string fillBiosMenuAction(void* inst);
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);
 	static void onRAUserText(const std::string& text, void* userData);
