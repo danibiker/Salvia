@@ -90,7 +90,7 @@ class CloudManager : public Common::Singleton<CloudManager>, public Common::Even
 
 public:
 	CloudManager();
-	~CloudManager() override;
+	~CloudManager();
 
 	/**
 	 * Loads all information from configs and creates current Storage instance.

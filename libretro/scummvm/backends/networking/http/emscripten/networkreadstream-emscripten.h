@@ -73,7 +73,7 @@ public:
 
 	NetworkReadStreamEmscripten(const char *url, RequestHeaders *headersList, const byte *buffer, uint32 bufferSize, bool uploading, bool usingPatch, bool post, bool keepAlive, long keepAliveIdle, long keepAliveInterval);
 
-	~NetworkReadStreamEmscripten() override;
+	~NetworkReadStreamEmscripten();
 	void initFetch();
 
 	// NetworkReadStream interface

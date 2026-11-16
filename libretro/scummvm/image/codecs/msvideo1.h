@@ -34,7 +34,7 @@ namespace Image {
 class MSVideo1Decoder : public Codec {
 public:
 	MSVideo1Decoder(uint16 width, uint16 height, byte bitsPerPixel);
-	~MSVideo1Decoder() override;
+	~MSVideo1Decoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _surface->format; }

@@ -40,7 +40,7 @@ public:
 	CBitmap m_bitmapDisabled;   // disabled bitmap (OPTIONAL)
 
 public:
-	~CBitmapButton() override {
+	~CBitmapButton() {
 	}
 
 	void SizeToContent();

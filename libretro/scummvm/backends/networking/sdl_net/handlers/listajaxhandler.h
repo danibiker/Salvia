@@ -52,7 +52,7 @@ class ListAjaxHandler: public FilesBaseHandler {
 
 public:
 	ListAjaxHandler();
-	~ListAjaxHandler() override;
+	~ListAjaxHandler();
 
 	void handle(Client &client) override;
 };

@@ -44,7 +44,7 @@
 //
 ////////////////////////////////////////
 
-class MidiDriver_WIN final : public MidiDriver_MPU401 {
+class MidiDriver_WIN : public MidiDriver_MPU401 {
 private:
 	MIDIHDR _streamHeader;
 	byte _streamBuffer[266];	// SysEx blocks should be no larger than 266 bytes
@@ -240,8 +240,8 @@ Common::Error WindowsMusicPlugin::createInstance(MidiDriver **mididriver, MidiDr
 		Common::String deviceIDString = MidiDriver::getDeviceString(dev, MidiDriver::kDeviceId);
 
 		MusicDevices i = getDevices();
-		for (auto &d : i) {
-			if (d.getCompleteId().equals(deviceIDString)) {
+		for (MusicDevices::iterator d = i.begin(); d != i.end(); ++d) {
+			if (d->getCompleteId().equals(deviceIDString)) {
 				found = true;
 				break;
 			}

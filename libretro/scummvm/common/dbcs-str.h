@@ -43,7 +43,7 @@ public:
 	typedef uint32 unsigned_type; /*!< Unsigned version of the underlying type. */
 public:
 	/** Construct a new empty string. */
-	constexpr DBCSString() : BaseString<uint16>() {}
+	DBCSString() : BaseString<uint16>() {}
 
 	/** Construct a new string from the given null-terminated C string. */
 	explicit DBCSString(const value_type *str) : BaseString<uint16>(str) {}
@@ -73,7 +73,7 @@ public:
 	explicit DBCSString(const String &str);
 
 	/** Construct a string consisting of the given character. */
-	explicit constexpr DBCSString(value_type c) : BaseString<uint16>(c) {}
+	explicit DBCSString(value_type c) : BaseString<uint16>(c) {}
 
 	/** Construct a string consisting of n copies of the given character. */
 	DBCSString(size_t n, value_type c) : BaseString<uint16>(n, c) {}

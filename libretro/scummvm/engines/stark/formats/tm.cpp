@@ -42,7 +42,7 @@ public:
 		_type = TYPE;
 	}
 
-	~TextureGroup() override {
+	~TextureGroup() {
 		delete[] _palette;
 	}
 

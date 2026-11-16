@@ -62,7 +62,7 @@ const Control kControls[] = {
 	{61, 428, 341, 469, 407, "HPICTURE"}
 };
 
-const Common::Point kQuestionOrigins[] = {{122, 191}, {120, 234}, {124, 278}};
+const Common::Point kQuestionOrigins[] = {Common::Point(122, 191), Common::Point(120, 234), Common::Point(124, 278)};
 
 MortimerInterview::MortimerInterview(bool isDemo) : _random("mortimer"), _isDemo(isDemo),
 	_region(0), _difficulty(0), _textDifficulty(0), _tried(0), _stage(kIdle), _effect(kNoEffect),
@@ -523,7 +523,7 @@ void MortimerInterview::draw(Graphics::Surface &screen, const MortimerMovie &mov
 		screen.copyRectToSurface(movie.pixels(), MortimerMovie::kScreenWidth, 0, 0, 640, 480);
 		if (!_isDemo && _stage == kSong) {
 			// Song callback 4119a0 and tables 4438a0/442d4c use STRK variable 1.
-			const Common::Point origins[] = {{97, 63}, {88, 17}, {181, 0}, {100, 33}};
+			const Common::Point origins[] = {Common::Point(97, 63), Common::Point(88, 17), Common::Point(181, 0), Common::Point(100, 33)};
 			_mouth[MIN<uint>(mouth, 5)].draw(screen, origins[_region].x * 2, origins[_region].y * 2, false, nullptr, 2);
 		}
 		for (uint i = 0; _isDemo && i < movie.captions().size(); ++i) {

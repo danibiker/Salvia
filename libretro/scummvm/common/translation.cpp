@@ -233,7 +233,8 @@ U32String TranslationManager::getTranslation(const String &message, const String
 const StringArray TranslationManager::getContexts() const {
 	StringArray contexts;
 
-	for (const auto &m : _currentTranslationMessages) {
+	for (auto rfIt236 = _currentTranslationMessages.begin(), rfEnd236 = _currentTranslationMessages.end(); rfIt236 != rfEnd236; ++rfIt236) {
+		const auto &m = *rfIt236;
 		contexts.push_back(m.msgctxt);
 	}
 
@@ -287,7 +288,8 @@ bool TranslationManager::openTranslationsFile(File &inFile) {
 	// Then try to open it using the SearchMan.
 	ArchiveMemberList fileList;
 	SearchMan.listMatchingMembers(fileList, Common::Path(_translationsFileName, Common::Path::kNoSeparator));
-	for (auto &m : fileList) {
+	for (auto rfIt290 = fileList.begin(), rfEnd290 = fileList.end(); rfIt290 != rfEnd290; ++rfIt290) {
+		auto &m = *rfIt290;
 		SeekableReadStream *const stream = m->createReadStream();
 		if (stream && inFile.open(stream, m->getName())) {
 			if (checkHeader(inFile))
@@ -324,7 +326,8 @@ bool TranslationManager::openTranslationsFile(const FSNode &node, File &inFile, 
 	if (!node.getChildren(fileList, FSNode::kListDirectoriesOnly))
 		return false;
 
-	for (auto &file : fileList) {
+	for (auto rfIt327 = fileList.begin(), rfEnd327 = fileList.end(); rfIt327 != rfEnd327; ++rfIt327) {
+		auto &file = *rfIt327;
 		if (openTranslationsFile(file, inFile, depth == -1 ? - 1 : depth - 1))
 			return true;
 	}

@@ -560,7 +560,7 @@ class DecoderImpl : public HNM6Decoder {
 public:
 	DecoderImpl(uint16 width, uint16 height, const Graphics::PixelFormat &format,
 	            uint32 bufferSize, bool videoMode = false);
-	~DecoderImpl() override;
+	~DecoderImpl();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 

@@ -19,10 +19,17 @@
  *
  */
 
+// Visual Studio 2010 / Xbox 360 XDK compatibility (C++03 + partial C++11, no C99 runtime)
+#include "msvc2010_compat.h"
+
 #include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>
+#if defined(_MSC_VER) && _MSC_VER < 1800
+#include <stdint.h> // no inttypes.h before MSVC 2013 (PRI* macros are in msvc2010_compat.h)
+#else
 #include <inttypes.h>
+#endif
 #include <limits.h>
 #include <math.h>
 #include <new>

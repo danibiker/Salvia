@@ -165,7 +165,7 @@ void readRawCoefficientToken(RawDeltaReader &reader, int coeff[64], int &index) 
 
 } // namespace
 
-RawDeltaReader::RawDeltaReader(const byte *ptr, uint32 len) : data(ptr), size(len) {
+RawDeltaReader::RawDeltaReader(const byte *ptr, uint32 len) : data(ptr), size(len), mode(0), wordBitsLeft(16), wordIndex(1), controlWord(0), pairIndex(0), byteIndex(0), nibbleBitsLeft(8), nibbleWordIndex(1), nibbleWord(0), pairOffset(0), byteOffset(0), signedByteOffset(0), nibbleOffset(0), signedByteIndex(0), separateSignedByteStream(false) {
 	if (size < 0x18)
 		return;
 
@@ -180,7 +180,7 @@ RawDeltaReader::RawDeltaReader(const byte *ptr, uint32 len) : data(ptr), size(le
 }
 
 RawDeltaReader::RawDeltaReader(const byte *ptr, uint32 len, uint32 streamBase, uint32 pairOff, uint32 byteOff,
-							   uint32 signedByteOff, uint32 nibbleOff, uint32 controlOff) : data(ptr), size(len) {
+							   uint32 signedByteOff, uint32 nibbleOff, uint32 controlOff) : data(ptr), size(len), mode(0), wordBitsLeft(16), wordIndex(1), controlWord(0), pairIndex(0), byteIndex(0), nibbleBitsLeft(8), nibbleWordIndex(1), nibbleWord(0), pairOffset(0), byteOffset(0), signedByteOffset(0), nibbleOffset(0), signedByteIndex(0), separateSignedByteStream(false) {
 	pairOffset = streamBase + pairOff;
 	byteOffset = streamBase + byteOff;
 	signedByteOffset = streamBase + signedByteOff;

@@ -31,11 +31,11 @@ template<typename T> class List;
 
 namespace ListInternal {
 	struct NodeBase {
-		NodeBase *_prev = nullptr;
-		NodeBase *_next = nullptr;
+		NodeBase *_prev;
+		NodeBase *_next;
 
-		constexpr NodeBase() = default;
-		constexpr NodeBase(NodeBase *prev, NodeBase *next) : _prev(prev), _next(next) {}
+		NodeBase() : _prev(nullptr), _next(nullptr) {};
+		NodeBase(NodeBase *prev, NodeBase *next) : _prev(prev), _next(next) {}
 	};
 
 	template<typename T>
@@ -44,8 +44,24 @@ namespace ListInternal {
 
 		Node(const T &x) : _data(x) {}
 		Node(T &&x) : _data(Common::move(x)) {}
+#ifndef SCUMMVM_CXX03_COMPAT
 		template<class... TArgs>
 		Node(TArgs&&... args) : _data(Common::forward<TArgs>(args)...) {}
+#else
+		Node() : _data() {}
+		template<class A1>
+		Node(A1 &&a1) : _data(Common::forward<A1>(a1)) {}
+		template<class A1, class A2>
+		Node(A1 &&a1, A2 &&a2) : _data(Common::forward<A1>(a1), Common::forward<A2>(a2)) {}
+		template<class A1, class A2, class A3>
+		Node(A1 &&a1, A2 &&a2, A3 &&a3) : _data(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3)) {}
+		template<class A1, class A2, class A3, class A4>
+		Node(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) : _data(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4)) {}
+		template<class A1, class A2, class A3, class A4, class A5>
+		Node(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) : _data(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5)) {}
+		template<class A1, class A2, class A3, class A4, class A5, class A6>
+		Node(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) : _data(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6)) {}
+#endif
 	};
 
 	template<typename T> struct ConstIterator;

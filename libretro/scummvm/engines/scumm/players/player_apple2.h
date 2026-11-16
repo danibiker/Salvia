@@ -225,19 +225,19 @@ class Player_AppleII;
 
 class AppleII_SoundFunction {
 public:
-	AppleII_SoundFunction() {}
+	AppleII_SoundFunction() : _player(nullptr) {}
 	virtual ~AppleII_SoundFunction() {}
 	virtual void init(Player_AppleII *player, const byte *params) = 0;
 	/* returns true if finished */
 	virtual bool update() = 0;
 protected:
-	Player_AppleII *_player = nullptr;
+	Player_AppleII *_player;
 };
 
 class Player_AppleII : public Audio::AudioStream, public MusicEngine {
 public:
 	Player_AppleII(ScummEngine *scumm, Audio::Mixer *mixer);
-	~Player_AppleII() override;
+	~Player_AppleII();
 
 	void setMusicVolume(int vol) override { _sampleConverter.setMusicVolume(vol); }
 	void setSampleRate(int rate) {
@@ -263,15 +263,15 @@ public:
 
 private:
 	// sound number
-	int _soundNr = 0;
+	int _soundNr;
 	// type of sound
-	int _type = 0;
+	int _type;
 	// number of loops left
-	int _loop = 0;
+	int _loop;
 	// global sound param list
-	const byte *_params = nullptr;
+	const byte *_params;
 	// speaker toggle state (0 / 1)
-	byte _speakerState = 0;
+	byte _speakerState;
 	// sound function
 	AppleII_SoundFunction *_soundFunc;
 	// cycle to sample converter
@@ -280,7 +280,7 @@ private:
 	ScummEngine *_vm;
 	Audio::Mixer *_mixer;
 	Audio::SoundHandle _soundHandle;
-	int _sampleRate = 0;
+	int _sampleRate;
 	Common::Mutex _mutex;
 
 	void resetState();

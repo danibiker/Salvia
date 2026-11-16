@@ -40,7 +40,7 @@ public:
 			_cachedSize(0), _eos(false), _err(false) {
 	}
 
-	~RA2PSXVideoReadStream() override {
+	~RA2PSXVideoReadStream() {
 		delete _stream;
 	}
 

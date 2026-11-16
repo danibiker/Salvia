@@ -276,6 +276,7 @@ public:
 		writeUint64BE(n);
 	}
 
+#ifndef SCUMMVM_CXX03_COMPAT
 	/**
 	 * Write multiple values to the stream using a specified data format,
 	 * return true on success and false on failure.
@@ -321,6 +322,53 @@ public:
 	inline bool writeMultipleBE(const T &...values) {
 		return this->writeMultiple<EndianStorageFormat, T...>(EndianStorageFormat::Big, values...);
 	}
+#else
+	/**
+	 * Write multiple values to the stream using a specified data format,
+	 * return true on success and false on failure.
+	 */
+	template<class TDataFormat, class T>
+	bool writeMultiple(const TDataFormat &dataFormat, const T &values) {
+		const TDataFormat dataFormatCopy = dataFormat; // Copy to help compiler alias analysis, parameter is const ref to ensure TDataFormat is a concrete type
+
+		byte buffer[DataMultipleIO<TDataFormat, T>::kMaxSize];
+		const uint actualSize = DataMultipleIO<TDataFormat, T>::computeSize(dataFormatCopy);
+
+		DataMultipleIO<TDataFormat, T>::encode(dataFormatCopy, buffer, values);
+
+		if (this->write(buffer, actualSize) != actualSize)
+			return false;
+
+		return true;
+	}
+
+	/**
+	 * Write multiple values to the stream using a specified endianness,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool writeMultipleEndian(bool isLittle, const T &values) {
+		return this->writeMultiple<EndianStorageFormat, T>(isLittle ? EndianStorageFormat::Little : EndianStorageFormat::Big, values);
+	}
+
+	/**
+	 * Write multiple values to the stream in little endian format,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool writeMultipleLE(const T &values) {
+		return this->writeMultiple<EndianStorageFormat, T>(EndianStorageFormat::Little, values);
+	}
+
+	/**
+	 * Write multiple values to the stream in big endian format,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool writeMultipleBE(const T &values) {
+		return this->writeMultiple<EndianStorageFormat, T>(EndianStorageFormat::Big, values);
+	}
+#endif
 
 	/**
 	 * Write at most @p dataSize of data from another stream into this one,
@@ -661,6 +709,7 @@ public:
 		return READ_BE_FLOAT64(val);
 	}
 
+#ifndef SCUMMVM_CXX03_COMPAT
 	/**
 	 * Read multiple values from the stream using a specified data format,
 	 * return true on success and false on failure.
@@ -705,6 +754,52 @@ public:
 	inline bool readMultipleBE(T &...values) {
 		return this->readMultiple<EndianStorageFormat, T...>(EndianStorageFormat::Big, values...);
 	}
+#else
+	/**
+	 * Read multiple values from the stream using a specified data format,
+	 * return true on success and false on failure.
+	 */
+	template<class TDataFormat, class T>
+	bool readMultiple(const TDataFormat &dataFormat, T &values) {
+		const TDataFormat dataFormatCopy = dataFormat;	// Copy to help compiler alias analysis, parameter is const ref to ensure TDataFormat is a concrete type
+
+		byte buffer[DataMultipleIO<TDataFormat, T>::kMaxSize];
+		const uint actualSize = DataMultipleIO<TDataFormat, T>::computeSize(dataFormatCopy);
+
+		if (read(buffer, actualSize) != actualSize)
+			return false;
+
+		DataMultipleIO<TDataFormat, T>::decode(dataFormatCopy, buffer, values);
+		return true;
+	}
+
+	/**
+	 * Read multiple values from the stream using a specified endianness,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool readMultipleEndian(bool isLittle, T &values) {
+		return this->readMultiple<EndianStorageFormat, T>(isLittle ? EndianStorageFormat::Little : EndianStorageFormat::Big, values);
+	}
+
+	/**
+	 * Read multiple values from the stream in little endian format,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool readMultipleLE(T &values) {
+		return this->readMultiple<EndianStorageFormat, T>(EndianStorageFormat::Little, values);
+	}
+
+	/**
+	 * Read multiple values from the stream in big endian format,
+	 * return true on success and false on failure.
+	 */
+	template<class T>
+	inline bool readMultipleBE(T &values) {
+		return this->readMultiple<EndianStorageFormat, T>(EndianStorageFormat::Big, values);
+	}
+#endif
 
 	/**
 	 * Read the specified amount of data into a malloc'ed buffer
@@ -958,7 +1053,7 @@ public:
  * Altering the position of the substream will affect the position of
  * the parent stream, and vice versa.
  */
-class SeekableReadStreamEndianWrapper final : virtual public SeekableReadStreamEndian {
+class SeekableReadStreamEndianWrapper : virtual public SeekableReadStreamEndian {
 protected:
 	DisposablePtr<SeekableReadStream> _parentStream;
 

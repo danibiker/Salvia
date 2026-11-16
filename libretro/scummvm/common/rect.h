@@ -48,12 +48,12 @@ struct PointBase {
 	T x;	/*!< The horizontal position of the point. */
 	T y;	/*!< The vertical position of the point. */
 
-	constexpr PointBase() : x(0), y(0) {}
+	PointBase() : x(0), y(0) {}
 
 	/**
 	 * Create a point with position defined by @p x1 and @p y1.
 	 */
-	constexpr PointBase(T x1, T y1) : x(x1), y(y1) {}
+	PointBase(T x1, T y1) : x(x1), y(y1) {}
 	/**
 	 * Determine whether the position of two points is the same.
 	 */
@@ -135,8 +135,8 @@ struct PointBase {
 #define BEGIN_POINT_TYPE(T, Point) \
 	struct Point : public Common::PointBase<T, Point> {
 #define END_POINT_TYPE(T, Point) \
-		constexpr Point() : PointBase() {} \
-		constexpr Point(T x1, T y1) : PointBase(x1, y1) {} \
+		Point() : PointBase() {} \
+		Point(T x1, T y1) : PointBase(x1, y1) {} \
 	}; \
 	static inline Point operator*(int multiplier, const Point &p) { return Point(p.x * multiplier, p.y * multiplier); } \
 	static inline Point operator*(double multiplier, const Point &p) { return Point((T)(p.x * multiplier), (T)(p.y * multiplier)); }
@@ -144,7 +144,7 @@ struct PointBase {
 BEGIN_POINT_TYPE(int16, Point)
 END_POINT_TYPE(int16, Point)
 BEGIN_POINT_TYPE(int32, Point32)
-		constexpr Point32(const Point &o) : PointBase(o.x, o.y) {}
+		Point32(const Point &o) : PointBase(o.x, o.y) {}
 END_POINT_TYPE(int32, Point32)
 
 /**
@@ -170,11 +170,11 @@ struct RectBase {
 	T top, left;		/*!< The point at the top left of the rectangle (part of the Rect). */
 	T bottom, right;	/*!< The point at the bottom right of the rectangle (not part of the Rect). */
 
-	constexpr RectBase() : top(0), left(0), bottom(0), right(0) {}
+	RectBase() : top(0), left(0), bottom(0), right(0) {}
 	/**
 	 * Create a rectangle with the top-left corner at position (0, 0) and the given width @p w and height @p h.
 	 */
-	constexpr RectBase(T w, T h) : top(0), left(0), bottom(h), right(w) {}
+	RectBase(T w, T h) : top(0), left(0), bottom(h), right(w) {}
 	/**
 	 * Create a rectangle with the top-left corner at the position @p topLeft
 	 * and the bottom-right corner at the position @p bottomRight.
@@ -189,7 +189,7 @@ struct RectBase {
 	 * Create a rectangle with the top-left corner at the position @p topLeft
 	 * and the given width @p w and height @p h.
 	 */
-	constexpr RectBase(const ConcretePoint &topLeft, T w, T h) : top(topLeft.y), left(topLeft.x), bottom(topLeft.y + h), right(topLeft.x + w) {
+	RectBase(const ConcretePoint &topLeft, T w, T h) : top(topLeft.y), left(topLeft.x), bottom(topLeft.y + h), right(topLeft.x + w) {
 	}
 	/**
 	 * Create a rectangle with the top-left corner at the given position (x1, y1)
@@ -526,10 +526,10 @@ struct RectBase {
 	struct Rect : public Common::RectBase<T, Rect, Point> {
 
 #define END_RECT_TYPE(T, Rect, Point) \
-		constexpr Rect() : RectBase() {} \
-		constexpr Rect(T w, T h) : RectBase(w, h) {} \
+		Rect() : RectBase() {} \
+		Rect(T w, T h) : RectBase(w, h) {} \
 		Rect(const Point &topLeft, const Point &bottomRight) : RectBase(topLeft, bottomRight) {} \
-		constexpr Rect(const Point &topLeft, T w, T h) : RectBase(topLeft, w, h) {} \
+		Rect(const Point &topLeft, T w, T h) : RectBase(topLeft, w, h) {} \
 		Rect(T x1, T y1, T x2, T y2) : RectBase(x1, y1, x2, y2) {} \
 	};
 

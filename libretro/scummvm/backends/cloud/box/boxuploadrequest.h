@@ -51,7 +51,7 @@ class BoxUploadRequest: public Networking::Request {
 
 public:
 	BoxUploadRequest(BoxStorage *storage, const Common::String &path, const Common::Path &localPath, Storage::UploadCallback callback, Networking::ErrorCallback ecb);
-	~BoxUploadRequest() override;
+	~BoxUploadRequest();
 
 	void handle() override;
 	void restart() override;

@@ -58,9 +58,10 @@ VirtualKeyboard::~VirtualKeyboard() {
 }
 
 void VirtualKeyboard::deleteEvents() {
-	for (auto &mode : _modes) {
-		for (auto &event : mode._value.events)
-			delete event._value;
+	for (auto rfIt61 = _modes.begin(), rfEnd61 = _modes.end(); rfIt61 != rfEnd61; ++rfIt61) {
+		auto &mode = *rfIt61;
+		for (auto rfIt62 = mode._value.events.begin(), rfEnd62 = mode._value.events.end(); rfIt62 != rfEnd62; ++rfIt62)
+			{ auto &event = *rfIt62; delete event._value; }
 	}
 }
 

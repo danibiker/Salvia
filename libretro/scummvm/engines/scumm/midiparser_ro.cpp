@@ -32,9 +32,13 @@ namespace Scumm {
 //////////////////////////////////////////////////
 
 class MidiParser_RO : public MidiParser {
+public:
+	MidiParser_RO() : _markerCount(0), _lastMarkerCount(0) {}
+private:
+
 protected:
-	int _markerCount = 0;     // Number of markers encountered in stream so far
-	int _lastMarkerCount = 0; // Cache markers until parsed event is actually consumed
+	int _markerCount;     // Number of markers encountered in stream so far
+	int _lastMarkerCount; // Cache markers until parsed event is actually consumed
 
 	void parseNextEvent (EventInfo &info) override;
 

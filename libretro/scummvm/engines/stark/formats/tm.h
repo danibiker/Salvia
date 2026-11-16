@@ -73,7 +73,7 @@ public:
 	static const uint32 TYPE = kTextureSetTexture;
 
 	Texture();
-	~Texture() override;
+	~Texture();
 
 	Common::String getName() const {
 		return _name;

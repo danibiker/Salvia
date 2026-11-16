@@ -79,7 +79,8 @@ Set::~Set() {
 		}
 		delete[] _shadows;
 	}
-	for (Light *l : _overworldLightsList) {
+	for (auto rfIt82 = _overworldLightsList.begin(), rfEnd82 = _overworldLightsList.end(); rfIt82 != rfEnd82; ++rfIt82) {
+		Light *l = *rfIt82;
 		delete l;
 	}
 }
@@ -818,7 +819,8 @@ void Set::setupLights(const Math::Vector3d &pos, bool inOverworld) {
 	Common::sort(lightsList->begin(), lightsList->end(), sorter);
 
 	int count = 0;
-	for (Light *l : *lightsList) {
+	for (auto rfIt821 = (*lightsList).begin(), rfEnd821 = (*lightsList).end(); rfIt821 != rfEnd821; ++rfIt821) {
+		Light *l = *rfIt821;
 		if (l->_enabled) {
 			g_driver->setupLight(l, count);
 			++count;

@@ -39,7 +39,7 @@ struct ChannelNode;
 class IMuseChannel_Midi : public MidiChannel {
 public:
 	IMuseChannel_Midi(IMuseDriver_GMidi *drv, int number);
-	virtual ~IMuseChannel_Midi() override {}
+	virtual ~IMuseChannel_Midi() {}
 
 	MidiDriver *device() override { return _drv; }
 	byte getNumber() override {	return _number; }
@@ -708,7 +708,7 @@ namespace IMSMidi {
 class IMuseChannel_MT32 : public IMuseChannel_Midi {
 public:
 	IMuseChannel_MT32(IMuseDriver_MT32 *drv, int number);
-	~IMuseChannel_MT32() override {}
+	~IMuseChannel_MT32() {}
 
 	bool allocate() override;
 	void reset();

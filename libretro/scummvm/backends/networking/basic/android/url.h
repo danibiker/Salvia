@@ -33,7 +33,7 @@ public:
 
 	AndroidURL(JNIEnv *env, jobject url);
 
-	~AndroidURL() override;
+	~AndroidURL();
 
 	Common::String getScheme() const override;
 	Common::String getHost() const override;

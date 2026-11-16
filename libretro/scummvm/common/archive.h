@@ -47,12 +47,17 @@ class ArchiveMember;
 class FSNode;
 class SeekableReadStream;
 
-enum class AltStreamType {
+// Note: originally a C++11 scoped enum. Wrapped in a namespace so the enumerators
+// don't clash with other names in Common (MSVC 2010 has no "enum class").
+namespace AltStreamTypeScope {
+enum AltStreamType {
 	Invalid,
 
 	MacFinderInfo,
-	MacResourceFork,
+	MacResourceFork
 };
+} // End of namespace AltStreamTypeScope
+using AltStreamTypeScope::AltStreamType;
 
 typedef SharedPtr<ArchiveMember> ArchiveMemberPtr; /*!< Shared pointer to an archive member. */
 typedef List<ArchiveMemberPtr> ArchiveMemberList;  /*!< List of archive members. */

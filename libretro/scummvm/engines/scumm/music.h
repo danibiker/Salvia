@@ -39,7 +39,7 @@ namespace Scumm {
  */
 class MusicEngine : public Common::Serializable {
 public:
-	~MusicEngine() override {}
+	~MusicEngine() {}
 
 	/**
 	 * Set the output volume for music.

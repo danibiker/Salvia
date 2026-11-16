@@ -400,7 +400,8 @@ bool ProDOSDisk::hasFile(const Common::Path &path) const {
 
 int ProDOSDisk::listMembers(Common::ArchiveMemberList &list) const {
 	int f = 0;
-	for (const auto &file : _files) {
+	for (auto rfIt403 = _files.begin(), rfEnd403 = _files.end(); rfIt403 != rfEnd403; ++rfIt403) {
+		const auto &file = *rfIt403;
 		list.push_back(Common::ArchiveMemberList::value_type(file._value));
 		++f;
 	}

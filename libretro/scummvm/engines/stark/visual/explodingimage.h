@@ -53,7 +53,7 @@ public:
 	static const VisualType TYPE = Visual::kExplodingImage;
 
 	explicit VisualExplodingImage(Gfx::Driver *gfx);
-	~VisualExplodingImage() override;
+	~VisualExplodingImage();
 
 	/** Prepare exploding the specified image */
 	void initFromSurface(const Graphics::Surface *surface, uint originalWidth, uint originalHeight);

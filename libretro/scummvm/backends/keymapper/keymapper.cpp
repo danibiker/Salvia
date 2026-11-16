@@ -49,7 +49,8 @@ Keymapper::~Keymapper() {
 }
 
 void Keymapper::clear() {
-	for (auto *keymap : _keymaps) {
+	for (auto rfIt52 = _keymaps.begin(), rfEnd52 = _keymaps.end(); rfIt52 != rfEnd52; ++rfIt52) {
+		auto *keymap = *rfIt52;
 		delete keymap;
 	}
 	_keymaps.clear();
@@ -147,7 +148,8 @@ void Keymapper::setGameKeymapState(const String &id, bool enable) {
 }
 
 void Keymapper::disableAllGameKeymaps() {
-	for (auto &keymap : _keymaps) {
+	for (auto rfIt150 = _keymaps.begin(), rfEnd150 = _keymaps.end(); rfIt150 != rfEnd150; ++rfIt150) {
+		auto &keymap = *rfIt150;
 		if (keymap->getType() == Keymap::kKeymapTypeGame) {
 			keymap->setEnabled(false);
 		}
@@ -155,7 +157,8 @@ void Keymapper::disableAllGameKeymaps() {
 }
 
 Keymap *Keymapper::getKeymap(const String &id) const {
-	for (const auto &keymap : _keymaps) {
+	for (auto rfIt158 = _keymaps.begin(), rfEnd158 = _keymaps.end(); rfIt158 != rfEnd158; ++rfIt158) {
+		const auto &keymap = *rfIt158;
 		if (keymap->getId() == id) {
 			return keymap;
 		}
@@ -196,7 +199,8 @@ bool Keymapper::mapEvent(const Event &ev, List<Event> &mappedEvents) {
 	}
 
 	bool matchedAction = !actions.empty();
-	for (const auto &action : actions) {
+	for (auto rfIt199 = actions.begin(), rfEnd199 = actions.end(); rfIt199 != rfEnd199; ++rfIt199) {
+		const auto &action = *rfIt199;
 		Event mappedEvent = executeAction(action, ev);
 		if (mappedEvent.type == EVENT_INVALID) {
 			continue;

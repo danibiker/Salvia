@@ -31,12 +31,15 @@
 
 // The initialization of the static const integral data members is done in the class definition,
 // but we still need to provide a definition if they are odr-used (e.g. GCC 4.7 wants this).
+// MSVC 2010 emits in-class initialized static const members itself (LNK2005 otherwise)
+#if !defined(_MSC_VER) || _MSC_VER >= 1900
 const uint8 MidiDriver_MT32GM::MT32_DEFAULT_CHANNEL_VOLUME;
 const uint8 MidiDriver_MT32GM::GM_DEFAULT_CHANNEL_VOLUME;
 const uint8 MidiDriver_MT32GM::MAXIMUM_MT32_ACTIVE_NOTES;
 const uint8 MidiDriver_MT32GM::MAXIMUM_GM_ACTIVE_NOTES;
 const uint8 MidiDriver_BASE::MT32_PITCH_BEND_SENSITIVITY_DEFAULT;
 const uint8 MidiDriver_BASE::GM_PITCH_BEND_SENSITIVITY_DEFAULT;
+#endif
 
 // These are the power-on default instruments of the Roland MT-32 family.
 const byte MidiDriver_MT32GM::MT32_DEFAULT_INSTRUMENTS[8] = {
@@ -83,8 +86,11 @@ const uint8 MidiDriver_MT32GM::GS_DRUMKIT_FALLBACK_MAP[128] = {
 	 0,  0,  0,  0,  0,  0,  0, 127 // No drumkit defined; CM-64/32L (127)
 };
 
+// MSVC 2010 emits in-class initialized static const members itself (LNK2005 otherwise)
+#if !defined(_MSC_VER) || _MSC_VER >= 1900
 const uint8 MidiDriver_MT32GM::MT32_DISPLAY_NUM_CHARS;
 const uint32 MidiDriver_MT32GM::MT32_DISPLAY_MEMORY_ADDRESS;
+#endif
 
 // Callback hooked up to the driver wrapped by the MIDI driver
 // object. Executes onTimer and the external callback set by
@@ -400,7 +406,8 @@ bool MidiDriver_MT32GM::isReady(int8 source) {
 
 	// For a specific source, check if there is a SysEx for that source in the
 	// queue.
-	for (auto &sysEx : _sysExQueue) {
+	for (auto rfIt403 = _sysExQueue.begin(), rfEnd403 = _sysExQueue.end(); rfIt403 != rfEnd403; ++rfIt403) {
+		auto &sysEx = *rfIt403;
 		if (sysEx.source == source)
 			return false;
 	}

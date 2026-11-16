@@ -38,7 +38,7 @@ public:
 		const Common::Path &subfolder, const Common::Path &publicFolder) :
 			_member(member), _publicFolder(publicFolder), _innerfolder(subfolder) {
 	}
-	~DataArchiveMember() override {
+	~DataArchiveMember() {
 	}
 	Common::SeekableReadStream *createReadStream() const override {
 		return _member->createReadStream();
@@ -75,7 +75,7 @@ public:
 	DataArchive(Common::Archive *zip, const Common::Path &subfolder, bool useDataPrefix) :
 		_zip(zip), _publicFolder(useDataPrefix ? "data/" : ""), _innerfolder(subfolder) {
 	}
-	~DataArchive() override {
+	~DataArchive() {
 		delete _zip;
 	}
 
@@ -131,7 +131,7 @@ private:
 public:
 	DataArchiveProxy(const Common::FSNode &folder, bool useDataPrefix) :
 		_folder(folder), _publicFolder(useDataPrefix ? "data/" : "") {}
-	~DataArchiveProxy() override {}
+	~DataArchiveProxy() {}
 
 	/**
 	 * Check if a member with the given name is present in the Archive.
@@ -182,7 +182,8 @@ int DataArchive::listMembers(Common::ArchiveMemberList &list) const {
 	int result = _zip->listMembers(innerList);
 
 	// Modify the results to change the filename
-	for (auto &archive : innerList) {
+	for (auto rfIt185 = innerList.begin(), rfEnd185 = innerList.end(); rfIt185 != rfEnd185; ++rfIt185) {
+		auto &archive = *rfIt185;
 		Common::ArchiveMemberPtr member = Common::ArchiveMemberPtr(
 			new DataArchiveMember(archive, _innerfolder, _publicFolder));
 		list.push_back(member);

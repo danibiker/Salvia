@@ -43,17 +43,17 @@ public:
 		_isSmart = smart;
 	}
 private:
-	int kBlinkDelay = 15; // Blink delay for closing animation
-	int kNumBlinks = 3; // Number of blinks
+	int kBlinkDelay; // Blink delay for closing animation
+	int kNumBlinks; // Number of blinks
 
 	int _mouseX;
 	int _mouseY;
 	int _menuItemId;
 	int _menuId;
 
-	bool _isSmart = false;
-	int _offsetY = 0;
-	int _prevCheckedItem = -1;
+	bool _isSmart;
+	int _offsetY;
+	int _prevCheckedItem;
 
 	bool mouseClicked(int x, int y);
 };

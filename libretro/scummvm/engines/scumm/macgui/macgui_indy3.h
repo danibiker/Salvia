@@ -90,16 +90,16 @@ protected:
 	bool runIqPointsDialog();
 
 private:
-	int _verbGuiTop = 0;
+	int _verbGuiTop;
 	Graphics::Surface _verbGuiSurface;
 
-	bool _visible = false;
+	bool _visible;
 
-	bool _leftButtonIsPressed = false;
+	bool _leftButtonIsPressed;
 	Common::Point _leftButtonPressed;
 	Common::Point _leftButtonHeld;
 
-	int _timer = 0;
+	int _timer;
 
 	bool updateVerbs(int delta);
 	void updateMouseHeldTimer(int delta);
@@ -112,7 +112,7 @@ private:
 
 	class Widget : public MacGuiObject {
 	private:
-		int _timer = 0;
+		int _timer;
 
 	public:
 		static ScummEngine *_vm;
@@ -159,12 +159,12 @@ private:
 
 	class VerbWidget : public Widget {
 	protected:
-		int _verbid = 0;
-		int _verbslot = -1;
-		bool _kill = false;
+		int _verbid;
+		int _verbslot;
+		bool _kill;
 
 	public:
-		VerbWidget(int x, int y, int width, int height) : Widget(x, y, width, height) {}
+		VerbWidget(int x, int y, int width, int height) : Widget(x, y, width, height), _verbid(0), _verbslot(-1), _kill(false) {}
 
 		void setVerbid(int n) { _verbid = n; }
 		bool hasVerb() const { return _verbslot != -1; }
@@ -199,8 +199,8 @@ private:
 	private:
 		class ScrollBar : public Widget {
 		private:
-			int _invCount = 0;
-			int _invOffset = 0;
+			int _invCount;
+			int _invOffset;
 
 		public:
 			ScrollBar(int x, int y, int width, int height);
@@ -232,8 +232,8 @@ private:
 		class Slot : public Widget {
 		private:
 			Common::String _name;
-			int _slot = -1;
-			int _obj = -1;
+			int _slot;
+			int _obj;
 
 		public:
 			Slot(int slot, int x, int y, int width, int height);

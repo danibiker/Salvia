@@ -39,7 +39,7 @@ class BoxTokenRefresher: public Networking::HttpJsonRequest {
 	void finishError(const Networking::ErrorResponse &error, Networking::RequestState state = Networking::FINISHED) override;
 public:
 	BoxTokenRefresher(BoxStorage *parent, Networking::JsonCallback callback, Networking::ErrorCallback ecb, const char *url);
-	~BoxTokenRefresher() override;
+	~BoxTokenRefresher();
 };
 
 } // End of namespace Box

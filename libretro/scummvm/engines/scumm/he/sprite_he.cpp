@@ -43,7 +43,7 @@ Sprite::Sprite(ScummEngine_v90he *vm)
 	_maxSprites(0),
 	_maxImageLists(0),
 	_imageLists(nullptr),
-	_imageListStack(nullptr) {
+	_imageListStack(nullptr), _imageListStackIndex(0) {
 }
 
 Sprite::~Sprite() {

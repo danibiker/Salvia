@@ -33,7 +33,7 @@ class ThemeParser : public Common::XMLParser {
 public:
 	ThemeParser(ThemeEngine *parent);
 
-	~ThemeParser() override;
+	~ThemeParser();
 
 	void setBaseResolution(int w, int h, float s) {
 		_baseWidth = w;

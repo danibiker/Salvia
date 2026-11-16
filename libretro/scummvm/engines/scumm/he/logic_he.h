@@ -90,20 +90,20 @@ LogicHE *makeLogicHEmoonbase(ScummEngine_v100he *vm);
 // they are defined in multiple files...
 class LogicHEBasketball : public LogicHE {
 public:
-	LogicHEBasketball(ScummEngine_v100he *vm) : LogicHE(vm) { _vm1 = vm; }
+	LogicHEBasketball(ScummEngine_v100he *vm) : LogicHE(vm), _courtAngle(0.0F), _yTranslationA(0.0F), _yTranslationB(0.0F), _yTranslationC(0.0F), _yRevTranslationA(0.0F), _yRevTranslationB(0.0F), _yRevTranslationC(0.0F), _topScalingPointCutoff(0), _bottomScalingPointCutoff(0) { _vm1 = vm; }
 
 	int versionID() override;
 	int32 dispatch(int op, int numArgs, int32 *args) override;
 
-	float _courtAngle = 0.0F;
-	float _yTranslationA = 0.0F;
-	float _yTranslationB = 0.0F;
-	float _yTranslationC = 0.0F;
-	float _yRevTranslationA = 0.0F;
-	float _yRevTranslationB = 0.0F;
-	float _yRevTranslationC = 0.0F;
-	int _topScalingPointCutoff = 0;
-	int _bottomScalingPointCutoff = 0;
+	float _courtAngle;
+	float _yTranslationA;
+	float _yTranslationB;
+	float _yTranslationC;
+	float _yRevTranslationA;
+	float _yRevTranslationB;
+	float _yRevTranslationC;
+	int _topScalingPointCutoff;
+	int _bottomScalingPointCutoff;
 
 protected:
 	int u32_userInitCourt(int courtID);

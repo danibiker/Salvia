@@ -1791,7 +1791,8 @@ int MacText::getMouseItem(int x, int y) {
 			if (_canvas._text[i].chunks[j].text.empty())
 				continue;
 			Common::String data = _canvas._text[i].chunks[j].getEncodedText();
-			for (auto it : data) {
+			for (auto rfIt1794 = data.begin(), rfEnd1794 = data.end(); rfIt1794 != rfEnd1794; ++rfIt1794) {
+				auto it = *rfIt1794;
 				if (onComma) {
 					index += 1;
 					onComma = false;
@@ -1808,7 +1809,8 @@ int MacText::getMouseItem(int x, int y) {
 		if (_canvas._text[row].chunks[i].text.empty())
 			continue;
 		Common::String data = _canvas._text[row].chunks[i].getEncodedText();
-		for (auto it : data) {
+		for (auto rfIt1811 = data.begin(), rfEnd1811 = data.end(); rfIt1811 != rfEnd1811; ++rfIt1811) {
+			auto it = *rfIt1811;
 			if (onComma) {
 				index += 1;
 				onComma = false;
@@ -1949,7 +1951,8 @@ void MacText::getLineCharacter(int x, int y, int *sx, int *sy, int *line, int *c
 			nline += 1;
 			ncharacter = 0;
 		} else {
-			for (auto &it : _canvas._text[i].chunks) {
+			for (auto rfIt1952 = _canvas._text[i].chunks.begin(), rfEnd1952 = _canvas._text[i].chunks.end(); rfIt1952 != rfEnd1952; ++rfIt1952) {
+				auto &it = *rfIt1952;
 				ncharacter += it.text.size();
 			}
 		}

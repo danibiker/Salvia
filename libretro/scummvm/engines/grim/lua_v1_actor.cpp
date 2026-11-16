@@ -1418,7 +1418,8 @@ void Lua_V1::GetVisibleThings() {
 
 	// TODO verify code below
 	if (actor->isInSet(g_grim->getCurrSet()->getName())) {
-		for (Actor *a : g_grim->getActiveActors()) {
+		{ auto &rfRange1421 = g_grim->getActiveActors(); for (auto rfIt1421 = rfRange1421.begin(), rfEnd1421 = rfRange1421.end(); rfIt1421 != rfEnd1421; ++rfIt1421) {
+			Actor *a = *rfIt1421;
 			// Consider the active actor visible
 			if (actor == a || actor->getYawTo(a) < 90) {
 				lua_pushobject(result);
@@ -1426,7 +1427,7 @@ void Lua_V1::GetVisibleThings() {
 				lua_pushnumber(1);
 				lua_settable();
 			}
-		}
+		} }
 	}
 	lua_pushobject(result);
 }

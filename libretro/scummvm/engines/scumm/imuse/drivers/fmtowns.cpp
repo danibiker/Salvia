@@ -119,7 +119,7 @@ class TownsMidiInputChannel : public MidiChannel {
 friend class TownsMidiOutputChannel;
 public:
 	TownsMidiInputChannel(IMuseDriver_FMTowns *driver, int16 number);
-	~TownsMidiInputChannel() override;
+	~TownsMidiInputChannel();
 
 	MidiDriver *device() override { return _driver; }
 	byte getNumber() override { return _number; }

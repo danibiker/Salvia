@@ -44,7 +44,7 @@ namespace Scumm {
 // The Mac Loom GUI. This one is pretty simple.
 // ===========================================================================
 
-MacLoomGui::MacLoomGui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile) {
+MacLoomGui::MacLoomGui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile), _practiceBox(nullptr), _practiceBoxNotes(0) {
 	// The practice box can be moved, but this is its default position on
 	// a large screen, and it's not saved.
 

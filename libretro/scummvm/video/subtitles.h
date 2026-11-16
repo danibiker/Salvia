@@ -109,11 +109,11 @@ protected:
 	virtual bool shouldShowSubtitle() const { return true; }
 
 	bool _loaded;
-	mutable const Common::Array<SubtitlePart> *_parts = nullptr;
-	mutable uint16 _splitPartCount = 0;
+	mutable const Common::Array<SubtitlePart> *_parts;
+	mutable uint16 _splitPartCount;
 
 private:
-	SRTParser *_srtParser = nullptr;
+	SRTParser *_srtParser;
 	bool _subtitleDev;
 	bool _overlayHasAlpha;
 

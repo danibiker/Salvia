@@ -159,7 +159,7 @@ Engine::Engine(OSystem *syst)
 		_lastAutosaveTime(_system->getMillis()),
 		_showHotspots(false),
 		_hotspotForceRedraw(false),
-		_hotspotPrevCursorVisible(false) {
+		_hotspotPrevCursorVisible(false), _activeEnhancements(kEnhGameBreakingBugFixes) {
 
 	g_engine = this;
 	_quitRequested = false;
@@ -477,8 +477,10 @@ void initGraphics(int width, int height, const Graphics::PixelFormat *format) {
  *					or PixelFormat::createFormatCLUT8() if no matching formats were found.
  */
 inline Graphics::PixelFormat findCompatibleFormat(const Common::List<Graphics::PixelFormat> &backend, const Common::List<Graphics::PixelFormat> &frontend) {
-	for (const auto &back : backend) {
-		for (auto &front : frontend) {
+	for (auto rfIt480 = backend.begin(), rfEnd480 = backend.end(); rfIt480 != rfEnd480; ++rfIt480) {
+		const auto &back = *rfIt480;
+		for (auto rfIt481 = frontend.begin(), rfEnd481 = frontend.end(); rfIt481 != rfEnd481; ++rfIt481) {
+			auto &front = *rfIt481;
 			if (back == front)
 				return back;
 		}
@@ -1273,7 +1275,8 @@ Common::ErrorCode Engine::updateAddOns(const MetaEngine *metaEngine) const {
 	const Common::FSNode gameDataDir(ConfMan.getPath("path"));
 	Common::FSList subdirNodes;
 	gameDataDir.getChildren(subdirNodes, Common::FSNode::kListDirectoriesOnly);
-	for (const Common::FSNode &subdirNode : subdirNodes) {
+	for (auto rfIt1276 = subdirNodes.begin(), rfEnd1276 = subdirNodes.end(); rfIt1276 != rfEnd1276; ++rfIt1276) {
+		const Common::FSNode &subdirNode = *rfIt1276;
 		Common::FSDirectory subdir(subdirNode);
 		if (dirCanBeGameAddOn(subdir)) {
 			Common::FSList files;
@@ -1284,7 +1287,8 @@ Common::ErrorCode Engine::updateAddOns(const MetaEngine *metaEngine) const {
 
 			DetectedGames detectedGames = detectionPlugin->get<MetaEngineDetection>().detectGames(files);
 			DetectedGames detectedAddOns;
-			for (DetectedGame &game : detectedGames) {
+			for (auto rfIt1287 = detectedGames.begin(), rfEnd1287 = detectedGames.end(); rfIt1287 != rfEnd1287; ++rfIt1287) {
+				DetectedGame &game = *rfIt1287;
 				if (game.isAddOn) {
 					detectedAddOns.push_back(game);
 				}

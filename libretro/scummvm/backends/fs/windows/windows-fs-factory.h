@@ -29,7 +29,7 @@
  *
  * Parts of this class are documented in the base interface class, FilesystemFactory.
  */
-class WindowsFilesystemFactory final : public FilesystemFactory {
+class WindowsFilesystemFactory : public FilesystemFactory {
 public:
 	AbstractFSNode *makeRootFileNode() const override;
 	AbstractFSNode *makeCurrentDirectoryFileNode() const override;

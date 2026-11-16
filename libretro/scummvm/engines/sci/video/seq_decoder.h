@@ -42,7 +42,7 @@ namespace Sci {
 class SEQDecoder : public Video::VideoDecoder {
 public:
 	SEQDecoder(uint frameDelay);
-	~SEQDecoder() override;
+	~SEQDecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream) override;
 
@@ -50,7 +50,7 @@ private:
 	class SEQVideoTrack : public FixedRateVideoTrack {
 	public:
 		SEQVideoTrack(Common::SeekableReadStream *stream, uint frameDelay);
-		~SEQVideoTrack() override;
+		~SEQVideoTrack();
 
 		uint16 getWidth() const override { return SEQ_SCREEN_WIDTH; }
 		uint16 getHeight() const override { return SEQ_SCREEN_HEIGHT; }

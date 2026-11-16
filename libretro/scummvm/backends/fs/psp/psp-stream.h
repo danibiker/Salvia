@@ -66,7 +66,7 @@ public:
 	static PspIoStream *makeFromPath(const Common::String &path, bool writeMode);
 
 	PspIoStream(const Common::String &path, bool writeMode);
-	~PspIoStream() override;
+	~PspIoStream();
 
 	SceUID open();		// open the file pointed to by the file path
 

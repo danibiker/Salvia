@@ -41,7 +41,16 @@ EditTextWidget::EditTextWidget(GuiObject *boss, int x, int y, int w, int h, bool
 }
 
 EditTextWidget::EditTextWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &text, const Common::U32String &tooltip, uint32 cmd, uint32 finishCmd, ThemeEngine::FontStyle font)
-	: EditTextWidget(boss, x, y, w, h, false, text, tooltip, cmd, finishCmd, font) {
+	: EditableWidget(boss, x, y - 1, w, h + 2, false, tooltip, cmd) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(WIDGET_ENABLED | WIDGET_CLEARBG | WIDGET_WANT_TICKLE);
+	_type = kEditTextWidget;
+	_finishCmd = finishCmd;
+
+	_leftPadding = _rightPadding = 0;
+
+	setEditString(text);
+	setFontStyle(font);
 }
 
 EditTextWidget::EditTextWidget(GuiObject *boss, const Common::String &name, const Common::U32String &text, const Common::U32String &tooltip, uint32 cmd, uint32 finishCmd, ThemeEngine::FontStyle font)
@@ -94,7 +103,10 @@ void EditTextWidget::drawWidget() {
 		Common::U32String left = Common::U32String(utxt.visual.c_str(), utxt.visual.c_str() + selBegin);
 		Common::U32String selected = Common::U32String(utxt.visual.c_str() + selBegin, selEnd - selBegin);
 		Common::U32String right = Common::U32String(utxt.visual.c_str() + selEnd);
-		Common::U32StringArray parts {left, selected, right};
+		Common::U32StringArray parts;
+		parts.push_back(left);
+		parts.push_back(selected);
+		parts.push_back(right);
 		int scrollOffset = _editScrollOffset;
 		for (uint i = 0; i < parts.size(); i++) {
 			if (!parts[i].size())

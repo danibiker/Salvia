@@ -56,7 +56,7 @@ void debugC(int channel, const char *s, ...) {
 }
 
 ScummDebugger::ScummDebugger(ScummEngine *s)
-	: GUI::Debugger() {
+	: GUI::Debugger(), _nextColorIndex(0) {
 	_vm = s;
 
 	// Initialize the debug colors

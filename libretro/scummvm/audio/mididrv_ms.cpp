@@ -23,9 +23,12 @@
 
 #include "audio/mididrv_ms.h"
 
+// MSVC 2010 emits in-class initialized static const members itself (LNK2005 otherwise)
+#if !defined(_MSC_VER) || _MSC_VER >= 1900
 const uint8 MidiDriver_Multisource::MAXIMUM_SOURCES;
 const uint16 MidiDriver_Multisource::DEFAULT_SOURCE_NEUTRAL_VOLUME;
 const uint16 MidiDriver_Multisource::FADING_DELAY;
+#endif
 
 MidiDriver_Multisource::MidiSource::MidiSource() :
 	type(SOURCE_TYPE_UNDEFINED),

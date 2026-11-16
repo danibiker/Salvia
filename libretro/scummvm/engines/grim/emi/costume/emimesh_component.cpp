@@ -39,7 +39,8 @@ EMIMeshComponent::~EMIMeshComponent() {
 		delete _obj;
 	}
 
-	for (EMIMeshComponent *child : _children) {
+	for (auto rfIt42 = _children.begin(), rfEnd42 = _children.end(); rfIt42 != rfEnd42; ++rfIt42) {
+		EMIMeshComponent *child = *rfIt42;
 		child->_obj = nullptr;
 		//child->_hier = NULL;
 		child->_parentModel = nullptr;

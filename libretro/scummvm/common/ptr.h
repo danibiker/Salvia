@@ -713,7 +713,12 @@ public:
 	/* Destroys the smart pointer while returning a pointer to
 	   assign to a new object.
  	 */
-	template <class T2, class DL2 = DefaultDeleter<T2> >
+	template <class T2>
+	DisposablePtr<T2, DefaultDeleter<T2> > moveAndDynamicCast() {
+		return moveAndDynamicCast<T2, DefaultDeleter<T2> >();
+	}
+
+	template <class T2, class DL2>
 	DisposablePtr<T2, DL2> moveAndDynamicCast() {
 		DisposablePtr<T2, DL2> ret(nullptr, DisposeAfterUse::NO);
 		ret._pointer = dynamic_cast<T2 *>(_pointer);

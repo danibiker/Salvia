@@ -94,7 +94,7 @@ public:
 	static const uint32 DEFAULT_SERVER_PORT = 12345;
 
 	LocalWebserver();
-	~LocalWebserver() override;
+	~LocalWebserver();
 
 	void start(bool useMinimalMode = false);
 	void stop();

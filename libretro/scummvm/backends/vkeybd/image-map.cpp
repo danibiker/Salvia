@@ -52,14 +52,16 @@ void ImageMap::removeArea(const String &id) {
 }
 
 void ImageMap::removeAllAreas() {
-	for (auto &area : _areas) {
+	for (auto rfIt55 = _areas.begin(), rfEnd55 = _areas.end(); rfIt55 != rfEnd55; ++rfIt55) {
+		auto &area = *rfIt55;
 		delete area._value;
 	}
 	_areas.clear();
 }
 
 String ImageMap::findMapArea(int16 x, int16 y) {
-	for (auto &area : _areas) {
+	for (auto rfIt62 = _areas.begin(), rfEnd62 = _areas.end(); rfIt62 != rfEnd62; ++rfIt62) {
+		auto &area = *rfIt62;
 		if (area._value->contains(x, y))
 			return area._key;
 	}

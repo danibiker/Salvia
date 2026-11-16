@@ -58,11 +58,11 @@ static String nexttok(const char *s, const char **newP = nullptr) {
 }
 
 
-CueSheet::CueSheet(const char *sheet) {
+CueSheet::CueSheet(const char *sheet) : _lineNum(0), _currentFile(-1), _currentTrack(-1) {
 	parse(sheet);
 }
 
-CueSheet::CueSheet(SeekableReadStream *stream) {
+CueSheet::CueSheet(SeekableReadStream *stream) : _lineNum(0), _currentFile(-1), _currentTrack(-1) {
 	int size = stream->size();
 	char *data = (char *)calloc(size + 1, 1); // null-terminated string
 

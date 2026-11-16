@@ -34,7 +34,7 @@
 namespace Graphics {
 
 template<typename T>
-class SurfacePrimitives final : public Primitives {
+class SurfacePrimitives : public Primitives {
 public:
         void drawPoint(int x, int y, uint32 color, void *data) override {
 		Surface *s = (Surface *)data;

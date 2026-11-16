@@ -102,7 +102,7 @@ BaseNearestTexelBuffer::~BaseNearestTexelBuffer() {
 }
 
 template<uint Format, uint Type>
-class NearestTexelBuffer final : public BaseNearestTexelBuffer {
+class NearestTexelBuffer : public BaseNearestTexelBuffer {
 public:
 	NearestTexelBuffer(const byte *buf, const Graphics::PixelFormat &format, uint width, uint height, uint textureSize, int internalformat)
 	  : BaseNearestTexelBuffer(buf, format, width, height, textureSize, internalformat) {}
@@ -122,7 +122,7 @@ protected:
 };
 
 template<>
-class NearestTexelBuffer<TGL_RGB, TGL_UNSIGNED_BYTE> final : public BaseNearestTexelBuffer {
+class NearestTexelBuffer<TGL_RGB, TGL_UNSIGNED_BYTE> : public BaseNearestTexelBuffer {
 public:
 	NearestTexelBuffer(const byte *buf, const Graphics::PixelFormat &format, uint width, uint height, uint textureSize, int internalformat)
 	  : BaseNearestTexelBuffer(buf, format, width, height, textureSize, internalformat) {}

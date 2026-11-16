@@ -42,7 +42,7 @@ namespace Scumm {
 // The Mac SCUMM v5 GUI.
 // ===========================================================================
 
-MacV5Gui::MacV5Gui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile) {
+MacV5Gui::MacV5Gui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile), _roughProgress(0), _roughWarned(false) {
 }
 
 bool MacV5Gui::initialize() {

@@ -39,10 +39,10 @@
 /**
  *  Dummy mutex implementation
  */
-class LibretroMutexInternal final : public Common::MutexInternal {
+class LibretroMutexInternal : public Common::MutexInternal {
 public:
 	LibretroMutexInternal() {};
-	~LibretroMutexInternal() override {};
+	~LibretroMutexInternal() {};
 	bool lock() override {
 		return 0;
 	}
@@ -79,7 +79,7 @@ public:
 
 	/* Base */
 	OSystem_libretro(void);
-	~OSystem_libretro(void) override;
+	~OSystem_libretro(void);
 	void initBackend(void) override;
 	void engineInit(void) override;
 	void refreshRetroSettings(void);
@@ -114,6 +114,9 @@ public:
 	Audio::Mixer *getMixer(void) override;
 	Common::Path getDefaultConfigFileName(void) override;
 	void logMessage(LogMessageType::Type type, const char *message) override;
+	void fatalError() override;
+	void messageBox(LogMessageType::Type type, const char *message) override;
+	void cleanupAfterFatalError(void);
 	bool hasFeature(Feature f) override;
 	bool openUrl(const Common::String &url) override;
 	int testGame(const char *filedata, bool autodetect);

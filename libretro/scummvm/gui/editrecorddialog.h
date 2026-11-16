@@ -37,7 +37,7 @@ private:
 	EditRecordDialog() : Dialog("EditRecordDialog") {};
 public:
 	EditRecordDialog(const Common::U32String &author, const Common::String &name, const Common::String &notes);
-	~EditRecordDialog() override;
+	~EditRecordDialog();
 
 	const Common::U32String getAuthor();
 	const Common::String getNotes();

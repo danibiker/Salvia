@@ -59,7 +59,7 @@ public:
 	/** This constructor extracts tokens from JSON acquired via OAuth code flow. */
 	BoxStorage(const Networking::JsonResponse &codeFlowJson, Networking::ErrorCallback cb);
 
-	~BoxStorage() override;
+	~BoxStorage();
 
 	/**
 	 * Storage methods, which are used by CloudManager to save

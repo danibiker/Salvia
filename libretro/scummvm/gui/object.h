@@ -72,7 +72,7 @@ protected:
 public:
 	GuiObject(int x, int y, int w, int h, bool scale = false);
 	GuiObject(const Common::String &name);
-	~GuiObject() override;
+	~GuiObject();
 
 	virtual void setTextDrawableArea(const Common::Rect &r) { _textDrawableArea = r; }
 

@@ -48,7 +48,7 @@ DialogBox::DialogBox(StarkEngine *vm, Gfx::Driver *gfx, Cursor *cursor) :
 		Window(gfx, cursor),
 		_background(nullptr),
 		_foreground(nullptr),
-		_confirmCallback(nullptr) {
+		_confirmCallback(nullptr), _textColor(Gfx::Color(0xFF, 0xFF, 0xFF)), _backgroundColor(Gfx::Color(26, 28, 57)) {
 	_vm = vm;
 	_surfaceRenderer = gfx->createSurfaceRenderer();
 

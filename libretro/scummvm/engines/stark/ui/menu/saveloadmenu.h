@@ -116,7 +116,7 @@ public:
 	LoadMenuScreen(Gfx::Driver *gfx, Cursor *cursor) :
 			SaveLoadMenuScreen(gfx, cursor, Screen::kScreenLoadMenu),
 			_slotToLoadAfterConfirm(-1) {}
-	~LoadMenuScreen() override {}
+	~LoadMenuScreen() {}
 
 	// SaveLoadMenuScreen API
 	void open() override;
@@ -156,8 +156,8 @@ public:
 	bool hasSave() { return _hasSave; }
 
 private:
-	const Gfx::Color _outlineColor = Gfx::Color(0x1E, 0x1E, 0x96);
-	const Gfx::Color _textColor = Gfx::Color(0x5C, 0x48, 0x3D);
+	const Gfx::Color _outlineColor;
+	const Gfx::Color _textColor;
 
 	int _slot;
 	SaveLoadMenuScreen *_screen;

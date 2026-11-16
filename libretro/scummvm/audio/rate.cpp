@@ -96,13 +96,13 @@ private:
 	template<st_volume_t volL, st_volume_t volR, typename st_sample_t, MixMode mixMode>
 	int commonConvert(AudioStream &input, st_sample_t *outBuffer, st_size_t numSamples, st_volume_t volL_val, st_volume_t volR_val, int outputSamples);
 
-	template<st_volume_t volL = static_cast<st_volume_t>(-1), st_volume_t volR = static_cast<st_volume_t>(-1), typename st_sample_t, MixMode mixMode>
+	template<st_volume_t volL, st_volume_t volR, typename st_sample_t, MixMode mixMode>
 	int copyConvert(AudioStream &input, st_sample_t *outBuffer, st_size_t numSamples, st_volume_t volL_val, st_volume_t volR_val);
-	template<st_volume_t volL = static_cast<st_volume_t>(-1), st_volume_t volR = static_cast<st_volume_t>(-1), typename st_sample_t, MixMode mixMode>
+	template<st_volume_t volL, st_volume_t volR, typename st_sample_t, MixMode mixMode>
 	int downsampleConvert(AudioStream &input, st_sample_t *outBuffer, st_size_t numSamples, st_volume_t volL_val, st_volume_t volR_val);
-	template<st_volume_t volL = static_cast<st_volume_t>(-1), st_volume_t volR = static_cast<st_volume_t>(-1), typename st_sample_t, MixMode mixMode>
+	template<st_volume_t volL, st_volume_t volR, typename st_sample_t, MixMode mixMode>
 	int upsampleConvert(AudioStream &input, st_sample_t *outBuffer, st_size_t numSamples, st_volume_t volL_val, st_volume_t volR_val);
-	template<st_volume_t volL = static_cast<st_volume_t>(-1), st_volume_t volR = static_cast<st_volume_t>(-1), typename st_sample_t, MixMode mixMode>
+	template<st_volume_t volL, st_volume_t volR, typename st_sample_t, MixMode mixMode>
 	int interpolateConvert(AudioStream &input, st_sample_t *outBuffer, st_size_t numSamples, st_volume_t volL_val, st_volume_t volR_val);
 
 	template<typename st_sample_t, MixMode mixMode>
@@ -112,8 +112,10 @@ private:
 	// PrintContext must be trivially destructible: it lives in a function-scope static and
 	// is torn down after the OSystem (and its memory pool that backs Common::String) is gone.
 	struct PrintContext {
-		st_rate_t previousInRate = 0;
-		char previousGameId[64] = { 0 };
+	PrintContext() : previousInRate(0), previousGameId() {}
+
+		st_rate_t previousInRate;
+		char previousGameId[64];
 	};
 	void printConvertType(const char *name, PrintContext &ctx) const {
 		const Common::String &activeDomain = ConfMan.getActiveDomainName();
@@ -505,7 +507,7 @@ template<typename st_sample_t, MixMode mixMode>
 int RateConverter_Impl<inStereo, outStereo, reverseStereo>::convertForType(AudioStream &input, byte *outBuffer, st_size_t numSamples, st_volume_t volL, st_volume_t volR) {
 	assert(input.isStereo() == inStereo);
 
-	constexpr auto kMax = Audio::Mixer::kMaxMixerVolume;
+	const auto kMax = Audio::Mixer::kMaxMixerVolume;
 
 	if (_inRate == _outRate) {
 		if (volL == 0 && volR == 0)

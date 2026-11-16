@@ -47,9 +47,9 @@ enum MixMode {
 // This assumes that 'a' and 'b' are 24-bit samples at most
 template <MixMode Mode, typename T>
 static inline void processSample(T& a, int b) {
-	constexpr unsigned long long highestBit = 1ULL << (sizeof(T) * 8 - 1);
-	constexpr int maxVal = (int)(highestBit - 1);
-	constexpr int minVal = ~maxVal;
+	const unsigned long long highestBit = 1ULL << (sizeof(T) * 8 - 1);
+	const int maxVal = (int)(highestBit - 1);
+	const int minVal = ~maxVal;
 
 #ifdef OUTPUT_UNSIGNED_AUDIO
 	constexpr int signMask = (int)highestBit;

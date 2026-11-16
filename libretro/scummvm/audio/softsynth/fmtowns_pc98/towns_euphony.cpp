@@ -78,8 +78,8 @@ EuphonyPlayer::~EuphonyPlayer() {
 	delete[] _partConfig_volume;
 	delete[] _partConfig_transpose;
 
-	for (auto *event : _euphonyEvents)
-		delete event;
+	for (auto rfIt81 = _euphonyEvents.begin(), rfEnd81 = _euphonyEvents.end(); rfIt81 != rfEnd81; ++rfIt81)
+		{ auto *event = *rfIt81; delete event; }
 }
 
 bool EuphonyPlayer::init() {

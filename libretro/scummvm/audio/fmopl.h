@@ -192,7 +192,7 @@ protected:
  * A null implementation of a Yamaha OPL chip that runs the callback
  * but doesn't output any audio.
  */
-class NullOPL final : public ::OPL::OPL, public Audio::RealChip {
+class NullOPL : public ::OPL::OPL, public Audio::RealChip {
 public:
 	bool init() override { return true; }
 	void reset() override {}

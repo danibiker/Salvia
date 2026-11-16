@@ -47,7 +47,8 @@ MainModelComponent::~MainModelComponent() {
 		_animation = nullptr;
 	}
 
-	for (MainModelComponent *child : _children) {
+	for (auto rfIt50 = _children.begin(), rfEnd50 = _children.end(); rfIt50 != rfEnd50; ++rfIt50) {
+		MainModelComponent *child = *rfIt50;
 		child->_obj = nullptr;
 		child->_hier = nullptr;
 		child->_parentModel = nullptr;

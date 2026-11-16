@@ -71,7 +71,7 @@ struct CinepakFrame {
 class CinepakDecoder : public Codec {
 public:
 	CinepakDecoder(int bitsPerPixel = 24);
-	~CinepakDecoder() override;
+	~CinepakDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _pixelFormat; }

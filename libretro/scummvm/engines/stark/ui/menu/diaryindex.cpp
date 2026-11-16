@@ -35,7 +35,7 @@
 namespace Stark {
 
 DiaryIndexScreen::DiaryIndexScreen(Gfx::Driver *gfx, Cursor *cursor) :
-		StaticLocationScreen(gfx, cursor, "DiaryIndexLocation", Screen::kScreenDiaryIndex) {
+		StaticLocationScreen(gfx, cursor, "DiaryIndexLocation", Screen::kScreenDiaryIndex), _textColorHovered(Gfx::Color(0x1E, 0x1E, 0x96)), _textColorDefault(Gfx::Color(0x00, 0x00, 0x00)) {
 }
 
 DiaryIndexScreen::~DiaryIndexScreen() {

@@ -247,7 +247,7 @@ GdiPCEngine::~GdiPCEngine() {
 }
 #endif
 
-GdiV1::GdiV1(ScummEngine *vm) : Gdi(vm) {
+GdiV1::GdiV1(ScummEngine *vm) : Gdi(vm), _colorMap(0) {
 	memset(&_V1, 0, sizeof(_V1));
 }
 

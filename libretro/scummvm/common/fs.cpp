@@ -87,7 +87,8 @@ void FSDirectoryFile::listChildren(ArchiveMemberList &list, const char *pattern)
 	if (!_fsNode.getChildren(fsList, FSNode::kListAll))
 		return;
 
-	for (const FSNode &fsNode : fsList) {
+	for (auto rfIt90 = fsList.begin(), rfEnd90 = fsList.end(); rfIt90 != rfEnd90; ++rfIt90) {
+		const FSNode &fsNode = *rfIt90;
 		Common::String fileName = fsNode.getName();
 
 		if (pattern != nullptr && !fileName.matchString(pattern, true))
@@ -155,7 +156,8 @@ bool FSNode::getChildren(FSList &fslist, ListMode mode, bool hidden) const {
 		return false;
 
 	fslist.clear();
-	for (auto &node : nodeList) {
+	for (auto rfIt158 = nodeList.begin(), rfEnd158 = nodeList.end(); rfIt158 != rfEnd158; ++rfIt158) {
+		auto &node = *rfIt158;
 		fslist.push_back(FSNode(node));
 	}
 
@@ -217,7 +219,8 @@ void FSNode::listChildren(ArchiveMemberList &childList, const char *pattern) con
 	if (!getChildren(fsList, Common::FSNode::kListAll))
 		return;
 
-	for (const Common::FSNode &fsNode : fsList) {
+	for (auto rfIt220 = fsList.begin(), rfEnd220 = fsList.end(); rfIt220 != rfEnd220; ++rfIt220) {
+		const Common::FSNode &fsNode = *rfIt220;
 		if (pattern != nullptr && !fsNode.getName().matchString(pattern))
 			continue;
 
@@ -430,7 +433,8 @@ void FSDirectory::cacheDirectoryRecursive(FSNode node, int depth, const Path& pr
 	FSList list;
 	node.getChildren(list, FSNode::kListAll);
 
-	for (auto &curNode : list) {
+	for (auto rfIt433 = list.begin(), rfEnd433 = list.end(); rfIt433 != rfEnd433; ++rfIt433) {
+		auto &curNode = *rfIt433;
 		Path name = prefix.appendComponent(curNode.getRealName());
 
 		// since the hashmap is case insensitive, we need to check for clashes when caching
@@ -485,21 +489,23 @@ bool FSDirectory::getChildren(const Common::Path &path, Common::Array<Common::St
 	int matches = 0;
 
 	if (mode == kListDirectoriesOnly || mode == kListAll) {
-		for (const auto &dir : _dirMapCache[pathNormalized]) {
+		{ auto &rfRange488 = _dirMapCache[pathNormalized]; for (auto rfIt488 = rfRange488.begin(), rfEnd488 = rfRange488.end(); rfIt488 != rfEnd488; ++rfIt488) {
+			const auto &dir = *rfIt488;
 			if (hidden || dir.firstChar() != '.') {
 				list.push_back(dir);
 				matches++;
 			}
-		}
+		} }
 	}
 
 	if (mode == kListFilesOnly || mode == kListAll) {
-		for (const auto &file : _fileMapCache[pathNormalized]) {
+		{ auto &rfRange497 = _fileMapCache[pathNormalized]; for (auto rfIt497 = rfRange497.begin(), rfEnd497 = rfRange497.end(); rfIt497 != rfEnd497; ++rfIt497) {
+			const auto &file = *rfIt497;
 			if (hidden || file.firstChar() != '.') {
 				list.push_back(file);
 				matches++;
 			}
-		}
+		} }
 	}
 
 	return matches;
@@ -521,7 +527,8 @@ int FSDirectory::listMatchingMembers(ArchiveMemberList &list, const Path &patter
 		patternStr = pattern.toString(pathSep);
 
 	auto addMatchingToList = [&](const NodeCache &nodeCache) {
-		for (const auto &it : nodeCache) {
+		for (auto rfIt524 = nodeCache.begin(), rfEnd524 = nodeCache.end(); rfIt524 != rfEnd524; ++rfIt524) {
+			const auto &it = *rfIt524;
 			bool isMatch;
 			if (matchPathComponents) {
 				Common::String keyStr = it._key.toString(pathSep);
@@ -552,13 +559,15 @@ int FSDirectory::listMembers(ArchiveMemberList &list) const {
 	ensureCached();
 
 	int files = 0;
-	for (const auto &it : _fileCache) {
+	for (auto rfIt555 = _fileCache.begin(), rfEnd555 = _fileCache.end(); rfIt555 != rfEnd555; ++rfIt555) {
+		const auto &it = *rfIt555;
 		list.push_back(ArchiveMemberPtr(new FSDirectoryFile(it._key, it._value)));
 		++files;
 	}
 
 	if (_includeDirectories) {
-		for (const auto &it : _subDirCache) {
+		for (auto rfIt561 = _subDirCache.begin(), rfEnd561 = _subDirCache.end(); rfIt561 != rfEnd561; ++rfIt561) {
+			const auto &it = *rfIt561;
 			list.push_back(ArchiveMemberPtr(new FSDirectoryFile(it._key, it._value)));
 			++files;
 		}

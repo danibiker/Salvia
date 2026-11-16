@@ -416,9 +416,9 @@ Common::Error BladeRunnerEngine::run() {
 				getEventManager()->getKeymapper()->getKeymap(BladeRunnerEngine::kGameplayKeymapId)->setEnabled(true);
 				const Common::Keymap::ActionArray karr = getEventManager()->getKeymapper()->getKeymap(BladeRunnerEngine::kGameplayKeymapId)->getActions();
 				for (uint8 i = 0; i < karr.size(); ++i) {
-					if (karr[i]->description == U"COMBAT"
-					    || karr[i]->description == U"SKIPDLG"
-					    || karr[i]->description == U"KIADB") {
+					if (karr[i]->description == Common::U32String("COMBAT")
+					    || karr[i]->description == Common::U32String("SKIPDLG")
+					    || karr[i]->description == Common::U32String("KIADB")) {
 						getEventManager()->getKeymapper()->getKeymap(BladeRunnerEngine::kGameplayKeymapId)->unregisterMapping(karr[i]);
 					}
 				}

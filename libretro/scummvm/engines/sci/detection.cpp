@@ -228,7 +228,8 @@ private:
 DetectedGames SciMetaEngineDetection::detectGames(const Common::FSList &fslist, uint32 skipADFlags, bool skipIncomplete) {
 	DetectedGames games = AdvancedMetaEngineDetection::detectGames(fslist, skipADFlags, skipIncomplete);
 
-	for (DetectedGame &game : games) {
+	for (auto rfIt231 = games.begin(), rfEnd231 = games.end(); rfIt231 != rfEnd231; ++rfIt231) {
+		DetectedGame &game = *rfIt231;
 		const GameIdStrToEnum *g = gameIdStrToEnum;
 		for (; g->gameidStr; ++g) {
 			if (game.gameId.equals(g->gameidStr))
@@ -241,8 +242,8 @@ DetectedGames SciMetaEngineDetection::detectGames(const Common::FSList &fslist, 
 		game.setGUIOptions(customizeGuiOptions(fslist.begin()->getParent().getPath(), parseGameGUIOptions(game.getGUIOptions()), game.platform, g->gameidStr, g->version));
 
 		// Restore the language info to the options string.
-		for (const Common::Language &lang : langList)
-			game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(lang));
+		for (auto rfIt244 = langList.begin(), rfEnd244 = langList.end(); rfIt244 != rfEnd244; ++rfIt244)
+			{ const Common::Language &lang = *rfIt244; game.appendGUIOptions(getGameGUIOptionsDescriptionLanguage(lang)); }
 	}
 
 	return games;

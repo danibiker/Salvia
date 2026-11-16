@@ -27,10 +27,10 @@
 
 namespace Sci {
 
-class SCI0_CGABWDriver final : public SCI0_DOSPreVGADriver {
+class SCI0_CGABWDriver : public SCI0_DOSPreVGADriver {
 public:
 	SCI0_CGABWDriver(uint32 monochromeColor, bool rgbRendering);
-	~SCI0_CGABWDriver() override;
+	~SCI0_CGABWDriver();
 	void copyRectToScreen(const byte *src, int srcX, int srcY, int pitch, int destX, int destY, int w, int h, const PaletteMod*, const byte*) override;
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;
 	Common::Point getMousePos() const override;

@@ -59,9 +59,9 @@ protected:
 	bool runOptionsDialog() override;
 
 private:
-	Graphics::Surface *_practiceBox = nullptr;
+	Graphics::Surface *_practiceBox;
 	Common::Point _practiceBoxPos;
-	int _practiceBoxNotes = 0;
+	int _practiceBoxNotes;
 };
 
 } // End of namespace Scumm

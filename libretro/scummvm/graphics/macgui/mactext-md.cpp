@@ -28,8 +28,10 @@ namespace Graphics {
 #define PR(x) ((x && x->data) ? Common::toPrintable(Common::String((const char *)(x)->data , (x)->size)).c_str() : "(null)")
 
 struct MDState {
+	MDState() : linkr(0), linkg(0), linkb(0) {}
+
 	Common::List<int> listNum;
-	uint32 linkr = 0, linkg = 0, linkb = 0;
+	uint32 linkr, linkg, linkb;
 };
 
 void render_blockcode(Common::SDDataBuffer *ob, const Common::SDDataBuffer *text, const Common::SDDataBuffer *lang, void *opaque) {

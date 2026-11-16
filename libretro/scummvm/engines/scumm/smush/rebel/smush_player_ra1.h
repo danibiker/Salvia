@@ -30,7 +30,7 @@ class SmushPlayerRebel1 : public SmushPlayer {
 	friend class InsaneRebel1;
 public:
 	SmushPlayerRebel1(ScummEngine_v7 *scumm, IMuseDigital *imuseDigital, Insane *insane);
-	~SmushPlayerRebel1() override;
+	~SmushPlayerRebel1();
 
 protected:
 	void initGamePlayerFields() override;

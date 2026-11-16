@@ -40,7 +40,7 @@ namespace Scumm {
 class MortimerEngine : public Engine {
 public:
 	MortimerEngine(OSystem *system, bool isDemo);
-	~MortimerEngine() override;
+	~MortimerEngine();
 	Common::Error run() override;
 	bool hasFeature(EngineFeature feature) const override;
 	Common::String getSaveStateName(int slot) const override;

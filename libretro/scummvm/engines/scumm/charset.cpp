@@ -1673,7 +1673,7 @@ void CharsetRendererPCE::setDrawCharIntern(uint16 chr) {
 #endif
 
 CharsetRendererMac::CharsetRendererMac(ScummEngine *vm, const Common::Path &fontFile)
-	: CharsetRendererCommon(vm), _lastTop(0) {
+	: CharsetRendererCommon(vm), _lastTop(0), _font(nullptr) {
 
 	// The original Macintosh interpreter didn't use the correct spacing
 	// between characters for some of the text, e.g. the Grail Diary. This

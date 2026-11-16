@@ -35,7 +35,7 @@ namespace Common {
 class InstallShieldV3 : public Common::Archive {
 public:
 	InstallShieldV3();
-	~InstallShieldV3() override;
+	~InstallShieldV3();
 
 	bool open(const Common::Path &filename);
 	bool open(const Common::FSNode &node);

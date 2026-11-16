@@ -84,7 +84,7 @@ private:
 class SoundChannel_PCSpeaker : public SoundHWChannel {
 public:
 	SoundChannel_PCSpeaker(const Common::SharedPtr<const uint16> &freqTable, const Common::SharedPtr<const uint16> &smpVolTable, const byte &masterVol, int outputRate) : SoundHWChannel(freqTable, smpVolTable, masterVol, outputRate) {}
-	~SoundChannel_PCSpeaker() override {}
+	~SoundChannel_PCSpeaker() {}
 
 	void reset() override;
 	void updateChannelVolume() override;
@@ -97,7 +97,7 @@ public:
 class SoundChannel_PCJr_SCI0 : public SoundHWChannel {
 public:
 	SoundChannel_PCJr_SCI0(const Common::SharedPtr<const uint16> &freqTable, const Common::SharedPtr<const uint16> &smpVolTable, const byte &masterVol, int outputRate) : SoundHWChannel(freqTable, smpVolTable, masterVol, outputRate), _envCount2(0) {}
-	~SoundChannel_PCJr_SCI0() override {}
+	~SoundChannel_PCJr_SCI0() {}
 
 	void reset() override;
 	void updateChannelVolume() override;
@@ -119,7 +119,7 @@ public:
 	SoundChannel_PCJr_SCI1(const Common::SharedPtr<const uint16> &freqTable, const Common::SharedPtr<const uint16> &smpVolTable, const byte &masterVol, int outputRate, const uint16 *&instrumentOffsets, const byte *&instrumentData, byte *&program) :
 		SoundHWChannel(freqTable, smpVolTable, masterVol, outputRate), _instrumentOffsets(instrumentOffsets), _instrumentData(instrumentData), _program(program), _duration(0), _releaseDuration(0), _sustain(0),
 			_release(0), _envData(nullptr) {}
-	~SoundChannel_PCJr_SCI1() override {}
+	~SoundChannel_PCJr_SCI1() {}
 
 	void reset() override;
 	void updateChannelVolume() override;
@@ -422,7 +422,7 @@ public:
 	};
 
 	MidiDriver_PCJr(Audio::Mixer *mixer, SciVersion version, bool pcsMode);
-	~MidiDriver_PCJr() override;
+	~MidiDriver_PCJr();
 
 	// MidiDriver
 	int open() override;

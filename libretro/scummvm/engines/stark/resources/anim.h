@@ -89,7 +89,7 @@ public:
 	static Object *construct(Object *parent, byte subType, uint16 index, const Common::String &name);
 
 	Anim(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~Anim() override;
+	~Anim();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;
@@ -175,7 +175,7 @@ protected:
 class AnimImages : public Anim {
 public:
 	AnimImages(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~AnimImages() override;
+	~AnimImages();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;
@@ -202,7 +202,7 @@ protected:
 class AnimProp : public Anim {
 public:
 	AnimProp(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~AnimProp() override;
+	~AnimProp();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;
@@ -230,7 +230,7 @@ protected:
 class AnimVideo : public Anim {
 public:
 	AnimVideo(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~AnimVideo() override;
+	~AnimVideo();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;
@@ -283,7 +283,7 @@ protected:
 class AnimSkeleton : public Anim {
 public:
 	AnimSkeleton(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~AnimSkeleton() override;
+	~AnimSkeleton();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;

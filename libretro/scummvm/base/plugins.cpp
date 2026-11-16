@@ -292,7 +292,8 @@ PluginManager::~PluginManager() {
 	unloadAllPlugins();
 
 	// Delete the plugin providers
-	for (auto *pluginProvider : _providers) {
+	for (auto rfIt295 = _providers.begin(), rfEnd295 = _providers.end(); rfIt295 != rfEnd295; ++rfIt295) {
+		auto *pluginProvider = *rfIt295;
 		delete pluginProvider;
 	}
 }
@@ -306,7 +307,8 @@ PluginManagerUncached::~PluginManagerUncached() {
 	// They are also referenced from _allEnginePlugins which we clean up here
 	unloadPluginsExcept(PLUGIN_TYPE_ENGINE, nullptr, false);
 
-	for (auto *enginePlugin : _allEnginePlugins) {
+	for (auto rfIt309 = _allEnginePlugins.begin(), rfEnd309 = _allEnginePlugins.end(); rfIt309 != rfEnd309; ++rfIt309) {
+		auto *enginePlugin = *rfIt309;
 		delete enginePlugin;
 	}
 	_allEnginePlugins.clear();
@@ -336,10 +338,12 @@ Common::String detectPluginName = "detection";
 	bool foundDetectPlugin = false;
 #endif
 
-	for (auto &pluginProvider : _providers) {
+	for (auto rfIt339 = _providers.begin(), rfEnd339 = _providers.end(); rfIt339 != rfEnd339; ++rfIt339) {
+		auto &pluginProvider = *rfIt339;
 		PluginList plugins(pluginProvider->getPlugins());
 
-		for (auto &curPlugin : plugins) {
+		for (auto rfIt342 = plugins.begin(), rfEnd342 = plugins.end(); rfIt342 != rfEnd342; ++rfIt342) {
+			auto &curPlugin = *rfIt342;
 			// This is a 'hack' based on the assumption that we have no sound
 			// file plugins. Currently this is the case. If it changes, we
 			// should find a fast way of detecting whether a plugin is a
@@ -393,7 +397,8 @@ bool PluginManagerUncached::loadPluginFromEngineId(const Common::String &engineI
 #ifdef PLUGIN_SUFFIX
 	tentativeEnginePluginFilename += PLUGIN_SUFFIX;
 #endif
-	for (auto &enginePlugin : _allEnginePlugins) {
+	for (auto rfIt396 = _allEnginePlugins.begin(), rfEnd396 = _allEnginePlugins.end(); rfIt396 != rfEnd396; ++rfIt396) {
+		auto &enginePlugin = *rfIt396;
 		Common::Path filename = enginePlugin->getFileName();
 		if (filename.baseName().hasSuffixIgnoreCase(tentativeEnginePluginFilename)) {
 			if (loadPluginByFileName(filename)) {
@@ -413,7 +418,8 @@ bool PluginManagerUncached::loadPluginByFileName(const Common::Path &filename) {
 
 	unloadPluginsExcept(PLUGIN_TYPE_ENGINE, nullptr, false);
 
-	for (auto &enginePlugin : _allEnginePlugins) {
+	for (auto rfIt416 = _allEnginePlugins.begin(), rfEnd416 = _allEnginePlugins.end(); rfIt416 != rfEnd416; ++rfIt416) {
+		auto &enginePlugin = *rfIt416;
 		if (enginePlugin->getFileName() == filename && enginePlugin->loadPlugin()) {
 			addToPluginsInMemList(enginePlugin);
 			_currentPlugin = &enginePlugin;
@@ -515,7 +521,8 @@ bool PluginManagerUncached::loadNextPlugin() {
  * one plugin in memory at a time.
  **/
 void PluginManager::loadAllPlugins() {
-	for (auto &pluginProvider : _providers) {
+	for (auto rfIt518 = _providers.begin(), rfEnd518 = _providers.end(); rfIt518 != rfEnd518; ++rfIt518) {
+		auto &pluginProvider = *rfIt518;
 		PluginList pl(pluginProvider->getPlugins());
 		Common::for_each(pl.begin(), pl.end(), Common::bind1st(Common::mem_fun(&PluginManager::tryLoadPlugin), this));
 	}
@@ -536,9 +543,11 @@ void PluginManager::loadAllPlugins() {
 }
 
 void PluginManager::loadAllPluginsOfType(PluginType type) {
-	for (auto &pluginProvider : _providers) {
+	for (auto rfIt539 = _providers.begin(), rfEnd539 = _providers.end(); rfIt539 != rfEnd539; ++rfIt539) {
+		auto &pluginProvider = *rfIt539;
 		PluginList pluginList(pluginProvider->getPlugins());
-		for (auto *plugin : pluginList) {
+		for (auto rfIt541 = pluginList.begin(), rfEnd541 = pluginList.end(); rfIt541 != rfEnd541; ++rfIt541) {
+			auto *plugin = *rfIt541;
 			if (plugin->loadPlugin()) {
 				if (plugin->getType() == type) {
 					addToPluginsInMemList(plugin);
@@ -562,7 +571,8 @@ void PluginManager::unloadAllPlugins() {
 
 void PluginManager::unloadPluginsExcept(PluginType type, const Plugin *plugin, bool deletePlugin /*=true*/) {
 	Plugin *found = nullptr;
-	for (auto *curPlugin : _pluginsInMem[type]) {
+	for (auto rfIt565 = _pluginsInMem[type].begin(), rfEnd565 = _pluginsInMem[type].end(); rfIt565 != rfEnd565; ++rfIt565) {
+		auto *curPlugin = *rfIt565;
 		if (curPlugin == plugin) {
 			found = curPlugin;
 		} else {
@@ -672,7 +682,8 @@ QualifiedGameList EngineManager::findGameInLoadedPlugins(const Common::String &g
 
 	QualifiedGameList results;
 
-	for (const auto &plugin : plugins) {
+	for (auto rfIt675 = plugins.begin(), rfEnd675 = plugins.end(); rfIt675 != rfEnd675; ++rfIt675) {
+		const auto &plugin = *rfIt675;
 		const MetaEngineDetection &engine = plugin->get<MetaEngineDetection>();
 		DebugMan.addAllDebugChannels(engine.getDebugChannels());
 		PlainGameDescriptor pluginResult = engine.findGame(gameId.c_str());
@@ -697,7 +708,8 @@ DetectionResults EngineManager::detectGames(const Common::FSList &fslist, uint32
 
 	// Iterate over all known games and for each check if it might be
 	// the game in the presented directory.
-	for (const auto &plugin : plugins) {
+	for (auto rfIt700 = plugins.begin(), rfEnd700 = plugins.end(); rfIt700 != rfEnd700; ++rfIt700) {
+		const auto &plugin = *rfIt700;
 		MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 		// set the debug flags
 		DebugMan.addAllDebugChannels(metaEngine.getDebugChannels());
@@ -762,8 +774,8 @@ Common::String EngineManager::createTargetForGame(const DetectedGame &game) {
 	addStringToConf("guioptions", game.getGUIOptions(), domain);
 
 	// Add any extra configuration keys
-	for (auto &extraConfigEntry : game._extraConfigEntries)
-		addStringToConf(extraConfigEntry._key, extraConfigEntry._value, domain);
+	for (auto rfIt765 = game._extraConfigEntries.begin(), rfEnd765 = game._extraConfigEntries.end(); rfIt765 != rfEnd765; ++rfIt765)
+		{ auto &extraConfigEntry = *rfIt765; addStringToConf(extraConfigEntry._key, extraConfigEntry._value, domain); }
 
 	// TODO: Setting the description field here has the drawback
 	// that the user does never notice when we upgrade our descriptions.
@@ -781,9 +793,9 @@ Common::String EngineManager::createTargetForGame(const DetectedGame &game) {
 const Plugin *EngineManager::findDetectionPlugin(const Common::String &engineId) const {
 	const PluginList &plugins = getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
 
-	for (const auto &plugin : plugins)
-		if (engineId == plugin->get<MetaEngineDetection>().getName())
-			return plugin;
+	for (auto rfIt784 = plugins.begin(), rfEnd784 = plugins.end(); rfIt784 != rfEnd784; ++rfIt784)
+		{ const auto &plugin = *rfIt784; if (engineId == plugin->get<MetaEngineDetection>().getName())
+			return plugin; }
 
 	return nullptr;
 }
@@ -791,9 +803,9 @@ const Plugin *EngineManager::findDetectionPlugin(const Common::String &engineId)
 const Plugin *PluginManager::findLoadedPlugin(const Common::String &engineId) {
 	const PluginList &plugins = getPlugins(PLUGIN_TYPE_ENGINE);
 
-	for (const auto &plugin : plugins)
-		if (engineId == plugin->get<MetaEngine>().getName())
-			return plugin;
+	for (auto rfIt794 = plugins.begin(), rfEnd794 = plugins.end(); rfIt794 != rfEnd794; ++rfIt794)
+		{ const auto &plugin = *rfIt794; if (engineId == plugin->get<MetaEngine>().getName())
+			return plugin; }
 
 	return nullptr;
 }
@@ -987,7 +999,8 @@ const PluginList &ScalerManager::getPlugins() const {
 uint ScalerManager::getMaxExtraPixels() const {
 	uint maxPixels = 0;
 	PluginList plugins = getPlugins();
-	for (auto &plugin : plugins) {
+	for (auto rfIt990 = plugins.begin(), rfEnd990 = plugins.end(); rfIt990 != rfEnd990; ++rfIt990) {
+		auto &plugin = *rfIt990;
 		uint n = plugin->get<ScalerPluginObject>().extraPixels();
 		if (n > maxPixels) {
 			maxPixels = n;
@@ -998,7 +1011,8 @@ uint ScalerManager::getMaxExtraPixels() const {
 
 Plugin *ScalerManager::findScalerPlugin(const char *name) const {
 	const PluginList &plugins = getPlugins();
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1001 = plugins.begin(), rfEnd1001 = plugins.end(); rfIt1001 != rfEnd1001; ++rfIt1001) {
+		const auto &plugin = *rfIt1001;
 		if (!strcmp(plugin->get<ScalerPluginObject>().getName(), name)) {
 			return plugin;
 		}
@@ -1011,7 +1025,8 @@ uint ScalerManager::findScalerPluginIndex(const char *name) const {
 	const PluginList &plugins = getPlugins();
 	uint index = 0;
 
-	for (auto &plugin : plugins) {
+	for (auto rfIt1014 = plugins.begin(), rfEnd1014 = plugins.end(); rfIt1014 != rfEnd1014; ++rfIt1014) {
+		auto &plugin = *rfIt1014;
 		if (!strcmp(plugin->get<ScalerPluginObject>().getName(), name)) {
 			return index;
 		}

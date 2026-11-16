@@ -57,8 +57,8 @@ Keymap::Keymap(KeymapType type, const String &id, const String &description) :
 }
 
 Keymap::~Keymap() {
-	for (auto *action : _actions)
-		delete action;
+	for (auto rfIt60 = _actions.begin(), rfEnd60 = _actions.end(); rfIt60 != rfEnd60; ++rfIt60)
+		{ auto *action = *rfIt60; delete action; }
 }
 
 void Keymap::addAction(Action *action) {
@@ -80,8 +80,10 @@ void Keymap::registerMapping(Action *action, const HardwareInput &hwInput) {
 
 void Keymap::unregisterMapping(Action *action) {
 	// Remove the action from all the input mappings
-	for (auto &hwAction : _hwActionMap) {
-		for (auto &itAction : hwAction._value) {
+	for (auto rfIt83 = _hwActionMap.begin(), rfEnd83 = _hwActionMap.end(); rfIt83 != rfEnd83; ++rfIt83) {
+		auto &hwAction = *rfIt83;
+		for (auto rfIt84 = hwAction._value.begin(), rfEnd84 = hwAction._value.end(); rfIt84 != rfEnd84; ++rfIt84) {
+			auto &itAction = *rfIt84;
 			if (itAction == action) {
 				hwAction._value.erase(&itAction);
 				break;
@@ -112,8 +114,10 @@ struct HardwareInputTypeIdComparator {
 Array<HardwareInput> Keymap::getActionMapping(const Action *action) const {
 	Array<HardwareInput> inputs;
 
-	for (auto &itInput : _hwActionMap) {
-		for (auto &itAction : itInput._value) {
+	for (auto rfIt115 = _hwActionMap.begin(), rfEnd115 = _hwActionMap.end(); rfIt115 != rfEnd115; ++rfIt115) {
+		auto &itInput = *rfIt115;
+		for (auto rfIt116 = itInput._value.begin(), rfEnd116 = itInput._value.end(); rfIt116 != rfEnd116; ++rfIt116) {
+			auto &itAction = *rfIt116;
 			if (itAction == action) {
 				inputs.push_back(itInput._key);
 				break;
@@ -128,7 +132,8 @@ Array<HardwareInput> Keymap::getActionMapping(const Action *action) const {
 }
 
 const Action *Keymap::findAction(const char *id) const {
-	for (const auto &action : _actions) {
+	for (auto rfIt131 = _actions.begin(), rfEnd131 = _actions.end(); rfIt131 != rfEnd131; ++rfIt131) {
+		const auto &action = *rfIt131;
 		if (strcmp(action->id, id) == 0)
 			return action;
 	}
@@ -150,7 +155,8 @@ Keymap::KeymapMatch Keymap::getMappedActions(const Event &event, ActionArray &ac
 		if (_partialMatchAllowed && normalizedKeystate.flags & KBD_NON_STICKY) {
 			// If no matching actions and non-sticky keyboard modifiers are down,
 			// check again for matches without the exact keyboard modifiers
-			for (const auto &itInput : _hwActionMap) {
+			for (auto rfIt153 = _hwActionMap.begin(), rfEnd153 = _hwActionMap.end(); rfIt153 != rfEnd153; ++rfIt153) {
+				const auto &itInput = *rfIt153;
 				if (itInput._key.type == kHardwareInputTypeKeyboard && itInput._key.key.keycode == normalizedKeystate.keycode) {
 					int flags = itInput._key.key.flags;
 					if (flags & KBD_NON_STICKY && (flags & normalizedKeystate.flags) == flags) {
@@ -282,7 +288,8 @@ void Keymap::loadMappings() {
 	String prefix = KEYMAP_KEY_PREFIX + _id + "_";
 
 	_hwActionMap.clear();
-	for (auto &action : _actions) {
+	for (auto rfIt285 = _actions.begin(), rfEnd285 = _actions.end(); rfIt285 != rfEnd285; ++rfIt285) {
+		auto &action = *rfIt285;
 		String confKey = prefix + action->id;
 
 		StringArray hwInputIds;
@@ -325,7 +332,8 @@ void Keymap::saveMappings() {
 
 	String prefix = KEYMAP_KEY_PREFIX + _id + "_";
 
-	for (const auto &action : _actions) {
+	for (auto rfIt328 = _actions.begin(), rfEnd328 = _actions.end(); rfIt328 != rfEnd328; ++rfIt328) {
+		const auto &action = *rfIt328;
 		Array<HardwareInput> mappedInputs = getActionMapping(action);
 
 		if (areMappingsIdentical(mappedInputs, getActionDefaultMappings(action))) {

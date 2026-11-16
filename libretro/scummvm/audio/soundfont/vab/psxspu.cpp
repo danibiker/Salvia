@@ -189,7 +189,8 @@ bool PSXSampColl::GetSampleInfo() {
 		_unLength = i - _dwOffset;
 	} else {
 		uint32 sampleIndex = 0;
-		for (auto &vag : _vagLocations) {
+		for (auto rfIt192 = _vagLocations.begin(), rfEnd192 = _vagLocations.end(); rfIt192 != rfEnd192; ++rfIt192) {
+			auto &vag = *rfIt192;
 			uint32 offSampStart = _dwOffset + vag.offset;
 			uint32 offDataEnd = offSampStart + vag.size;
 			uint32 offSampEnd = offSampStart;

@@ -188,7 +188,7 @@ public:
 class Files_AppleDOS : public Files {
 public:
 	Files_AppleDOS();
-	~Files_AppleDOS() override;
+	~Files_AppleDOS();
 
 	bool open(const Common::Path &filename);
 	const DataBlockPtr getDataBlock(const Common::Path &filename, uint offset = 0) const override;

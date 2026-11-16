@@ -49,7 +49,7 @@ public:
 	};
 
 	WindowsTextToSpeechManager();
-	~WindowsTextToSpeechManager() override;
+	~WindowsTextToSpeechManager();
 
 	bool say(const Common::U32String &str, Action action) override;
 

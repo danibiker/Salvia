@@ -32,7 +32,7 @@ namespace Image {
 class DitherCodec : public Codec {
 public:
 	DitherCodec(Codec *codec, DisposeAfterUse::Flag disposeAfterUse = DisposeAfterUse::YES);
-	virtual ~DitherCodec() override;
+	virtual ~DitherCodec();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 

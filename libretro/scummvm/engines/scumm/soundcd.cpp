@@ -32,7 +32,7 @@
 namespace Scumm {
 
 SoundCD::SoundCD(ScummEngine *parent, Audio::Mixer *mixer, SoundSE *soundSE, bool useReplacementAudioTracks):
-	_vm(parent), _mixer(mixer), _soundSE(soundSE), _useReplacementAudioTracks(useReplacementAudioTracks) {
+	_vm(parent), _mixer(mixer), _soundSE(soundSE), _useReplacementAudioTracks(useReplacementAudioTracks), _hasFileBasedCDAudio(false), _musicTimer(0), _loomOvertureTransition(0), _replacementTrackStartTime(0), _currentCDSound(0), _cdMusicTimerMod(0), _cdMusicTimer(0), _soundsPaused(false) {
 	_fileBasedCDStatus.playing = false;
 	_fileBasedCDStatus.track = 0;
 	_fileBasedCDStatus.start = 0;

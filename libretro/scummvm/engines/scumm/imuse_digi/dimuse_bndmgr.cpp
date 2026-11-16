@@ -137,7 +137,7 @@ int BundleDirCache::matchFile(const char *filename) {
 	}
 }
 
-BundleMgr::BundleMgr(const ScummEngine *vm, BundleDirCache *cache) {
+BundleMgr::BundleMgr(const ScummEngine *vm, BundleDirCache *cache) : _indexTable(nullptr), _numFiles(0), _numCompItems(0), _lastBlockDecompressedSize(0), _curSampleId(0), _curDecompressedFilePos(0), _compTableLoaded(0), _isUncompressed(0), _fileBundleId(0), _compOutputBuff(), _compInputBuff(nullptr), _outputSize(0), _lastBlock(0) {
 	_cache = cache;
 	_bundleTable = nullptr;
 	_compTable = nullptr;

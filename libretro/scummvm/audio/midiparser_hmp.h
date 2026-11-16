@@ -32,7 +32,7 @@
  */
 class MidiParser_HMP : public MidiParser_SMF {
 protected:
-	enum class HmpVersion {
+	enum HmpVersion {
 		VERSION_HMI,
 		VERSION_HMP_1,
 		VERSION_HMP_013195

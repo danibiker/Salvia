@@ -125,7 +125,7 @@ struct Picture;
 class WMV3Decoder : public Codec {
 public:
 	WMV3Decoder(int width, int height, bool advanced = false);
-	~WMV3Decoder() override;
+	~WMV3Decoder();
 	/** Supply container initialization data before decoding packets. */
 	bool setExtraData(Common::SeekableReadStream &stream);
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;

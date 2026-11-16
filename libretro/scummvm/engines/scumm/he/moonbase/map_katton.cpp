@@ -23,7 +23,7 @@
 
 namespace Scumm {
 
-KattonGenerator::KattonGenerator(int seed) {
+KattonGenerator::KattonGenerator(int seed) : _seed(0), _size(0), _tileset(0), _startloc(), _board(), _special() {
 	_seed = seed;
 }
 

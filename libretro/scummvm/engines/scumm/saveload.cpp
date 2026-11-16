@@ -55,10 +55,12 @@
 namespace Scumm {
 
 struct SaveGameHeader {
+	SaveGameHeader() : name() {}
+
 	uint32 type;
 	uint32 size;
 	uint32 ver;
-	char name[32] = {};
+	char name[32];
 };
 
 struct SaveInfoSection {
@@ -566,7 +568,7 @@ uint32 *ScummEngine_v8::fetchScummVMSaveStateThumbnail(int slotId, bool isHeapSa
 	if (in) {
 		// We don't perform checks on the header: if we're here it means that the
 		// savestate follows the correct format and it is loadable.
-		in->skip(sizeof(uint32) * 3 + sizeof(SaveGameHeader::name));
+		in->skip(sizeof(uint32) * 3 + sizeof(((SaveGameHeader *)nullptr)->name));
 
 		// Load the thumbnail.
 		// We're under the assumption that its resolution will always be 160x120,
@@ -1289,7 +1291,7 @@ static void syncWithSerializer(Common::Serializer &s, Common::Rect &rect) {
 }
 
 template <typename T, size_t N, size_t M>
-static void sync2DArray(Common::Serializer &s, T (&array)[N][M], const size_t dim1, const size_t dim2, void (*serializer)(Common::Serializer &, T &), Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion) {
+static void sync2DArray(Common::Serializer &s, T (&array)[N][M], const size_t dim1, const size_t dim2, void (*serializer)(Common::Serializer &, typename Common::Serializer::SyncArrayIdentity<T>::type &), Common::Serializer::Version minVersion = 0, Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion) {
 
 	if (s.getVersion() < minVersion || s.getVersion() > maxVersion) {
 		return;

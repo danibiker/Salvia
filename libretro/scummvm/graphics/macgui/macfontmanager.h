@@ -230,7 +230,7 @@ private:
 
 #ifdef USE_FREETYPE2
 	void generateTTFFont(MacFont &toFront, Common::SeekableReadStream *stream);
-	TTFRenderMode _ttfRenderMode = Graphics::kTTFRenderModeMonochrome;
+	TTFRenderMode _ttfRenderMode;
 #endif
 
 private:

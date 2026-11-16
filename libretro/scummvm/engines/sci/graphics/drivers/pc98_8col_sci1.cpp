@@ -27,10 +27,10 @@
 
 namespace Sci {
 
-class SCI1_PC98Gfx8ColorsDriver final : public UpscaledGfxDriver {
+class SCI1_PC98Gfx8ColorsDriver : public UpscaledGfxDriver {
 public:
 	SCI1_PC98Gfx8ColorsDriver(bool rgbRendering);
-	~SCI1_PC98Gfx8ColorsDriver() override;
+	~SCI1_PC98Gfx8ColorsDriver();
 	bool initScreen(const Graphics::PixelFormat *format) override;
 	void setPalette(const byte*, uint, uint, bool, const PaletteMod*, const byte*) override {}
 	void copyRectToScreen(const byte *src, int srcX, int srcY, int pitch, int destX, int destY, int w, int h, const PaletteMod *palMods, const byte *palModMapping) override;

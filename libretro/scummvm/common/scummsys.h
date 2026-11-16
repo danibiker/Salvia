@@ -35,9 +35,12 @@
 	#define GCC_ATLEAST(major, minor) 0
 #endif
 
-#if defined(_MSC_VER) && _MSC_VER < 1900
+#if defined(_MSC_VER) && _MSC_VER < 1900 && !(defined(__LIBRETRO__) && _MSC_VER >= 1600)
 	#error MSVC support requires MSVC 2015 or newer
 #endif
+// Note: the libretro port can also be built with MSVC 2010 (Visual Studio 2010
+// and the Xbox 360 XDK compiler) in a restricted "C++03 + partial C++11" mode,
+// see SCUMMVM_CXX03_COMPAT in backends/platform/libretro/include/portdefs.h
 
 #if defined(NONSTANDARD_PORT)
 
@@ -468,7 +471,11 @@ namespace std {
 // std::initializer_list when unavailable (e.g. the compiler supports C++11,
 // but the standard library is older and has incomplete C++11 support)
 //
-#if defined(NO_CXX11_INITIALIZER_LIST)
+#if defined(SCUMMVM_CXX03_COMPAT)
+
+// MSVC 2010: no std::initializer_list (nor brace initialization of classes)
+
+#elif defined(NO_CXX11_INITIALIZER_LIST)
 namespace std {
 	template<class T> class initializer_list {
 	public:

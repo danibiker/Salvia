@@ -14,7 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(_XBOX)
 #include "backends/fs/windows/windows-fs-factory.h"
 #define FS_SYSTEM_FACTORY WindowsFilesystemFactory
 #else
@@ -70,6 +70,14 @@ void OSystem_libretro::initBackend() {
 
 	if (! ConfMan.hasKey("libretro_hooks_clear"))
 		ConfMan.set("libretro_hooks_clear", 0);
+
+	/* MIDI defaults for frontends that synthesize MIDI themselves (Salvia's
+	 * MT-32 / CM-32L emulation): send MT-32 games their native MT-32 data
+	 * through the first available device (the frontend's MIDI output) instead
+	 * of none / GM emulation. Only defaults: values set in scummvm.ini or in
+	 * the options dialog still take precedence. */
+	ConfMan.registerDefault("mt32_device", "auto");
+	ConfMan.registerDefault("native_mt32", true);
 
 	delete _timerManager;
 	_timerManager = nullptr;
@@ -131,14 +139,19 @@ void OSystem_libretro::destroy() {
 	delete this;
 }
 
+/* The software renderer is in use whenever the graphics manager is the
+ * surface one (see resetGraphicsManager), which is also the case when the
+ * frontend gives no video option at all (video_hw_mode == 0): check the
+ * manager itself rather than the REQUEST_SW flag. */
 void OSystem_libretro::getScreen(const Graphics::ManagedSurface *&screen) {
-	if (retro_get_video_hw_mode() & VIDEO_GRAPHIC_MODE_REQUEST_SW)
-		screen = dynamic_cast<LibretroGraphics *>(_graphicsManager)->getScreen();
+	LibretroGraphics *gfx = dynamic_cast<LibretroGraphics *>(_graphicsManager);
+	screen = gfx ? gfx->getScreen() : nullptr;
 }
 
 void OSystem_libretro::refreshScreen(void) {
-	if (retro_get_video_hw_mode() & VIDEO_GRAPHIC_MODE_REQUEST_SW)
-		dynamic_cast<LibretroGraphics *>(_graphicsManager)->realUpdateScreen();
+	LibretroGraphics *gfx = dynamic_cast<LibretroGraphics *>(_graphicsManager);
+	if (gfx)
+		gfx->realUpdateScreen();
 }
 
 #ifdef USE_OPENGL

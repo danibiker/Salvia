@@ -44,7 +44,7 @@ private:
 
 public:
 	ConnectionManagerCurl();
-	~ConnectionManagerCurl() override;
+	~ConnectionManagerCurl();
 
 	/**
 	 * All libcurl transfers are going through this ConnectionManager.

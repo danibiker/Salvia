@@ -36,7 +36,7 @@ namespace N3DS {
 class N3DSOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	explicit N3DSOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~N3DSOptionsWidget() override;
+	~N3DSOptionsWidget();
 
 	// OptionsContainerWidget API
 	void load() override;

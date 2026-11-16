@@ -122,7 +122,7 @@ private:
 	Common::SeekableReadStream *_fileStream;
 	Common::SafeSeekableSubReadStream *_videoStream;
 	Common::SafeSeekableSubReadStream *_audioStream;
-	int _curFrame = 0;
+	int _curFrame;
 	int _frameSizes[65536]; // can be done differently?
 	int getAudioSamplingRate();
 };

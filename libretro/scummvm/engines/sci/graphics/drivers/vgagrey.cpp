@@ -25,10 +25,10 @@
 
 namespace Sci {
 
-class SCI1_VGAGreyScaleDriver final : public GfxDefaultDriver {
+class SCI1_VGAGreyScaleDriver : public GfxDefaultDriver {
 public:
 	SCI1_VGAGreyScaleDriver(bool rgbRendering);
-	~SCI1_VGAGreyScaleDriver() override;
+	~SCI1_VGAGreyScaleDriver();
 	void setPalette(const byte *colors, uint start, uint num, bool update, const PaletteMod *palMods, const byte *palModMapping) override;
 	static bool validateMode(Common::Platform p) { return (p == Common::kPlatformDOS || p == Common::kPlatformWindows) && checkDriver(&_driverFile, 1); }
 private:

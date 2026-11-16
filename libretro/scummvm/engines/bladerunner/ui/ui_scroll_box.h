@@ -101,7 +101,7 @@ public:
 	            Common::Rect rect,
 	            Common::Rect scrollBarRect);
 
-	~UIScrollBox() override;
+	~UIScrollBox();
 
 	void draw(Graphics::Surface &surface) override;
 

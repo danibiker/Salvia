@@ -109,19 +109,23 @@ struct MacTextLine;
 
 class MacTextCanvas {
 public:
+	MacTextCanvas() : _surface(nullptr), _shadowSurface(nullptr), _glyphMask(nullptr), _charBoxMask(nullptr), _maxWidth(0), _textMaxWidth(0), _textMaxHeight(0), _textAlignment(kTextAlignLeft), _interLinear(0), _textShadow(0), _wm(nullptr), _tfgcolor(0), _tbgcolor(0), _macFontMode(true) {}
+private:
+
+public:
 	Common::Array<MacTextLine> _text;
-	ManagedSurface *_surface = nullptr, *_shadowSurface = nullptr;
-	ManagedSurface *_glyphMask = nullptr, *_charBoxMask = nullptr;
-	int _maxWidth = 0;
-	int _textMaxWidth = 0;
-	int _textMaxHeight = 0;
-	TextAlign _textAlignment = kTextAlignLeft;
-	int _interLinear = 0;
-	int _textShadow = 0;
-	MacWindowManager *_wm = nullptr;
-	uint32 _tfgcolor = 0;
-	uint32 _tbgcolor = 0;
-	bool _macFontMode = true;
+	ManagedSurface *_surface, *_shadowSurface;
+	ManagedSurface *_glyphMask, *_charBoxMask;
+	int _maxWidth;
+	int _textMaxWidth;
+	int _textMaxHeight;
+	TextAlign _textAlignment;
+	int _interLinear;
+	int _textShadow;
+	MacWindowManager *_wm;
+	uint32 _tfgcolor;
+	uint32 _tbgcolor;
+	bool _macFontMode;
 	MacText *_macText;
 	MacFontRun _defaultFormatting;
 	ImageArchive _imageArchive;
@@ -171,25 +175,29 @@ private:
 };
 
 struct MacTextTableRow {
+	MacTextTableRow() : heght(-1) {}
+
 	Common::Array<MacTextCanvas> cells;
-	int heght = -1;
+	int heght;
 };
 
 struct MacTextLine {
-	int width = -1;
-	int height = -1;
-	int minWidth = -1;
-	int y = 0;
-	int charwidth = -1;
-	bool paragraphEnd = false;
-	bool wordContinuation = false;
-	int indent = 0; // in units
-	int firstLineIndent = 0; // in pixels
+	MacTextLine() : width(-1), height(-1), minWidth(-1), y(0), charwidth(-1), paragraphEnd(false), wordContinuation(false), indent(0), firstLineIndent(0), picpercent(50), table(nullptr), tableSurface(nullptr) {}
+
+	int width;
+	int height;
+	int minWidth;
+	int y;
+	int charwidth;
+	bool paragraphEnd;
+	bool wordContinuation;
+	int indent; // in units
+	int firstLineIndent; // in pixels
 	Common::Path picfname;
 	Common::U32String picalt, pictitle, picext;
-	uint16 picpercent = 50;
-	Common::Array<MacTextTableRow> *table = nullptr;
-	ManagedSurface *tableSurface = nullptr;
+	uint16 picpercent;
+	Common::Array<MacTextTableRow> *table;
+	ManagedSurface *tableSurface;
 
 	Common::Array<MacFontRun> chunks;
 

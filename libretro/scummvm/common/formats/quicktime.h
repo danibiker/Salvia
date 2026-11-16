@@ -99,7 +99,7 @@ public:
 	/** Find out if this parser has an open file handle */
 	bool isOpen() const { return _fd != nullptr; }
 
-	enum class QTVRType {
+	enum QTVRType {
 		OTHER,
 		OBJECT,
 		PANORAMA
@@ -155,7 +155,7 @@ public:
 		CODEC_TYPE_PANO
 	};
 
-	enum class GraphicsMode {
+	enum GraphicsMode {
 		COPY				 = 0x0,   // Directly copy the source image over the destination.
 		DITHER_COPY			 = 0x40,  // Dither the image (if needed), otherwise copy.
 		BLEND				 = 0x20,  // Blend source and destination pixel colors using opcolor values.
@@ -168,14 +168,18 @@ public:
 	};
 
 	struct PanoramaNode {
-		uint32 nodeID = 0;
-		uint32 timestamp = 0;
+	PanoramaNode() : nodeID(0), timestamp(0) {}
+
+		uint32 nodeID;
+		uint32 timestamp;
 	};
 
 	struct PanoramaInformation {
+	PanoramaInformation() : defNodeID(0), defZoom(0.0f) {}
+
 		String name;
-		uint32 defNodeID = 0;
-		float defZoom = 0.0f;
+		uint32 defNodeID;
+		float defZoom;
 		Array<PanoramaNode> nodes;
 	};
 
@@ -346,30 +350,32 @@ public:
 		uint targetTrack;
 	};
 
-	enum class MovieType {
+	enum MovieType {
 		kStandardObject = 1,
 		kOldNavigableMovieScene,
 		kObjectInScene
 	};
 
 	struct Navigation {
-		uint16 columns = 1;
-		uint16 rows = 1;
-		uint16 loop_size = 0;      // Number of frames shot at each position
-		uint16 frame_duration = 1;
+	Navigation() : columns(1), rows(1), loop_size(0), frame_duration(1), movie_type(MovieType::kStandardObject), loop_ticks(0), field_of_view(1.0f), startHPan(1.0f), startVPan(1.0f), endHPan(1.0f), endVPan(1.0f), initialHPan(1.0f), initialVPan(1.0f) {}
 
-		MovieType movie_type = MovieType::kStandardObject;
+		uint16 columns;
+		uint16 rows;
+		uint16 loop_size;      // Number of frames shot at each position
+		uint16 frame_duration;
 
-		uint16 loop_ticks = 0;	 // Number of ticks before next frame of loop is displayed
+		MovieType movie_type;
 
-		float field_of_view = 1.0f;
+		uint16 loop_ticks;	 // Number of ticks before next frame of loop is displayed
 
-		float startHPan = 1.0f;
-		float startVPan = 1.0f;
-		float endHPan = 1.0f;
-		float endVPan = 1.0f;
-		float initialHPan = 1.0f;
-		float initialVPan = 1.0f;
+		float field_of_view;
+
+		float startHPan;
+		float startVPan;
+		float endHPan;
+		float endVPan;
+		float initialHPan;
+		float initialVPan;
 	};
 
 protected:

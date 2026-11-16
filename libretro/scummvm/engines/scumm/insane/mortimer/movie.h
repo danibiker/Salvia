@@ -47,21 +47,25 @@ struct MortimerSprite {
 };
 
 struct MortimerSound {
-	uint frame = 0;
-	uint rate = 11025;
-	byte volume = 127;
-	int8 balance = 0;
-	bool music = false;
-	bool speech = true;
+	MortimerSound() : frame(0), rate(11025), volume(127), balance(0), music(false), speech(true) {}
+
+	uint frame;
+	uint rate;
+	byte volume;
+	int8 balance;
+	bool music;
+	bool speech;
 	Common::Array<byte> samples;
 	Common::Array<byte> script;
 };
 
 struct MortimerMovieContext {
+	MortimerMovieContext() : girl(false), riddle(-1), conditions() {}
+
 	enum Condition { kAtGate, kHasStones, kHostilesRemain, kAnimalsRemain, kDamaged, kOutOfGuesses, kConditionCount };
-	bool girl = false;
-	int riddle = -1;
-	bool conditions[kConditionCount] = {};
+	bool girl;
+	int riddle;
+	bool conditions[kConditionCount];
 	bool matches(uint code) const;
 };
 
@@ -108,12 +112,14 @@ private:
 		uint32 offset, size;
 	};
 	struct Object {
-		uint32 offset = 0, size = 0;
-		uint16 skipA = 0xffff, skipB = 0;
-		int x = 0, y = 0, width = 0, height = 0, scale = 1;
-		byte codec = 0;
-		bool transparent = false;
-		byte remap[256] = {};
+	Object() : offset(0), size(0), skipA(0xffff), skipB(0), x(0), y(0), width(0), height(0), scale(1), codec(0), transparent(false), remap() {}
+
+		uint32 offset, size;
+		uint16 skipA, skipB;
+		int x, y, width, height, scale;
+		byte codec;
+		bool transparent;
+		byte remap[256];
 		Common::Array<byte> pixels;
 	};
 

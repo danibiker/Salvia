@@ -96,7 +96,7 @@ protected:
 
 public:
 	MidiPlayer_Casio(SciVersion soundVersion, MusicType midiType);
-	~MidiPlayer_Casio() override;
+	~MidiPlayer_Casio();
 
 	int open(ResourceManager *resMan) override;
 	void close() override;

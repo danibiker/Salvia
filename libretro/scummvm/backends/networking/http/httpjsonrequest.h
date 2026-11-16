@@ -45,7 +45,7 @@ protected:
 
 public:
 	HttpJsonRequest(JsonCallback cb, ErrorCallback ecb, const Common::String &url);
-	~HttpJsonRequest() override;
+	~HttpJsonRequest();
 
 	void handle() override;
 	void restart() override;

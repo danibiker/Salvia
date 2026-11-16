@@ -31,7 +31,7 @@ public:
 	struct Context;
 
 	MSMPEG4Decoder(int width, int height, int bitsPerPixel);
-	~MSMPEG4Decoder() override;
+	~MSMPEG4Decoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _pixelFormat; }

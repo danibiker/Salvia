@@ -34,7 +34,7 @@
 class EmscriptenTextToSpeechManager final : public Common::TextToSpeechManager {
 public:
 	EmscriptenTextToSpeechManager();
-	~EmscriptenTextToSpeechManager() override;
+	~EmscriptenTextToSpeechManager();
 
 	bool say(const Common::U32String &str, Action action) override;
 

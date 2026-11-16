@@ -229,8 +229,8 @@ protected:
 	virtual void storeSaveGameMetadata(SaveGame *state);
 	virtual void storeSaveGameImage(SaveGame *savedState);
 
-	bool _savegameLoadRequest = false;
-	bool _savegameSaveRequest = false;
+	bool _savegameLoadRequest;
+	bool _savegameSaveRequest;
 	Common::String _savegameFileName;
 	SaveGame *_savedState;
 	bool _justSaveLoaded;
@@ -242,16 +242,16 @@ protected:
 	bool _flipEnable;
 	char _fps[8];
 	bool _doFlip;
-	bool _refreshShadowMask = false;
-	bool _shortFrame = false;
-	bool _setupChanged = true;
+	bool _refreshShadowMask;
+	bool _shortFrame;
+	bool _setupChanged;
 	// This holds the name of the setup in which the movie must be drawed
 	Common::String _movieSetup;
 
-	unsigned _frameStart = 0, _frameTime = 0, _movieTime = 0;
-	int _prevSmushFrame = 0;
-	unsigned int _frameCounter = 0;
-	unsigned int _lastFrameTime = 0;
+	unsigned _frameStart, _frameTime, _movieTime;
+	int _prevSmushFrame;
+	unsigned int _frameCounter;
+	unsigned int _lastFrameTime;
 	unsigned _speedLimitMs;
 	bool _showFps;
 	bool _softRenderer;
@@ -260,7 +260,7 @@ protected:
 	bool *_controlsState;
 	float *_joyAxisPosition;
 
-	bool _changeHardwareState = false;
+	bool _changeHardwareState;
 
 	Actor *_selectedActor;
 	Iris *_iris;
@@ -284,17 +284,17 @@ protected:
 	bool _conceptEnabled[kNumConcepts];
 
 	Common::String _saveMeta1;
-	int _saveMeta2 = 0;
+	int _saveMeta2;
 	Common::String _saveMeta3;
 
 	Commentary *_commentary;
 
 public:
-	int _cursorX = 0;
-	int _cursorY = 0;
-	bool _isUtf8 = false;
-	bool _transcodeChineseToSimplified = false;
-	Font *_overrideFont = nullptr;
+	int _cursorX;
+	int _cursorY;
+	bool _isUtf8;
+	bool _transcodeChineseToSimplified;
+	Font *_overrideFont;
 };
 
 extern GrimEngine *g_grim;

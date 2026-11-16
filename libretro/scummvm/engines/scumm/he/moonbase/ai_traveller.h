@@ -65,7 +65,7 @@ protected:
 public:
 	Traveller(AI *ai);
 	Traveller(int originX, int originY, AI *ai);
-	~Traveller() override {}
+	~Traveller() {}
 
 	IContainedObject *duplicate() override { return this; }
 

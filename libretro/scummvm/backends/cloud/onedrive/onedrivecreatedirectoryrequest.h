@@ -45,7 +45,7 @@ class OneDriveCreateDirectoryRequest: public Networking::Request {
 	void finishCreation(bool success);
 public:
 	OneDriveCreateDirectoryRequest(OneDriveStorage *storage, const Common::String &path, Storage::BoolCallback cb, Networking::ErrorCallback ecb);
-	~OneDriveCreateDirectoryRequest() override;
+	~OneDriveCreateDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

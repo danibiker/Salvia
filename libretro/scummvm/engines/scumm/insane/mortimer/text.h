@@ -29,6 +29,10 @@ namespace Scumm {
 
 class MortimerFont : public Graphics::Font {
 public:
+	MortimerFont() : _height(0), _width(0) {}
+private:
+
+public:
 	bool load(const char *path);
 	bool load(Common::SeekableReadStream &stream);
 	int getFontHeight() const override { return _height; }
@@ -38,7 +42,7 @@ public:
 
 private:
 	Common::Array<MortimerSprite> _glyphs;
-	int _height = 0, _width = 0;
+	int _height, _width;
 };
 
 class MortimerSubtitles {
@@ -53,10 +57,12 @@ public:
 
 private:
 	struct Entry {
+	Entry() : color(1), information(false), conditional(false) {}
+
 		Common::String text;
-		byte color = 1;
-		bool information = false;
-		bool conditional = false;
+		byte color;
+		bool information;
+		bool conditional;
 	};
 
 	MortimerFont _font, _infoFont;

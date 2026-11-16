@@ -32,7 +32,7 @@
 namespace Common {
 class ClickteamInstaller : public MemcachingCaseInsensitiveArchive {
 public:
-	enum class ClickteamTagId : uint16 {
+	enum ClickteamTagId : uint16 {
 		BANNER_IMAGE = 0x1235,
 		FILE_LIST = 0x123a,
 		STRINGS = 0x123e,

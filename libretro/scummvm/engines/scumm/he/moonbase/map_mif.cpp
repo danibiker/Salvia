@@ -76,7 +76,7 @@ static int magic(int x, int y) {
 	return matrix[y % 8][x % 8];
 }
 
-MIF::MIF() {
+MIF::MIF() : _dimension(0), _mapType(0), _name(), _cornerMap(), _centerMap() {
 }
 
 void MIF::generateMap(MapFile *map) {

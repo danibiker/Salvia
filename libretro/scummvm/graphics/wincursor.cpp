@@ -56,7 +56,7 @@ public:
 	bool readFromStream(Common::SeekableReadStream &stream);
 
 private:
-	WinCursor() = delete;
+	WinCursor(); // = delete (not implemented)
 
 	byte *_surface;
 	byte *_mask;

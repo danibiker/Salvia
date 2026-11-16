@@ -908,7 +908,7 @@ ValueDisplayDialog::ValueDisplayDialog(const Common::U32String &label, int minVa
 		int val, uint16 incKey, uint16 decKey)
 	: GUI::Dialog(0, 0, 0, 0),
 	_label(label), _min(minVal), _max(maxVal),
-	_value(val), _incKey(incKey), _decKey(decKey), _timer(0) {
+	_value(val), _incKey(incKey), _decKey(decKey), _timer(0), _percentBarWidth(0) {
 	assert(_min <= _value && _value <= _max);
 }
 
@@ -1277,7 +1277,7 @@ void ScummOptionsContainerWidget::updateAdjustmentSlider(GUI::SliderWidget *slid
 // SCUMM game settings
 
 ScummGameOptionsWidget::ScummGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, const ExtraGuiOptions &options) :
-		ScummOptionsContainerWidget(boss, name, "ScummGameOptionsDialog", domain), _options(options) {
+		ScummOptionsContainerWidget(boss, name, "ScummGameOptionsDialog", domain), _options(options), _c64SidTypeCheckbox(nullptr), _smoothScrollCheckbox(nullptr), _semiSmoothScrollCheckbox(nullptr) {
 	for (uint i = 0; i < _options.size(); i++) {
 		GUI::CheckboxWidget *checkbox = nullptr;
 		if (strcmp(_options[i].configOption, "enhancements") == 0) {
@@ -1383,7 +1383,7 @@ void ScummGameOptionsWidget::handleCommand(GUI::CommandSender *sender, uint32 cm
 // EGA Loom Overture settings
 
 LoomEgaGameOptionsWidget::LoomEgaGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain) :
-		ScummOptionsContainerWidget(boss, name, "LoomEgaGameOptionsDialog", domain) {
+		ScummOptionsContainerWidget(boss, name, "LoomEgaGameOptionsDialog", domain), _enableOriginalGUICheckbox(nullptr), _enableCopyProtectionCheckbox(nullptr), _overtureTicksSlider(nullptr), _overtureTicksValue(nullptr) {
 	GUI::StaticTextWidget *text = new GUI::StaticTextWidget(widgetsBoss(), "LoomEgaGameOptionsDialog.OvertureTicksLabel", _("Overture Timing:"));
 
 	text->setAlign(Graphics::TextAlign::kTextAlignEnd);
@@ -1488,7 +1488,7 @@ void LoomEgaGameOptionsWidget::updateOvertureTicksValue() {
 
 // Options for various Mac games
 MacGameOptionsWidget::MacGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, int gameId, const Common::String &extra) :
-	ScummOptionsContainerWidget(boss, name, "MacGameOptionsWidget", domain) {
+	ScummOptionsContainerWidget(boss, name, "MacGameOptionsWidget", domain), _enableOriginalGUICheckbox(nullptr), _enableGammaCorrectionCheckbox(nullptr), _enableCopyProtectionCheckbox(nullptr), _sndQualitySlider(nullptr), _sndQualityValue(nullptr), _quality(0) {
 	GUI::StaticTextWidget *text = new GUI::StaticTextWidget(widgetsBoss(), "MacGameOptionsWidget.SndQualityLabel", _("Music Quality:"));
 	text->setAlign(Graphics::TextAlign::kTextAlignEnd);
 
@@ -1616,7 +1616,7 @@ void MacGameOptionsWidget::updateQualitySlider() {
 // VGA Loom Playback Adjustment settings
 
 LoomVgaGameOptionsWidget::LoomVgaGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain) :
-		ScummOptionsContainerWidget(boss, name, "LoomVgaGameOptionsDialog", domain) {
+		ScummOptionsContainerWidget(boss, name, "LoomVgaGameOptionsDialog", domain), _enableOriginalGUICheckbox(nullptr), _playbackAdjustmentSlider(nullptr), _playbackAdjustmentValue(nullptr) {
 	GUI::StaticTextWidget *text = new GUI::StaticTextWidget(widgetsBoss(), "LoomVgaGameOptionsDialog.PlaybackAdjustmentLabel", _("Playback Adjust:"));
 
 	text->setAlign(Graphics::TextAlign::kTextAlignEnd);
@@ -1712,7 +1712,7 @@ void LoomVgaGameOptionsWidget::updatePlaybackAdjustmentValue() {
 // MI1 (CD) Playback Adjustment settings
 
 MI1CdGameOptionsWidget::MI1CdGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain) :
-		ScummOptionsContainerWidget(boss, name, "MI1CdGameOptionsDialog", domain) {
+		ScummOptionsContainerWidget(boss, name, "MI1CdGameOptionsDialog", domain), _enableOriginalGUICheckbox(nullptr), _enableSegaShadowModeCheckbox(nullptr), _enableSegaCdWaitCursorWhenPausedCheckbox(nullptr), _introAdjustmentSlider(nullptr), _introAdjustmentValue(nullptr), _outlookAdjustmentSlider(nullptr), _outlookAdjustmentValue(nullptr) {
 	Common::Platform platform = Common::parsePlatform(ConfMan.get("platform", _domain));
 
 	_enableOriginalGUICheckbox = createOriginalGUICheckbox(widgetsBoss(), "MI1CdGameOptionsDialog.EnableOriginalGUI");

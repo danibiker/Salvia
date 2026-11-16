@@ -134,24 +134,24 @@ public:
 	virtual void onMenuClose();
 
 protected:
-	ScummEngine *_vm = nullptr;
-	OSystem *_system = nullptr;
+	ScummEngine *_vm;
+	OSystem *_system;
 
-	Graphics::Surface *_surface = nullptr;
-	MacGuiImpl::MacDialogWindow *_bannerWindow = nullptr;
+	Graphics::Surface *_surface;
+	MacGuiImpl::MacDialogWindow *_bannerWindow;
 
 	Common::Path _resourceFile;
 
-	bool _paletteDirty = false;
-	bool _suspendPaletteUpdates = false;
+	bool _paletteDirty;
+	bool _suspendPaletteUpdates;
 
-	bool _menuIsActive = false;
-	bool _cursorWasVisible = false;
+	bool _menuIsActive;
+	bool _cursorWasVisible;
 
 	Common::HashMap<int, const Graphics::Font *> _fonts;
 	Common::Array<Common::String> _strsStrings;
 
-	int _gameFontId = -1;
+	int _gameFontId;
 
 	byte _unicodeToMacRoman[96];
 
@@ -251,12 +251,12 @@ public:
 	class MacGuiObject {
 	protected:
 		Common::Rect _bounds;
-		bool _redraw = false;
-		bool _enabled = false;
-		bool _visible = true;
+		bool _redraw;
+		bool _enabled;
+		bool _visible;
 
 	public:
-		MacGuiObject(Common::Rect bounds, bool enabled) : _bounds(bounds), _enabled(enabled) {}
+		MacGuiObject(Common::Rect bounds, bool enabled) : _bounds(bounds), _enabled(enabled), _redraw(false), _visible(true) {}
 		virtual ~MacGuiObject() {}
 
 		Common::Rect getBounds() const { return _bounds; }
@@ -271,14 +271,14 @@ public:
 		uint32 _black;
 		uint32 _white;
 
-		int _id = -1;
-		MacWidgetType _type = kWidgetUnknown;
+		int _id;
+		MacWidgetType _type;
 
-		bool _fullRedraw = false;
+		bool _fullRedraw;
 
 		Common::String _text;
-		int _oldValue = 0;
-		int _value = 0;
+		int _oldValue;
+		int _value;
 
 		int drawText(Common::String text, int x, int y, int w, uint32 fg = 0, uint32 bg = 0, Graphics::TextAlign align = Graphics::kTextAlignLeft, bool wordWrap = false, int deltax = 0) const;
 		void drawBitmap(Common::Rect r, const uint16 *bitmap, uint32 color) const;
@@ -373,14 +373,14 @@ public:
 	private:
 		uint32 _fg;
 		uint32 _bg;
-		Graphics::TextAlign _alignment = Graphics::kTextAlignLeft;
-		bool _wordWrap = true;
+		Graphics::TextAlign _alignment;
+		bool _wordWrap;
 
 	public:
 		MacStaticText(
 			MacGuiImpl::MacDialogWindow *window,
 			Common::Rect bounds, Common::String text,
-			bool enabled, Graphics::TextAlign alignment = Graphics::kTextAlignLeft) : MacWidget(window, bounds, text, true) {
+			bool enabled, Graphics::TextAlign alignment = Graphics::kTextAlignLeft) : MacWidget(window, bounds, text, true), _alignment(Graphics::kTextAlignLeft), _wordWrap(true) {
 			_alignment = alignment;
 			_fg = _black;
 			_bg = _white;
@@ -413,15 +413,15 @@ public:
 	private:
 		// Max length of a SCUMM saved game name. We could make this
 		// configurable later, if needed.
-		uint _maxLength = 31;
+		uint _maxLength;
 
-		int _textPos = 1;
-		int _selectLen = 0;
-		int _caretPos = 0;
-		int _caretX = -1;
+		int _textPos;
+		int _selectLen;
+		int _caretPos;
+		int _caretX;
 
-		uint32 _nextCaretBlink = 0;
-		bool _caretVisible = true;
+		uint32 _nextCaretBlink;
+		bool _caretVisible;
 
 		const Graphics::Font *_font;
 		Graphics::Surface _textSurface;
@@ -454,8 +454,8 @@ public:
 
 	class MacImage : public MacWidget {
 	private:
-		Graphics::Surface *_image = nullptr;
-		Graphics::Surface *_mask = nullptr;
+		Graphics::Surface *_image;
+		Graphics::Surface *_mask;
 
 	public:
 		MacImage(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Graphics::Surface *surface, Graphics::Surface *mask, bool enabled);
@@ -473,8 +473,8 @@ public:
 		int _maxValue;
 		int _minPos;
 		int _maxPos;
-		int _handlePos = -1;
-		int _grabOffset = -1;
+		int _handlePos;
+		int _grabOffset;
 
 		Common::HashMap<int, int> _posToValue;
 		Common::HashMap<int, int> _valueToPos;
@@ -488,7 +488,7 @@ public:
 		MacSliderBase(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, int minValue, int maxValue, int minPos, int maxPos, bool enabled)
 			: MacWidget(window, bounds, "SliderBase", enabled),
 			_minValue(minValue), _maxValue(maxValue),
-			_minPos(minPos), _maxPos(maxPos) {}
+			_minPos(minPos), _maxPos(maxPos), _handlePos(-1), _grabOffset(-1) {}
 
 		virtual ~MacSliderBase() {
 			_posToValue.clear();
@@ -511,13 +511,13 @@ public:
 	class MacSlider : public MacSliderBase {
 	private:
 		Common::Point _clickPos;
-		uint32 _nextRepeat = 0;
+		uint32 _nextRepeat;
 
-		int _pageSize = 0;
-		int _paging = 0;
+		int _pageSize;
+		int _paging;
 
-		bool _upArrowPressed = false;
-		bool _downArrowPressed = false;
+		bool _upArrowPressed;
+		bool _downArrowPressed;
 
 		Common::Rect _boundsButtonUp;
 		Common::Rect _boundsButtonDown;
@@ -558,8 +558,8 @@ public:
 		MacImage *_handle;
 		int _minX;
 		int _maxX;
-		bool _freeBackground = false;
-		bool _snapWhileDragging = false;
+		bool _freeBackground;
+		bool _snapWhileDragging;
 
 		void eraseHandle();
 		void drawHandle();
@@ -567,7 +567,7 @@ public:
 	public:
 		 MacImageSlider(MacGuiImpl::MacDialogWindow *window, MacImage *background, MacImage *handle, bool enabled, int minX, int maxX, int minValue, int maxValue, int leftMargin, int rightMargin)
 			: MacSliderBase(window, background->getBounds(), minValue, maxValue, minX + leftMargin, maxX - rightMargin, enabled),
-			_background(background->getImage()), _handle(handle), _minX(minX), _maxX(maxX) {}
+			_background(background->getImage()), _handle(handle), _minX(minX), _maxX(maxX), _freeBackground(false), _snapWhileDragging(false) {}
 		MacImageSlider(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, MacImage *handle, bool enabled, int minX, int maxX, int minValue, int maxValue);
 		~MacImageSlider();
 
@@ -590,7 +590,7 @@ public:
 		Common::StringArray _texts;
 		Common::Array<MacStaticText *> _textWidgets;
 		MacSlider *_slider;
-		bool _sliderFocused = false;
+		bool _sliderFocused;
 
 		void updateTexts();
 		void handleWheel(int distance);
@@ -627,7 +627,7 @@ public:
 	private:
 		Common::StringArray _texts;
 		int _textWidth;
-		bool _menuVisible = false;
+		bool _menuVisible;
 		int _selected;
 		Graphics::Surface _popUpBackground;
 		Common::Rect _popUpBounds;
@@ -673,40 +673,40 @@ public:
 		Common::Rect _bounds;
 		int _margin;
 
-		bool _visible = false;
+		bool _visible;
 
-		uint32 _lastClickTime = 0;
+		uint32 _lastClickTime;
 		Common::Point _lastClickPos;
 
-		Graphics::Surface *_beamCursor = nullptr;
+		Graphics::Surface *_beamCursor;
 		Common::Point _beamCursorPos;
-		bool _cursorWasVisible = false;
-		bool _beamCursorVisible = false;
-		const int _beamCursorHotspotX = 3;
-		const int _beamCursorHotspotY = 4;
+		bool _cursorWasVisible;
+		bool _beamCursorVisible;
+		const int _beamCursorHotspotX;
+		const int _beamCursorHotspotY;
 
 		void drawBeamCursor();
 		void undrawBeamCursor();
 
 		PauseToken _pauseToken;
 
-		Graphics::Surface *_from = nullptr;
-		Graphics::Surface *_backup = nullptr;
+		Graphics::Surface *_from;
+		Graphics::Surface *_backup;
 		Graphics::Surface _surface;
 		Graphics::Surface _innerSurface;
 
 		Common::Array<MacWidget *> _widgets;
 
-		MacWidget *_defaultWidget = nullptr;
+		MacWidget *_defaultWidget;
 
-		MacWidget *_focusedWidget = nullptr;
+		MacWidget *_focusedWidget;
 		Common::Point _oldMousePos;
 		Common::Point _mousePos;
 		Common::Point _realMousePos;
 
 		Common::StringArray _substitutions;
 		Common::Array<Common::Rect> _dirtyRects;
-		bool _dirtyPalette = false;
+		bool _dirtyPalette;
 
 		void queueEvent(MacGuiImpl::MacWidget *widget, MacGuiImpl::MacDialogEventType type);
 
@@ -783,7 +783,7 @@ public:
 	MacGuiImpl(ScummEngine *vm, const Common::Path &resourceFile);
 	virtual ~MacGuiImpl();
 
-	Graphics::MacWindowManager *_windowManager = nullptr;
+	Graphics::MacWindowManager *_windowManager;
 
 	virtual int getNumColors() const = 0;
 

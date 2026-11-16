@@ -26,8 +26,11 @@
 
 namespace Sci {
 
-UpscaledGfxDriver::UpscaledGfxDriver(int16 textAlignX, bool scaleCursor, bool rgbRendering) :
-	UpscaledGfxDriver(640, 400, textAlignX, scaleCursor, rgbRendering) {
+UpscaledGfxDriver::UpscaledGfxDriver(int16 textAlignX, bool scaleCursor, bool rgbRendering) : GfxDefaultDriver(640, 400, false, rgbRendering), _textAlignX(textAlignX), _scaleCursor(scaleCursor), _needCursorBuffer(false),
+	_scaledBitmap(nullptr), _renderScaled(nullptr), _renderGlyph(nullptr), _cursorWidth(0), _cursorHeight(0), _hScaleMult(2), _vScaleMult(2), _vScaleDiv(1) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_virtualW = 320;
+	_virtualH = 200;
 }
 
 UpscaledGfxDriver::UpscaledGfxDriver(uint16 scaledW, uint16 scaledH, int16 textAlignX, bool scaleCursor, bool rgbRendering) :

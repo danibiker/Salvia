@@ -55,7 +55,7 @@ class KIASectionLoad : public KIASectionBase {
 
 public:
 	KIASectionLoad(BladeRunnerEngine *vm);
-	~KIASectionLoad() override;
+	~KIASectionLoad();
 
 	void open() override;
 	void close() override;

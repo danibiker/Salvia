@@ -32,7 +32,7 @@ public:
 	static Socket *connect(const Common::String &url);
 
 	AndroidSocket(JNIEnv *env, jobject socket);
-	~AndroidSocket() override;
+	~AndroidSocket();
 
 	int ready() override;
 

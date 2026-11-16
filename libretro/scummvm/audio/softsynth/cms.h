@@ -71,7 +71,7 @@ public:
 		_basePort = basePort;
 	}
 
-	~DOSBoxCMS() override { }
+	~DOSBoxCMS() { }
 
 	bool init() override;
 	void reset() override;

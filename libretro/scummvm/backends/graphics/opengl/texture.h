@@ -172,7 +172,7 @@ public:
 	 * @param format      The format used for the texture input.
 	 */
 	TextureSurface(GLenum glIntFormat, GLenum glFormat, GLenum glType, const Graphics::PixelFormat &format);
-	~TextureSurface() override;
+	~TextureSurface();
 
 	void destroy() override;
 
@@ -211,7 +211,7 @@ private:
 class FakeTextureSurface : public TextureSurface {
 public:
 	FakeTextureSurface(GLenum glIntFormat, GLenum glFormat, GLenum glType, const Graphics::PixelFormat &format, const Graphics::PixelFormat &fakeFormat);
-	~FakeTextureSurface() override;
+	~FakeTextureSurface();
 
 	void allocate(uint width, uint height) override;
 	void setMask(const byte *mask) override;
@@ -241,7 +241,7 @@ protected:
 class ScaledTextureSurface : public FakeTextureSurface {
 public:
 	ScaledTextureSurface(GLenum glIntFormat, GLenum glFormat, GLenum glType, const Graphics::PixelFormat &format, const Graphics::PixelFormat &fakeFormat);
-	~ScaledTextureSurface() override;
+	~ScaledTextureSurface();
 
 	void allocate(uint width, uint height) override;
 
@@ -273,7 +273,7 @@ class CLUT8LookUpPipeline;
 class TextureSurfaceCLUT8GPU : public Surface {
 public:
 	TextureSurfaceCLUT8GPU();
-	~TextureSurfaceCLUT8GPU() override;
+	~TextureSurfaceCLUT8GPU();
 
 	void destroy() override;
 

@@ -203,7 +203,7 @@ class Texture;
 class TextureTarget : public Framebuffer {
 public:
 	TextureTarget();
-	~TextureTarget() override;
+	~TextureTarget();
 
 	/**
 	 * Notify that the GL context is about to be destroyed.

@@ -51,7 +51,7 @@ class FilesPageHandler: public FilesBaseHandler {
 
 public:
 	FilesPageHandler();
-	~FilesPageHandler() override;
+	~FilesPageHandler();
 
 	void handle(Client &client) override;
 };

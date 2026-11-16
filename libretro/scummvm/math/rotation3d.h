@@ -52,7 +52,7 @@ enum EulerOrder {
 template<class T>
 class Rotation3D : public Transform<T> {
 public:
-	constexpr Rotation3D();
+	Rotation3D();
 
 	/**
 	 * Constructor and assignment from buildFromEuler
@@ -101,7 +101,7 @@ public:
 };
 
 template<class T>
-constexpr Rotation3D<T>::Rotation3D() : Transform<T>() {}
+Rotation3D<T>::Rotation3D() : Transform<T>() {}
 
 template<class T>
 void Rotation3D<T>::buildFromEuler(const Angle &first, const Angle &second, const Angle &third, EulerOrder order) {

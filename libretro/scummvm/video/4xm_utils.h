@@ -30,25 +30,25 @@ namespace Video {
 namespace FourXM {
 
 struct RawDeltaReader {
-	const byte *data = nullptr;
-	uint32 size = 0;
-	uint32 mode = 0;
-	uint32 wordBitsLeft = 16;
-	uint32 wordIndex = 1;
-	uint32 controlWord = 0;
-	uint32 pairIndex = 0;
-	uint32 byteIndex = 0;
-	uint32 nibbleBitsLeft = 8;
-	uint32 nibbleWordIndex = 1;
-	uint32 nibbleWord = 0;
-	uint32 pairOffset = 0;
-	uint32 byteOffset = 0;
-	uint32 signedByteOffset = 0;
-	uint32 nibbleOffset = 0;
-	uint32 signedByteIndex = 0;
-	bool separateSignedByteStream = false;
+	const byte *data;
+	uint32 size;
+	uint32 mode;
+	uint32 wordBitsLeft;
+	uint32 wordIndex;
+	uint32 controlWord;
+	uint32 pairIndex;
+	uint32 byteIndex;
+	uint32 nibbleBitsLeft;
+	uint32 nibbleWordIndex;
+	uint32 nibbleWord;
+	uint32 pairOffset;
+	uint32 byteOffset;
+	uint32 signedByteOffset;
+	uint32 nibbleOffset;
+	uint32 signedByteIndex;
+	bool separateSignedByteStream;
 
-	RawDeltaReader() = default;
+	RawDeltaReader() : data(nullptr), size(0), mode(0), wordBitsLeft(16), wordIndex(1), controlWord(0), pairIndex(0), byteIndex(0), nibbleBitsLeft(8), nibbleWordIndex(1), nibbleWord(0), pairOffset(0), byteOffset(0), signedByteOffset(0), nibbleOffset(0), signedByteIndex(0), separateSignedByteStream(false) {};
 	RawDeltaReader(const byte *ptr, uint32 len);
 	RawDeltaReader(const byte *ptr, uint32 len, uint32 streamBase, uint32 pairOff, uint32 byteOff,
 				   uint32 signedByteOff, uint32 nibbleOff, uint32 controlOff);

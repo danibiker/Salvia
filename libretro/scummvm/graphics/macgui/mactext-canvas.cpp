@@ -43,7 +43,8 @@ MacTextCanvas::~MacTextCanvas() {
 	delete _glyphMask;
 	delete _charBoxMask;
 
-	for (auto &t : _text) {
+	for (auto rfIt46 = _text.begin(), rfEnd46 = _text.end(); rfIt46 != rfEnd46; ++rfIt46) {
+		auto &t = *rfIt46;
 		delete t.table;
 		delete t.tableSurface;
 	}
@@ -1258,7 +1259,8 @@ void MacTextCanvas::reshuffleParagraph(int *row, int *col, MacFontRun &defaultFo
 	Common::Array<MacFontRun> chunks;
 
 	for (int i = start; i <= end; i++) {
-		for (auto &ch : _text[i].chunks) {
+		for (auto rfIt1261 = _text[i].chunks.begin(), rfEnd1261 = _text[i].chunks.end(); rfIt1261 != rfEnd1261; ++rfIt1261) {
+			auto &ch = *rfIt1261;
 			if (!chunks.size()) {
 				chunks.push_back(ch);
 			} else {
@@ -1301,7 +1303,8 @@ void MacTextCanvas::reshuffleParagraph(int *row, int *col, MacFontRun &defaultFo
 	_text[curLine].indent = indent;
 	_text[curLine].firstLineIndent = firstLineIndent;
 
-	for (auto &ch : chunks) {
+	for (auto rfIt1304 = chunks.begin(), rfEnd1304 = chunks.end(); rfIt1304 != rfEnd1304; ++rfIt1304) {
+		auto &ch = *rfIt1304;
 		_text[curLine].chunks.push_back(ch);
 		_text[curLine].chunks.back().text.clear(); // We wil add it later
 		chopChunk(ch.text, &curLine, indent, _maxWidth);
@@ -1375,9 +1378,11 @@ void MacTextCanvas::processTable(int line, int maxWidth) {
 	int gutter = 10;
 
 	// Compute column widths, both minimal and maximal
-	for (auto &row : *table) {
+	for (auto rfIt1378 = (*table).begin(), rfEnd1378 = (*table).end(); rfIt1378 != rfEnd1378; ++rfIt1378) {
+		auto &row = *rfIt1378;
 		int i = 0;
-		for (auto &cell : row.cells) {
+		for (auto rfIt1380 = row.cells.begin(), rfEnd1380 = row.cells.end(); rfIt1380 != rfEnd1380; ++rfIt1380) {
+			auto &cell = *rfIt1380;
 			int cW = 0, cL = 0;
 			for (uint l = 0; l < cell._text.size(); l++) {
 				(void)cell.getLineWidth(l); // calculate it
@@ -1454,10 +1459,12 @@ void MacTextCanvas::processTable(int line, int maxWidth) {
 	}
 
 	int r = 0;
-	for (auto &row : *table) {
+	for (auto rfIt1457 = (*table).begin(), rfEnd1457 = (*table).end(); rfIt1457 != rfEnd1457; ++rfIt1457) {
+		auto &row = *rfIt1457;
 		int c = 0;
 		rowH[r] = 0;
-		for (auto &cell : row.cells) {
+		for (auto rfIt1460 = row.cells.begin(), rfEnd1460 = row.cells.end(); rfIt1460 != rfEnd1460; ++rfIt1460) {
+			auto &cell = *rfIt1460;
 			cell.setMaxWidth(colW[c], _defaultFormatting);
 
 			cell.recalcDims();
@@ -1505,10 +1512,12 @@ void MacTextCanvas::processTable(int line, int maxWidth) {
 
 	r = 0;
 	y = 1 + gutter;
-	for (auto &row : *table) {
+	for (auto rfIt1508 = (*table).begin(), rfEnd1508 = (*table).end(); rfIt1508 != rfEnd1508; ++rfIt1508) {
+		auto &row = *rfIt1508;
 		int c = 0;
 		x = 1 + gutter;
-		for (auto &cell : row.cells) {
+		for (auto rfIt1511 = row.cells.begin(), rfEnd1511 = row.cells.end(); rfIt1511 != rfEnd1511; ++rfIt1511) {
+			auto &cell = *rfIt1511;
 			surf->blitFrom(*cell._surface, Common::Point(x, y));
 			x += gutter * 2 + 1 + colW[c];
 			c++;

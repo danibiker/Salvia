@@ -41,7 +41,8 @@ bool b64Validate(String &string) {
 	String encodingStr(encodingTable);
 
 	// It must also use characters defined in the encoding table,
-	for (char c : string) {
+	for (auto rfIt44 = string.begin(), rfEnd44 = string.end(); rfIt44 != rfEnd44; ++rfIt44) {
+		char c = *rfIt44;
 		if (!encodingStr.contains(c)) {
 			// or the padding character (=).
 			if (c != '=')
@@ -65,7 +66,8 @@ String b64EncodeString(String &string) {
 	String out;
 	uint32 val = 0;
 	int32 valb = -6;
-	for (uint8 c : string) {
+	for (auto rfIt68 = string.begin(), rfEnd68 = string.end(); rfIt68 != rfEnd68; ++rfIt68) {
+		uint8 c = *rfIt68;
 		val = (val << 8) + c;
 		valb += 8;
 		while (valb >= 0) {
@@ -138,7 +140,8 @@ String b64DecodeString(String &string) {
 
 	uint32 val = 0;
 	int32 valb = -8;
-	for (char c : string) {
+	for (auto rfIt141 = string.begin(), rfEnd141 = string.end(); rfIt141 != rfEnd141; ++rfIt141) {
+		char c = *rfIt141;
 		if (T[c] == -1)
 			break;
 		val = (val << 6) + T[c];
@@ -168,7 +171,8 @@ MemoryReadStream *b64DecodeStream(String &string, uint32 outputLength) {
 
 	uint32 val = 0, valc = 0;
 	int32 valb = -8;
-	for (char c : string) {
+	for (auto rfIt171 = string.begin(), rfEnd171 = string.end(); rfIt171 != rfEnd171; ++rfIt171) {
+		char c = *rfIt171;
 		if (T[c] == -1)
 			break;
 		val = (val << 6) + T[c];
@@ -195,7 +199,8 @@ bool b64DecodeData(String &string, void *dataPtr) {
 
 	uint32 val = 0, valc = 0;
 	int32 valb = -8;
-	for (char c : string) {
+	for (auto rfIt198 = string.begin(), rfEnd198 = string.end(); rfIt198 != rfEnd198; ++rfIt198) {
+		char c = *rfIt198;
 		if (T[c] == -1)
 			break;
 		val = (val << 6) + T[c];

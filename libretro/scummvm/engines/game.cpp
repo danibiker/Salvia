@@ -60,7 +60,7 @@ DetectedGame::DetectedGame() :
 		canBeAdded(true),
 		language(Common::UNK_LANG),
 		platform(Common::kPlatformUnknown),
-		gameSupportLevel(kStableGame) {
+		gameSupportLevel(kStableGame), isSelected(false), isAddOn(false) {
 }
 
 DetectedGame::DetectedGame(const Common::String &engine, const PlainGameDescriptor &pgd) :
@@ -69,7 +69,7 @@ DetectedGame::DetectedGame(const Common::String &engine, const PlainGameDescript
 		canBeAdded(true),
 		language(Common::UNK_LANG),
 		platform(Common::kPlatformUnknown),
-		gameSupportLevel(kStableGame) {
+		gameSupportLevel(kStableGame), isSelected(false), isAddOn(false) {
 
 	gameId = pgd.gameId;
 	preferredTarget = pgd.gameId;
@@ -80,7 +80,7 @@ DetectedGame::DetectedGame(const Common::String &engine, const Common::String &i
 		engineId(engine),
 		hasUnknownFiles(false),
 		canBeAdded(true),
-		gameSupportLevel(kStableGame) {
+		gameSupportLevel(kStableGame), isSelected(false), isAddOn(false) {
 
 	gameId = id;
 	preferredTarget = id;
@@ -238,7 +238,8 @@ Common::U32String generateUnknownGameReport(const DetectedGames &detectedGames, 
 		report += game.preferredTarget;
 
 		// Consolidate matched files across all engines and detection entries
-		for (const auto &file : game.matchedFiles) {
+		for (auto rfIt241 = game.matchedFiles.begin(), rfEnd241 = game.matchedFiles.end(); rfIt241 != rfEnd241; ++rfIt241) {
+			const auto &file = *rfIt241;
 			Common::Path filename = file._key;
 			// Avoid double encoding of punycoded files
 			if (!filename.punycodeIsEncoded()) {
@@ -256,7 +257,8 @@ Common::U32String generateUnknownGameReport(const DetectedGames &detectedGames, 
 	report += Common::U32String("\n\n");
 
 	Common::StringArray filenames;
-	for (const auto &file : matchedFiles) {
+	for (auto rfIt259 = matchedFiles.begin(), rfEnd259 = matchedFiles.end(); rfIt259 != rfEnd259; ++rfIt259) {
+		const auto &file = *rfIt259;
 		filenames.push_back(file._key);
 	}
 	Common::sort(filenames.begin(), filenames.end());

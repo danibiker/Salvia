@@ -47,7 +47,7 @@ private:
 
 public:
 	Sortie(AI *ai) { _ai = ai; _unitType = 0; _shotPosX = _shotPosY = 0; }
-	~Sortie() override;
+	~Sortie();
 
 	static void setSourcePos(int x, int y) {
 		_sSourceX = x;

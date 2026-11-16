@@ -41,7 +41,7 @@ class SaveLoadCloudSyncProgressDialog : public Dialog { //protected?
 
 public:
 	SaveLoadCloudSyncProgressDialog(bool canRunInBackground, SaveLoadChooserDialog *parent);
-	~SaveLoadCloudSyncProgressDialog() override;
+	~SaveLoadCloudSyncProgressDialog();
 
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
 	void handleTickle() override;
@@ -74,7 +74,7 @@ class SaveLoadChooserDialog : protected Dialog {
 public:
 	SaveLoadChooserDialog(const Common::String &dialogName, const bool saveMode);
 	SaveLoadChooserDialog(int x, int y, int w, int h, const bool saveMode);
-	~SaveLoadChooserDialog() override;
+	~SaveLoadChooserDialog();
 
 	void open() override;
 	void close() override;
@@ -205,7 +205,7 @@ private:
 class SaveLoadChooserGrid : public SaveLoadChooserDialog {
 public:
 	SaveLoadChooserGrid(const Common::U32String &title, bool saveMode);
-	~SaveLoadChooserGrid() override;
+	~SaveLoadChooserGrid();
 
 	const Common::String getResultString() const override;
 

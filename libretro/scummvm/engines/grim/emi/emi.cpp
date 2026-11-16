@@ -79,23 +79,25 @@ const char *EMIEngine::getUpdateFilename() {
 }
 
 void EMIEngine::pushText() {
-	for (TextObject *t : TextObject::getPool()) {
+	{ auto &rfRange82 = TextObject::getPool(); for (auto rfIt82 = rfRange82.begin(), rfEnd82 = rfRange82.end(); rfIt82 != rfEnd82; ++rfIt82) {
+		TextObject *t = *rfIt82;
 		t->incStackLevel();
-	}
+	} }
 	invalidateTextObjectsSortOrder();
 }
 
 void EMIEngine::popText() {
 	Common::List<TextObject *> toDelete;
 
-	for (TextObject *t : TextObject::getPool()) {
+	{ auto &rfRange91 = TextObject::getPool(); for (auto rfIt91 = rfRange91.begin(), rfEnd91 = rfRange91.end(); rfIt91 != rfEnd91; ++rfIt91) {
+		TextObject *t = *rfIt91;
 		if (t->getStackLevel() == 0) {
 			warning("Text stack top not empty; deleting object");
 			toDelete.push_back(t);
 		} else {
 			t->decStackLevel();
 		}
-	}
+	} }
 
 	while (!toDelete.empty()) {
 		TextObject *t = toDelete.front();
@@ -109,11 +111,12 @@ void EMIEngine::popText() {
 void EMIEngine::purgeText() {
 	Common::List<TextObject *> toDelete;
 
-	for (TextObject *t : TextObject::getPool()) {
+	{ auto &rfRange112 = TextObject::getPool(); for (auto rfIt112 = rfRange112.begin(), rfEnd112 = rfRange112.end(); rfIt112 != rfEnd112; ++rfIt112) {
+		TextObject *t = *rfIt112;
 		if (t->getStackLevel() == 0) {
 			toDelete.push_back(t);
 		}
-	}
+	} }
 
 	while (!toDelete.empty()) {
 		TextObject *t = toDelete.front();
@@ -190,15 +193,17 @@ void EMIEngine::drawNormalMode() {
 
 	g_driver->drawDimPlane();
 
-	for (Actor *a : _activeActors) {
+	for (auto rfIt193 = _activeActors.begin(), rfEnd193 = _activeActors.end(); rfIt193 != rfEnd193; ++rfIt193) {
+		Actor *a = *rfIt193;
 		if (a->isInOverworld())
 			a->draw();
 	}
 
 	// Draw Primitives
-	for (PrimitiveObject *p : PrimitiveObject::getPool()) {
+	{ auto &rfRange199 = PrimitiveObject::getPool(); for (auto rfIt199 = rfRange199.begin(), rfEnd199 = rfRange199.end(); rfIt199 != rfEnd199; ++rfIt199) {
+		PrimitiveObject *p = *rfIt199;
 		p->draw();
-	}
+	} }
 
 	flagRefreshShadowMask(false);
 
@@ -272,7 +277,8 @@ bool EMIEngine::compareLayer(const Layer *x, const Layer *y) {
 
 void EMIEngine::drawTextObjects() {
 	sortTextObjects();
-	for (TextObject *t : _textObjects) {
+	for (auto rfIt275 = _textObjects.begin(), rfEnd275 = _textObjects.end(); rfIt275 != rfEnd275; ++rfIt275) {
+		TextObject *t = *rfIt275;
 		t->draw();
 	}
 }
@@ -284,20 +290,22 @@ void EMIEngine::sortTextObjects() {
 	_textObjectsSortOrderInvalidated = false;
 
 	_textObjects.clear();
-	for (TextObject *t : TextObject::getPool()) {
+	{ auto &rfRange287 = TextObject::getPool(); for (auto rfIt287 = rfRange287.begin(), rfEnd287 = rfRange287.end(); rfIt287 != rfEnd287; ++rfIt287) {
+		TextObject *t = *rfIt287;
 		if (t->getStackLevel() == 0) {
 			_textObjects.push_back(t);
 		}
-	}
+	} }
 
 	Common::sort(_textObjects.begin(), _textObjects.end(), compareTextLayer);
 }
 
 void EMIEngine::sortLayers() {
 	_layers.clear();
-	for (Layer *l : Layer::getPool()) {
+	{ auto &rfRange298 = Layer::getPool(); for (auto rfIt298 = rfRange298.begin(), rfEnd298 = rfRange298.end(); rfIt298 != rfEnd298; ++rfIt298) {
+		Layer *l = *rfIt298;
 		_layers.push_back(l);
-	}
+	} }
 
 	Common::sort(_layers.begin(), _layers.end(), compareLayer);
 }

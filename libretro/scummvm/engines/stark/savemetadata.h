@@ -79,7 +79,7 @@ public:
 	/** Write the game screen thumbnail to a stream */
 	void writeGameScreenThumbnail(Common::WriteStream *stream);
 
-	static constexpr inline Graphics::PixelFormat getPixelFormat() {
+	static inline Graphics::PixelFormat getPixelFormat() {
 		return Graphics::PixelFormat::createFormatRGBA32();
 	}
 

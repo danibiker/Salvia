@@ -38,7 +38,7 @@ namespace Scumm {
 // Base widget
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacWidget::MacWidget(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, bool enabled) : MacGuiObject(bounds, enabled), _window(window), _text(text) {
+MacGuiImpl::MacWidget::MacWidget(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, bool enabled) : MacGuiObject(bounds, enabled), _window(window), _text(text), _id(-1), _type(kWidgetUnknown), _fullRedraw(false), _oldValue(0), _value(0) {
 	_black = _window->_gui->getBlack();
 	_white = _window->_gui->getWhite();
 
@@ -386,7 +386,7 @@ void MacGuiImpl::MacStaticText::draw(bool drawFocused) {
 // actual selection by mouse enormously.
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacEditText::MacEditText(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, bool enabled) : MacWidget(window, bounds, text, enabled) {
+MacGuiImpl::MacEditText::MacEditText(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, bool enabled) : MacWidget(window, bounds, text, enabled), _maxLength(31), _textPos(1), _selectLen(0), _caretPos(0), _caretX(-1), _nextCaretBlink(0), _caretVisible(true) {
 	_font = _window->_gui->getFont(kSystemFont);
 
 	// This widget gets its own text surface, to ensure that the text is
@@ -807,7 +807,7 @@ void MacGuiImpl::MacEditText::handleMouseMove(Common::Event &event) {
 // Image widget
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacImage::MacImage(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Graphics::Surface *surface, Graphics::Surface *mask, bool enabled) : MacWidget(window, bounds, "Picture", enabled) {
+MacGuiImpl::MacImage::MacImage(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Graphics::Surface *surface, Graphics::Surface *mask, bool enabled) : MacWidget(window, bounds, "Picture", enabled), _image(nullptr), _mask(nullptr) {
 	_image = surface;
 	_mask = mask;
 }
@@ -897,7 +897,7 @@ int MacGuiImpl::MacSliderBase::calculatePosFromValue(int value) const {
 
 MacGuiImpl::MacSlider::MacSlider(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, int minValue, int maxValue, int pageSize, bool enabled)
 	: MacSliderBase(window, bounds, minValue, maxValue, 0, 0, enabled),
-	_pageSize(pageSize) {
+	_pageSize(pageSize), _nextRepeat(0), _paging(0), _upArrowPressed(false), _downArrowPressed(false) {
 	_boundsButtonUp = Common::Rect(_bounds.left, _bounds.top, _bounds.right, _bounds.top + 16);
 	_boundsButtonDown = Common::Rect(_bounds.left, _bounds.bottom - 16, _bounds.right, _bounds.bottom);
 	_boundsBody = Common::Rect(_bounds.left, _bounds.top + 16, _bounds.right, _bounds.bottom - 16);
@@ -1303,7 +1303,7 @@ void MacGuiImpl::MacSlider::handleWheelDown() {
 // ---------------------------------------------------------------------------
 
 MacGuiImpl::MacImageSlider::MacImageSlider(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, MacImage *handle, bool enabled, int minX, int maxX, int minValue, int maxValue)
-	: MacSliderBase(window, bounds, minValue, maxValue, minX, maxX, enabled), _handle(handle), _minX(minX), _maxX(maxX) {
+	: MacSliderBase(window, bounds, minValue, maxValue, minX, maxX, enabled), _handle(handle), _minX(minX), _maxX(maxX), _freeBackground(false), _snapWhileDragging(false) {
 	_background = new Graphics::Surface();
 	_background->copyFrom(window->innerSurface()->getSubArea(bounds));
 	_freeBackground = true;
@@ -1436,7 +1436,7 @@ void MacGuiImpl::MacImageSlider::handleWheelDown() {
 // List box widget
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacListBox::MacListBox(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::StringArray texts, bool enabled, bool contentUntouchable) : MacWidget(window, bounds, "ListBox", enabled), _texts(texts) {
+MacGuiImpl::MacListBox::MacListBox(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::StringArray texts, bool enabled, bool contentUntouchable) : MacWidget(window, bounds, "ListBox", enabled), _texts(texts), _sliderFocused(false) {
 	int pageSize = _bounds.height() / 16;
 
 	int numSlots = MIN<int>(pageSize, texts.size());
@@ -1655,7 +1655,7 @@ bool MacGuiImpl::MacListBox::handleKeyDown(Common::Event &event) {
 // Pop-up menu widget
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacPopUpMenu::MacPopUpMenu(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, int textWidth, Common::StringArray texts, bool enabled) : MacWidget(window, bounds, text, enabled), _textWidth(textWidth), _texts(texts) {
+MacGuiImpl::MacPopUpMenu::MacPopUpMenu(MacGuiImpl::MacDialogWindow *window, Common::Rect bounds, Common::String text, int textWidth, Common::StringArray texts, bool enabled) : MacWidget(window, bounds, text, enabled), _textWidth(textWidth), _texts(texts), _menuVisible(false) {
 	_enhUIUX = g_engine->enhancementEnabled(kEnhUIUX);
 	_floating = false;
 	_black = _window->_gui->getBlack();

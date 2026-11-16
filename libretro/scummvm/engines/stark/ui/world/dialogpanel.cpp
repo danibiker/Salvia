@@ -43,7 +43,7 @@ DialogPanel::DialogPanel(Gfx::Driver *gfx, Cursor *cursor) :
 		_firstVisibleOption(0),
 		_lastVisibleOption(0),
 		_focusedOption(0),
-		_acceptIdleMousePos(false) {
+		_acceptIdleMousePos(false), _aprilColor(Gfx::Color(0xFF, 0xC0, 0x00)), _otherColor(Gfx::Color(0xFF, 0x40, 0x40)) {
 	_position = Common::Rect(Gfx::Driver::kOriginalWidth, Gfx::Driver::kBottomBorderHeight);
 	_position.translate(0, Gfx::Driver::kTopBorderHeight + Gfx::Driver::kGameViewportHeight);
 

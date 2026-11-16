@@ -129,8 +129,8 @@ CoroutineScheduler::~CoroutineScheduler() {
 	active = nullptr;
 
 	// Clear the event list
-	for (auto *event : _events)
-		delete event;
+	for (auto rfIt132 = _events.begin(), rfEnd132 = _events.end(); rfIt132 != rfEnd132; ++rfIt132)
+		{ auto *event = *rfIt132; delete event; }
 }
 
 void CoroutineScheduler::reset() {
@@ -244,7 +244,8 @@ void CoroutineScheduler::schedule() {
 	}
 
 	// Disable any events that were pulsed
-	for (auto &event : _events) {
+	for (auto rfIt247 = _events.begin(), rfEnd247 = _events.end(); rfIt247 != rfEnd247; ++rfIt247) {
+		auto &event = *rfIt247;
 		if (event->pulsing) {
 			event->pulsing = event->signalled = false;
 		}
@@ -666,7 +667,8 @@ PROCESS *CoroutineScheduler::getProcess(uint32 pid) {
 }
 
 EVENT *CoroutineScheduler::getEvent(uint32 pid) {
-	for (auto &event : _events) {
+	for (auto rfIt669 = _events.begin(), rfEnd669 = _events.end(); rfIt669 != rfEnd669; ++rfIt669) {
+		auto &event = *rfIt669;
 		if (event->pid == pid)
 			return event;
 	}

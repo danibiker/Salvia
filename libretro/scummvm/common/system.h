@@ -79,7 +79,12 @@ class HardwareInputSet;
 class Keymap;
 class KeymapperDefaultBindings;
 
-enum RotationMode : int;
+}
+
+// MSVC 2010 does not support opaque enum declarations ("enum X : int;"), include the definition instead
+#include "common/rotationmode.h"
+
+namespace Common {
 
 typedef Array<Keymap *> KeymapArray;
 }

@@ -142,7 +142,7 @@ struct PixelFormat {
 	byte rShift, gShift, bShift, aShift; /**< Binary left shift of each color component in the pixel value. */
 
 	/** Default constructor that creates a null pixel format. */
-	constexpr PixelFormat() :
+	PixelFormat() :
 		bytesPerPixel(0),
 		rLoss(0), gLoss(0), bLoss(0), aLoss(0),
 		rShift(0), gShift(0), bShift(0), aShift(0) {}
@@ -165,7 +165,7 @@ struct PixelFormat {
 	 *  @endcode
 	 */
 
-	constexpr PixelFormat(byte BytesPerPixel,
+	PixelFormat(byte BytesPerPixel,
 						byte RBits, byte GBits, byte BBits, byte ABits,
 						byte RShift, byte GShift, byte BShift, byte AShift) :
 		bytesPerPixel(BytesPerPixel),
@@ -181,12 +181,12 @@ struct PixelFormat {
 	}
 
 	/** Define a CLUT8 pixel format. */
-	static constexpr inline PixelFormat createFormatCLUT8() {
+	static inline PixelFormat createFormatCLUT8() {
 		return PixelFormat(1, 0, 0, 0, 0, 0, 0, 0, 0);
 	}
 
 	/** Define an endian-aware RGB24 pixel format. */
-	static constexpr inline PixelFormat createFormatRGB24() {
+	static inline PixelFormat createFormatRGB24() {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(3, 8, 8, 8, 0, 16, 8, 0, 0);
 #else
@@ -195,7 +195,7 @@ struct PixelFormat {
 	}
 
 	/** Define an endian-aware BGR24 pixel format. */
-	static constexpr inline PixelFormat createFormatBGR24() {
+	static inline PixelFormat createFormatBGR24() {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(3, 8, 8, 8, 0, 0, 8, 16, 0);
 #else
@@ -204,7 +204,7 @@ struct PixelFormat {
 	}
 
 	/** Define an endian-aware RGBA32 pixel format. */
-	static constexpr inline PixelFormat createFormatRGBA32(bool alpha = true) {
+	static inline PixelFormat createFormatRGBA32(bool alpha = true) {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 24, 16, 8, 0);
 #else
@@ -213,7 +213,7 @@ struct PixelFormat {
 	}
 
 	/** Define an endian-aware BGRA32 pixel format. */
-	static constexpr inline PixelFormat createFormatBGRA32(bool alpha = true) {
+	static inline PixelFormat createFormatBGRA32(bool alpha = true) {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 8, 16, 24, 0);
 #else
@@ -222,7 +222,7 @@ struct PixelFormat {
 	}
 
 	/** Define an endian-aware ABGR32 pixel format. */
-	static constexpr inline PixelFormat createFormatABGR32(bool alpha = true) {
+	static inline PixelFormat createFormatABGR32(bool alpha = true) {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 0, 8, 16, 24);
 #else
@@ -231,7 +231,7 @@ struct PixelFormat {
 	}
 
 	/** Define an endian-aware ARGB32 pixel format. */
-	static constexpr inline PixelFormat createFormatARGB32(bool alpha = true) {
+	static inline PixelFormat createFormatARGB32(bool alpha = true) {
 #ifdef SCUMM_BIG_ENDIAN
 		return Graphics::PixelFormat(4, 8, 8, 8, alpha ? 8 : 0, 16, 8, 0, 24);
 #else

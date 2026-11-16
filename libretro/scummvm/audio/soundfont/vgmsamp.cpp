@@ -96,7 +96,8 @@ bool VGMSampColl::Load() {
 		return false;
 
 	if (_unLength == 0) {
-		for (auto &samp : _samples) {
+		for (auto rfIt99 = _samples.begin(), rfEnd99 = _samples.end(); rfIt99 != rfEnd99; ++rfIt99) {
+			auto &samp = *rfIt99;
 			// Some formats can have negative sample offset
 			// For example, Konami's SNES format and Hudson's SNES format
 			// TODO: Fix negative sample offset without breaking instrument

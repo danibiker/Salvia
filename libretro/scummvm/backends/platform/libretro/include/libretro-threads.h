@@ -63,6 +63,26 @@ int retro_get_scummvm_res(void);
  */
 bool retro_emu_thread_started(void);
 
+/* Fatal error handling (error() -> OSystem::fatalError()).
+ *
+ * ScummVM's error() never returns: every caller assumes execution stops there.
+ * Instead of exit()ing the whole process (which would also kill a frontend that
+ * links the core statically), the emulation thread is abandoned: it is marked
+ * as exited/aborted and control goes back to the main thread for good. The
+ * main thread then reports the error and asks the frontend to shut the core
+ * down (RETRO_ENVIRONMENT_SHUTDOWN).
+ *
+ * retro_emu_thread_is_current(): true when called from the emulation thread.
+ * retro_emu_thread_abort(): call from the emulation thread only; never returns.
+ * retro_emu_thread_mark_aborted(): call from the main thread, when the fatal
+ *   error happened there; the emulation thread is never resumed afterwards.
+ * retro_emu_thread_aborted(): true after either of the two above.
+ */
+bool retro_emu_thread_is_current(void);
+void retro_emu_thread_abort(int res);
+void retro_emu_thread_mark_aborted(int res);
+bool retro_emu_thread_aborted(void);
+
 
 /* Set from the frontend's context_reset (main thread); consumed on the
  * emulation thread, where the GL context is current, to run the actual

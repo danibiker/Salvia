@@ -30,7 +30,7 @@ class ResourceHandler: public BaseHandler {
 	static const char *determineMimeType(const Common::String &filename);
 public:
 	ResourceHandler();
-	~ResourceHandler() override;
+	~ResourceHandler();
 
 	void handle(Client &client) override;
 	bool minimalModeSupported() override;

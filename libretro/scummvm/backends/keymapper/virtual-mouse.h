@@ -44,7 +44,7 @@ class Keymap;
 class VirtualMouse : public EventSource, public EventObserver {
 public:
 	VirtualMouse(EventDispatcher *eventDispatcher);
-	~VirtualMouse() override;
+	~VirtualMouse();
 
 	// EventSource API
 	bool pollEvent(Event &event) override;

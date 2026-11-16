@@ -91,8 +91,10 @@ inline int transpose_clamp(int a, int b, int c) {
 //////////////////////////////////////////////////
 
 struct TimerCallbackInfo {
-	IMuseInternal *imuse = nullptr;
-	MidiDriver *driver = nullptr;
+	TimerCallbackInfo() : imuse(nullptr), driver(nullptr) {}
+
+	IMuseInternal *imuse;
+	MidiDriver *driver;
 };
 
 struct HookDatas {
@@ -257,7 +259,7 @@ public:
 
 public:
 	Player();
-	~Player() override;
+	~Player();
 
 	int addParameterFader(int param, int target, int time);
 	void clear();
@@ -446,7 +448,7 @@ protected:
 	int  _player_limit;       // Limits how many simultaneous music tracks are played
 	bool _recycle_players;    // Can we stop a player in order to start another one?
 
-	int _musicVolumeReductionTimer = 0; // 60 Hz
+	int _musicVolumeReductionTimer; // 60 Hz
 
 	uint _queue_end, _queue_pos, _queue_sound;
 	byte _queue_adding;
@@ -474,7 +476,9 @@ protected:
 
 	// These are basically static vars in the original drivers
 	struct RhyState {
-		RhyState() : RhyState(127, 1, 0) {}
+		RhyState() : vol(127), poly(1), prio(0) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+}
 		RhyState(byte volume, byte polyphony, byte priority) : vol(volume), poly(polyphony), prio(priority) {}
 		byte vol;
 		byte poly;
@@ -483,7 +487,7 @@ protected:
 
 protected:
 	IMuseInternal(ScummEngine *vm, MidiDriverFlags sndType, bool nativeMT32);
-	~IMuseInternal() override;
+	~IMuseInternal();
 
 	int initialize(OSystem *syst, MidiDriver *nativeMidiDriver, MidiDriver *adlibMidiDriver);
 

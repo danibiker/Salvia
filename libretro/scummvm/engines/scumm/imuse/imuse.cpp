@@ -71,7 +71,7 @@ IMuseInternal::IMuseInternal(ScummEngine *vm, MidiDriverFlags sndType, bool nati
 	_soundType(sndType),
 	_lowLevelVolumeControl(sndType == MDT_MACINTOSH),
 	_game_id(vm ? vm->_game.id : 0),
-	_mutex(vm ? vm->_mixer->mutex() : _dummyMutex) {
+	_mutex(vm ? vm->_mixer->mutex() : _dummyMutex), _musicVolumeReductionTimer(0) {
 	memset(_channel_volume, 0, sizeof(_channel_volume));
 	memset(_channel_volume_eff, 0, sizeof(_channel_volume_eff));
 	memset(_volchan_table, 0, sizeof(_volchan_table));

@@ -38,7 +38,7 @@
 namespace Sci {
 
 GfxPorts::GfxPorts(SegManager *segMan, GfxScreen *screen)
-	: _segMan(segMan), _screen(screen) {
+	: _segMan(segMan), _screen(screen), _portIdWithEditText(-1) {
 }
 
 GfxPorts::~GfxPorts() {

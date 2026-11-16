@@ -26,7 +26,7 @@
 
 namespace Common {
 
-NEResources::NEResources() {
+NEResources::NEResources() : _autoSegmentIndex(0) {
 	_exe = nullptr;
 }
 
@@ -118,7 +118,8 @@ uint32 NEResources::getResourceTableOffset() {
 			segmentSize = 0x10000;
 		auto segmentFlags = _exe->readUint16LE();
 		_exe->skip(2);
-		_segments.push_back(NESegment{segmentOffset, segmentSize, segmentFlags});
+		NESegment segment = {segmentOffset, segmentSize, segmentFlags};
+		_segments.push_back(segment);
 	}
 
 	if (!_exe->seek(offsetSegmentEXE + 36))
@@ -289,7 +290,8 @@ String NEResources::getResourceString(SeekableReadStream &exe, uint32 offset) {
 }
 
 const NEResources::Resource *NEResources::findResource(const WinResourceID &type, const WinResourceID &id) const {
-	for (const auto &resource : _resources) {
+	for (auto rfIt292 = _resources.begin(), rfEnd292 = _resources.end(); rfIt292 != rfEnd292; ++rfIt292) {
+		const auto &resource = *rfIt292;
 		if (resource.type == type &&
 			(resource.id == id ||
 			 (!_nameTable.empty() &&
@@ -315,9 +317,9 @@ SeekableReadStream *NEResources::getResource(const WinResourceID &type, const Wi
 const Array<WinResourceID> NEResources::getIDList(const WinResourceID &type) const {
 	Array<WinResourceID> idArray;
 
-	for (const auto &resource : _resources)
-		if (resource.type == type)
-			idArray.push_back(resource.id);
+	for (auto rfIt318 = _resources.begin(), rfEnd318 = _resources.end(); rfIt318 != rfEnd318; ++rfIt318)
+		{ const auto &resource = *rfIt318; if (resource.type == type)
+			idArray.push_back(resource.id); }
 
 	return idArray;
 }

@@ -187,9 +187,11 @@ public:
 	virtual double getSyncDownloadingProgress();
 
 	struct SyncDownloadingInfo {
-		uint64 bytesDownloaded = 0, bytesToDownload = 0;
-		uint64 filesDownloaded = 0, filesToDownload = 0;
-		bool inProgress = false;
+	SyncDownloadingInfo() : bytesDownloaded(0), bytesToDownload(0), filesDownloaded(0), filesToDownload(0), inProgress(false) {}
+
+		uint64 bytesDownloaded, bytesToDownload;
+		uint64 filesDownloaded, filesToDownload;
+		bool inProgress;
 	};
 
 	/** Fills a struct with numbers about current sync downloading progress. */

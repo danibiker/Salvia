@@ -151,7 +151,58 @@ ListWidget::~ListWidget() {
 }
 
 ListWidget::ListWidget(Dialog *boss, int x, int y, int w, int h, const Common::U32String &tooltip, uint32 cmd)
-	: ListWidget(boss, x, y, w, h, false, tooltip, cmd) {
+	: EditableWidget(boss, x, y, w, h, false, tooltip), _cmd(cmd) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_entriesPerPage = 0;
+	_scrollBarWidth = 0;
+
+	_scrollBar = new ScrollBarWidget(this, _w - _scrollBarWidth, 0, _scrollBarWidth, _h);
+	_scrollBar->setTarget(this);
+
+	// WIDGET_HOOK_DRAG: prevent hooking by a container as we need drag for ourselves
+	setFlags(WIDGET_ENABLED | WIDGET_CLEARBG | WIDGET_WANT_TICKLE | WIDGET_TRACK_MOUSE | WIDGET_HOOK_DRAG);
+	_type = kListWidget;
+	_editMode = false;
+	_numberingMode = kListNumberingOne;
+	_currentPos = 0;
+	_selectedItem = -1;
+	_lastSelectionStartItem = -1;
+	_multiSelectEnabled = false;
+	_currentKeyDown = 0;
+
+	_quickSelectTime = 0;
+
+	// The item is selected, thus _bgcolor is used to draw the caret and _textcolorhi to erase it
+	_caretInverse = true;
+
+	// Disable text selection
+	_disableSelection = true;
+
+	// FIXME: This flag should come from widget definition
+	_editable = true;
+
+	_quickSelect = true;
+	_editColor = ThemeEngine::kFontColorNormal;
+	_dictionarySelect = false;
+
+	_filterMatcher = ListWidgetDefaultMatcher;
+	_filterMatcherArg = nullptr;
+
+	_lastRead = -1;
+
+	_hlLeftPadding = _hlRightPadding = 0;
+	_leftPadding = _rightPadding = 0;
+	_topPadding = _bottomPadding = 0;
+	_itemSpacing = 0;
+
+	_scrollBarWidth = 0;
+
+	_scrollPos = 0.0f;
+	_fluidScroller = new FluidScroller();
+	_wasAnimating = false;
+	_isMouseDown = false;
+	_isDragging = false;
+	_dragStartY = _dragLastY = 0;
 }
 
 void ListWidget::copyListData(const Common::U32StringArray &list) {
@@ -603,7 +654,8 @@ bool ListWidget::handleKeyDown(Common::KeyState state) {
 			int newSelectedItem = 0;
 			int bestMatch = 0;
 			bool stop;
-			for (const auto &entry : _list) {
+			for (auto rfIt606 = _list.begin(), rfEnd606 = _list.end(); rfIt606 != rfEnd606; ++rfIt606) {
+				const auto &entry = *rfIt606;
 				const int match = matchingCharsIgnoringCase(stripGUIformatting(entry).encode().c_str(), _quickSelectStr.c_str(), stop, _dictionarySelect);
 				if (match > bestMatch || stop) {
 					_selectedItem = newSelectedItem;
@@ -1192,10 +1244,10 @@ Common::U32String ListWidget::getThemeColor(ThemeEngine::FontColor color) {
 }
 
 ThemeEngine::FontColor ListWidget::getThemeColor(const Common::U32String &color) {
-	if (color == U"normal")
+	if (color == Common::U32String("normal"))
 		return ThemeEngine::kFontColorNormal;
 
-	if (color == U"alternate")
+	if (color == Common::U32String("alternate"))
 		return ThemeEngine::kFontColorAlternate;
 
 	warning("ListWidget::getThemeColor(): Malformed color (\"%s\")", color.encode().c_str());

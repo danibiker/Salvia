@@ -36,7 +36,7 @@ namespace Sci {
 class GfxFontSjis : public GfxFont {
 public:
 	GfxFontSjis(GfxScreen *screen, GuiResourceId resourceId);
-	~GfxFontSjis() override;
+	~GfxFontSjis();
 
 	GuiResourceId getResourceId() override;
 	byte getHeight() override;

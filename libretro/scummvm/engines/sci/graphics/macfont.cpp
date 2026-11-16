@@ -65,7 +65,9 @@ GfxMacFontManager::GfxMacFontManager(Common::MacResManager *macExecutable) :
 		}
 
 		// Map all fonts to Palatino.
-		_defaultFont = new MacFontItem { palatinoSmall, palatinoLarge };
+		_defaultFont = new MacFontItem();
+		_defaultFont->smallFont = palatinoSmall;
+		_defaultFont->largeFont = palatinoLarge;
 		_macFonts.setVal(0, _defaultFont);
 	}
 }
@@ -114,7 +116,9 @@ bool GfxMacFontManager::initFromFontTable(Common::MacResManager *macExecutable) 
 			return false;
 		}
 
-		MacFontItem *font = new MacFontItem { smallFont, largeFont };
+		MacFontItem *font = new MacFontItem();
+		font->smallFont = smallFont;
+		font->largeFont = largeFont;
 		_macFonts.setVal(sciFontId, font);
 
 		if (i == defaultFontIndex) {

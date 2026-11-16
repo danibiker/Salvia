@@ -27,12 +27,12 @@
 
 namespace Sci {
 
-class WindowsGfx16ColorsDriver final : public SCI1_EGADriver {
+class WindowsGfx16ColorsDriver : public SCI1_EGADriver {
 public:
 	// The original does not take into account the extra lines required for the 200->440 vertical scaling. There is a noticeable dithering glitch every 11th line, as the
 	// two pixels of the checkerbox pattern appear in the wrong order. I have implemented a fix for this which can be activated with the fixDithering parameter.
 	WindowsGfx16ColorsDriver(bool fixDithering, bool rgbRendering);
-	~WindowsGfx16ColorsDriver() override {}
+	~WindowsGfx16ColorsDriver() {}
 	bool initScreen(const Graphics::PixelFormat *format) override;
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;
 	Common::Point getRealCoords(Common::Point &pos) const override;

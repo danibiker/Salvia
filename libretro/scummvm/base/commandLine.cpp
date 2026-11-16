@@ -352,7 +352,7 @@ void registerDefaults() {
 
 	// Game specific
 	ConfMan.registerDefault("path", Common::Path());
-	ConfMan.registerDefault("platform", Common::kPlatformDOS);
+	ConfMan.registerDefault("platform", (int)Common::kPlatformDOS);
 	ConfMan.registerDefault("language", "en");
 	ConfMan.registerDefault("subtitles", false);
 	ConfMan.registerDefault("boot_param", 0);
@@ -1097,7 +1097,8 @@ static void listGames(const Common::String &engineID, bool jsonOutput) {
 	}
 
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE);
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1100 = plugins.begin(), rfEnd1100 = plugins.end(); rfIt1100 != rfEnd1100; ++rfIt1100) {
+		const auto &plugin = *rfIt1100;
 		const Plugin *p = EngineMan.findDetectionPlugin(plugin->getName());
 		/* If for some reason, we can't find the MetaEngineDetection for this Engine, just ignore it */
 		if (!p) {
@@ -1107,7 +1108,8 @@ static void listGames(const Common::String &engineID, bool jsonOutput) {
 		if (all || Common::find(engines.begin(), engines.end(), p->getName()) != engines.end()) {
 			PlainGameList list = p->get<MetaEngineDetection>().getSupportedGames();
 			bool first = true;
-			for (const auto &v : list) {
+			for (auto rfIt1110 = list.begin(), rfEnd1110 = list.end(); rfIt1110 != rfEnd1110; ++rfIt1110) {
+				const auto &v = *rfIt1110;
 				const Common::String &gameId = buildQualifiedGameName(p->get<MetaEngineDetection>().getName(), v.gameId);
 				if (jsonOutput) {
 					if (!first) {
@@ -1141,12 +1143,14 @@ static void listAllGames(const Common::String &engineID) {
 	       "------------------------------ -----------------------------------------------------------\n");
 
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1144 = plugins.begin(), rfEnd1144 = plugins.end(); rfIt1144 != rfEnd1144; ++rfIt1144) {
+		const auto &plugin = *rfIt1144;
 		const MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 
 		if (any || Common::find(engines.begin(), engines.end(), metaEngine.getName()) != engines.end()) {
 			PlainGameList list = metaEngine.getSupportedGames();
-			for (const auto &v : list) {
+			for (auto rfIt1149 = list.begin(), rfEnd1149 = list.end(); rfIt1149 != rfEnd1149; ++rfIt1149) {
+				const auto &v = *rfIt1149;
 				printf("%-30s %s\n", buildQualifiedGameName(metaEngine.getName(), v.gameId).c_str(), v.description);
 			}
 		}
@@ -1164,7 +1168,8 @@ static void listEngines(bool jsonOutput) {
 
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE);
 	bool first = true;
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1167 = plugins.begin(), rfEnd1167 = plugins.end(); rfIt1167 != rfEnd1167; ++rfIt1167) {
+		const auto &plugin = *rfIt1167;
 		const Plugin *p = EngineMan.findDetectionPlugin(plugin->getName());
 		/* If for some reason, we can't find the MetaEngineDetection for this Engine, just ignore it */
 		if (!p) {
@@ -1195,7 +1200,8 @@ static void listAllEngines() {
 	       "--------------- ------------------------------------------------------\n");
 
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1198 = plugins.begin(), rfEnd1198 = plugins.end(); rfIt1198 != rfEnd1198; ++rfIt1198) {
+		const auto &plugin = *rfIt1198;
 		const MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 		printf("%-15s %s\n", metaEngine.getName(), metaEngine.getEngineName());
 	}
@@ -1236,7 +1242,8 @@ static void listTargets(const Common::String &engineID, bool jsonOutput) {
 	Common::Array<Target> targets;
 	targets.reserve(domains.size());
 
-	for (const auto &domain : domains) {
+	for (auto rfIt1239 = domains.begin(), rfEnd1239 = domains.end(); rfIt1239 != rfEnd1239; ++rfIt1239) {
+		const auto &domain = *rfIt1239;
 		Common::String name(domain._key);
 		Common::String description(domain._value.getValOrDefault("description"));
 		Common::String engine = domain._value.getValOrDefault("engineid");
@@ -1256,14 +1263,17 @@ static void listTargets(const Common::String &engineID, bool jsonOutput) {
 		if (description.empty())
 			description = "<Unknown game>";
 
-		if (any || Common::find(engines.begin(), engines.end(), engine) != engines.end())
-			targets.push_back({name, description, engine, gameId});
+		if (any || Common::find(engines.begin(), engines.end(), engine) != engines.end()) {
+			Target target = {name, description, engine, gameId};
+			targets.push_back(target);
+		}
 	}
 
 	Common::sort(targets.begin(), targets.end());
 
 	bool first = true;
-	for (const auto &target : targets) {
+	for (auto rfIt1266 = targets.begin(), rfEnd1266 = targets.end(); rfIt1266 != rfEnd1266; ++rfIt1266) {
+		const auto &target = *rfIt1266;
 		if (jsonOutput) {
 			if (!first) {
 				printf(",\n");
@@ -1301,7 +1311,8 @@ static void printStatistics(const Common::String &engineID) {
 	int targetCount = 0;
 	Common::HashMap<Common::String, int> engineTargetCount;
 	const Common::ConfigManager::DomainMap &domains = ConfMan.getGameDomains();
-	for (const auto &domain : domains) {
+	for (auto rfIt1304 = domains.begin(), rfEnd1304 = domains.end(); rfIt1304 != rfEnd1304; ++rfIt1304) {
+		const auto &domain = *rfIt1304;
 		if (!summary) {
 			Common::String engine(domain._value.getValOrDefault("engineid"));
 			if (engine.empty()) {
@@ -1323,7 +1334,8 @@ static void printStatistics(const Common::String &engineID) {
 	bool approximation = false;
 	int engineCount = 0, gameCount = 0, variantCount = 0;
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1326 = plugins.begin(), rfEnd1326 = plugins.end(); rfIt1326 != rfEnd1326; ++rfIt1326) {
+		const auto &plugin = *rfIt1326;
 		const MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 		if (summary || all || Common::find(engines.begin(), engines.end(), metaEngine.getName()) != engines.end()) {
 			PlainGameList list = metaEngine.getSupportedGames();
@@ -1371,7 +1383,8 @@ static void listDebugFlags(const Common::String &engineID) {
 		printDebugFlags(gDebugChannels);
 	else {
 		const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
-		for (const auto &plugin : plugins) {
+		for (auto rfIt1374 = plugins.begin(), rfEnd1374 = plugins.end(); rfIt1374 != rfEnd1374; ++rfIt1374) {
+			const auto &plugin = *rfIt1374;
 			const MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 			if (metaEngine.getName() == engineID) {
 				printf("Flag name       Flag description                                           \n");
@@ -1390,7 +1403,8 @@ static void listAllEngineDebugFlags() {
 	printf("Flag name       Flag description                                           \n");
 
 	const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE_DETECTION);
-	for (const auto &plugin : plugins) {
+	for (auto rfIt1393 = plugins.begin(), rfEnd1393 = plugins.end(); rfIt1393 != rfEnd1393; ++rfIt1393) {
+		const auto &plugin = *rfIt1393;
 		const MetaEngineDetection &metaEngine = plugin->get<MetaEngineDetection>();
 		printf("--------------- ------------------------------------------------------\n");
 		printf("ID=%-12s Name=%s\n", metaEngine.getName(), metaEngine.getEngineName());
@@ -1408,7 +1422,8 @@ static void assembleTargets(const Common::String &singleTarget, Common::Array<Co
 	const Common::ConfigManager::DomainMap &domains = ConfMan.getGameDomains();
 
 	targets.reserve(domains.size());
-	for (const auto &domain : domains) {
+	for (auto rfIt1411 = domains.begin(), rfEnd1411 = domains.end(); rfIt1411 != rfEnd1411; ++rfIt1411) {
+		const auto &domain = *rfIt1411;
 		targets.push_back(domain._key);
 	}
 }
@@ -1503,7 +1518,8 @@ static Common::Error listSaves(const Common::String &singleTarget) {
 	Common::Array<GameTarget> gameTargets;
 
 	bool atLeastOneFound = false;
-	for (const auto &target : targets) {
+	for (auto rfIt1506 = targets.begin(), rfEnd1506 = targets.end(); rfIt1506 != rfEnd1506; ++rfIt1506) {
+		const auto &target = *rfIt1506;
 		// Check whether there is either a game domain (i.e. a target) matching
 		// the specified game name, or alternatively whether there is a matching game id.
 		Common::String currentTarget;
@@ -1520,7 +1536,8 @@ static Common::Error listSaves(const Common::String &singleTarget) {
 		} else {
 			return Common::Error(Common::kEnginePluginNotFound, Common::String::format("target '%s'", singleTarget.c_str()));
 		}
-		gameTargets.push_back({currentTarget, game});
+		GameTarget gameTarget = {currentTarget, game};
+		gameTargets.push_back(gameTarget);
 	}
 
 #if defined(UNCACHED_PLUGINS) && defined(DYNAMIC_MODULES) && !defined(DETECTION_STATIC)
@@ -1528,7 +1545,8 @@ static Common::Error listSaves(const Common::String &singleTarget) {
 	PluginMan.unloadDetectionPlugin();
 #endif
 
-	for (const auto &gameTarget : gameTargets) {
+	for (auto rfIt1531 = gameTargets.begin(), rfEnd1531 = gameTargets.end(); rfIt1531 != rfEnd1531; ++rfIt1531) {
+		const auto &gameTarget = *rfIt1531;
 		const Plugin *enginePlugin = nullptr;
 
 		// If we actually found a domain, we're going to change the domain
@@ -1572,7 +1590,8 @@ static Common::Error listSaves(const Common::String &singleTarget) {
 			printf("  Slot Description                                           \n"
 					   "  ---- ------------------------------------------------------\n");
 
-			for (const auto &x : saveList) {
+			for (auto rfIt1575 = saveList.begin(), rfEnd1575 = saveList.end(); rfIt1575 != rfEnd1575; ++rfIt1575) {
+				const auto &x = *rfIt1575;
 				printf("  %-4d %s\n", x.getSaveSlot(), x.getDescription().c_str());
 				// TODO: Could also iterate over the full hashmap, printing all key-value pairs
 			}
@@ -1604,8 +1623,8 @@ static void listThemes() {
 	printf("Theme          Description\n");
 	printf("-------------- ------------------------------------------------\n");
 
-	for (const auto &theme : thList)
-		printf("%-14s %s\n", theme.id.c_str(), theme.name.c_str());
+	for (auto rfIt1607 = thList.begin(), rfEnd1607 = thList.end(); rfIt1607 != rfEnd1607; ++rfIt1607)
+		{ const auto &theme = *rfIt1607; printf("%-14s %s\n", theme.id.c_str(), theme.name.c_str()); }
 }
 
 /** Lists all output devices */
@@ -1615,10 +1634,12 @@ static void listAudioDevices() {
 	printf("ID                             Description\n");
 	printf("------------------------------ ------------------------------------------------\n");
 
-	for (const auto &plugin : pluginList) {
+	for (auto rfIt1618 = pluginList.begin(), rfEnd1618 = pluginList.end(); rfIt1618 != rfEnd1618; ++rfIt1618) {
+		const auto &plugin = *rfIt1618;
 		const MusicPluginObject &musicObject = plugin->get<MusicPluginObject>();
 		MusicDevices deviceList = musicObject.getDevices();
-		for (auto &device : deviceList) {
+		for (auto rfIt1621 = deviceList.begin(), rfEnd1621 = deviceList.end(); rfIt1621 != rfEnd1621; ++rfIt1621) {
+			auto &device = *rfIt1621;
 			printf("%-30s %s\n", Common::String::format("\"%s\"", device.getCompleteId().c_str()).c_str(), device.getCompleteName().c_str());
 		}
 	}
@@ -1633,7 +1654,8 @@ static void dumpAllDetectionEntries() {
 	printf("\tversion \"%s\"\n", gScummVMVersion);
 	printf(")\n\n");
 
-	for (const auto &iter : plugins) {
+	for (auto rfIt1636 = plugins.begin(), rfEnd1636 = plugins.end(); rfIt1636 != rfEnd1636; ++rfIt1636) {
+		const auto &iter = *rfIt1636;
 		const MetaEngineDetection &metaEngine = iter->get<MetaEngineDetection>();
 		metaEngine.dumpDetectionEntries();
 	}
@@ -1666,9 +1688,11 @@ static DetectedGames recListGames(const Common::FSNode &dir, const Common::Strin
 	if (recursive) {
 		Common::FSList files;
 		dir.getChildren(files, Common::FSNode::kListDirectoriesOnly);
-		for (const auto &file : files) {
+		for (auto rfIt1669 = files.begin(), rfEnd1669 = files.end(); rfIt1669 != rfEnd1669; ++rfIt1669) {
+			const auto &file = *rfIt1669;
 			DetectedGames rec = recListGames(file, engineId, gameId, recursive);
-			for (auto &game : rec) {
+			for (auto rfIt1671 = rec.begin(), rfEnd1671 = rec.end(); rfIt1671 != rfEnd1671; ++rfIt1671) {
+				auto &game = *rfIt1671;
 				if ((game.engineId == engineId && game.gameId == gameId)
 				    || gameId.empty())
 					list.push_back(game);
@@ -1699,7 +1723,8 @@ static Common::String detectGames(const Common::Path &path, const Common::String
 	// TODO this is not especially pretty
 	printf("GameID                         Description                                                Full Path\n");
 	printf("------------------------------ ---------------------------------------------------------- ---------------------------------------------------------\n");
-	for (const auto &v : candidates) {
+	for (auto rfIt1702 = candidates.begin(), rfEnd1702 = candidates.end(); rfIt1702 != rfEnd1702; ++rfIt1702) {
+		const auto &v = *rfIt1702;
 		printf("%-30s %-58s %s\n",
 		       buildQualifiedGameName(v.engineId, v.gameId).c_str(),
 		       v.description.c_str(),
@@ -1712,7 +1737,8 @@ static Common::String detectGames(const Common::Path &path, const Common::String
 static int recAddGames(const Common::FSNode &dir, const Common::String &engineId, const Common::String &gameId, bool recursive) {
 	int count = 0;
 	DetectedGames list = getGameList(dir);
-	for (const auto &v : list) {
+	for (auto rfIt1715 = list.begin(), rfEnd1715 = list.end(); rfIt1715 != rfEnd1715; ++rfIt1715) {
+		const auto &v = *rfIt1715;
 		if ((v.engineId != engineId || v.gameId != gameId)
 		    && !gameId.empty()) {
 			printf("Found %s, only adding %s per --game option, ignoring...\n",
@@ -1740,7 +1766,8 @@ static int recAddGames(const Common::FSNode &dir, const Common::String &engineId
 	if (recursive) {
 		Common::FSList files;
 		if (dir.getChildren(files, Common::FSNode::kListDirectoriesOnly)) {
-			for (const auto &file : files) {
+			for (auto rfIt1743 = files.begin(), rfEnd1743 = files.end(); rfIt1743 != rfEnd1743; ++rfIt1743) {
+				const auto &file = *rfIt1743;
 				count += recAddGames(file, engineId, gameId, recursive);
 			}
 		}
@@ -1843,7 +1870,8 @@ static void runDetectorTest() {
 
 	const Common::ConfigManager::DomainMap &domains = ConfMan.getGameDomains();
 	int success = 0, failure = 0;
-	for (const auto &domain : domains) {
+	for (auto rfIt1846 = domains.begin(), rfEnd1846 = domains.end(); rfIt1846 != rfEnd1846; ++rfIt1846) {
+		const auto &domain = *rfIt1846;
 		Common::String name(domain._key);
 		Common::String gameid(domain._value.getVal("gameid"));
 		Common::Path path(Common::Path::fromConfig(domain._value.getVal("path")));
@@ -1868,7 +1896,8 @@ static void runDetectorTest() {
 		DetectedGames candidates = detectionResults.listRecognizedGames();
 
 		bool gameidDiffers = false;
-		for (const auto &candidate : candidates) {
+		for (auto rfIt1871 = candidates.begin(), rfEnd1871 = candidates.end(); rfIt1871 != rfEnd1871; ++rfIt1871) {
+			const auto &candidate = *rfIt1871;
 			gameidDiffers |= !gameid.equalsIgnoreCase(candidate.gameId);
 		}
 
@@ -1890,7 +1919,8 @@ static void runDetectorTest() {
 			success++;
 		}
 
-		for (auto &candidate : candidates) {
+		for (auto rfIt1893 = candidates.begin(), rfEnd1893 = candidates.end(); rfIt1893 != rfEnd1893; ++rfIt1893) {
+			auto &candidate = *rfIt1893;
 			printf("    gameid '%s', desc '%s', language '%s', platform '%s'\n",
 				   candidate.gameId.c_str(),
 				   candidate.description.c_str(),
@@ -1960,7 +1990,8 @@ void upgradeTargets() {
 		if (candidates.size() > 1) {
 			// Scan over all candidates, check if there is a unique match for gameid, language and platform
 			int matchesFound = 0;
-			for (auto &candidate : candidates) {
+			for (auto rfIt1963 = candidates.begin(), rfEnd1963 = candidates.end(); rfIt1963 != rfEnd1963; ++rfIt1963) {
+				auto &candidate = *rfIt1963;
 				if (candidate.gameId == gameid && candidate.language == lang && candidate.platform == plat) {
 					matchesFound++;
 					g = &(candidate);
@@ -2129,7 +2160,8 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 		s += langs.front();
 		langs.pop_front();
 
-		for (auto &l : langs) {
+		for (auto rfIt2132 = langs.begin(), rfEnd2132 = langs.end(); rfIt2132 != rfEnd2132; ++rfIt2132) {
+			auto &l = *rfIt2132;
 			if (s.size() + l.size() + 2 >= kCommandMaxWidth) {
 				printf("%s,\n", s.c_str());
 				s = kCommandLineIndent + l;
@@ -2145,7 +2177,8 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 		s += platforms.front();
 		langs.pop_front();
 
-		for (auto &p : platforms) {
+		for (auto rfIt2148 = platforms.begin(), rfEnd2148 = platforms.end(); rfIt2148 != rfEnd2148; ++rfIt2148) {
+			auto &p = *rfIt2148;
 			if (s.size() + p.size() + 2 >= kCommandMaxWidth) {
 				printf("%s,\n", s.c_str());
 				s = kCommandLineIndent + p;
@@ -2334,7 +2367,8 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 		nullptr
 	};
 
-	for (const auto &x : settings) {
+	for (auto rfIt2337 = settings.begin(), rfEnd2337 = settings.end(); rfIt2337 != rfEnd2337; ++rfIt2337) {
+		const auto &x = *rfIt2337;
 		Common::String key(x._key);
 		Common::String value(x._value);
 
@@ -2345,9 +2379,9 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 			continue;
 
 		// Replace any "-" in the key by "_" (e.g. change "save-slot" to "save_slot").
-		for (auto &c : key)
-			if (c == '-')
-				c = '_';
+		for (auto rfIt2348 = key.begin(), rfEnd2348 = key.end(); rfIt2348 != rfEnd2348; ++rfIt2348)
+			{ auto &c = *rfIt2348; if (c == '-')
+				c = '_'; }
 
 		// Store it into ConfMan.
 		bool useSessionDomain = false;

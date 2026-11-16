@@ -449,7 +449,8 @@ ClickteamInstaller* ClickteamInstaller::openPatch(Common::SeekableReadStream *st
 		return nullptr;
 
 	if (verifyOriginal && reference) {
-		for (auto &file : files) {
+		for (auto rfIt452 = files.begin(), rfEnd452 = files.end(); rfIt452 != rfEnd452; ++rfIt452) {
+			auto &file = *rfIt452;
 			if (file._value._isPatchFile) {
 				Common::ScopedPtr<Common::SeekableReadStream> refStream(reference->createReadStreamForMember(file._key));
 				if (!refStream) {
@@ -466,7 +467,8 @@ ClickteamInstaller* ClickteamInstaller::openPatch(Common::SeekableReadStream *st
 	}
 
 	if (!reference) {
-		for (auto &file : files) {
+		for (auto rfIt469 = files.begin(), rfEnd469 = files.end(); rfIt469 != rfEnd469; ++rfIt469) {
+			auto &file = *rfIt469;
 			if (file._value._isPatchFile) {
 				file._value._isReferenceMissing = true;
 			}
@@ -483,7 +485,8 @@ bool ClickteamInstaller::hasFile(const Path &path) const {
 int ClickteamInstaller::listMembers(ArchiveMemberList &list) const {
 	int members = 0;
 
-	for (const auto &file : _files) {
+	for (auto rfIt486 = _files.begin(), rfEnd486 = _files.end(); rfIt486 != rfEnd486; ++rfIt486) {
+		const auto &file = *rfIt486;
 		if (!file._value._isReferenceMissing) {
 			list.push_back(ArchiveMemberList::value_type(new GenericArchiveMember(file._key, *this)));
 			++members;

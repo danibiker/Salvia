@@ -42,7 +42,7 @@ public:
 	static const VisualType TYPE = Visual::kEffectFirefly;
 
 	explicit VisualEffectFireFlies(Gfx::Driver *gfx, const Common::Point &size);
-	~VisualEffectFireFlies() override;
+	~VisualEffectFireFlies();
 
 	/** Set the effect's parameters using the string based data format found in the game data files */
 	void setParams(const Common::String &params);

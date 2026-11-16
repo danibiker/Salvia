@@ -50,7 +50,7 @@ class FolderDownloadRequest: public Networking::Request, public GUI::CommandSend
 	void finishDownload(Common::Array<StorageFile> &files);
 public:
 	FolderDownloadRequest(Storage *storage, Storage::FileArrayCallback callback, Networking::ErrorCallback ecb, const Common::String &remoteDirectoryPath, const Common::Path &localDirectoryPath, bool recursive);
-	~FolderDownloadRequest() override;
+	~FolderDownloadRequest();
 
 	void handle() override;
 	void restart() override;

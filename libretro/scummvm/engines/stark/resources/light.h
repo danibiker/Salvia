@@ -48,7 +48,7 @@ public:
 	static const Type::ResourceType TYPE = Type::kLight;
 
 	Light(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~Light() override;
+	~Light();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;

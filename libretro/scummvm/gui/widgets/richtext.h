@@ -38,15 +38,15 @@ class FluidScroller;
 /* RichTextWidget */
 class RichTextWidget : public Widget, public CommandSender {
 protected:
-	Graphics::ManagedSurface *_cachedTextSurface = nullptr;
-	Graphics::MacText *_txtWnd = nullptr;
-	Graphics::ManagedSurface *_surface = nullptr;
+	Graphics::ManagedSurface *_cachedTextSurface;
+	Graphics::MacText *_txtWnd;
+	Graphics::ManagedSurface *_surface;
 	Common::U32String _text;
 
 	ScrollBarWidget *_verticalScroll;
 	int16 _scrolledX, _scrolledY;
-	int _mouseDownY = 0;
-	int _mouseDownStartY = 0;
+	int _mouseDownY;
+	int _mouseDownStartY;
 	int _innerMargin;
 	int _scrollbarWidth;
 	uint16 _limitH;

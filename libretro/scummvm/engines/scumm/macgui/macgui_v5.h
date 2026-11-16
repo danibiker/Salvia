@@ -65,8 +65,8 @@ private:
 		uint32 delayMs;
 	};
 
-	uint _roughProgress = 0;
-	bool _roughWarned = false;
+	uint _roughProgress;
+	bool _roughWarned;
 
 	void runAboutDialogMI1(MacDialogWindow *window);
 	void runAboutDialogMI2(MacDialogWindow *window);

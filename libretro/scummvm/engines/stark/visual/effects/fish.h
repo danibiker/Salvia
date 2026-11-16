@@ -42,7 +42,7 @@ public:
 	static const VisualType TYPE = Visual::kEffectFish;
 
 	explicit VisualEffectFish(Gfx::Driver *gfx, const Common::Point &size);
-	~VisualEffectFish() override;
+	~VisualEffectFish();
 
 	/** Set the effect's parameters using the string based data format found in the game data files */
 	void setParams(const Common::String &params);

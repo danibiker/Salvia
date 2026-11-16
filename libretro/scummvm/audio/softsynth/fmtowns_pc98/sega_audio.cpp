@@ -24,10 +24,10 @@
 #include "audio/softsynth/fmtowns_pc98/pcm_common.h"
 #include "common/mutex.h"
 
-class SegaPCMChannel final : public PCMChannel_Base {
+class SegaPCMChannel : public PCMChannel_Base {
 public:
 	SegaPCMChannel() : PCMChannel_Base(), _playing(false) {}
-	~SegaPCMChannel() override {}
+	~SegaPCMChannel() {}
 
 	void play(const int8 *data, uint16 dataSize, uint16 startAddress, uint16 loopStart, uint16 loopLen, uint16 pitch, uint8 pan, uint8 vol);
 	void stop();
@@ -79,7 +79,7 @@ private:
 	const uint8 _numChannels;
 };
 
-class SegaAudioInterfaceInternal final : public TownsPC98_FmSynth {
+class SegaAudioInterfaceInternal : public TownsPC98_FmSynth {
 private:
 	SegaAudioInterfaceInternal(Audio::Mixer *mixer, SegaAudioInterface *owner, SegaAudioPluginDriver *driver);
 public:

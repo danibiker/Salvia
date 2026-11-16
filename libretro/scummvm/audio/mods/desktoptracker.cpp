@@ -153,22 +153,22 @@ static void decodeEvent(const byte *p, DttEvent &out, uint32 &bytesUsed) {
 	if (isMultipleEffect(raw0)) {
 		const uint32 raw1 = readLE32FromBuf(p + 4);
 		out.numEffects = 4;
-		out.effects[0] = DttEffect{ mask5(raw0, 12), mask8(raw1, 0) };
-		out.effects[1] = DttEffect{ mask5(raw0, 17), mask8(raw1, 8) };
-		out.effects[2] = DttEffect{ mask5(raw0, 22), mask8(raw1, 16) };
-		out.effects[3] = DttEffect{ mask5(raw0, 27), mask8(raw1, 24) };
+		{ DttEffect e = { mask5(raw0, 12), mask8(raw1, 0) }; out.effects[0] = e; }
+		{ DttEffect e = { mask5(raw0, 17), mask8(raw1, 8) }; out.effects[1] = e; }
+		{ DttEffect e = { mask5(raw0, 22), mask8(raw1, 16) }; out.effects[2] = e; }
+		{ DttEffect e = { mask5(raw0, 27), mask8(raw1, 24) }; out.effects[3] = e; }
 		bytesUsed = 8;
 	} else {
 		out.numEffects = 1;
-		out.effects[0] = DttEffect{ mask5(raw0, 12), mask8(raw0, 24) };
-		out.effects[1] = DttEffect{ 0, 0 };
-		out.effects[2] = DttEffect{ 0, 0 };
-		out.effects[3] = DttEffect{ 0, 0 };
+		{ DttEffect e = { mask5(raw0, 12), mask8(raw0, 24) }; out.effects[0] = e; }
+		{ DttEffect e = { 0, 0 }; out.effects[1] = e; }
+		{ DttEffect e = { 0, 0 }; out.effects[2] = e; }
+		{ DttEffect e = { 0, 0 }; out.effects[3] = e; }
 		bytesUsed = 4;
 	}
 }
 
-class DesktopTrackerStream final : public AudioStream {
+class DesktopTrackerStream : public AudioStream {
 public:
 	DesktopTrackerStream(Common::SeekableReadStream *stream, int offs, int rate, bool stereo)
 		: _rate(rate), _stereo(false), _songPos(0), _row(0), _speed50ths(6), _samplesUntilNextRow(0), _ended(false), _sawAnyNote(false) {

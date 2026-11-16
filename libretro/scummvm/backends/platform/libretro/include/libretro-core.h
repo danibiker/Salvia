@@ -25,7 +25,18 @@ extern retro_input_state_t retro_input_cb;
 extern struct retro_midi_interface *retro_midi_interface;
 
 bool retro_get_input_bitmask_supported(void);
-void retro_osd_notification(const char *msg, enum retro_log_level level = RETRO_LOG_INFO);
+void retro_osd_notification(const char *msg, enum retro_log_level level = RETRO_LOG_INFO, unsigned duration_ms = 3000);
+/* Shows a ScummVM message box text through the frontend (OSystem::messageBox). */
+void retro_message_box(const char *message, enum retro_log_level level);
+
+/* Fatal error support (see OSystem_libretro::fatalError).
+ * retro_store_error_message(): remembers the last error() text, to show it to
+ *   the user when the core goes back to the frontend.
+ * retro_fatal_error(): stops ScummVM without exit()ing the process; does not
+ *   return when called from the emulation thread or from a guarded part of the
+ *   main thread, returns otherwise (the caller must then terminate). */
+void retro_store_error_message(const char *msg);
+void retro_fatal_error(void);
 int retro_get_input_device(void);
 const char *retro_get_core_dir(void);
 const char *retro_get_system_dir(void);

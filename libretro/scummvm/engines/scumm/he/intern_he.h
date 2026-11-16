@@ -78,7 +78,7 @@ public:
 	Common::Rect _defaultActorClipping;	// HE specific
 
 	int _heTimers[16];
-	uint32 _pauseStartTime = 0;
+	uint32 _pauseStartTime;
 
 	int getHETimer(int timer);
 	void setHETimer(int timer);
@@ -92,7 +92,7 @@ public:
 
 public:
 	ScummEngine_v60he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v60he() override;
+	~ScummEngine_v60he();
 
 	Common::Path generateFilename(const int room) const override;
 	void setActorClippingRect(int actor, int x1, int y1, int x2, int y2);
@@ -223,7 +223,7 @@ protected:
 
 public:
 	ScummEngine_v70he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v70he() override;
+	~ScummEngine_v70he();
 
 	Common::Path generateFilename(const int room) const override;
 
@@ -298,14 +298,14 @@ protected:
 
 public:
 	ScummEngine_v71he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v71he() override;
+	~ScummEngine_v71he();
 
 	byte *heFindResourceData(uint32 tag, byte *ptr);
 	byte *heFindResource(uint32 tag, byte *ptr);
 	byte *findWrappedBlock(uint32 tag, byte *ptr, int state, bool flagError);
 
 	Wiz *_wiz;
-	bool _disableActorDrawingFlag = false;
+	bool _disableActorDrawingFlag;
 
 	virtual int setupStringArray(int size);
 
@@ -342,9 +342,9 @@ protected:
 public:
 	/* Actor AuxQueue stuff (HE) */
 	HEEraseAuxEntry _heAuxEraseActorTable[16];
-	int _heAuxEraseActorIndex = 0;
+	int _heAuxEraseActorIndex;
 	HEAnimAuxEntry _heAuxAnimTable[16];
-	int _heAuxAnimTableIndex = 0;
+	int _heAuxAnimTableIndex;
 
 	void heQueueEraseAuxActor(ActorHE *a);
 	void heQueueAnimAuxFrame(int actorNum, int subIndex);
@@ -403,11 +403,11 @@ protected:
 
 #include "common/pack-end.h"	// END STRUCT PACKING
 
-	int _stringLength = 1;
-	byte _stringBuffer[4096] = {};
+	int _stringLength;
+	byte _stringBuffer[4096];
 
-	WizImageCommand _wizImageCommand = {};
-	FloodFillCommand _floodFillCommand = {};
+	WizImageCommand _wizImageCommand;
+	FloodFillCommand _floodFillCommand;
 
 public:
 	ScummEngine_v72he(OSystem *syst, const DetectorResult &dr);
@@ -526,7 +526,7 @@ protected:
 
 class ScummEngine_v80he : public ScummEngine_v72he {
 protected:
-	int32 _heSndResId = 0;
+	int32 _heSndResId;
 
 	enum SubOpType {
 		SO_CURSOR_IMAGE = 19,
@@ -669,15 +669,15 @@ protected:
 
 	VideoParameters _videoParams;
 
-	int32 _heObject = 0;
-	int32 _heObjectNum = 0;
-	int32 _hePaletteNum = 0;
+	int32 _heObject;
+	int32 _heObjectNum;
+	int32 _hePaletteNum;
 
-	int32 _maxSpriteNum = 0;
-	int32 _minSpriteNum = 0;
-	int32 _curSpriteGroupId = 0;
+	int32 _maxSpriteNum;
+	int32 _minSpriteNum;
+	int32 _curSpriteGroupId;
 
-	LogicHE *_logicHE = nullptr;
+	LogicHE *_logicHE;
 	MoviePlayer *_moviePlay;
 	Sprite *_sprite;
 
@@ -691,7 +691,7 @@ public:
 
 public:
 	ScummEngine_v90he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v90he() override;
+	~ScummEngine_v90he();
 
 protected:
 	void allocateArrays() override;
@@ -834,7 +834,7 @@ friend class Wiz;
 
 public:
 	ScummEngine_v99he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v99he() override;
+	~ScummEngine_v99he();
 
 	void resetScumm() override;
 
@@ -851,7 +851,7 @@ protected:
 	void setPalColor(int index, int r, int g, int b) override;
 	void updatePalette() override;
 
-	HEFont *_heFont = nullptr;
+	HEFont *_heFont;
 };
 
 class ScummEngine_v100he : public ScummEngine_v99he {
@@ -1078,7 +1078,7 @@ protected:
 
 public:
 	ScummEngine_v100he(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v100he() override;
+	~ScummEngine_v100he();
 
 	void resetScumm() override;
 
@@ -1156,7 +1156,7 @@ protected:
 
 public:
 	ScummEngine_vCUPhe(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_vCUPhe() override;
+	~ScummEngine_vCUPhe();
 
 	Common::Error run() override;
 

@@ -52,7 +52,7 @@ class Indeo5Decoder : public IndeoDecoderBase {
 	};
 public:
 	Indeo5Decoder(uint16 width, uint16 height, uint bitsPerPixel = 16);
-	~Indeo5Decoder() override {}
+	~Indeo5Decoder() {}
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 

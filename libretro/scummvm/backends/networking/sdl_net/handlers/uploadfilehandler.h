@@ -29,7 +29,7 @@ namespace Networking {
 class UploadFileHandler: public FilesBaseHandler {
 public:
 	UploadFileHandler();
-	~UploadFileHandler() override;
+	~UploadFileHandler();
 
 	void handle(Client &client) override;
 };

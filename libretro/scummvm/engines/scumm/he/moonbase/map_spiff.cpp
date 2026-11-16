@@ -25,7 +25,7 @@
 
 namespace Scumm {
 
-SpiffGenerator::SpiffGenerator(int seed) {
+SpiffGenerator::SpiffGenerator(int seed) : _seed(0), _numPoolsG(0), _energyAmountG(0), _cliffAmountG(0), _waterAmountG(0), _totalMapSizeG(0), _terrainSeedFlagG(0), _islandsFlagG(0), _advancedMirrorOK_G(0), _mirrorTypeG(0), _mapCornerMaxG(0), _mapMiddleMaxG(0), _mapCorner(), _mapMiddle() {
 	_seed = seed;
 }
 

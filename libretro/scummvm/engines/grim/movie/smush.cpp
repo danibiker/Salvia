@@ -37,7 +37,7 @@ SmushPlayer::~SmushPlayer() {
 	delete _theoraDecoder;
 }
 
-SmushPlayer::SmushPlayer(bool demo) : MoviePlayer(), _demo(demo) {
+SmushPlayer::SmushPlayer(bool demo) : MoviePlayer(), _demo(demo), _currentVideoIsTheora(false) {
 	_smushDecoder = new SmushDecoder();
 	_videoDecoder = _smushDecoder;
 #if defined (USE_THEORADEC)

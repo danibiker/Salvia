@@ -55,8 +55,8 @@ public:
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
 
 private:
-	ImageAlbumDialog() = delete;
-	ImageAlbumDialog(const ImageAlbumDialog &) = delete;
+	ImageAlbumDialog(); // = delete (not implemented)
+	ImageAlbumDialog(const ImageAlbumDialog &); // = delete (not implemented)
 
 	void changeToSlot(uint slot);
 	void saveImageInSlot(uint slot);

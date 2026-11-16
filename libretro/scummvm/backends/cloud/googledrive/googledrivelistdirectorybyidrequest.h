@@ -49,7 +49,7 @@ class GoogleDriveListDirectoryByIdRequest: public Networking::Request {
 	void finishListing(Common::Array<StorageFile> &files);
 public:
 	GoogleDriveListDirectoryByIdRequest(GoogleDriveStorage *storage, const Common::String &id, Storage::ListDirectoryCallback cb, Networking::ErrorCallback ecb);
-	~GoogleDriveListDirectoryByIdRequest() override;
+	~GoogleDriveListDirectoryByIdRequest();
 
 	void handle() override;
 	void restart() override;

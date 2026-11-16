@@ -62,7 +62,7 @@ class OptionsDialog : public Dialog {
 public:
 	OptionsDialog(const Common::String &domain, int x, int y, int w, int h);
 	OptionsDialog(const Common::String &domain, const Common::String &name);
-	~OptionsDialog() override;
+	~OptionsDialog();
 
 	void init();
 
@@ -126,7 +126,7 @@ protected:
 
 	PathWidget *_shader;
 	ButtonWidget *_shaderClearButton;
-	ButtonWidget *_updateShadersButton = nullptr;
+	ButtonWidget *_updateShadersButton;
 
 private:
 
@@ -259,7 +259,7 @@ protected:
 class GlobalOptionsDialog : public OptionsDialog, public CommandSender {
 public:
 	GlobalOptionsDialog(LauncherDialog *launcher);
-	~GlobalOptionsDialog() override;
+	~GlobalOptionsDialog();
 
 	void apply() override;
 	void close() override;

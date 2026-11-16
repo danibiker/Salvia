@@ -30,7 +30,7 @@
 
 namespace Scumm {
 
-IMuseDigiInternalMixer::IMuseDigiInternalMixer(Audio::Mixer *mixer, int sampleRate, bool isEarlyDiMUSE, bool lowLatencyMode) {
+IMuseDigiInternalMixer::IMuseDigiInternalMixer(Audio::Mixer *mixer, int sampleRate, bool isEarlyDiMUSE, bool lowLatencyMode) : _amp8Table(nullptr), _amp12Table(nullptr), _softLMID(nullptr), _softLTable(nullptr), _mixBuf(nullptr), _mixBufSize(0), _radioChatter(0), _outWordSize(0), _outChannelCount(0), _sampleRate(0), _stereoReverseFlag(0), _isEarlyDiMUSE(false), _lowLatencyMode(false) {
 	_mixer = mixer;
 	_sampleRate = sampleRate;
 	_lowLatencyMode = lowLatencyMode;

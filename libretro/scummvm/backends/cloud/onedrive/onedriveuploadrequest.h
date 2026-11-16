@@ -48,7 +48,7 @@ class OneDriveUploadRequest: public Networking::Request {
 
 public:
 	OneDriveUploadRequest(OneDriveStorage *storage, const Common::String &path, Common::SeekableReadStream *contents, Storage::UploadCallback callback, Networking::ErrorCallback ecb);
-	~OneDriveUploadRequest() override;
+	~OneDriveUploadRequest();
 
 	void handle() override;
 	void restart() override;

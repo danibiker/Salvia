@@ -201,7 +201,8 @@ LauncherDialog::LauncherDialog(const Common::String &dialogName)
 
 	g_gui.lockIconsSet();
 	g_gui.getIconsSet().listMatchingMembers(mdFiles, "*.xml");
-	for (auto &md : mdFiles) {
+	for (auto rfIt204 = mdFiles.begin(), rfEnd204 = mdFiles.end(); rfIt204 != rfEnd204; ++rfIt204) {
+		auto &md = *rfIt204;
 		if (_metadataParser.loadStream(md->createReadStream()) == false) {
 			warning("Failed to load XML file '%s'", md->getDisplayName().encode().c_str());
 			_metadataParser.close();
@@ -472,7 +473,8 @@ void LauncherDialog::removeGame(int item) {
 
 		// Remove all the add-ons for this game
 		const Common::ConfigManager::DomainMap &domains = ConfMan.getGameDomains();
-		for (const auto &domain : domains) {
+		for (auto rfIt475 = domains.begin(), rfEnd475 = domains.end(); rfIt475 != rfEnd475; ++rfIt475) {
+			const auto &domain = *rfIt475;
 			if (domain._value.getValOrDefault("parent") == _domains[item]) {
 				ConfMan.removeGameDomain(domain._key);
 			}
@@ -488,12 +490,14 @@ void LauncherDialog::removeGame(int item) {
 }
 
 void LauncherDialog::removeGamesWithAddons(const Common::StringArray &domainsToRemove) {
-	for (const Common::String &domain : domainsToRemove) {
+	for (auto rfIt491 = domainsToRemove.begin(), rfEnd491 = domainsToRemove.end(); rfIt491 != rfEnd491; ++rfIt491) {
+		const Common::String &domain = *rfIt491;
 		ConfMan.removeGameDomain(domain);
 
 		// Remove all the add-ons for this game
 		const Common::ConfigManager::DomainMap &domains = ConfMan.getGameDomains();
-		for (const auto &addonDomain : domains) {
+		for (auto rfIt496 = domains.begin(), rfEnd496 = domains.end(); rfIt496 != rfEnd496; ++rfIt496) {
+			const auto &addonDomain = *rfIt496;
 			if (addonDomain._value.getValOrDefault("parent") == domain) {
 				ConfMan.removeGameDomain(addonDomain._key);
 			}
@@ -600,7 +604,8 @@ void LauncherDialog::loadGame(int item) {
 
 Common::Array<LauncherEntry> LauncherDialog::generateEntries(const Common::ConfigManager::DomainMap &domains, bool skipAddOns) {
 	Common::Array<LauncherEntry> domainList;
-	for (const auto &domain : domains) {
+	for (auto rfIt603 = domains.begin(), rfEnd603 = domains.end(); rfIt603 != rfEnd603; ++rfIt603) {
+		const auto &domain = *rfIt603;
 		// Do not list temporary targets added when starting a game from the command line
 		if (domain._value.contains("id_came_from_command_line"))
 			continue;
@@ -1042,7 +1047,7 @@ LauncherDisplayType getRequestedLauncherType() {
 class LauncherGrid : public LauncherDialog {
 public:
 	LauncherGrid(const Common::String &title);
-	~LauncherGrid() override;
+	~LauncherGrid();
 
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
 	void handleKeyDown(Common::KeyState state) override;
@@ -1113,7 +1118,8 @@ int LauncherChooser::runModal() {
 			if (_impl && !selectedDomains.empty()) {
 				const Common::StringArray &newDomains = _impl->getDomains();
 				Common::Array<bool> &newSelections = const_cast<Common::Array<bool>&>(_impl->getSelectedItems());
-				for (const auto &domain : selectedDomains) {
+				for (auto rfIt1116 = selectedDomains.begin(), rfEnd1116 = selectedDomains.end(); rfIt1116 != rfEnd1116; ++rfIt1116) {
+					const auto &domain = *rfIt1116;
 					for (uint i = 0; i < newDomains.size(); ++i) {
 						if (newDomains[i] == domain) {
 							if (i < newSelections.size())
@@ -1211,7 +1217,8 @@ void LauncherSimple::updateListing(int selPos) {
 	Common::Array<LauncherEntry> domainList = generateEntries(domains, false);
 	Common::HashMap<Common::String, Common::Array<const LauncherEntry*>> addOnsMap;
 
-	for (const auto &curDomain : domainList) {
+	for (auto rfIt1214 = domainList.begin(), rfEnd1214 = domainList.end(); rfIt1214 != rfEnd1214; ++rfIt1214) {
+		const auto &curDomain = *rfIt1214;
 		Common::String parentDomain;
 		if (curDomain.domain->tryGetVal("parent", parentDomain)) {
 			Common::Array<const LauncherEntry*> &gameAddOns = addOnsMap.getOrCreateVal(parentDomain);
@@ -1222,7 +1229,8 @@ void LauncherSimple::updateListing(int selPos) {
 	if (!addOnsMap.empty()) {
 		// Rebuild the list by adding add-ons just next to their parent game
 		Common::Array<LauncherEntry> newDomainList;
-		for (const auto &curDomain : domainList) {
+		for (auto rfIt1225 = domainList.begin(), rfEnd1225 = domainList.end(); rfIt1225 != rfEnd1225; ++rfIt1225) {
+			const auto &curDomain = *rfIt1225;
 			if (curDomain.domain->contains("parent"))
 				continue;
 
@@ -1230,7 +1238,8 @@ void LauncherSimple::updateListing(int selPos) {
 			Common::Array<const LauncherEntry*> gameAddOns;
 			if (addOnsMap.tryGetVal(curDomain.key, gameAddOns)) {
 				// Add add-ons for this game
-				for (const auto *addOn : gameAddOns) {
+				for (auto rfIt1233 = gameAddOns.begin(), rfEnd1233 = gameAddOns.end(); rfIt1233 != rfEnd1233; ++rfIt1233) {
+					const auto *addOn = *rfIt1233;
 					newDomainList.push_back(*addOn);
 				}
 			}
@@ -1240,7 +1249,8 @@ void LauncherSimple::updateListing(int selPos) {
 	}
 
 	// And fill out our structures
-	for (const auto &curDomain : domainList) {
+	for (auto rfIt1243 = domainList.begin(), rfEnd1243 = domainList.end(); rfIt1243 != rfEnd1243; ++rfIt1243) {
+		const auto &curDomain = *rfIt1243;
 		ThemeEngine::FontColor color = ThemeEngine::kFontColorNormal;
 
 		if (scanEntries) {
@@ -1320,14 +1330,16 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 	_list->setGroupsVisibility(true);
 	switch (_groupBy) {
 	case kGroupByFirstLetter: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1323 = metadata.begin(), rfEnd1323 = metadata.end(); rfIt1323 != rfEnd1323; ++rfIt1323) {
+			const auto &entry = *rfIt1323;
 			attrs.push_back(entry.description.substr(0, 1));
 		}
 		_list->setGroupHeaderFormat(Common::U32String(""), Common::U32String("..."));
 		break;
 	}
 	case kGroupByEngine: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1330 = metadata.begin(), rfEnd1330 = metadata.end(); rfIt1330 != rfEnd1330; ++rfIt1330) {
+			const auto &entry = *rfIt1330;
 			attrs.push_back(entry.engineid);
 		}
 		_list->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1344,7 +1356,8 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 		break;
 	}
 	case kGroupByCompany: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1347 = metadata.begin(), rfEnd1347 = metadata.end(); rfIt1347 != rfEnd1347; ++rfIt1347) {
+			const auto &entry = *rfIt1347;
 			attrs.push_back(_metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].company_id);
 		}
 		_list->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1361,7 +1374,8 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 		break;
 	}
 	case kGroupBySeries: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1364 = metadata.begin(), rfEnd1364 = metadata.end(); rfIt1364 != rfEnd1364; ++rfIt1364) {
+			const auto &entry = *rfIt1364;
 			attrs.push_back(_metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].series_id);
 		}
 		_list->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1374,7 +1388,8 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 		break;
 	}
 	case kGroupByLanguage: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1377 = metadata.begin(), rfEnd1377 = metadata.end(); rfIt1377 != rfEnd1377; ++rfIt1377) {
+			const auto &entry = *rfIt1377;
 			Common::U32String language = entry.domain->getValOrDefault(Common::String("language"));
 			attrs.push_back(language);
 		}
@@ -1388,7 +1403,8 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 		break;
 	}
 	case kGroupByPlatform: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1391 = metadata.begin(), rfEnd1391 = metadata.end(); rfIt1391 != rfEnd1391; ++rfIt1391) {
+			const auto &entry = *rfIt1391;
 			Common::U32String platform = entry.domain->getValOrDefault(Common::String("Platform"));
 			attrs.push_back(platform);
 		}
@@ -1402,7 +1418,8 @@ void LauncherSimple::groupEntries(const Common::Array<LauncherEntry> &metadata) 
 		break;
 	}
 	case kGroupByYear: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1405 = metadata.begin(), rfEnd1405 = metadata.end(); rfIt1405 != rfEnd1405; ++rfIt1405) {
+			const auto &entry = *rfIt1405;
 			Common::U32String year = _metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].year;
 			attrs.push_back(year);
 
@@ -1438,7 +1455,8 @@ void LauncherSimple::handleKeyDown(Common::KeyState state) {
 }
 
 bool LauncherDialog::hasAnySelection(const Common::Array<bool> &selectedItems) const {
-	for (const auto &item : selectedItems) {
+	for (auto rfIt1441 = selectedItems.begin(), rfEnd1441 = selectedItems.end(); rfIt1441 != rfEnd1441; ++rfIt1441) {
+		const auto &item = *rfIt1441;
 		if (item) {
 			return true;
 		}
@@ -1565,14 +1583,16 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 	Common::StringMap metadataNames;
 	switch (_groupBy) {
 	case kGroupByFirstLetter: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1568 = metadata.begin(), rfEnd1568 = metadata.end(); rfIt1568 != rfEnd1568; ++rfIt1568) {
+			const auto &entry = *rfIt1568;
 			attrs.push_back(entry.description.substr(0, 1));
 		}
 		_grid->setGroupHeaderFormat(Common::U32String(""), Common::U32String("..."));
 		break;
 	}
 	case kGroupByEngine: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1575 = metadata.begin(), rfEnd1575 = metadata.end(); rfIt1575 != rfEnd1575; ++rfIt1575) {
+			const auto &entry = *rfIt1575;
 			attrs.push_back(entry.engineid);
 		}
 		_grid->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1589,7 +1609,8 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 		break;
 	}
 	case kGroupByCompany: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1592 = metadata.begin(), rfEnd1592 = metadata.end(); rfIt1592 != rfEnd1592; ++rfIt1592) {
+			const auto &entry = *rfIt1592;
 			attrs.push_back(_metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].company_id);
 		}
 		_grid->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1606,7 +1627,8 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 		break;
 	}
 	case kGroupBySeries: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1609 = metadata.begin(), rfEnd1609 = metadata.end(); rfIt1609 != rfEnd1609; ++rfIt1609) {
+			const auto &entry = *rfIt1609;
 			attrs.push_back(_metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].series_id);
 		}
 		_grid->setGroupHeaderFormat(Common::U32String(""), Common::U32String(""));
@@ -1619,7 +1641,8 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 		break;
 	}
 	case kGroupByLanguage: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1622 = metadata.begin(), rfEnd1622 = metadata.end(); rfIt1622 != rfEnd1622; ++rfIt1622) {
+			const auto &entry = *rfIt1622;
 			Common::U32String language = entry.domain->getValOrDefault(Common::String("language"));
 			attrs.push_back(language);
 		}
@@ -1633,7 +1656,8 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 		break;
 	}
 	case kGroupByPlatform: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1636 = metadata.begin(), rfEnd1636 = metadata.end(); rfIt1636 != rfEnd1636; ++rfIt1636) {
+			const auto &entry = *rfIt1636;
 			Common::U32String platform = entry.domain->getValOrDefault(Common::String("Platform"));
 			attrs.push_back(platform);
 		}
@@ -1647,7 +1671,8 @@ void LauncherGrid::groupEntries(const Common::Array<LauncherEntry> &metadata) {
 		break;
 	}
 	case kGroupByYear: {
-		for (const auto &entry : metadata) {
+		for (auto rfIt1650 = metadata.begin(), rfEnd1650 = metadata.end(); rfIt1650 != rfEnd1650; ++rfIt1650) {
+			const auto &entry = *rfIt1650;
 			Common::U32String year = _metadataParser._gameInfo[buildQualifiedGameName(entry.engineid, entry.gameid)].year;
 			attrs.push_back(year);
 
@@ -1761,7 +1786,8 @@ void LauncherGrid::updateListing(int selPos) {
 	Common::Array<GridItemInfo> gridList;
 
 	int k = 0;
-	for (const auto &curDomain : domainList) {
+	for (auto rfIt1764 = domainList.begin(), rfEnd1764 = domainList.end(); rfIt1764 != rfEnd1764; ++rfIt1764) {
+		const auto &curDomain = *rfIt1764;
 		Common::String gameid = curDomain.domain->getVal("gameid");
 		Common::String engineid = "UNK";
 		Common::String language = "XX";

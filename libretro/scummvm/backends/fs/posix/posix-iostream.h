@@ -27,7 +27,7 @@
 /**
  * A file input / output stream using POSIX interfaces
  */
-class PosixIoStream final : public StdioStream {
+class PosixIoStream : public StdioStream {
 public:
 	static StdioStream *makeFromPath(const Common::String &path, StdioStream::WriteMode writeMode) {
 		return StdioStream::makeFromPathHelper(path, writeMode, [](void *handle) -> StdioStream * {

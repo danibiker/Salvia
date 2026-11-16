@@ -78,12 +78,14 @@ Common::StringArray DefaultSaveFileManager::listSavefiles(const Common::String &
 		return Common::StringArray();
 
 	Common::HashMap<Common::String, bool> locked;
-	for (const auto &lockedFile : _lockedFiles) {
+	for (auto rfIt81 = _lockedFiles.begin(), rfEnd81 = _lockedFiles.end(); rfIt81 != rfEnd81; ++rfIt81) {
+		const auto &lockedFile = *rfIt81;
 		locked[lockedFile] = true;
 	}
 
 	Common::StringArray results;
-	for (const auto &file : _saveFileCache) {
+	for (auto rfIt86 = _saveFileCache.begin(), rfEnd86 = _saveFileCache.end(); rfIt86 != rfEnd86; ++rfIt86) {
+		const auto &file = *rfIt86;
 		if (!locked.contains(file._key) && file._key.matchString(pattern, true)) {
 			results.push_back(file._key);
 		}
@@ -113,7 +115,8 @@ Common::InSaveFile *DefaultSaveFileManager::openForLoading(const Common::String 
 	if (getError().getCode() != Common::kNoError)
 		return nullptr;
 
-	for (const auto &lockedFile : _lockedFiles) {
+	for (auto rfIt116 = _lockedFiles.begin(), rfEnd116 = _lockedFiles.end(); rfIt116 != rfEnd116; ++rfIt116) {
+		const auto &lockedFile = *rfIt116;
 		if (filename == lockedFile) {
 			setError(Common::kReadingFailed, Common::String::format("Savefile '%s' is locked and cannot be loaded", filename.c_str()));
 			return nullptr; // file is locked, no loading available
@@ -138,7 +141,8 @@ Common::OutSaveFile *DefaultSaveFileManager::openForSaving(const Common::String 
 	if (getError().getCode() != Common::kNoError)
 		return nullptr;
 
-	for (const auto &lockedFile : _lockedFiles) {
+	for (auto rfIt141 = _lockedFiles.begin(), rfEnd141 = _lockedFiles.end(); rfIt141 != rfEnd141; ++rfIt141) {
+		const auto &lockedFile = *rfIt141;
 		if (filename == lockedFile) {
 			return nullptr; // file is locked, no saving available
 		}
@@ -227,7 +231,8 @@ bool DefaultSaveFileManager::exists(const Common::String &filename) {
 	if (getError().getCode() != Common::kNoError)
 		return false;
 
-	for (const auto &lockedFile : _lockedFiles) {
+	for (auto rfIt230 = _lockedFiles.begin(), rfEnd230 = _lockedFiles.end(); rfIt230 != rfEnd230; ++rfIt230) {
+		const auto &lockedFile = *rfIt230;
 		if (filename == lockedFile)
 			return true;
 	}
@@ -285,7 +290,8 @@ void DefaultSaveFileManager::assureCached(const Common::Path &savePathName) {
 	}
 
 	// Build the savefile name cache.
-	for (const auto &file : children) {
+	for (auto rfIt288 = children.begin(), rfEnd288 = children.end(); rfIt288 != rfEnd288; ++rfIt288) {
+		const auto &file = *rfIt288;
 		if (_saveFileCache.contains(file.getName())) {
 			warning("DefaultSaveFileManager::assureCached: Name clash when building cache, ignoring file '%s'", file.getName().c_str());
 		} else {

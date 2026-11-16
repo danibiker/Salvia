@@ -81,10 +81,10 @@ protected:
 	const Audio::Mixer::SoundType _sndType;
 };
 
-class FourToneSynthDriver final : public LegacyMusicDriver {
+class FourToneSynthDriver : public LegacyMusicDriver {
 public:
 	FourToneSynthDriver(Audio::Mixer::SoundType sndType, Common::Mutex &mutex, bool internal16bit);
-	~FourToneSynthDriver() override;
+	~FourToneSynthDriver();
 
 	void feed(int8 *dst, uint32 byteSize, Audio::Mixer::SoundType type, bool expectStereo) override;
 	void start() override;
@@ -109,10 +109,10 @@ private:
 	Channel *_chan;
 };
 
-class SquareWaveSynthDriver final : public LegacyMusicDriver {
+class SquareWaveSynthDriver : public LegacyMusicDriver {
 public:
 	SquareWaveSynthDriver(Audio::Mixer::SoundType sndType, Common::Mutex &mutex, bool internal16Bit);
-	~SquareWaveSynthDriver() override {};
+	~SquareWaveSynthDriver() {};
 
 	void feed(int8 *dst, uint32 byteSize, Audio::Mixer::SoundType type, bool expectStereo) override;
 	void start() override;
@@ -123,7 +123,9 @@ private:
 
 	struct Triplet {
 		Triplet(uint16 cnt, uint16 ampl, uint16 dur) : count(cnt), amplitude(ampl), duration(dur) {}
-		Triplet() : Triplet(0xffff, 0xffff, 1) {}
+		Triplet() : count(0xffff), amplitude(0xffff), duration(1) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+}
 		Triplet &&fromScumm() { count = (count / 3) * 2; duration = MAX<uint8>(duration, 1); return Common::move(*this); }
 		void toHardware(uint32 &dstCount, uint8 &dstAmpl, uint16 &dstDur) { dstCount = count ? 0x58000000 / (5 * count) : 0; dstAmpl = (amplitude & 0xff) >> 1; dstDur = duration; }
 		uint16 count;
@@ -837,7 +839,7 @@ Indy3MacSnd::MusicChannel *Indy3MacSnd::MusicChannel::_ctrlChan = nullptr;
 
 Indy3MacSnd::MusicChannel::MusicChannel(Indy3MacSnd *pl) : _player(pl), _vars(nullptr), _numVars(0), _ctrlProc(nullptr),
 _resSize(0), _savedOffset(savedOffset), _modShapes(g_pv2ModTbl), _modShapesTableSize(g_pv2ModTblSize) {
-	static const CtrlProc ctrl[8] {
+	static const CtrlProc ctrl[8] = {
 		&Indy3MacSnd::MusicChannel::ctrl_setShape,
 		&Indy3MacSnd::MusicChannel::ctrl_modPara,
 		&Indy3MacSnd::MusicChannel::ctrl_init,

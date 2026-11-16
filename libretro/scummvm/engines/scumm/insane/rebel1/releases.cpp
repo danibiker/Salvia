@@ -149,7 +149,8 @@ bool Rebel1Release::readTuningData(Common::SeekableReadStream &in, Rebel1TuningT
 Rebel1Release getRebel1Release(const char *variant, bool restoredContent) {
 	if (!variant)
 		variant = "";
-	for (const Rebel1Release &release : kReleases) {
+	for (auto rfIt152 = &kReleases[0], rfEnd152 = &kReleases[0] + sizeof(kReleases) / sizeof(kReleases[0]); rfIt152 != rfEnd152; ++rfIt152) {
+		const Rebel1Release &release = *rfIt152;
 		if (!strcmp(variant, release.variant)) {
 			Rebel1Release result = release;
 			if (restoredContent && release.restoredLevels)

@@ -275,7 +275,7 @@ void GridWidget::loadClosedGroups(const Common::U32String &groupName) {
 		for (Common::U32String tok = hiddenGroups.nextToken(); tok.size(); tok = hiddenGroups.nextToken()) {
 			// See if the hidden group is in our group headers still, if so, hide it
 			for (Common::U32StringArray::size_type i = 0; i < _groupHeaders.size(); ++i) {
-				if (_groupHeaders[i] == tok || (tok == U"unnamed" && _groupHeaders[i].size() == 0)) {
+				if (_groupHeaders[i] == tok || (tok == Common::U32String("unnamed") && _groupHeaders[i].size() == 0)) {
 					uint groupID = _groupValueIndex[_groupHeaders[i]];
 					_groupExpanded[groupID] = false;
 					break;
@@ -485,7 +485,7 @@ Common::SharedPtr<Graphics::ManagedSurface> scaleGfx(Common::SharedPtr<Graphics:
 #pragma mark -
 
 GridWidget::GridWidget(GuiObject *boss, const Common::String &name)
-	: ContainerWidget(boss, name), CommandSender(boss) {
+	: ContainerWidget(boss, name), CommandSender(boss), _highlightedItem(nullptr), _lastSelectedEntryID(-1) {
 
 	_thumbnailHeight = 0;
 	_thumbnailWidth = 0;

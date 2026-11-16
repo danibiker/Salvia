@@ -98,7 +98,7 @@ public:
 		return entries;
 	}
 
-	void dumpDetectionEntries() const override final;
+	void dumpDetectionEntries() const override;
 
 	GameFilenamePattern matchGameFilenamePattern(const MD5Table *entry) const;
 };

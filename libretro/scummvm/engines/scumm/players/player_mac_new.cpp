@@ -1336,7 +1336,7 @@ class LoomMonkeyMacSnd;
 template<typename T> class MusicEngineImpl : public MusicEngine {
 public:
 	MusicEngineImpl(ScummEngine *vm, Audio::Mixer *mixer);
-	~MusicEngineImpl() override;
+	~MusicEngineImpl();
 	void setMusicVolume(int vol) override;
 	void setSfxVolume(int vol) override;
 	void startSound(int id) override;

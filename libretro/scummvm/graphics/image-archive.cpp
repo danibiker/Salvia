@@ -38,10 +38,10 @@ ImageArchive::~ImageArchive() {
 
 void ImageArchive::reset() {
 #ifdef USE_PNG
-	for (auto &i : _imageCache) {
-		if (i._value)
-			i._value->free();
-		delete i._value;
+	for (auto it = _imageCache.begin(); it != _imageCache.end(); ++it) {
+		if (it->_value)
+			it->_value->free();
+		delete it->_value;
 	}
 	_imageCache.clear();
 #endif

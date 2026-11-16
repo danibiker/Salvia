@@ -50,7 +50,7 @@ class LibRetroTextureTarget;
 class LibRetroPipeline : public Pipeline {
 public:
 	LibRetroPipeline();
-	~LibRetroPipeline() override;
+	~LibRetroPipeline();
 
 	void setColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) override;
 	void setProjectionMatrix(const Math::Matrix4 &projectionMatrix) override;

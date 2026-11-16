@@ -78,9 +78,9 @@ bool DebugManager::addDebugChannel(uint32 channel, const String &name, const Str
 	if (_debugChannels.contains(name))
 		warning("Duplicate declaration of engine debug channel '%s'", name.c_str());
 
-	for (auto &debugChannel : _debugChannels)
-		if (debugChannel._value.channel == channel)
-			error("Duplicate engine debug channel id '%d' for flag '%s'", channel, name.c_str());
+	for (auto rfIt81 = _debugChannels.begin(), rfEnd81 = _debugChannels.end(); rfIt81 != rfEnd81; ++rfIt81)
+		{ auto &debugChannel = *rfIt81; if (debugChannel._value.channel == channel)
+			error("Duplicate engine debug channel id '%d' for flag '%s'", channel, name.c_str()); }
 
 	_debugChannels[name] = DebugChannel(channel, name, description);
 
@@ -102,9 +102,9 @@ void DebugManager::removeAllDebugChannels() {
 	_debugChannels.clear();
 	addDebugChannels(gDebugChannels);
 
-	for (auto &debugChannel : _debugChannels)
-		if (oldMap.contains(debugChannel._value.channel))
-			_debugChannelsEnabled[debugChannel._value.channel] = oldMap[debugChannel._value.channel];
+	for (auto rfIt105 = _debugChannels.begin(), rfEnd105 = _debugChannels.end(); rfIt105 != rfEnd105; ++rfIt105)
+		{ auto &debugChannel = *rfIt105; if (oldMap.contains(debugChannel._value.channel))
+			_debugChannelsEnabled[debugChannel._value.channel] = oldMap[debugChannel._value.channel]; }
 }
 
 bool DebugManager::enableDebugChannel(const String &name) {
@@ -143,21 +143,21 @@ bool DebugManager::disableDebugChannel(uint32 channel) {
 
 DebugManager::DebugChannelList DebugManager::getDebugChannels() {
 	DebugChannelList tmp;
-	for (auto &debugChannel : _debugChannels)
-		tmp.push_back(debugChannel._value);
+	for (auto rfIt146 = _debugChannels.begin(), rfEnd146 = _debugChannels.end(); rfIt146 != rfEnd146; ++rfIt146)
+		{ auto &debugChannel = *rfIt146; tmp.push_back(debugChannel._value); }
 	sort(tmp.begin(), tmp.end(), DebugLevelComperator());
 
 	return tmp;
 }
 
 void DebugManager::enableAllDebugChannels() {
-	for (auto &debugChannel : _debugChannels)
-		enableDebugChannel(debugChannel._value.name);
+	for (auto rfIt154 = _debugChannels.begin(), rfEnd154 = _debugChannels.end(); rfIt154 != rfEnd154; ++rfIt154)
+		{ auto &debugChannel = *rfIt154; enableDebugChannel(debugChannel._value.name); }
 }
 
 void DebugManager::disableAllDebugChannels() {
-	for (auto &debugChannel : _debugChannels)
-		disableDebugChannel(debugChannel._value.name);
+	for (auto rfIt159 = _debugChannels.begin(), rfEnd159 = _debugChannels.end(); rfIt159 != rfEnd159; ++rfIt159)
+		{ auto &debugChannel = *rfIt159; disableDebugChannel(debugChannel._value.name); }
 }
 
 bool DebugManager::isDebugChannelEnabled(uint32 channel, bool enforce) {

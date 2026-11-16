@@ -86,7 +86,7 @@ class GuiManager : public Common::Singleton<GuiManager>, public CommandSender {
 	friend class Dialog;
 	friend class Common::Singleton<SingletonBaseType>;
 	GuiManager();
-	~GuiManager() override;
+	~GuiManager();
 public:
 
 	// Main entry for the GUI: this will start an event loop that keeps running
@@ -195,7 +195,7 @@ protected:
 	Common::SearchSet _iconsSet;
 	bool _iconsSetChanged;
 
-	Graphics::MacWindowManager *_wm = nullptr;
+	Graphics::MacWindowManager *_wm;
 
 	// position and time of last mouse click (used to detect double clicks)
 	struct MousePos {

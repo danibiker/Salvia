@@ -58,7 +58,7 @@ public:
 	Font(Graphics::Font *font, const Common::String &faceName, int height,
 		DisposeAfterUse::Flag disposeAfterUse =
 			DisposeAfterUse::YES);
-	~Font() override;
+	~Font();
 
 	int getFontHeight() const override;
 	int getFontAscent() const override;

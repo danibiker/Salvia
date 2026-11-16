@@ -36,7 +36,7 @@ class IMuseDriver_Amiga : public MidiDriver, public Audio::Paula {
 friend class SoundChannel_Amiga;
 public:
 	IMuseDriver_Amiga(Audio::Mixer *mixer);
-	~IMuseDriver_Amiga() override;
+	~IMuseDriver_Amiga();
 
 	int open() override;
 	bool isOpen() const override { return _isOpen; }

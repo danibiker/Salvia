@@ -74,6 +74,7 @@ static void check_stack_headroom(void) {
 #define MAIN_WAITING   (1 << 1)
 #define EMU_STARTED    (1 << 2)
 #define EMU_EXITED     (1 << 3)
+#define EMU_ABORTED    (1 << 4)
 static uint8 status = EMU_WAITING | MAIN_WAITING;
 
 static cothread_t main_thread;
@@ -88,7 +89,7 @@ static void retro_wrap_emulator(void) {
 	char anchor;
 	stack_anchor = &anchor;
 
-	status &= ~EMU_EXITED;
+	status &= ~(EMU_EXITED | EMU_ABORTED);
 	status |= EMU_STARTED;
 	scummvm_res = retro_run_emulator();
 	status |= EMU_EXITED;
@@ -124,6 +125,29 @@ bool retro_emu_thread_started(void) {
 	return (bool)(status & EMU_STARTED);
 }
 
+bool retro_emu_thread_is_current(void) {
+	return emu_thread && co_active() == emu_thread;
+}
+
+void retro_emu_thread_mark_aborted(int res) {
+	scummvm_res = res;
+	status |= EMU_EXITED | EMU_ABORTED;
+	status &= ~EMU_STARTED;
+}
+
+void retro_emu_thread_abort(int res) {
+	retro_emu_thread_mark_aborted(res);
+	/* retro_switch_to_emu_thread() refuses to resume an exited thread, so this
+	 * switch never comes back; the loop only guards against a stray resume.
+	 * The coroutine stack is released by co_delete() on unload. */
+	for (;;)
+		retro_exit_to_main_thread();
+}
+
+bool retro_emu_thread_aborted(void) {
+	return (bool)(status & EMU_ABORTED);
+}
+
 bool retro_init_emu_thread(void) {
 	if (retro_emu_thread_initialized())
 		return true;
@@ -135,7 +159,7 @@ bool retro_init_emu_thread(void) {
 		return false;
 	}
 
-	status &= ~(EMU_EXITED | EMU_STARTED);
+	status &= ~(EMU_EXITED | EMU_STARTED | EMU_ABORTED);
 	return true;
 }
 
@@ -163,8 +187,11 @@ static scond_t *emu_cond = NULL;
 static uint8 turn = TURN_MAIN;
 static bool emu_started = false;
 static bool emu_exited = false;
+static bool emu_aborted = false;
+static uintptr_t emu_thread_id = 0;
 
 static void retro_wrap_emulator(void *args) {
+	emu_thread_id = sthread_get_current_thread_id();
 	slock_lock(state_lock);
 	while (turn != TURN_EMU)
 		scond_wait(emu_cond, state_lock);
@@ -187,6 +214,18 @@ static void retro_wrap_emulator(void *args) {
 }
 
 static void retro_free_emu_thread(void) {
+	if (emu_thread && emu_aborted) {
+		/* The aborted emulation thread is parked forever on emu_cond (see
+		 * retro_emu_thread_abort); it cannot be joined, so detach it and leak
+		 * the lock and condition variables it is still waiting on. */
+		sthread_detach(emu_thread);
+		emu_thread = NULL;
+		state_lock = NULL;
+		main_cond = NULL;
+		emu_cond = NULL;
+		emu_started = false;
+		return;
+	}
 	if (emu_thread) {
 		sthread_join(emu_thread);
 		emu_thread = NULL;
@@ -255,6 +294,46 @@ bool retro_emu_thread_started(void) {
 	return ret;
 }
 
+bool retro_emu_thread_is_current(void) {
+	return emu_thread && sthread_get_current_thread_id() == emu_thread_id;
+}
+
+void retro_emu_thread_mark_aborted(int res) {
+	if (!state_lock)
+		return;
+	slock_lock(state_lock);
+	scummvm_res = res;
+	emu_exited = true;
+	emu_aborted = true;
+	emu_started = false;
+	slock_unlock(state_lock);
+}
+
+void retro_emu_thread_abort(int res) {
+	retro_gl_context_release();
+	slock_lock(state_lock);
+	scummvm_res = res;
+	emu_exited = true;
+	emu_aborted = true;
+	emu_started = false;
+	turn = TURN_MAIN;
+	scond_signal(main_cond);
+	/* Park forever: retro_switch_to_emu_thread() never hands the turn back to
+	 * an exited thread. */
+	for (;;)
+		scond_wait(emu_cond, state_lock);
+}
+
+bool retro_emu_thread_aborted(void) {
+	bool ret;
+	if (!state_lock)
+		return emu_aborted;
+	slock_lock(state_lock);
+	ret = emu_aborted;
+	slock_unlock(state_lock);
+	return ret;
+}
+
 bool retro_init_emu_thread(void) {
 	if (retro_emu_thread_initialized())
 		return true;
@@ -270,6 +349,8 @@ bool retro_init_emu_thread(void) {
 
 	turn = TURN_MAIN;
 	emu_exited = false;
+	emu_aborted = false;
+	emu_thread_id = 0;
 	emu_started = true;
 
 	emu_thread = sthread_create(retro_wrap_emulator, NULL);

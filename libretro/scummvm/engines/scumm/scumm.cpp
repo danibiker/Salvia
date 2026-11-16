@@ -139,7 +139,7 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 	  _game(dr.game),
 	  _filenamePattern(dr.fp),
 	  _language(dr.language),
-	  _rnd("scumm")
+	  _rnd("scumm"), _imuse(nullptr), _imuseDigital(nullptr), _musicEngine(nullptr), _townsPlayer(nullptr), _sound(nullptr), _verbs(nullptr), _objs(nullptr), _gdi(nullptr), _res(nullptr), _insideCreateResource(0), _useOriginalGUI(true), _enableAudioOverride(false), _enableCOMISong(false), _isAmigaPALSystem(false), _isC64PALSystem(false), _quitFromScriptCmd(false), _isHE995(false), _enableHECompetitiveOnlineMods(false), _needsSoundUnpause(false), _msecFractParts(0.0), _isIndy4Jap(false), _pauseDialog(nullptr), _messageDialog(nullptr), _versionDialog(nullptr), _bannerMem(nullptr), _bannerMemSize(0), _bannerSaveYStart(0), _messageBannerActive(false), _comiQuitMenuIsOpen(false), _closeBannerAndQueryQuitFlag(false), _textSurfBannerMem(nullptr), _textSurfBannerMemSize(0), _menuPage(0), _mainMenuSavegameLabel(1), _curDisplayedSaveSlotPage(0), _firstSaveStateOfList(0), _mainMenuIsActive(false), _quitByGUIPrompt(false), _spooledMusicIsToBeEnabled(1), _saveScriptParam(0), _guiCursorAnimCounter(0), _v5VoiceMode(0), _internalSpeakerSoundsAreOn(1), _guiMouseFlag(1), _guiJoystickFlag(1), _mixerMutedByGUI(false), _tempTextSurface(nullptr), _tempMainSurface(nullptr), _tempVerbSurface(nullptr), _postGUICharMask(false), _curGrabbedCursor(nullptr), _oldCursorState(0), _curCursorState(0), _curCursorWidth(0), _curCursorHeight(0), _curCursorHotspotX(0), _curCursorHotspotY(0), _fastMode(0), _numActors(0), _actors(nullptr), _sortedActors(nullptr), _arraySlot(nullptr), _inventory(nullptr), _newNames(nullptr), _varwatch(0), _roomVars(nullptr), _scummVars(nullptr), _bitVars(nullptr), _numVariables(0), _numBitVariables(0), _numLocalObjects(0), _numGlobalObjects(0), _numArray(0), _numVerbs(0), _numFlObject(0), _numInventory(0), _numNewNames(0), _numGlobalScripts(0), _numRoomVariables(0), _numPalettes(0), _numSprites(0), _numTalkies(0), _numWindows(0), _HEHeapSize(0), _numLocalScripts(60), _numImages(0), _numRooms(0), _numScripts(0), _numSounds(0), _numCostumes(0), _numCharsets(0), _costumeLoader(nullptr), _costumeRenderer(nullptr), _NESCostumeSet(0), _NEScostdesc(nullptr), _NEScostlens(nullptr), _NEScostoffs(nullptr), _NEScostdata(nullptr), _NESBaseTiles(0), _NESStartStrip(0), _curPalIndex(0), _currentRoom(0), _roomResource(0), _egoPositioned(false), _mouseAndKeyboardStat(0), _leftBtnPressed(0), _rightBtnPressed(0), _mouseWheelFlag(0), _setupIsComplete(false), _lastInputScriptTime(0), _bootParam(0), _dumpScripts(false), _hexdumpScripts(false), _showStack(false), _debugMode(false), _saveLoadFlag(0), _saveLoadSlot(0), _lastSaveTime(0), _saveTemporaryState(false), _pauseSoundsDuringSave(true), _loadFromLauncher(false), _videoModeChanged(false), _scriptPointer(nullptr), _scriptOrgPointer(nullptr), _lastCodePtr(nullptr), _opcode(0), _debug(false), _currentScript(0xFF), _scummStackPos(0), _fileHandle(nullptr), _fileOffset(0), _resourceHeaderSize(8), _lastLoadedRoom(0), OF_OWNER_ROOM(0), _objectOwnerTable(nullptr), _objectRoomTable(nullptr), _objectStateTable(nullptr), _numObjectsInRoom(0), _classData(nullptr), _verbMouseOver(0), _userPut(0), _userState(0), _actorToPrintStrFor(0), _V1TalkingActor(0), _sentenceNum(0), _haveMsg(0), _talkDelay(0), _NES_lastTalkingActor(0), _NES_talkColor(0), _screenB(0), _screenH(0), _roomHeight(0), _roomWidth(0), _screenHeight(0), _screenWidth(0), _cameraIsFrozen(false), _screenStartStrip(0), _screenEndStrip(0), _screenTop(0), _forceBannerVirtScreen(false), _useMacScreenCorrectHeight(true), _macScreenDrawOffset(20), _bytesPerPixel(1), _ENCD_offs(0), _EXCD_offs(0), _CLUT_offs(0), _EPAL_offs(0), _IM00_offs(0), _PALS_offs(0), _fullRedraw(false), _bgNeedsRedraw(false), _screenEffectFlag(false), _completeScreenRedraw(false), _disableFadeInEffect(false), _currentCursor(0), _newEffect(0), _switchRoomEffect2(0), _switchRoomEffect(0), _doEffect(false), _snapScroll(false), _hercCGAScaleBuf(nullptr), _enableEGADithering(false), _supportsEGADithering(false), _enableSegaShadowMode(false), _shakeEnabled(false), _shakeTempSavedState(false), _shakeFrame(0), _shakeNextTick(0), _shakeTickCounter(0), _drawObjectQueNr(0), _shadowPalette(nullptr), _skipDrawObject(0), _voiceMode(0), _soundEnabled(0), _hePalettes(nullptr), _hePaletteSlot(0), _16BitPalette(nullptr), _verbPalette(nullptr), _shadowPaletteSize(0), _paletteChangedCounter(1), _palDirtyMin(0), _palDirtyMax(0), _palManipStart(0), _palManipEnd(0), _palManipCounter(0), _palManipPalette(nullptr), _palManipIntermediatePal(nullptr), _haveActorSpeechMsg(false), _useTalkAnims(false), _defaultTextSpeed(0), _saveSound(0), _native_mt32(false), _copyProtection(false), _shadowPalRemap(false), _amigaFirstUsedColor(0), _charset(nullptr), _textSurfaceMultiplier(0), _isModernMacVersion(false), _useGammaCorrection(true), _macScreen(nullptr), _macGui(nullptr), _useMacGraphicsSmoothing(true), _charsetColor(0), _charsetBufPos(0), _keepText(false), _msgCount(0), _nextLeft(0), _nextTop(0), _localizer(nullptr), _useCJKMode(false), _useMultiFont(false), _numLoadedFont(0), _2byteShadow(0), _force2ByteCharHeight(false), _2byteHeight(0), _2byteWidth(0), _krStrPost(0), _newLineCharacter(0), _2byteFontPtr(nullptr), _existLanguageFile(false), _isRTL(false), _languageBuffer(nullptr), _numTranslatedLines(0), _translatedLines(nullptr), _languageLineIndex(nullptr), VAR_KEYPRESS(0xFF), VAR_SYNC(0xFF), VAR_EGO(0xFF), VAR_CAMERA_POS_X(0xFF), VAR_HAVE_MSG(0xFF), VAR_ROOM(0xFF), VAR_OVERRIDE(0xFF), VAR_MACHINE_SPEED(0xFF), VAR_ME(0xFF), VAR_NUM_ACTOR(0xFF), VAR_CURRENT_LIGHTS(0xFF), VAR_CURRENTDRIVE(0xFF), VAR_CURRENTDISK(0xFF), VAR_TMR_1(0xFF), VAR_TMR_2(0xFF), VAR_TMR_3(0xFF), VAR_MUSIC_TIMER(0xFF), VAR_ACTOR_RANGE_MIN(0xFF), VAR_ACTOR_RANGE_MAX(0xFF), VAR_CAMERA_MIN_X(0xFF), VAR_CAMERA_MAX_X(0xFF), VAR_TIMER_NEXT(0xFF), VAR_VIRT_MOUSE_X(0xFF), VAR_VIRT_MOUSE_Y(0xFF), VAR_ROOM_RESOURCE(0xFF), VAR_LAST_SOUND(0xFF), VAR_CUTSCENEEXIT_KEY(0xFF), VAR_OPTIONS_KEY(0xFF), VAR_TALK_ACTOR(0xFF), VAR_CAMERA_FAST_X(0xFF), VAR_SCROLL_SCRIPT(0xFF), VAR_ENTRY_SCRIPT(0xFF), VAR_ENTRY_SCRIPT2(0xFF), VAR_EXIT_SCRIPT(0xFF), VAR_EXIT_SCRIPT2(0xFF), VAR_VERB_SCRIPT(0xFF), VAR_SENTENCE_SCRIPT(0xFF), VAR_INVENTORY_SCRIPT(0xFF), VAR_CUTSCENE_START_SCRIPT(0xFF), VAR_CUTSCENE_END_SCRIPT(0xFF), VAR_CHARINC(0xFF), VAR_WALKTO_OBJ(0xFF), VAR_DEBUGMODE(0xFF), VAR_HEAPSPACE(0xFF), VAR_RESTART_KEY(0xFF), VAR_PAUSE_KEY(0xFF), VAR_MOUSE_X(0xFF), VAR_MOUSE_Y(0xFF), VAR_TIMER(0xFF), VAR_TIMER_TOTAL(0xFF), VAR_SOUNDCARD(0xFF), VAR_VIDEOMODE(0xFF), VAR_MAINMENU_KEY(0xFF), VAR_FIXEDDISK(0xFF), VAR_CURSORSTATE(0xFF), VAR_USERPUT(0xFF), VAR_SOUNDRESULT(0xFF), VAR_TALKSTOP_KEY(0xFF), VAR_FADE_DELAY(0xFF), VAR_NOSUBTITLES(0xFF), VAR_SOUNDPARAM(0xFF), VAR_SOUNDPARAM2(0xFF), VAR_SOUNDPARAM3(0xFF), VAR_INPUTMODE(0xFF), VAR_MEMORY_PERFORMANCE(0xFF), VAR_VIDEO_PERFORMANCE(0xFF), VAR_ROOM_FLAG(0xFF), VAR_GAME_LOADED(0xFF), VAR_NEW_ROOM(0xFF), VAR_V5_TALK_STRING_Y(0xFF), VAR_ROOM_WIDTH(0xFF), VAR_ROOM_HEIGHT(0xFF), VAR_SUBTITLES(0xFF), VAR_V6_EMSSPACE(0xFF), VAR_CAMERA_POS_Y(0xFF), VAR_CAMERA_MIN_Y(0xFF), VAR_CAMERA_MAX_Y(0xFF), VAR_CAMERA_THRESHOLD_X(0xFF), VAR_CAMERA_THRESHOLD_Y(0xFF), VAR_CAMERA_SPEED_X(0xFF), VAR_CAMERA_SPEED_Y(0xFF), VAR_CAMERA_ACCEL_X(0xFF), VAR_CAMERA_ACCEL_Y(0xFF), VAR_CAMERA_DEST_X(0xFF), VAR_CAMERA_DEST_Y(0xFF), VAR_CAMERA_FOLLOWED_ACTOR(0xFF), VAR_VERSION_KEY(0xFF), VAR_DEFAULT_TALK_DELAY(0xFF), VAR_CUSTOMSCALETABLE(0xFF), VAR_BLAST_ABOVE_TEXT(0xFF), VAR_VOICE_MODE(0xFF), VAR_MUSIC_BUNDLE_LOADED(0xFF), VAR_VOICE_BUNDLE_LOADED(0xFF), VAR_LEFTBTN_DOWN(0xFF), VAR_RIGHTBTN_DOWN(0xFF), VAR_LEFTBTN_HOLD(0xFF), VAR_RIGHTBTN_HOLD(0xFF), VAR_PRE_SAVELOAD_SCRIPT(0xFF), VAR_POST_SAVELOAD_SCRIPT(0xFF), VAR_SAVELOAD_PAGE(0xFF), VAR_OBJECT_LABEL_FLAG(0xFF), VAR_CHARSET_MASK(0xFF), VAR_V6_SOUNDMODE(0xFF), VAR_CHARCOUNT(0xFF), VAR_VERB_ALLOWED(0xFF), VAR_ACTIVE_VERB(0xFF), VAR_ACTIVE_OBJECT1(0xFF), VAR_ACTIVE_OBJECT2(0xFF), VAR_ALWAYS_REDRAW_ACTORS(0xFF), VAR_SKIP_RESET_TALK_ACTOR(0xFF), VAR_SOUND_CHANNEL(0xFF), VAR_TALK_CHANNEL(0xFF), VAR_SOUND_TOKEN_OFFSET(0xFF), VAR_START_DYN_SOUND_CHANNELS(0xFF), VAR_SOUND_CALLBACK_SCRIPT(0xFF), VAR_EARLY_TALKIE_CALLBACK(0xFF), VAR_EARLY_CHAN_0_CALLBACK(0xFF), VAR_EARLY_CHAN_1_CALLBACK(0xFF), VAR_EARLY_CHAN_2_CALLBACK(0xFF), VAR_EARLY_CHAN_3_CALLBACK(0xFF), VAR_MAIN_SCRIPT(0xFF), VAR_DEFAULT_SCRIPT_PRIORITY(0xFF), VAR_LAST_SCRIPT_PRIORITY(0xFF), VAR_QUIT_SCRIPT(0xFF), VAR_ERROR_FLAG(0xFF), VAR_OPERATION_FAILURE(0xFF), VAR_COLOR_BLACK(0xFF), VAR_NUM_GLOBAL_OBJS(0xFF), VAR_LAST_FRAME_BURN_TIME(0xFF), VAR_LAST_FRAME_SCUMM_TIME(0xFF), VAR_WINDEX_RUNNING(0xFF), _cjkFont(nullptr), _townsPaletteFlags(0), _numCyclRects(0), _scrollRequest(0), _scrollDeltaAdjust(0), _scrollNeedDeltaAdjust(0), _refreshArrayPos(0), _refreshNeedCatchUp(false), _enableSmoothScrolling(false), _forceFMTownsHiResMode(false), _scrollTimer(0), _scrollDestOffset(0), _townsOverrideShadowColor(0), _townsClearLayerFlag(1), _townsActiveLayerFlags(3), _townsScreen(nullptr)
 {
 
 #ifdef USE_RGB_COLOR
@@ -557,8 +557,8 @@ ScummEngine::~ScummEngine() {
 
 	delete _macGui;
 
-	for (auto &it : _scriptOverrides)
-		delete it._value;
+	for (auto rfIt560 = _scriptOverrides.begin(), rfEnd560 = _scriptOverrides.end(); rfIt560 != rfEnd560; ++rfIt560)
+		{ auto &it = *rfIt560; delete it._value; }
 
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
 	delete _townsScreen;
@@ -594,6 +594,17 @@ ScummEngine_v5::ScummEngine_v5(OSystem *syst, const DetectorResult &dr)
 	_resultVarNumber = 0;
 }
 
+// Static GUI data (moved out of the class definition for MSVC 2010 compatibility)
+const char ScummEngine::_emptyMsg[1] = {'\0'};
+const char ScummEngine::_uncheckedBox[2] = {' ', '\0'};
+const char ScummEngine::_checkedBox[2] = {'x', '\0'};
+const char ScummEngine::_arrowUp[2] = {'\x18', '\0'};
+const char ScummEngine::_arrowDown[2] = {'\x19', '\0'};
+const char ScummEngine::_arrowLeft[2] = {'\x3c', '\0'};
+const char ScummEngine::_arrowRight[2] = {'\x3d', '\0'};
+const byte ScummEngine_v4::_GUIPalette[13] = {0x00, 0x01, 0x0B, 0x03, 0x00, 0x0B, 0x0B, 0x03, 0x01, 0x00, 0x01, 0x0B, 0x09};
+const byte ScummEngine_v4::_GUIPaletteCGA[13] = {0x00, 0x03, 0x0B, 0x03, 0x00, 0x0B, 0x0B, 0x0F, 0x03, 0x00, 0x0B, 0x0B, 0x05};
+
 ScummEngine_v4::ScummEngine_v4(OSystem *syst, const DetectorResult &dr)
 	: ScummEngine_v5(syst, dr) {
 	_resourceHeaderSize = 6;
@@ -622,7 +633,7 @@ ScummEngine_v3old::ScummEngine_v3old(OSystem *syst, const DetectorResult &dr)
 }
 
 ScummEngine_v2::ScummEngine_v2(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v3old(syst, dr) {
+	: ScummEngine_v3old(syst, dr), _hiLiteColorVerbArrow(0x0E), _hiLiteColorInvSentence(0x0E) {
 
 	_shadowPalRemap = false;
 	_inventoryOffset = 0;
@@ -692,7 +703,7 @@ int ScummEngine_v0::DelayCalculateDelta() {
 }
 
 ScummEngine_v6::ScummEngine_v6(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine(syst, dr) {
+	: ScummEngine(syst, dr), _blastObjectRectsQueue(0) {
 	_blastObjectQueuePos = 0;
 	for (uint i = 0; i < ARRAYSIZE(_blastObjectQueue); i++) {
 		_blastObjectQueue[i].clear();
@@ -721,7 +732,7 @@ ScummEngine_v6::ScummEngine_v6(OSystem *syst, const DetectorResult &dr)
 }
 
 ScummEngine_v60he::ScummEngine_v60he(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v6(syst, dr) {
+	: ScummEngine_v6(syst, dr), _pauseStartTime(0) {
 #ifdef ENABLE_HE
 	_moonbase = nullptr;
 	_basketball = nullptr;
@@ -782,7 +793,7 @@ ScummEngine_v70he::~ScummEngine_v70he() {
 
 #ifdef ENABLE_HE
 ScummEngine_v71he::ScummEngine_v71he(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v70he(syst, dr) {
+	: ScummEngine_v70he(syst, dr), _disableActorDrawingFlag(false), _heAuxEraseActorIndex(0), _heAuxAnimTableIndex(0) {
 	_heAuxEraseActorIndex = 0;
 	memset(_heAuxEraseActorTable, 0, sizeof(_heAuxEraseActorTable));
 	_heAuxAnimTableIndex = 0;
@@ -800,7 +811,7 @@ ScummEngine_v71he::~ScummEngine_v71he() {
 }
 
 ScummEngine_v72he::ScummEngine_v72he(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v71he(syst, dr) {
+	: ScummEngine_v71he(syst, dr), _stringLength(1), _stringBuffer(), _wizImageCommand(), _floodFillCommand() {
 	VAR_NUM_ROOMS = 0xFF;
 	VAR_NUM_SCRIPTS = 0xFF;
 	VAR_NUM_SOUNDS = 0xFF;
@@ -814,7 +825,7 @@ ScummEngine_v72he::ScummEngine_v72he(OSystem *syst, const DetectorResult &dr)
 }
 
 ScummEngine_v80he::ScummEngine_v80he(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v72he(syst, dr) {
+	: ScummEngine_v72he(syst, dr), _heSndResId(0) {
 
 	VAR_PLATFORM_VERSION = 0xFF;
 	VAR_CURRENT_CHARSET = 0xFF;
@@ -823,7 +834,7 @@ ScummEngine_v80he::ScummEngine_v80he(OSystem *syst, const DetectorResult &dr)
 }
 
 ScummEngine_v90he::ScummEngine_v90he(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v80he(syst, dr) {
+	: ScummEngine_v80he(syst, dr), _heObject(0), _heObjectNum(0), _hePaletteNum(0), _maxSpriteNum(0), _minSpriteNum(0), _curSpriteGroupId(0), _logicHE(nullptr) {
 	_moviePlay = new MoviePlayer(this, _mixer);
 	_sprite = new Sprite(this);
 
@@ -876,7 +887,7 @@ ScummEngine_v90he::~ScummEngine_v90he() {
 	}
 }
 
-ScummEngine_v99he::ScummEngine_v99he(OSystem *syst, const DetectorResult &dr) : ScummEngine_v95he(syst, dr) {
+ScummEngine_v99he::ScummEngine_v99he(OSystem *syst, const DetectorResult &dr) : ScummEngine_v95he(syst, dr), _heFont(nullptr) {
 	_heFont = new HEFont(this);
 }
 
@@ -948,7 +959,7 @@ void ScummEngine_vCUPhe::parseEvents() {
 
 #ifdef ENABLE_SCUMM_7_8
 ScummEngine_v7::ScummEngine_v7(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v6(syst, dr) {
+	: ScummEngine_v6(syst, dr), _smushFrameRate(0), _smushVideoShouldFinish(false), _smushActive(false), _insane(nullptr), _newTextRenderStyle(false), _blastTextRectsQueue(0), _verbLineSpacing(0), _existLanguageFile(false), _languageBuffer(nullptr), _languageIndexSize(0), _lastStringTag(), _guiStringTransBuff(nullptr) {
 	_blastTextQueuePos = 0;
 	for (uint i = 0; i < ARRAYSIZE(_blastTextQueue); i++) {
 		_blastTextQueue[i].clear();
@@ -994,7 +1005,7 @@ ScummEngine_v7::~ScummEngine_v7() {
 }
 
 ScummEngine_v8::ScummEngine_v8(OSystem *syst, const DetectorResult &dr)
-	: ScummEngine_v7(syst, dr) {
+	: ScummEngine_v7(syst, dr), _objectIDMapSize(0), _objectIDMap(nullptr), _savegameThumbnailV8Palette(), _savegameThumbnailV8(), _stampShots(), _stampShotsInQueue(0), _keyScriptKey(0), _keyScriptNo(0) {
 	_objectIDMap = 0;
 	_keyScriptKey = 0;
 	_keyScriptNo = 0;

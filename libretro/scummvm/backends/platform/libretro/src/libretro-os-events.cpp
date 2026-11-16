@@ -15,7 +15,11 @@
  *
  */
 
+#ifndef _MSC_VER
 #include <unistd.h>
+#else
+#include <retro_timers.h>
+#endif
 #include <features/features_cpu.h>
 
 #include "common/list.h"
@@ -51,7 +55,11 @@ void OSystem_libretro::delayMillis(uint msecs) {
 
 	while (elapsed_time < msecs) {
 		if (!((LibretroTimerManager *)_timerManager)->checkThread(THREAD_SWITCH_DELAY))
+#ifdef _MSC_VER
+			retro_sleep(1);
+#else
 			usleep(1000);
+#endif
 		elapsed_time = getMillis() - start_time;
 	}
 

@@ -36,7 +36,7 @@
  *
  * Parts of this class are documented in the base interface class, AbstractFSNode.
  */
-class WindowsFilesystemNode final : public AbstractFSNode {
+class WindowsFilesystemNode : public AbstractFSNode {
 protected:
 	Common::String _displayName;
 	Common::String _path;

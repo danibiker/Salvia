@@ -24,10 +24,10 @@
 
 #define COMMON_HOOKS_FOLDER "scummvm_hooks"
 
-class LibretroOptionsWidget final : public GUI::OptionsContainerWidget {
+class LibretroOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	explicit LibretroOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~LibretroOptionsWidget() override;
+	~LibretroOptionsWidget();
 	void load() override;
 	bool save() override;
 

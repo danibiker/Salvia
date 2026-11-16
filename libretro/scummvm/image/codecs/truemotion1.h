@@ -36,7 +36,7 @@ namespace Image {
 class TrueMotion1Decoder : public Codec {
 public:
 	TrueMotion1Decoder();
-	~TrueMotion1Decoder() override;
+	~TrueMotion1Decoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 

@@ -373,8 +373,10 @@ bool MortimerMovie::load(Common::SeekableReadStream &stream, bool doubled, bool 
 		return fail("Invalid Mortimer movie ANIM container");
 
 	struct Track {
+	Track() : size(0) {}
+
 		uint16 id, flags, nextBlock;
-		uint32 size = 0;
+		uint32 size;
 		MortimerSound sound;
 		Common::Array<Chunk> blocks;
 	};
@@ -487,7 +489,8 @@ bool MortimerMovie::load(Common::SeekableReadStream &stream, bool doubled, bool 
 			}
 			if (backgrounds > 1)
 				return fail("Invalid Mortimer movie background");
-			_frames.push_back({chunk.offset, chunk.size});
+			Frame frame = {chunk.offset, chunk.size};
+			_frames.push_back(frame);
 		}
 	}
 	if (_frames.size() != expectedFrames || !expectedFrames)
@@ -665,7 +668,8 @@ bool MortimerMovie::advance(bool renderFrame) {
 		} else if (chunk.tag == MKTAG('N', 'P', 'A', 'L')) {
 			memcpy(_palette, src, sizeof(_palette));
 		} else if (chunk.tag == MKTAG('T', 'R', 'E', 'S')) {
-			_captions.push_back({READ_LE_INT16(src), READ_LE_INT16(src + 2), READ_LE_UINT16(src + 16)});
+			Caption caption = {READ_LE_INT16(src), READ_LE_INT16(src + 2), READ_LE_UINT16(src + 16)};
+			_captions.push_back(caption);
 		} else if (chunk.tag == MKTAG('S', 'T', 'O', 'R')) {
 			_storeNext = true;
 		} else if (chunk.tag == MKTAG('F', 'T', 'C', 'H')) {

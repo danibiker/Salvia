@@ -49,7 +49,7 @@ public:
 
 	MidiDriver_AdLib(SciVersion version) : _version(version), _isSCI0(version < SCI_VERSION_1_EARLY), _playSwitch(true), _masterVolume(15),
 		_numVoiceMax(version == SCI_VERSION_0_EARLY ? 8 : kVoices), _rhythmKeyMap(), _opl(nullptr), _adlibTimerParam(nullptr), _adlibTimerProc(nullptr), _stereo(false), _isOpen(false) { }
-	~MidiDriver_AdLib() override { }
+	~MidiDriver_AdLib() { }
 
 	// MidiDriver
 	int open() override { return -1; } // Dummy implementation (use openAdLib)
@@ -177,7 +177,7 @@ private:
 class MidiPlayer_AdLib : public MidiPlayer {
 public:
 	MidiPlayer_AdLib(SciVersion soundVersion) : MidiPlayer(soundVersion) { _driver = new MidiDriver_AdLib(soundVersion); }
-	~MidiPlayer_AdLib() override {
+	~MidiPlayer_AdLib() {
 		delete _driver;
 		_driver = nullptr;
 	}

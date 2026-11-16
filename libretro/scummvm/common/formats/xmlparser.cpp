@@ -81,8 +81,8 @@ XMLParser::~XMLParser() {
 	delete _XMLkeys;
 	delete _stream;
 
-	for (auto *layout : _layoutList)
-		delete layout;
+	for (auto rfIt84 = _layoutList.begin(), rfEnd84 = _layoutList.end(); rfIt84 != rfEnd84; ++rfIt84)
+		{ auto *layout = *rfIt84; delete layout; }
 
 	_layoutList.clear();
 }
@@ -217,7 +217,8 @@ bool XMLParser::parseActiveKey(bool closed) {
 		StringMap localMap = key->values;
 		int keyCount = localMap.size();
 
-		for (const auto &prop : key->layout->properties) {
+		for (auto rfIt220 = key->layout->properties.begin(), rfEnd220 = key->layout->properties.end(); rfIt220 != rfEnd220; ++rfIt220) {
+			const auto &prop = *rfIt220;
 			if (prop.required && !localMap.contains(prop.name))
 				return parserError("Missing required property '" + prop.name + "' inside key '" + key->name + "'");
 			else if (localMap.contains(prop.name)) {

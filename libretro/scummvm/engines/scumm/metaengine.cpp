@@ -796,7 +796,7 @@ static const ExtraGuiOption semiSmoothScrolling = {
 	0
 };
 
-static const ExtraGuiOption enableEnhancements {
+static const ExtraGuiOption enableEnhancements = {
 	"",
 	"",
 	"enhancements",
@@ -805,7 +805,7 @@ static const ExtraGuiOption enableEnhancements {
 	0
 };
 
-static const ExtraGuiOption audioOverride {
+static const ExtraGuiOption audioOverride = {
 	_s("Load modded audio"),
 	_s("Replace music, sound effects, and speech clips with modded audio files, if available."),
 	"audio_override",

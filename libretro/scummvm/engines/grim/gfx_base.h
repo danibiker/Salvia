@@ -281,7 +281,7 @@ protected:
 	static const int _globalHeight = 1080;
 	static const int _globalWidth = 1920;
 	float _scaleW, _scaleH;
-	float _globalScaleW = 1.0f, _globalScaleH = 1.0f;
+	float _globalScaleW, _globalScaleH;
 	int _screenWidth, _screenHeight;
 	Shadow *_currentShadowArray;
 	unsigned char _shadowColorR;

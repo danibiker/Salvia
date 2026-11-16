@@ -43,7 +43,8 @@ enum ResourcePatchOp {
 	kEndOfPatch
 };
 
-enum SciMedia : uint;
+// MSVC 2010 does not support opaque enum declarations ("enum X : uint;"), include the definition instead
+#include "sci/engine/workarounds.h" // for SciMedia
 
 struct GameResourcePatch {
 	/**
@@ -91,7 +92,7 @@ class ResourcePatcher : public ResourceSource {
 public:
 	ResourcePatcher(const SciGameId gameId, const bool isCD, const Common::Platform platform, const Common::Language gameLanguage);
 
-	~ResourcePatcher() override {}
+	~ResourcePatcher() {}
 
 	/**
 	 * Finds and applies a patch to the given resource.

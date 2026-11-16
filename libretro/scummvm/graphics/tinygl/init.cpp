@@ -238,11 +238,11 @@ void GLContext::init(int screenW, int screenH, Graphics::PixelFormat pixelFormat
 	maxTextureName = 0;
 	texture_mag_filter = TGL_LINEAR;
 	texture_min_filter = TGL_NEAREST_MIPMAP_LINEAR;
-	colorAssociationList.push_back({Graphics::PixelFormat::createFormatRGBA32(),        TGL_RGBA, TGL_UNSIGNED_BYTE});
-	colorAssociationList.push_back({Graphics::PixelFormat::createFormatRGB24(),         TGL_RGB,  TGL_UNSIGNED_BYTE});
-	colorAssociationList.push_back({Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0),  TGL_RGB,  TGL_UNSIGNED_SHORT_5_6_5});
-	colorAssociationList.push_back({Graphics::PixelFormat(2, 5, 5, 5, 1, 11, 6, 1, 0),  TGL_RGBA, TGL_UNSIGNED_SHORT_5_5_5_1});
-	colorAssociationList.push_back({Graphics::PixelFormat(2, 4, 4, 4, 4, 12, 8, 4, 0),  TGL_RGBA, TGL_UNSIGNED_SHORT_4_4_4_4});
+	{ tglColorAssociation ca = {Graphics::PixelFormat::createFormatRGBA32(),        TGL_RGBA, TGL_UNSIGNED_BYTE}; colorAssociationList.push_back(ca); }
+	{ tglColorAssociation ca = {Graphics::PixelFormat::createFormatRGB24(),         TGL_RGB,  TGL_UNSIGNED_BYTE}; colorAssociationList.push_back(ca); }
+	{ tglColorAssociation ca = {Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0),  TGL_RGB,  TGL_UNSIGNED_SHORT_5_6_5}; colorAssociationList.push_back(ca); }
+	{ tglColorAssociation ca = {Graphics::PixelFormat(2, 5, 5, 5, 1, 11, 6, 1, 0),  TGL_RGBA, TGL_UNSIGNED_SHORT_5_5_5_1}; colorAssociationList.push_back(ca); }
+	{ tglColorAssociation ca = {Graphics::PixelFormat(2, 4, 4, 4, 4, 12, 8, 4, 0),  TGL_RGBA, TGL_UNSIGNED_SHORT_4_4_4_4}; colorAssociationList.push_back(ca); }
 
 	// default state
 	current_color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);

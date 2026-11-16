@@ -99,7 +99,7 @@ public:
 	/**
 	 * Destructor.
 	 */
-	~AmigaOSFilesystemNode() override;
+	~AmigaOSFilesystemNode();
 
 	bool exists() const override;
 	Common::U32String getDisplayName() const override { return _sDisplayName; }

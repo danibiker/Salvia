@@ -52,7 +52,7 @@ private:
 	int8 *data;
 };
 
-class TownsAudio_PCMChannel final : public PCMChannel_Base {
+class TownsAudio_PCMChannel : public PCMChannel_Base {
 public:
 	TownsAudio_PCMChannel();
 	~TownsAudio_PCMChannel();
@@ -115,7 +115,7 @@ private:
 	static const uint16 _pcmPhase2[];
 };
 
-class TownsAudioInterfaceInternal final : public TownsPC98_FmSynth {
+class TownsAudioInterfaceInternal : public TownsPC98_FmSynth {
 private:
 	TownsAudioInterfaceInternal(Audio::Mixer *mixer, TownsAudioInterface *owner, TownsAudioInterfacePluginDriver *driver, bool externalMutex);
 public:

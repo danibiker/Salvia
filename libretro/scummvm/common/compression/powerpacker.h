@@ -39,7 +39,7 @@ public:
 
 	static byte *unpackBuffer(const byte *input, uint32 input_len, uint32 &output_len);
 
-	~PowerPackerStream() override {
+	~PowerPackerStream() {
 		if (_dispose) delete _stream;
 	}
 

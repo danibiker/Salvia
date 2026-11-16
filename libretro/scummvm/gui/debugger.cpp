@@ -680,7 +680,8 @@ bool Debugger::cmdMd5(int argc, const char **argv) {
 			debugPrintf("File '%s' not found\n", filename.c_str());
 		} else {
 			sort(list.begin(), list.end(), ArchiveMemberLess());
-			for (auto &archive : list) {
+			for (auto rfIt683 = list.begin(), rfEnd683 = list.end(); rfIt683 != rfEnd683; ++rfIt683) {
+				auto &archive = *rfIt683;
 				Common::SeekableReadStream *stream = archive->createReadStream();
 				if (tail && stream->size() > length)
 					stream->seek(-length, SEEK_END);
@@ -786,7 +787,8 @@ bool Debugger::cmdDebugFlagsList(int argc, const char **argv) {
 		debugPrintf("No engine debug levels\n");
 		return true;
 	}
-	for (const auto &debugLevel : debugLevels) {
+	for (auto rfIt789 = debugLevels.begin(), rfEnd789 = debugLevels.end(); rfIt789 != rfEnd789; ++rfIt789) {
+		const auto &debugLevel = *rfIt789;
 		bool enabled = DebugMan.isDebugChannelEnabled(debugLevel.channel);
 
 		debugPrintf("%c%s - %s (%s)\n", enabled ? '+' : ' ',

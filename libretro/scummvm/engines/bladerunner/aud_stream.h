@@ -53,7 +53,7 @@ class AudStream : public Audio::RewindableAudioStream {
 public:
 	AudStream(byte *data, int overrideFrequency = -1);
 	AudStream(AudioCache *cache, int32 hash, int overrideFrequency = -1);
-	~AudStream() override;
+	~AudStream();
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 	bool isStereo() const override { return false; }

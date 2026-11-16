@@ -515,9 +515,9 @@ public:
 	 */
 	DetectedGames detectGames(const Common::FSList &fslist, uint32 skipADFlags, bool skipIncomplete) override;
 
-	uint getMD5Bytes() const override final { return _md5Bytes; }
+	uint getMD5Bytes() const override { return _md5Bytes; }
 
-	int getGameVariantCount() const override final {
+	int getGameVariantCount() const override {
 		uint count = 0;
 		for (const byte *descPtr = _gameDescriptors; ((const ADGameDescription *)descPtr)->gameId != nullptr; descPtr += _descItemSize)
 			++count;
@@ -707,7 +707,7 @@ protected:
 	 *
 	 * @return A list of extra GUI options for an engine plugin and target.
 	 */
-	const ExtraGuiOptions getExtraGuiOptions(const Common::String &target) const override final;
+	const ExtraGuiOptions getExtraGuiOptions(const Common::String &target) const override;
 
 	/**
 	 * Returns a map containing all the extra game GUI options the engine supports.
@@ -728,7 +728,7 @@ template<class Descriptor>
 class AdvancedMetaEngine : public AdvancedMetaEngineBase {
 protected:
 	virtual Common::Error createInstance(OSystem *syst, Engine **engine, const Descriptor *desc) const = 0;
-	Common::Error createInstance(OSystem *syst, Engine **engine, const void *desc) const override final {
+	Common::Error createInstance(OSystem *syst, Engine **engine, const void *desc) const override {
 		return createInstance(syst, engine, static_cast<const Descriptor *>(desc));
 	}
 
@@ -790,7 +790,8 @@ public:
 	}
 
 	void clearArchives() {
-		for (auto &entry : archiveHashMap) {
+		for (auto rfIt793 = archiveHashMap.begin(), rfEnd793 = archiveHashMap.end(); rfIt793 != rfEnd793; ++rfIt793) {
+			auto &entry = *rfIt793;
 			delete entry._value;
 		}
 		archiveHashMap.clear(true);

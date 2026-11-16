@@ -317,21 +317,24 @@ void ConfigManager::flushToDisk() {
 #endif
 
 	// Write the miscellaneous domains next
-	for (const auto &misc : _miscDomains) {
+	for (auto rfIt320 = _miscDomains.begin(), rfEnd320 = _miscDomains.end(); rfIt320 != rfEnd320; ++rfIt320) {
+		const auto &misc = *rfIt320;
 		writeDomain(*stream, misc._key, misc._value);
 	}
 
 	// First write the domains in _domainSaveOrder, in that order.
 	// Note: It's possible for _domainSaveOrder to list domains which
 	// are not present anymore, so we validate each name.
-	for (const auto &domain : _domainSaveOrder) {
+	for (auto rfIt327 = _domainSaveOrder.begin(), rfEnd327 = _domainSaveOrder.end(); rfIt327 != rfEnd327; ++rfIt327) {
+		const auto &domain = *rfIt327;
 		if (_gameDomains.contains(domain)) {
 			writeDomain(*stream, domain, _gameDomains[domain]);
 		}
 	}
 
 	// Now write the domains which haven't been written yet
-	for (auto &domain : _gameDomains) {
+	for (auto rfIt334 = _gameDomains.begin(), rfEnd334 = _gameDomains.end(); rfIt334 != rfEnd334; ++rfIt334) {
+		auto &domain = *rfIt334;
 		if (find(_domainSaveOrder.begin(), _domainSaveOrder.end(), domain._key) == _domainSaveOrder.end())
 			writeDomain(*stream, domain._key, domain._value);
 	}
@@ -365,7 +368,8 @@ void ConfigManager::writeDomain(WriteStream &stream, const String &name, const D
 	stream.writeByte('\n');
 
 	// Write all key/value pairs in this domain, including comments
-	for (const auto &x : domain) {
+	for (auto rfIt368 = domain.begin(), rfEnd368 = domain.end(); rfIt368 != rfEnd368; ++rfIt368) {
+		const auto &x = *rfIt368;
 		if (!x._value.empty()) {
 			// Write comment (if any)
 			if (domain.hasKVComment(x._key)) {
@@ -783,8 +787,8 @@ void ConfigManager::renameDomain(const String &oldName, const String &newName, D
 //	_gameDomains[newName].merge(_gameDomains[oldName]);
 	Domain &oldDom = map[oldName];
 	Domain &newDom = map[newName];
-	for (const auto &dom : oldDom)
-		newDom.setVal(dom._key, dom._value);
+	for (auto rfIt786 = oldDom.begin(), rfEnd786 = oldDom.end(); rfIt786 != rfEnd786; ++rfIt786)
+		{ const auto &dom = *rfIt786; newDom.setVal(dom._key, dom._value); }
 
 	map.erase(oldName);
 }

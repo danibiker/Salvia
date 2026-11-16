@@ -715,7 +715,8 @@ Common::Rect MacWindow::getDirtyRectBounds() {
 	if (_dirtyRects.size() == 0)
 		return result;
 	result = Common::Rect(_dirtyRects.front());
-	for (auto &r : _dirtyRects) {
+	for (auto rfIt718 = _dirtyRects.begin(), rfEnd718 = _dirtyRects.end(); rfIt718 != rfEnd718; ++rfIt718) {
+		auto &r = *rfIt718;
 		result.extend(r);
 	}
 	return result;

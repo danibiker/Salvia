@@ -27,10 +27,10 @@
 
 namespace Sci {
 
-class SCI0_CGADriver final : public SCI0_DOSPreVGADriver {
+class SCI0_CGADriver : public SCI0_DOSPreVGADriver {
 public:
 	SCI0_CGADriver(bool emulateCGAModeOnEGACard, bool rgbRendering);
-	~SCI0_CGADriver() override;
+	~SCI0_CGADriver();
 	void copyRectToScreen(const byte *src, int srcX, int srcY, int pitch, int destX, int destY, int w, int h, const PaletteMod*, const byte*) override;
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;
 	static bool validateMode(Common::Platform p) { return (p == Common::kPlatformDOS) && checkDriver(&_driverFile, 1); }

@@ -49,7 +49,7 @@ class DropboxUploadRequest: public Networking::Request {
 
 public:
 	DropboxUploadRequest(DropboxStorage *storage, const Common::String &path, Common::SeekableReadStream *contents, Storage::UploadCallback callback, Networking::ErrorCallback ecb);
-	~DropboxUploadRequest() override;
+	~DropboxUploadRequest();
 
 	void handle() override;
 	void restart() override;

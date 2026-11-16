@@ -50,8 +50,8 @@
 #endif
 
 // Macros to free an array/object
-#define FREE_ARRAY(x) { for (auto *i : x) { delete i; } }
-#define FREE_OBJECT(x) { for (auto &i : x) { delete i._value; } }
+#define FREE_ARRAY(x) { for (JSONArray::iterator i = (x).begin(); i != (x).end(); ++i) { delete *i; } }
+#define FREE_OBJECT(x) { for (JSONObject::iterator i = (x).begin(); i != (x).end(); ++i) { delete i->_value; } }
 
 namespace Common {
 
@@ -693,15 +693,16 @@ JSONValue::JSONValue(const JSONValue &source) {
 	case JSONType_Array: {
 		JSONArray source_array = *source._arrayValue;
 		_arrayValue = new JSONArray();
-		for (auto &src : source_array)
-			_arrayValue->push_back(new JSONValue(*src));
+		for (auto rfIt696 = source_array.begin(), rfEnd696 = source_array.end(); rfIt696 != rfEnd696; ++rfIt696)
+			{ auto &src = *rfIt696; _arrayValue->push_back(new JSONValue(*src)); }
 		break;
 	}
 
 	case JSONType_Object: {
 		JSONObject source_object = *source._objectValue;
 		_objectValue = new JSONObject();
-		for (auto &src : source_object) {
+		for (auto rfIt704 = source_object.begin(), rfEnd704 = source_object.end(); rfIt704 != rfEnd704; ++rfIt704) {
+			auto &src = *rfIt704;
 			String name = src._key;
 			(*_objectValue)[name] = new JSONValue(*(src._value));
 		}
@@ -724,12 +725,12 @@ JSONValue::JSONValue(const JSONValue &source) {
 */
 JSONValue::~JSONValue() {
 	if (_type == JSONType_Array) {
-		for (auto *array : *_arrayValue)
-			delete array;
+		for (auto rfIt727 = (*_arrayValue).begin(), rfEnd727 = (*_arrayValue).end(); rfIt727 != rfEnd727; ++rfIt727)
+			{ auto *array = *rfIt727; delete array; }
 		delete _arrayValue;
 	} else if (_type == JSONType_Object) {
-		for (auto &object : *_objectValue)
-			delete object._value;
+		for (auto rfIt731 = (*_objectValue).begin(), rfEnd731 = (*_objectValue).end(); rfIt731 != rfEnd731; ++rfIt731)
+			{ auto &object = *rfIt731; delete object._value; }
 		delete _objectValue;
 	} else if (_type == JSONType_String) {
 		delete _stringValue;
@@ -986,7 +987,8 @@ Array<String> JSONValue::objectKeys() const {
 	Array<String> keys;
 
 	if (_type == JSONType_Object) {
-		for (auto &obj : *_objectValue) {
+		for (auto rfIt989 = (*_objectValue).begin(), rfEnd989 = (*_objectValue).end(); rfIt989 != rfEnd989; ++rfIt989) {
+			auto &obj = *rfIt989;
 			keys.push_back(obj._key);
 		}
 	}

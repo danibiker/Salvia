@@ -66,7 +66,7 @@ class WriteStream;
 class EventRecorder : private Common::EventSource, public Common::Singleton<EventRecorder>, private Common::EventObserver {
 	friend class Common::Singleton<SingletonBaseType>;
 	EventRecorder();
-	~EventRecorder() override;
+	~EventRecorder();
 public:
 	/** Specify operation mode of Event Recorder */
 	enum RecordMode {

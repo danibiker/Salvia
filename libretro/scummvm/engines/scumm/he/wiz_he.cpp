@@ -46,7 +46,7 @@ namespace Scumm {
 Common::Array<DbgEntry> *WizPxShrdBuffer::_allocLocs = 0;
 #endif
 
-Wiz::Wiz(ScummEngine_v71he *vm) : _vm(vm) {
+Wiz::Wiz(ScummEngine_v71he *vm) : _vm(vm), _wizBuffer(), _wizBufferIndex(0), _polygons(), _compareBufferA(), _compareBufferB(), _useWizClipRect(false), _uses16BitColor(false), _wizActiveShadow(0), _trlePutSize(0), _trleBuf(), _initializeAlphaTable(true), _alphaTable(), _precomputed16bppTable() {
 	_wizBufferIndex = 0;
 	memset(&_wizBuffer, 0, sizeof(_wizBuffer));
 	memset(&_polygons, 0, sizeof(_polygons));

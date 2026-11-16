@@ -34,7 +34,7 @@ namespace Image {
 class BitmapRawDecoder : public Codec {
 public:
 	BitmapRawDecoder(int width, int height, int bitsPerPixel, bool ignoreAlpha, bool flip = false);
-	~BitmapRawDecoder() override;
+	~BitmapRawDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override;

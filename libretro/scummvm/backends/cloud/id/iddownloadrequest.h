@@ -47,7 +47,7 @@ class IdDownloadRequest: public Networking::Request {
 	void finishDownload(bool success);
 public:
 	IdDownloadRequest(IdStorage *storage, const Common::String &remotePath, const Common::Path &localPath, Storage::BoolCallback cb, Networking::ErrorCallback ecb);
-	~IdDownloadRequest() override;
+	~IdDownloadRequest();
 
 	void handle() override;
 	void restart() override;

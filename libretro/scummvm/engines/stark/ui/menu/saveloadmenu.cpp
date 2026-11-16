@@ -246,7 +246,7 @@ SaveDataWidget::SaveDataWidget(int slot, Gfx::Driver *gfx, SaveLoadMenuScreen *s
 		_textTime(gfx),
 		_isMouseHovered(false),
 		_hasSave(false),
-		_name() {
+		_name(), _outlineColor(Gfx::Color(0x1E, 0x1E, 0x96)), _textColor(Gfx::Color(0x5C, 0x48, 0x3D)) {
 	// Load from the save data
 	loadSaveDataElements();
 

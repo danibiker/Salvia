@@ -35,6 +35,10 @@ namespace Video {
  */
 class FourXMDecoder : public Video::VideoDecoder {
 public:
+	FourXMDecoder() : _dataRate(0), _curFrame(0), _video(nullptr), _audio(nullptr), _rawVideo(nullptr), _rawAudio(nullptr) {}
+private:
+
+public:
 	~FourXMDecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream) override;
@@ -55,15 +59,15 @@ private:
 	void decodeNextFrameImpl();
 	bool loadRawStream();
 
-	uint32 _dataRate = 0;
+	uint32 _dataRate;
 	Common::Rational _frameRate;
 	Common::ScopedPtr<Common::SeekableReadStream> _stream;
 	Common::Array<Frame> _frames;
-	uint _curFrame = 0;
-	FourXMVideoTrack *_video = nullptr;
-	FourXMAudioTrack *_audio = nullptr;
-	FourXMRawVideoTrack *_rawVideo = nullptr;
-	FourXMRawAudioTrack *_rawAudio = nullptr;
+	uint _curFrame;
+	FourXMVideoTrack *_video;
+	FourXMAudioTrack *_audio;
+	FourXMRawVideoTrack *_rawVideo;
+	FourXMRawAudioTrack *_rawAudio;
 };
 
 } // namespace Video

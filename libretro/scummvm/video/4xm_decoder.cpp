@@ -42,13 +42,13 @@ FourXMDecoder::~FourXMDecoder() {
 Common::Rational floatToRational(float value) {
 	int num = static_cast<int>(1000 * value);
 	int denom = 1000;
-	return {num, denom};
+	return Common::Rational(num, denom);
 }
 
 namespace {
 Common::String tagName(uint32 tag) {
 	char name[5] = {char(tag >> 24), char(tag >> 16), char(tag >> 8), char(tag), 0};
-	return {name};
+	return Common::String(name);
 }
 
 static const int8_t mv[256][2] = {
@@ -70,17 +70,19 @@ enum Raw4XMChunkId {
 };
 
 struct Raw4XMCacheEntry {
-	int32 frame = -1;
-	uint32 declaredSize = 0;
+	Raw4XMCacheEntry() : frame(-1), declaredSize(0) {}
+
+	int32 frame;
+	uint32 declaredSize;
 	Common::Array<byte> data;
 };
 
 struct Raw4XMDeltaDecoder {
 	FourXM::RawDeltaReader reader;
-	uint16 *dst = nullptr;
-	const uint16 *src = nullptr;
-	int frameWidth = 0;
-	int frameHeight = 0;
+	uint16 *dst;
+	const uint16 *src;
+	int frameWidth;
+	int frameHeight;
 	const Common::Array<int> &fullOffsets;
 	const Common::Array<int> &expOffsets;
 
@@ -190,16 +192,16 @@ struct Raw4XMDeltaDecoder {
 };
 
 struct Raw4XMNibbleDctReader {
-	const byte *byteStream = nullptr;
-	const byte *nibbleStream = nullptr;
-	uint32 byteSize = 0;
-	uint32 nibbleSize = 0;
-	uint32 bytePos = 0;
-	uint32 nibbleWordPos = 1;
-	uint32 nibbleBitsLeft = 8;
-	uint32 nibbleWord = 0;
+	const byte *byteStream;
+	const byte *nibbleStream;
+	uint32 byteSize;
+	uint32 nibbleSize;
+	uint32 bytePos;
+	uint32 nibbleWordPos;
+	uint32 nibbleBitsLeft;
+	uint32 nibbleWord;
 
-	Raw4XMNibbleDctReader(const byte *data, uint32 size) {
+	Raw4XMNibbleDctReader(const byte *data, uint32 size) : byteStream(nullptr), nibbleStream(nullptr), byteSize(0), nibbleSize(0), bytePos(0), nibbleWordPos(1), nibbleBitsLeft(8), nibbleWord(0) {
 		if (size < 8)
 			return;
 
@@ -241,20 +243,20 @@ struct Raw4XMNibbleDctReader {
 };
 
 struct Raw4XMNativeDeltaReader {
-	const byte *data = nullptr;
-	uint32 size = 0;
+	const byte *data;
+	uint32 size;
 	FourXM::RawDeltaReader dctReader;
-	const byte *addStream = nullptr;
-	const byte *byteStream = nullptr;
-	uint32 addSize = 0;
-	uint32 byteSize = 0;
-	uint32 controlPos = 0x24;
-	uint32 controlWord = 0;
-	uint32 controlBitsLeft = 32;
-	uint32 addPos = 0;
-	uint32 bytePos = 0;
+	const byte *addStream;
+	const byte *byteStream;
+	uint32 addSize;
+	uint32 byteSize;
+	uint32 controlPos;
+	uint32 controlWord;
+	uint32 controlBitsLeft;
+	uint32 addPos;
+	uint32 bytePos;
 
-	Raw4XMNativeDeltaReader(const byte *ptr, uint32 len) : data(ptr), size(len) {
+	Raw4XMNativeDeltaReader(const byte *ptr, uint32 len) : data(ptr), size(len), addStream(nullptr), byteStream(nullptr), addSize(0), byteSize(0), controlPos(0x24), controlWord(0), controlBitsLeft(32), addPos(0), bytePos(0) {
 		if (size < 0x24)
 			return;
 
@@ -662,10 +664,10 @@ static bool applyRaw4XMDelta(const byte *data, uint32 size, uint16 *dst, const u
 
 struct Raw4XMNativeDeltaDecoder {
 	Raw4XMNativeDeltaReader reader;
-	uint16 *dst = nullptr;
-	const uint16 *src = nullptr;
-	int frameWidth = 0;
-	int frameHeight = 0;
+	uint16 *dst;
+	const uint16 *src;
+	int frameWidth;
+	int frameHeight;
 	const Common::Array<int> &motionOffsets;
 
 	Raw4XMNativeDeltaDecoder(const byte *data, uint32 size, uint16 *dstPixels, const uint16 *srcPixels,
@@ -829,13 +831,13 @@ class FourXMDecoder::FourXMRawAudioTrack : public AudioTrack {
 	uint _audioType;
 	uint _channels;
 	uint _bits;
-	int16 _predictor[2] = {0, 0};
-	int _stepIndex[2] = {0, 0};
+	int16 _predictor[2];
+	int _stepIndex[2];
 	Common::ScopedPtr<Audio::QueuingAudioStream> _output;
 
 public:
 	FourXMRawAudioTrack(uint audioType, uint channels, uint sampleRate, uint bits) : AudioTrack(Audio::Mixer::SoundType::kPlainSoundType), _audioType(audioType),
-																					 _channels(channels), _bits(bits) {
+																					 _channels(channels), _bits(bits), _predictor(), _stepIndex() {
 		if ((audioType == 0 || audioType == 1) && sampleRate > 0 && (channels == 1 || channels == 2) && bits == 16)
 			_output.reset(Audio::makeQueuingAudioStream(sampleRate, channels == 2));
 	}
@@ -935,19 +937,23 @@ class FourXMDecoder::FourXMVideoTrack : public FixedRateVideoTrack {
 	Common::Rational _frameRate;
 	uint _w, _h;
 	Common::ScopedPtr<Graphics::ManagedSurface> _framePtr, _lastFramePtr;
-	Graphics::Surface *_frame = nullptr, *_lastFrame = nullptr;
-	using HuffmanBitStream = Common::BitStreamMemory32LEMSB;
-	using HuffmanType = Common::Huffman<HuffmanBitStream>;
+	Graphics::Surface *_frame, *_lastFrame;
+	typedef Common::BitStreamMemory32LEMSB HuffmanBitStream;
+	typedef Common::Huffman<HuffmanBitStream> HuffmanType;
 	Common::ScopedPtr<HuffmanType> _blockType[4];
 	int _mv[256];
 	Common::HashMap<byte, Common::Array<byte>> _cframes;
 
 public:
-	FourXMVideoTrack(FourXMDecoder *dec, const Common::Rational &frameRate, uint w, uint h, uint16 version) : _dec(dec), _frameRate(frameRate), _w(w), _h(h) {
-		_blockType[0].reset(new HuffmanType(HuffmanType::fromFrequencies({16, 8, 4, 2, 1, 1})));
-		_blockType[1].reset(new HuffmanType(HuffmanType::fromFrequencies({8, 0, 4, 2, 1, 1})));
-		_blockType[2].reset(new HuffmanType(HuffmanType::fromFrequencies({8, 4, 0, 2, 1, 1})));
-		_blockType[3].reset(new HuffmanType(HuffmanType::fromFrequencies({8, 0, 0, 4, 2, 1, 1})));
+	FourXMVideoTrack(FourXMDecoder *dec, const Common::Rational &frameRate, uint w, uint h, uint16 version) : _dec(dec), _frameRate(frameRate), _w(w), _h(h), _frame(nullptr), _lastFrame(nullptr) {
+		static const uint32 kFreqs0[] = {16, 8, 4, 2, 1, 1};
+		static const uint32 kFreqs1[] = {8, 0, 4, 2, 1, 1};
+		static const uint32 kFreqs2[] = {8, 4, 0, 2, 1, 1};
+		static const uint32 kFreqs3[] = {8, 0, 0, 4, 2, 1, 1};
+		_blockType[0].reset(new HuffmanType(HuffmanType::fromFrequencyList(kFreqs0, ARRAYSIZE(kFreqs0))));
+		_blockType[1].reset(new HuffmanType(HuffmanType::fromFrequencyList(kFreqs1, ARRAYSIZE(kFreqs1))));
+		_blockType[2].reset(new HuffmanType(HuffmanType::fromFrequencyList(kFreqs2, ARRAYSIZE(kFreqs2))));
+		_blockType[3].reset(new HuffmanType(HuffmanType::fromFrequencyList(kFreqs3, ARRAYSIZE(kFreqs3))));
 	}
 	~FourXMVideoTrack();
 
@@ -997,7 +1003,7 @@ int FourXMDecoder::FourXMVideoTrack::getFrameCount() const {
 	return _dec->_frames.size();
 }
 
-FourXMDecoder::FourXMVideoTrack::~FourXMVideoTrack() = default;
+FourXMDecoder::FourXMVideoTrack::~FourXMVideoTrack() {}
 
 class FourXMDecoder::FourXMRawVideoTrack : public FixedRateVideoTrack {
 	FourXMDecoder *_dec;
@@ -1005,15 +1011,15 @@ class FourXMDecoder::FourXMRawVideoTrack : public FixedRateVideoTrack {
 	uint _w, _h;
 	Graphics::Surface _frameBuffer1;
 	Graphics::Surface _frameBuffer2;
-	Graphics::Surface *_frame = nullptr;
-	Graphics::Surface *_previousFrame = nullptr;
+	Graphics::Surface *_frame;
+	Graphics::Surface *_previousFrame;
 	Common::Array<int> _fullMotionOffsets;
 	Common::Array<int> _expMotionOffsets;
 	Common::Array<Raw4XMCacheEntry> _cache;
-	bool _nativeRawStream = false;
+	bool _nativeRawStream;
 
 public:
-	FourXMRawVideoTrack(FourXMDecoder *dec, const Common::Rational &frameRate, uint w, uint h) : _dec(dec), _frameRate(frameRate), _w(w), _h(h) {
+	FourXMRawVideoTrack(FourXMDecoder *dec, const Common::Rational &frameRate, uint w, uint h) : _dec(dec), _frameRate(frameRate), _w(w), _h(h), _frame(nullptr), _previousFrame(nullptr), _nativeRawStream(false) {
 		_frameBuffer1.create(w, h, getPixelFormat());
 		_frameBuffer2.create(w, h, getPixelFormat());
 		_frame = &_frameBuffer1;
@@ -1267,7 +1273,7 @@ void FourXMDecoder::FourXMVideoTrack::decode_ifrm(Common::SeekableReadStream *st
 	huffOffset = (huffOffset + 3) & ~3u;
 
 	Common::BitStreamMemoryStream huffMs(huffPtr + huffOffset, prefixStream.size() - huffOffset);
-	Common::BitStreamMemory32LEMSB huffBs{&huffMs};
+	Common::BitStreamMemory32LEMSB huffBs(&huffMs);
 
 	Common::BitStreamMemoryStream bitstreamInput(bitstreamData.data(), bitstreamData.size());
 	Common::BitStreamMemory8MSB bitstream(&bitstreamInput);
@@ -1311,7 +1317,7 @@ void FourXMDecoder::FourXMVideoTrack::decode_ifrm(Common::SeekableReadStream *st
 			for (int b = 0; b != 6; ++b)
 				readBlock(b, block[b]);
 
-			auto acIdx = [](byte y, byte x) {
+			auto acIdx = [](byte y, byte x) -> int {
 				assert(y < 8 && x < 8);
 				return y << 3 | x;
 			};
@@ -1577,7 +1583,7 @@ void FourXMDecoder::readList(uint32 listEnd) {
 	assert(_stream);
 	uint32 listType = _stream->readUint32BE();
 	if (listType == MKTAG('F', 'R', 'A', 'M')) {
-		_frames.push_back({_stream->pos() - 4, listEnd});
+		{ Frame frame = {_stream->pos() - 4, listEnd}; _frames.push_back(frame); }
 		return;
 	}
 	while (_stream->pos() < listEnd) {
@@ -1672,7 +1678,7 @@ bool FourXMDecoder::loadRawStream() {
 			break;
 
 		if (chunkId == kRaw4XMFrameContainer)
-			_frames.push_back({frameOffset, frameEnd});
+			{ Frame frame = {frameOffset, frameEnd}; _frames.push_back(frame); }
 		_stream->seek(frameEnd);
 	}
 

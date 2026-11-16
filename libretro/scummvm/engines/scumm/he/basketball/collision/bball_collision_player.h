@@ -56,9 +56,9 @@ public:
 	bool testCatch(const ICollisionObject &targetObject, U32Distance3D *distance, CBBallCourt *court);
 
 private:
-	int _blockHeight = 0;    // The extra height that a player gets when blocking.
-	int _maxBlockHeight = 0; // The max extra height that a player gets when blocking.
-	int _blockTime = 0;      // The time it takes from the start of a block, to the apex of the block.
+	int _blockHeight;    // The extra height that a player gets when blocking.
+	int _maxBlockHeight; // The max extra height that a player gets when blocking.
+	int _blockTime;      // The time it takes from the start of a block, to the apex of the block.
 };
 
 } // End of namespace Scumm

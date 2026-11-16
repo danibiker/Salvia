@@ -40,7 +40,7 @@ class ScummEngine;
 class Player_V4A : public MusicEngine {
 public:
 	Player_V4A(ScummEngine *scumm, Audio::Mixer *mixer);
-	~Player_V4A() override;
+	~Player_V4A();
 
 	void setMusicVolume(int vol) override;
 	void startSound(int sound) override;

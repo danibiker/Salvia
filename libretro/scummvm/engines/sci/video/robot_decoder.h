@@ -319,7 +319,7 @@ public:
 	};
 
 	RobotAudioStream(const int32 bufferSize);
-	~RobotAudioStream() override;
+	~RobotAudioStream();
 
 	/**
 	 * Adds a new audio packet to the stream.

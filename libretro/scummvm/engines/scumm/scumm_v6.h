@@ -233,7 +233,7 @@ protected:
 	};
 
 	int _blastObjectQueuePos;
-	int _blastObjectRectsQueue = 0;
+	int _blastObjectRectsQueue;
 	BlastObject _blastObjectQueue[200];
 	Common::Rect _blastObjectsRectsToBeRestored[200];
 

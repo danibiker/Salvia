@@ -66,7 +66,7 @@ public:
 	typedef unsigned char unsigned_type;
 
 	/** Construct a new empty string. */
-	constexpr String() : BaseString<char>() {}
+	String() : BaseString<char>() {}
 
 	/** Construct a new string from the given NULL-terminated C string. */
 	String(const char *str) : BaseString<char>(str) {}
@@ -84,7 +84,7 @@ public:
 	String(String &&str) : BaseString<char>(static_cast<BaseString<char> &&>(str)) {}
 
 	/** Construct a string consisting of the given character. */
-	explicit constexpr String(value_type c) : BaseString<char>(c) {}
+	explicit String(value_type c) : BaseString<char>(c) {}
 
 	/** Construct a string consisting of n copies of the given character. */
 	String(size_t n, value_type c) : BaseString<char>(n, c) {}

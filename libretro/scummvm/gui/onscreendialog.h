@@ -41,7 +41,7 @@ private:
 
 public:
 	OnScreenDialog(bool recordingMode);
-	~OnScreenDialog() override;
+	~OnScreenDialog();
 	void close() override;
 	bool isVisible() const override;
 	void reflowLayout() override;

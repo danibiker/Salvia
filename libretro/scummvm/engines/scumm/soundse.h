@@ -73,7 +73,7 @@ class SoundSE {
 
 public:
 	SoundSE(ScummEngine *parent, Audio::Mixer *mixer);
-	~SoundSE() = default;
+	~SoundSE() {}
 
 	Audio::SeekableAudioStream *getAudioStreamFromIndex(int32 index, SoundSEType type);
 	Audio::SeekableAudioStream *getAudioStreamFromOffset(uint32 offset, SoundSEType type);
@@ -144,8 +144,8 @@ private:
 	AudioIndexMI _audioEntriesMI;
 
 	/* MI SE injected speech */
-	int32 _currentScriptSavedForSpeechMI = 0;
-	int32 _currentScriptOffsetSavedForSpeechMI = 0;
+	int32 _currentScriptSavedForSpeechMI;
+	int32 _currentScriptOffsetSavedForSpeechMI;
 
 	Audio::SoundHandle _ambienceHandle;
 
@@ -187,7 +187,7 @@ public:
 	HeaderlessWMAStream(Common::SeekableReadStream *stream,
 						AudioEntry entry,
 						DisposeAfterUse::Flag disposeAfterUse);
-	~HeaderlessWMAStream() override;
+	~HeaderlessWMAStream();
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 

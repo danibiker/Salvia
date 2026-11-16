@@ -449,7 +449,8 @@ void VocStream::preProcess() {
 	_length = Timestamp(0, _rate);
 
 	// Calculate the total play time and do some more sanity checks
-	for (const auto &curBlock : _blocks) {
+	for (auto rfIt452 = _blocks.begin(), rfEnd452 = _blocks.end(); rfIt452 != rfEnd452; ++rfIt452) {
+		const auto &curBlock = *rfIt452;
 		// Check whether we found a block 8 which survived, this is not
 		// allowed to happen!
 		if (curBlock.code == 8) {

@@ -52,7 +52,7 @@ typedef Common::Array<Port *> PortArray;
 class GfxPorts : public Common::Serializable {
 public:
 	GfxPorts(SegManager *segMan, GfxScreen *screen);
-	~GfxPorts() override;
+	~GfxPorts();
 
 	void init(bool usesOldGfxFunctions, GfxPaint16 *paint16, GfxText16 *text16);
 	void reset();
@@ -139,7 +139,7 @@ private:
 	// Priority Bands related variables
 	int16 _priorityTop, _priorityBottom, _priorityBandCount;
 	byte _priorityBands[200];
-	int16 _portIdWithEditText = -1; // ID of the port that has an edit text field
+	int16 _portIdWithEditText; // ID of the port that has an edit text field
 };
 
 } // End of namespace Sci

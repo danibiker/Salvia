@@ -59,7 +59,7 @@ public:
 	/** This constructor extracts tokens from JSON acquired via OAuth code flow. */
 	OneDriveStorage(const Networking::JsonResponse &codeFlowJson, Networking::ErrorCallback cb);
 
-	~OneDriveStorage() override;
+	~OneDriveStorage();
 
 	/**
 	 * Storage methods, which are used by CloudManager to save

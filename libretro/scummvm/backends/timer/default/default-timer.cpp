@@ -121,7 +121,8 @@ bool DefaultTimerManager::installTimerProc(TimerProc callback, int32 interval, v
 		}
 	}
 
-	for (const auto &curCallback : _callbacks) {
+	for (auto rfIt124 = _callbacks.begin(), rfEnd124 = _callbacks.end(); rfIt124 != rfEnd124; ++rfIt124) {
+		const auto &curCallback = *rfIt124;
 		if (curCallback._value == callback) {
 			error("Same callback added twice (old name: %s, new name: %s)", curCallback._key.c_str(), id.c_str());
 		}

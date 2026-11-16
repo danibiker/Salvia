@@ -68,7 +68,7 @@ protected:
 
 public:
 	SessionRequest(const Common::String &url, const Common::Path &localFile, DataCallback cb = nullptr, ErrorCallback ecb = nullptr, bool binary = false);
-	~SessionRequest() override;
+	~SessionRequest();
 
 	void start();
 	void startAndWait();

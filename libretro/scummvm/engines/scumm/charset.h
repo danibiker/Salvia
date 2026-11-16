@@ -173,9 +173,12 @@ protected:
 public:
 	CharsetRendererClassic(ScummEngine *vm, int cjkSpacing) : CharsetRendererPC(vm), _width(0), _height(0), _origWidth(0), _origHeight(0),
 		_cjkSpacing(cjkSpacing), _offsX(0), _offsY(0), _charPtr(nullptr), _drawScreen(kMainVirtScreen) {}
-	CharsetRendererClassic(ScummEngine *vm) : CharsetRendererClassic(vm, vm->_game.id == GID_INDY4 &&
+	CharsetRendererClassic(ScummEngine *vm) : CharsetRendererPC(vm), _width(0), _height(0), _origWidth(0), _origHeight(0),
+		_cjkSpacing((vm->_game.id == GID_INDY4 &&
 									 (vm->_game.platform == Common::kPlatformMacintosh || vm->_game.platform == Common::kPlatformDOS) &&
-									 vm->_language == Common::JA_JPN ? -3 : 0) {}
+									 vm->_language == Common::JA_JPN ? -3 : 0)), _offsX(0), _offsY(0), _charPtr(nullptr), _drawScreen(kMainVirtScreen) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+}
 
 	void printChar(int chr, bool ignoreCharsetMask) override;
 	void drawChar(int chr, Graphics::Surface &s, int x, int y) override;
@@ -206,12 +209,12 @@ private:
 
 class CharsetRendererNES : public CharsetRendererCommon {
 protected:
-	byte *_trTable = nullptr;
+	byte *_trTable;
 
 	void drawBits1(Graphics::Surface &dest, int x, int y, const byte *src, int drawTop, int width, int height);
 
 public:
-	CharsetRendererNES(ScummEngine *vm) : CharsetRendererCommon(vm) {}
+	CharsetRendererNES(ScummEngine *vm) : CharsetRendererCommon(vm), _trTable(nullptr) {}
 
 	void setCurID(int32 id) override {}
 	void printChar(int chr, bool ignoreCharsetMask) override;
@@ -227,10 +230,10 @@ protected:
 	virtual int getDrawHeightIntern(uint16 chr);
 	virtual void setDrawCharIntern(uint16 chr) {}
 
-	const byte *_widthTable = nullptr;
+	const byte *_widthTable;
 
 public:
-	CharsetRendererV3(ScummEngine *vm) : CharsetRendererPC(vm) {}
+	CharsetRendererV3(ScummEngine *vm) : CharsetRendererPC(vm), _widthTable(nullptr) {}
 
 	void printChar(int chr, bool ignoreCharsetMask) override;
 	void drawChar(int chr, Graphics::Surface &s, int x, int y) override;
@@ -281,7 +284,7 @@ protected:
 
 public:
 	CharsetRendererV2(ScummEngine *vm, Common::Language language);
-	~CharsetRendererV2() override;
+	~CharsetRendererV2();
 
 	void setCurID(int32 id) override {}
 	int getCharWidth(uint16 chr) const override { return 8; }
@@ -293,7 +296,7 @@ public:
 
 class CharsetRendererMac : public CharsetRendererCommon {
 protected:
-	const Graphics::Font *_font = nullptr;
+	const Graphics::Font *_font;
 	bool _useCorrectFontSpacing;
 	bool _pad;
 	int _lastTop;
@@ -308,7 +311,7 @@ protected:
 
 public:
 	CharsetRendererMac(ScummEngine *vm, const Common::Path &fontFile);
-	~CharsetRendererMac() override;
+	~CharsetRendererMac();
 
 	void setCurID(int32 id) override;
 
@@ -323,7 +326,7 @@ public:
 class CharsetRendererV7 : public CharsetRendererClassic, public GlyphRenderer_v7 {
 public:
 	CharsetRendererV7(ScummEngine *vm);
-	~CharsetRendererV7() override {};
+	~CharsetRendererV7() {};
 
 	void printChar(int, bool) override { error("CharsetRendererV7::printChar(): Unexpected call to deprecated function"); }
 
@@ -342,7 +345,7 @@ private:
 class CharsetRendererNut : public CharsetRenderer, public GlyphRenderer_v7 {
 public:
 	CharsetRendererNut(ScummEngine *vm);
-	~CharsetRendererNut() override;
+	~CharsetRendererNut();
 
 	void printChar(int, bool) override { error("CharsetRendererNut::printChar(): Unexpected call to deprecated function"); }
 

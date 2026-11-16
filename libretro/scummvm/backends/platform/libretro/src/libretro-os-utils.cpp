@@ -25,6 +25,22 @@
 #include "base/plugins.h"
 #include "engines/game.h"
 #include "engines/metaengine.h"
+#include "engines/engine.h"
+#include "common/archive.h"
+#include "common/debug-channels.h"
+#include "common/osd_message_queue.h"
+#include "common/textconsole.h"
+#include "audio/musicplugin.h"
+#include "graphics/cursorman.h"
+#include "graphics/fontman.h"
+#include "graphics/yuv_to_rgb.h"
+#include "gui/gui-manager.h"
+#ifdef USE_FREETYPE2
+#include "graphics/fonts/ttf.h"
+#endif
+#ifdef ENABLE_EVENTRECORDER
+#include "gui/EventRecorder.h"
+#endif
 
 #include "backends/platform/libretro/include/libretro-defs.h"
 #include "backends/platform/libretro/include/libretro-core.h"
@@ -88,6 +104,64 @@ void OSystem_libretro::logMessage(LogMessageType::Type type, const char *message
 
 	if (retro_log_cb)
 		retro_log_cb(loglevel, "%s\n", message);
+
+	if (type == LogMessageType::kError)
+		retro_store_error_message(message);
+}
+
+/* error() and GUI::displayErrorDialog() call this with the text for the
+ * user: send it to the frontend too (see retro_message_box). */
+void OSystem_libretro::messageBox(LogMessageType::Type type, const char *message) {
+	retro_log_level level = RETRO_LOG_INFO;
+	if (type == LogMessageType::kError)
+		level = RETRO_LOG_ERROR;
+	else if (type == LogMessageType::kWarning)
+		level = RETRO_LOG_WARN;
+	retro_message_box(message, level);
+}
+
+/* Called by error() after the message has been logged. The default
+ * implementation exit()s the process, which would take the frontend down too:
+ * abandon the ScummVM thread instead and let the main thread return to the
+ * frontend (see retro_fatal_error in libretro-core.cpp). */
+void OSystem_libretro::fatalError() {
+	retro_fatal_error();
+
+	/* Only reached when there is nothing that can be unwound (error() called
+	 * outside of the emulation thread and outside of a guarded section). */
+	OSystem::fatalError();
+}
+
+/* Same teardown as the end of scummvm_main(), for when scummvm_main() was
+ * abandoned by a fatal error, so that the next game starts from a clean state.
+ * Must be called from the main thread, with the emulation thread already
+ * stopped for good. The running engine (if any) is leaked on purpose: its
+ * destructor would run on whatever half-built state caused the error. */
+void OSystem_libretro::cleanupAfterFatalError(void) {
+	g_engine = nullptr;
+	Common::setErrorOutputFormatter(nullptr);
+	Common::setErrorHandler(nullptr);
+
+	PluginManager::destroy();
+	GUI::GuiManager::destroy();
+	Common::ConfigManager::destroy();
+	Common::DebugManager::destroy();
+	Common::OSDMessageQueue::destroy();
+#ifdef ENABLE_EVENTRECORDER
+	GUI::EventRecorder::destroy();
+#endif
+	Common::SearchManager::destroy();
+#ifdef USE_TRANSLATION
+	Common::MainTranslationManager::destroy();
+#endif
+	MusicManager::destroy();
+	Graphics::CursorManager::destroy();
+	Graphics::FontManager::destroy();
+#ifdef USE_FREETYPE2
+	Graphics::shutdownTTF();
+#endif
+	EngineManager::destroy();
+	Graphics::YUVToRGBManager::destroy();
 }
 
 

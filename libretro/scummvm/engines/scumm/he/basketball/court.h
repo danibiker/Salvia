@@ -71,13 +71,13 @@ namespace Scumm {
 
 class CBBallCourt {
 public:
-	CBBallCourt() {
+	CBBallCourt() : _shotSpot() {
 		_objectCount = 0;
 		_backboardIndex[0] = 0;
 		_backboardIndex[1] = 0;
 	}
 
-	~CBBallCourt() = default;
+	~CBBallCourt() {}
 
 	int getPlayerIndex(int playerID);
 	CCollisionPlayer *getPlayerPtr(int playerID);
@@ -102,7 +102,7 @@ public:
 	Common::Array<CCollisionPlayer> _awayPlayerList;
 	int _objectCount;
 	int _backboardIndex[2];
-	U32Sphere _shotSpot[2] = {};
+	U32Sphere _shotSpot[2];
 };
 
 } // End of namespace Scumm

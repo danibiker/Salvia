@@ -38,7 +38,7 @@ namespace Scumm {
 
 SoundSE::SoundSE(ScummEngine *parent, Audio::Mixer *mixer)
 	: _vm(parent),
-	_mixer(mixer) {
+	_mixer(mixer), _currentScriptSavedForSpeechMI(0), _currentScriptOffsetSavedForSpeechMI(0) {
 
 	initSoundFiles();
 }
@@ -241,7 +241,8 @@ void SoundSE::indexSpeechXSBFile() {
 
 	f->seek(nameOffset);
 
-	for (auto &index : speechIndices) {
+	for (auto rfIt244 = speechIndices.begin(), rfEnd244 = speechIndices.end(); rfIt244 != rfEnd244; ++rfIt244) {
+		auto &index = *rfIt244;
 		Common::String name = f->readString(0);
 		name.toLowercase();
 
@@ -762,7 +763,7 @@ Audio::SeekableAudioStream *SoundSE::getAudioStreamFromOffset(uint32 offset, Sou
 
 Audio::SeekableAudioStream *SoundSE::getAudioStreamFromIndex(int32 index, SoundSEType type) {
 	AudioIndex *audioIndex = getAudioEntries(type);
-	AudioEntry audioEntry = {};
+	AudioEntry audioEntry;
 
 	if (index < 0 || index >= (int32)audioIndex->size())
 		return nullptr;

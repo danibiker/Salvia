@@ -78,8 +78,8 @@ bool InstallShieldV3::hasFile(const Common::Path &path) const {
 }
 
 int InstallShieldV3::listMembers(Common::ArchiveMemberList &list) const {
-	for (const auto &file : _map)
-		list.push_back(getMember(file._key));
+	for (auto rfIt81 = _map.begin(), rfEnd81 = _map.end(); rfIt81 != rfEnd81; ++rfIt81)
+		{ const auto &file = *rfIt81; list.push_back(getMember(file._key)); }
 
 	return _map.size();
 }

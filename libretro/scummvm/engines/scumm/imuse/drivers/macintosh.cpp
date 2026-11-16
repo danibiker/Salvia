@@ -145,10 +145,10 @@ private:
 	const byte _version;
 };
 
-class DJMSoundSystem final : public IMSMacSoundSystem {
+class DJMSoundSystem : public IMSMacSoundSystem {
 public:
 	DJMSoundSystem(Audio::Mixer *mixer);
-	~DJMSoundSystem() override {}
+	~DJMSoundSystem() {}
 
 	bool start() override;
 	void setQuality(int qual) override;
@@ -165,10 +165,10 @@ private:
 	MacLowLevelPCMDriver::DBCallback _dbCbProc;
 };
 
-class NewMacSoundSystem final : public IMSMacSoundSystem {
+class NewMacSoundSystem : public IMSMacSoundSystem {
 public:
 	NewMacSoundSystem(ScummEngine *vm, Audio::Mixer *mixer);
-	~NewMacSoundSystem() override;
+	~NewMacSoundSystem();
 
 	bool start() override;
 	void setQuality(int qual) override {}
@@ -203,10 +203,10 @@ private:
 	Common::Array<Common::SharedPtr<Instrument> > _instruments;
 };
 
-class IMuseChannel_Macintosh final : public MidiChannel {
+class IMuseChannel_Macintosh : public MidiChannel {
 public:
 	IMuseChannel_Macintosh(IMuseDriver_Macintosh *drv, int number);
-	~IMuseChannel_Macintosh() override {}
+	~IMuseChannel_Macintosh() {}
 
 	MidiDriver *device() override { return _drv; }
 	byte getNumber() override {	return _number; }

@@ -23,7 +23,7 @@
 
 namespace Graphics {
 
-BgiFont::BgiFont() {
+BgiFont::BgiFont() : _maxWidth(10), _totalWidth(0), _totalHeight(0), _originToAscender(0), _originToDescender(0) {
 }
 
 BgiFont::~BgiFont() {

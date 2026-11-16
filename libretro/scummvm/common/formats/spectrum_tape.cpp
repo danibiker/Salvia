@@ -29,12 +29,14 @@
 namespace Common {
 
 struct SpectrumTapeHeader {
-	bool valid = false;
-	byte type = 0;
+	SpectrumTapeHeader() : valid(false), type(0), size(0), param1(0), param2(0) {}
+
+	bool valid;
+	byte type;
 	String name;
-	uint16 size = 0;
-	uint16 param1 = 0;
-	uint16 param2 = 0;
+	uint16 size;
+	uint16 param1;
+	uint16 param2;
 };
 
 enum TzxBlockId {
@@ -459,7 +461,8 @@ SpectrumTapeArchive::SpectrumTapeArchive(const SpectrumTapeBlocks &blocks) {
 	SpectrumTapeHeader pendingHeader;
 	uint fileIndex = 1;
 
-	for (const SpectrumTapeBlock &block : blocks) {
+	for (auto rfIt462 = blocks.begin(), rfEnd462 = blocks.end(); rfIt462 != rfEnd462; ++rfIt462) {
+		const SpectrumTapeBlock &block = *rfIt462;
 		SpectrumTapeHeader header = parseTapHeader(block);
 		if (header.valid) {
 			pendingHeader = header;
@@ -485,7 +488,8 @@ void SpectrumTapeArchive::addFile(const Path &path, const Array<byte> &data) {
 }
 
 bool SpectrumTapeArchive::hasFile(const Path &path) const {
-	for (const ArchiveFile &file : _files) {
+	for (auto rfIt488 = _files.begin(), rfEnd488 = _files.end(); rfIt488 != rfEnd488; ++rfIt488) {
+		const ArchiveFile &file = *rfIt488;
 		if (file.name.equalsIgnoreCase(path))
 			return true;
 	}
@@ -494,8 +498,8 @@ bool SpectrumTapeArchive::hasFile(const Path &path) const {
 }
 
 int SpectrumTapeArchive::listMembers(ArchiveMemberList &list) const {
-	for (const ArchiveFile &file : _files)
-		list.push_back(ArchiveMemberList::value_type(new GenericArchiveMember(file.name, *this)));
+	for (auto rfIt497 = _files.begin(), rfEnd497 = _files.end(); rfIt497 != rfEnd497; ++rfIt497)
+		{ const ArchiveFile &file = *rfIt497; list.push_back(ArchiveMemberList::value_type(new GenericArchiveMember(file.name, *this))); }
 
 	return _files.size();
 }
@@ -508,7 +512,8 @@ const ArchiveMemberPtr SpectrumTapeArchive::getMember(const Path &path) const {
 }
 
 SeekableReadStream *SpectrumTapeArchive::createReadStreamForMember(const Path &path) const {
-	for (const ArchiveFile &file : _files) {
+	for (auto rfIt511 = _files.begin(), rfEnd511 = _files.end(); rfIt511 != rfEnd511; ++rfIt511) {
+		const ArchiveFile &file = *rfIt511;
 		if (file.name.equalsIgnoreCase(path))
 			return new MemoryReadStream(file.data.data(), file.data.size(), DisposeAfterUse::NO);
 	}

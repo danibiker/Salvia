@@ -49,7 +49,7 @@ class VisualText;
 class DialogBox : public Window {
 public:
 	DialogBox(StarkEngine *vm, Gfx::Driver *gfx, Cursor *cursor);
-	~DialogBox() override;
+	~DialogBox();
 
 	/** Make the dialog visible with the specified message */
 	void open(const Common::String &message, ConfirmCallback *confirmCallback,
@@ -90,8 +90,8 @@ private:
 	Common::Rect _cancelButtonRect;
 	Common::Rect _messageRect;
 
-	const Gfx::Color _textColor = Gfx::Color(0xFF, 0xFF, 0xFF);
-	const Gfx::Color _backgroundColor = Gfx::Color(26, 28, 57);
+	const Gfx::Color _textColor;
+	const Gfx::Color _backgroundColor;
 
 	ConfirmCallback *_confirmCallback;
 };

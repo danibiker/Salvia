@@ -48,7 +48,7 @@ class Bitmap;
 class VisualEffect : public Visual {
 public:
 	explicit VisualEffect(VisualType type, const Common::Point &size, Gfx::Driver *gfx);
-	~VisualEffect() override;
+	~VisualEffect();
 
 protected:
 	Gfx::Driver *_gfx;

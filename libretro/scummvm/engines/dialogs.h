@@ -81,7 +81,7 @@ namespace GUI {
 class ConfigDialog : public OptionsDialog {
 public:
 	ConfigDialog();
-	~ConfigDialog() override;
+	~ConfigDialog();
 
 	// OptionsDialog API
 	void build() override;
@@ -99,7 +99,7 @@ public:
 
 public:
 	ExtraGuiOptionsWidget(GuiObject *widgetsBoss, const Common::String &name, const Common::String &domain, const ExtraGuiOptions &options);
-	~ExtraGuiOptionsWidget() override;
+	~ExtraGuiOptionsWidget();
 
 	virtual void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 

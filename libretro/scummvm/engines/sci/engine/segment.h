@@ -87,7 +87,7 @@ public:
 
 public:
 	SegmentObj(SegmentType type) : _type(type) {}
-	~SegmentObj() override {}
+	~SegmentObj() {}
 
 	inline SegmentType getType() const { return _type; }
 
@@ -168,7 +168,7 @@ struct DataStack : SegmentObj {
 
 public:
 	DataStack() : SegmentObj(SEG_TYPE_STACK), _capacity(0), _entries(NULL) { }
-	~DataStack() override {
+	~DataStack() {
 		free(_entries);
 		_entries = NULL;
 	}
@@ -239,17 +239,17 @@ struct SegmentObjTable : public SegmentObj {
 	};
 	enum { HEAPENTRY_INVALID = -1 };
 
-	int first_free = HEAPENTRY_INVALID; /**< Beginning of a singly linked list for entries */
-	int entries_used = 0; /**< Statistical information */
+	int first_free; /**< Beginning of a singly linked list for entries */
+	int entries_used; /**< Statistical information */
 
 	typedef Common::Array<Entry> ArrayType;
 	ArrayType _table;
 
 public:
-	SegmentObjTable(SegmentType type) : SegmentObj(type) {
+	SegmentObjTable(SegmentType type) : SegmentObj(type), first_free(HEAPENTRY_INVALID), entries_used(0) {
 	}
 
-	~SegmentObjTable() override {
+	~SegmentObjTable() {
 		for (uint i = 0; i < _table.size(); i++) {
 			if (isValidEntry(i)) {
 				freeEntry(i);
@@ -353,7 +353,7 @@ struct ListTable : public SegmentObjTable<List> {
 /* HunkTable */
 struct HunkTable : public SegmentObjTable<Hunk> {
 	HunkTable() : SegmentObjTable<Hunk>(SEG_TYPE_HUNK) {}
-	~HunkTable() override {
+	~HunkTable() {
 		for (uint i = 0; i < _table.size(); i++) {
 			if (isValidEntry(i))
 				freeEntryContents(i);
@@ -386,7 +386,7 @@ struct DynMem : public SegmentObj {
 
 public:
 	DynMem() : SegmentObj(SEG_TYPE_DYNMEM), _size(0), _buf(0) {}
-	~DynMem() override {
+	~DynMem() {
 		free(_buf);
 		_buf = NULL;
 	}
@@ -458,7 +458,7 @@ public:
 		return *this;
 	}
 
-	~SciArray() override {
+	~SciArray() {
 		free(_data);
 		_size = 0;
 		_type = kArrayTypeInvalid;
@@ -984,7 +984,7 @@ public:
 		_gc = other._gc;
 	}
 
-	inline ~SciBitmap() override {
+	inline ~SciBitmap() {
 		free(_data);
 		_data = nullptr;
 		_dataSize = 0;

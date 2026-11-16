@@ -86,7 +86,7 @@ static const Graphics::TTFMap *getTTFFamily() {
 }
 
 RichTextWidget::RichTextWidget(GuiObject *boss, int x, int y, int w, int h, bool scale, const Common::U32String &text, const Common::U32String &tooltip)
-	: Widget(boss, x, y, w, h, scale, tooltip), CommandSender(nullptr)  {
+	: Widget(boss, x, y, w, h, scale, tooltip), CommandSender(nullptr), _cachedTextSurface(nullptr), _txtWnd(nullptr), _surface(nullptr), _mouseDownY(0), _mouseDownStartY(0)  {
 
 	_text = text;
 
@@ -94,11 +94,15 @@ RichTextWidget::RichTextWidget(GuiObject *boss, int x, int y, int w, int h, bool
 }
 
 RichTextWidget::RichTextWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &text, const Common::U32String &tooltip)
-	: RichTextWidget(boss, x, y, w, h, false, text, tooltip) {
+	: Widget(boss, x, y, w, h, false, tooltip), CommandSender(nullptr), _cachedTextSurface(nullptr), _txtWnd(nullptr), _surface(nullptr), _mouseDownY(0), _mouseDownStartY(0) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_text = text;
+
+	init();
 }
 
 RichTextWidget::RichTextWidget(GuiObject *boss, const Common::String &name, const Common::U32String &text, const Common::U32String &tooltip)
-	: Widget(boss, name, tooltip), CommandSender(nullptr)  {
+	: Widget(boss, name, tooltip), CommandSender(nullptr), _cachedTextSurface(nullptr), _txtWnd(nullptr), _surface(nullptr), _mouseDownY(0), _mouseDownStartY(0)  {
 
 	_text = text;
 

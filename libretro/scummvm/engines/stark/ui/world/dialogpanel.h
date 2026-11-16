@@ -104,8 +104,8 @@ private:
 	Common::Array<ClickText*> _options;
 	bool _acceptIdleMousePos;
 
-	const Gfx::Color _aprilColor = Gfx::Color(0xFF, 0xC0, 0x00);
-	const Gfx::Color _otherColor = Gfx::Color(0xFF, 0x40, 0x40);
+	const Gfx::Color _aprilColor;
+	const Gfx::Color _otherColor;
 	static const uint32 _optionsTop = 4;
 	static const uint32 _optionsLeft = 30;
 	static const uint32 _optionsHeight = 80;

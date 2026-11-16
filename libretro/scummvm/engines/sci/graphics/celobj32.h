@@ -499,7 +499,7 @@ private:
 
 public:
 	CelObjView(const GuiResourceId viewId, const int16 loopNo, const int16 celNo);
-	~CelObjView() override {};
+	~CelObjView() {};
 
 	using CelObj::draw;
 
@@ -551,7 +551,7 @@ public:
 	int16 _priority;
 
 	CelObjPic(const GuiResourceId pictureId, const int16 celNo);
-	~CelObjPic() override {};
+	~CelObjPic() {};
 
 	using CelObj::draw;
 	void draw(Buffer &target, const Common::Rect &targetRect, const Common::Point &scaledPosition, const bool mirrorX) override;
@@ -571,7 +571,7 @@ public:
 class CelObjMem : public CelObj {
 public:
 	CelObjMem(const reg_t bitmap);
-	~CelObjMem() override {};
+	~CelObjMem() {};
 
 	CelObjMem *duplicate() const override;
 	const SciSpan<const byte> getResPointer() const override;
@@ -587,7 +587,7 @@ public:
 class CelObjColor : public CelObj {
 public:
 	CelObjColor(const uint8 color, const int16 width, const int16 height);
-	~CelObjColor() override {};
+	~CelObjColor() {};
 
 	using CelObj::draw;
 	/**

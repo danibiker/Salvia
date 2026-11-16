@@ -82,7 +82,7 @@ public:
 			_strings[i].string = nullptr;
 		}
 	}
-	~StringResourceImpl() override {
+	~StringResourceImpl() {
 		for (int32 i = 0; i < _nbStrings; i++) {
 			delete[] _strings[i].string;
 		}
@@ -220,7 +220,7 @@ void SmushPlayer::timerCallback() {
 	parseNextFrame();
 }
 
-SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm, IMuseDigital *imuseDigital, Insane *insane) {
+SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm, IMuseDigital *imuseDigital, Insane *insane) : _curVideoFlags(0) {
 	_vm = scumm;
 	_imuseDigital = imuseDigital;
 	_insane = insane;

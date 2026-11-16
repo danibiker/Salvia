@@ -76,7 +76,7 @@ class MetadataParser : public Common::XMLParser {
 public:
 	MetadataParser();
 
-	~MetadataParser() override;
+	~MetadataParser();
 
 	Common::HashMap<Common::String, MetadataGame, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _gameInfo;
 	Common::HashMap<Common::String, MetadataEngine, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _engineInfo;

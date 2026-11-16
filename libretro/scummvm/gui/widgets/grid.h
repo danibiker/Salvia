@@ -181,7 +181,7 @@ protected:
 
 	FluidScroller *_fluidScroller;
 	bool _wasAnimating;
-	GridItemWidget *_highlightedItem = nullptr;
+	GridItemWidget *_highlightedItem;
 
 public:
 	int				_gridItemHeight;
@@ -266,7 +266,7 @@ public:
 	void setMultiSelectEnabled(bool enabled) { _multiSelectEnabled = enabled; }
 	bool isMultiSelectEnabled() const { return _multiSelectEnabled; }
 	Common::Array<bool> _selectedItems;	/// Multiple selected items (bool array)
-	int _lastSelectedEntryID = -1;		/// Used for Shift+Click range selection
+	int _lastSelectedEntryID;		/// Used for Shift+Click range selection
 	bool isItemSelected(int entryID) const;
 	void markSelectedItem(int entryID, bool state);
 	void clearSelection();

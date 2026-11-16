@@ -39,8 +39,8 @@ enum ColorDistanceMethod {
 /**
  * Constants available for use in paletted code
  */
-constexpr int PALETTE_COUNT = 256;
-constexpr int PALETTE_SIZE = (256 * 3);
+const int PALETTE_COUNT = 256;
+const int PALETTE_SIZE = (256 * 3);
 
 extern const byte HGC_A_PALETTE[6];
 extern const byte HGC_G_PALETTE[6];

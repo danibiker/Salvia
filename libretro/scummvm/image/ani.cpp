@@ -220,8 +220,21 @@ bool AniDecoder::parseAnimHeaderChunk(const RIFFChunkDef &chunk, Common::Seekabl
 
 	uint32 structSize = 0;
 	uint32 flags = 0;
-	if (!stream.readMultipleLE(structSize, _metadata.numFrames, _metadata.numSteps, _metadata.width, _metadata.height,
-		_metadata.bitCount, _metadata.numPlanes, _metadata.perFrameDelay, flags) || structSize < expectedStructSize) {
+	// Read the 9 little endian uint32 values at once (no variadic readMultipleLE for MSVC 2010)
+	byte headerData[9 * 4];
+	bool headerOk = (stream.read(headerData, sizeof(headerData)) == sizeof(headerData));
+	if (headerOk) {
+		structSize              = READ_LE_UINT32(headerData + 0);
+		_metadata.numFrames     = READ_LE_UINT32(headerData + 4);
+		_metadata.numSteps      = READ_LE_UINT32(headerData + 8);
+		_metadata.width         = READ_LE_UINT32(headerData + 12);
+		_metadata.height        = READ_LE_UINT32(headerData + 16);
+		_metadata.bitCount      = READ_LE_UINT32(headerData + 20);
+		_metadata.numPlanes     = READ_LE_UINT32(headerData + 24);
+		_metadata.perFrameDelay = READ_LE_UINT32(headerData + 28);
+		flags                   = READ_LE_UINT32(headerData + 32);
+	}
+	if (!headerOk || structSize < expectedStructSize) {
 		warning("AniDecoder::parseAnimHeaderChunk: Read failed");
 		return false;
 	}

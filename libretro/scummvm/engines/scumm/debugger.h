@@ -37,7 +37,7 @@ public:
 private:
 	ScummEngine *_vm;
 
-	int _nextColorIndex = 0;
+	int _nextColorIndex;
 	int _debugColors[DEBUG_COLOR_COUNT];
 
 	void preEnter() override;

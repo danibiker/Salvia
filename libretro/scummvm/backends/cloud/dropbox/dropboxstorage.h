@@ -55,7 +55,7 @@ public:
 	/** This constructor extracts tokens from JSON acquired via OAuth code flow. */
 	DropboxStorage(const Networking::JsonResponse &codeFlowJson, Networking::ErrorCallback cb);
 
-	~DropboxStorage() override;
+	~DropboxStorage();
 
 	/**
 	 * Storage methods, which are used by CloudManager to save

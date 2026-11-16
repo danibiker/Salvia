@@ -61,7 +61,7 @@ enum {
 class AndroidOptionsWidget final : public GUI::OptionsContainerWidget {
 public:
 	explicit AndroidOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~AndroidOptionsWidget() override;
+	~AndroidOptionsWidget();
 
 	// OptionsContainerWidget API
 	void load() override;

@@ -36,7 +36,7 @@ class ASFDecoder::ASFVideoTrack : public VideoTrack {
 public:
 	ASFVideoTrack() : _codec(nullptr), _pending(nullptr), _width(0), _height(0),
 		_frame(-1), _time(0), _vc1(false) {}
-	~ASFVideoTrack() override { delete _codec; _surface.free(); }
+	~ASFVideoTrack() { delete _codec; _surface.free(); }
 	bool open(const ASFDemuxer::Stream &stream) {
 		if (stream.typeData.size() < 51)
 			return false;
@@ -132,7 +132,7 @@ private:
 class ASFDecoder::ASFAudioTrack : public AudioTrack {
 public:
 	ASFAudioTrack(Audio::Mixer::SoundType soundType) : AudioTrack(soundType), _queue(nullptr) {}
-	~ASFAudioTrack() override { delete _queue; }
+	~ASFAudioTrack() { delete _queue; }
 	bool open(const ASFDemuxer::Stream &stream) {
 		if (!_codec.open(stream))
 			return false;
@@ -180,7 +180,8 @@ bool ASFDecoder::loadStream(Common::SeekableReadStream *stream) {
 		close();
 		return false;
 	}
-	for (const auto &info : _demux.getStreams()) {
+	{ auto &rfRange183 = _demux.getStreams(); for (auto rfIt183 = rfRange183.begin(), rfEnd183 = rfRange183.end(); rfIt183 != rfEnd183; ++rfIt183) {
+		const auto &info = *rfIt183;
 		if (info.type == ASFDemuxer::kVideo && !_video) {
 			ASFVideoTrack *track = new ASFVideoTrack();
 			if (!track->open(info)) {
@@ -204,7 +205,7 @@ bool ASFDecoder::loadStream(Common::SeekableReadStream *stream) {
 			_audio = track;
 			_audioID = info.id;
 		}
-	}
+	} }
 	if (!_video || !prepareFrame()) {
 		delete _video;
 		delete _audio;

@@ -320,7 +320,7 @@ private:
 
 public:
 	IMuseDigital(ScummEngine_v7 *scumm, int sampleRate, Audio::Mixer *mixer, Common::Mutex *mutex, bool lowLatencyMode = false);
-	~IMuseDigital() override;
+	~IMuseDigital();
 
 	// Wrapper functions used by the main engine
 

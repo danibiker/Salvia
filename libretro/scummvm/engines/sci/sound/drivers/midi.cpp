@@ -142,7 +142,7 @@ public:
 	};
 
 	MidiPlayer_Midi(SciVersion version);
-	~MidiPlayer_Midi() override;
+	~MidiPlayer_Midi();
 
 	int open(ResourceManager *resMan) override;
 	void close() override;

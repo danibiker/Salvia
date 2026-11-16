@@ -48,21 +48,21 @@ class ScummEngine_v7 : public ScummEngine_v6 {
 #endif
 public:
 	ScummEngine_v7(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine_v7() override;
+	~ScummEngine_v7();
 
 
 protected:
-	int _smushFrameRate = 0;
+	int _smushFrameRate;
 
 	/**
 	 * Flag which signals that the SMUSH video playback should end now
 	 * (e.g. because it was aborted by the user or it's simply finished).
 	 */
-	bool _smushVideoShouldFinish = false;
+	bool _smushVideoShouldFinish;
 
-	bool _smushActive = false;
+	bool _smushActive;
 
-	Insane *_insane = nullptr;
+	Insane *_insane;
 #ifdef ENABLE_REBEL2_PSX
 	Rebel2PSX *_rebel2PSX = nullptr;
 #endif
@@ -83,15 +83,15 @@ protected:
 	TextRenderer_v7 *_textV7;
 	Common::Rect _defaultTextClipRect;
 	Common::Rect _wrappedTextClipRect;
-	bool _newTextRenderStyle = false;
-	int _blastTextRectsQueue = 0;
+	bool _newTextRenderStyle;
+	int _blastTextRectsQueue;
 
-	int _verbLineSpacing = 0;
-	bool _existLanguageFile = false;
-	char *_languageBuffer = nullptr;
+	int _verbLineSpacing;
+	bool _existLanguageFile;
+	char *_languageBuffer;
 	LangIndexNode *_languageIndex;
-	int _languageIndexSize = 0;
-	char _lastStringTag[12+1] = {};
+	int _languageIndexSize;
+	char _lastStringTag[12+1];
 
 	struct SubtitleText : TextObject {
 		void clear() {
@@ -208,7 +208,7 @@ protected:
 	int _blastTextQueuePos;
 	BlastText _blastTextQueue[50];
 
-	byte *_guiStringTransBuff = nullptr;
+	byte *_guiStringTransBuff;
 };
 
 

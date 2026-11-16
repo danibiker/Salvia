@@ -187,7 +187,8 @@ void ShaderBrowserDialog::updateListing() {
 
 	Common::sort(files.begin(), files.end(), Common::ArchiveMemberListComparator());
 
-	for (auto &file : files) {
+	for (auto rfIt190 = files.begin(), rfEnd190 = files.end(); rfIt190 != rfEnd190; ++rfIt190) {
+		auto &file = *rfIt190;
 		list.push_back(file->getPathInArchive().toString().decode());
 	}
 

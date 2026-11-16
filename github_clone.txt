@@ -32,6 +32,7 @@ git subtree add --prefix=libretro/uae2021 https://github.com/libretro/libretro-u
 git subtree add --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
 git subtree add --prefix=libretro/mgba https://github.com/libretro/mgba master --squash
 git subtree add --prefix=libretro/stella2014 https://github.com/libretro/stella2014-libretro master --squash
+git subtree add --prefix=libretro/scummvm https://github.com/libretro/scummvm master --squash
 
 ###########################################################################################################
 # External libraries
@@ -75,6 +76,7 @@ git subtree pull --prefix=libretro/uae2021 https://github.com/libretro/libretro-
 git subtree pull --prefix=libretro/blueMSX https://github.com/libretro/blueMSX-libretro master --squash
 git subtree pull --prefix=libretro/mgba https://github.com/libretro/mgba master --squash
 git subtree pull --prefix=libretro/stella2014 https://github.com/libretro/stella2014-libretro master --squash
+git subtree pull --prefix=libretro/scummvm https://github.com/libretro/scummvm master --squash
 
 ###########################################################################################################
 # Merging conflicts

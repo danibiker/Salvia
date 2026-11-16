@@ -50,7 +50,7 @@ namespace Video {
 class ThreeDOMovieDecoder : public Video::VideoDecoder {
 public:
 	ThreeDOMovieDecoder();
-	~ThreeDOMovieDecoder() override;
+	~ThreeDOMovieDecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream) override;
 	void close() override;
@@ -68,7 +68,7 @@ private:
 	class StreamVideoTrack : public VideoTrack  {
 	public:
 		StreamVideoTrack(uint32 width, uint32 height, uint32 codecTag, uint32 frameCount);
-		~StreamVideoTrack() override;
+		~StreamVideoTrack();
 
 		bool endOfTrack() const override;
 
@@ -98,7 +98,7 @@ private:
 	class StreamAudioTrack : public AudioTrack {
 	public:
 		StreamAudioTrack(uint32 codecTag, uint32 sampleRate, uint32 channels, Audio::Mixer::SoundType soundType, uint32 trackId);
-		~StreamAudioTrack() override;
+		~StreamAudioTrack();
 
 		void queueAudio(Common::SeekableReadStream *stream, uint32 size);
 

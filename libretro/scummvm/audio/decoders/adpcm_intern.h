@@ -265,7 +265,7 @@ private:
 class FOURXM_ADPCMStream : public Ima_ADPCMStream {
 public:
 	FOURXM_ADPCMStream(Common::SeekableReadStream *stream, DisposeAfterUse::Flag disposeAfterUse, uint32 size, int rate, int channels)
-		: Ima_ADPCMStream(stream, disposeAfterUse, size, rate, channels, 0) {
+		: Ima_ADPCMStream(stream, disposeAfterUse, size, rate, channels, 0), _samplePos(0) {
 		decode();
 	}
 
@@ -283,7 +283,7 @@ public:
 private:
 	void decode();
 
-	uint _samplePos = 0;
+	uint _samplePos;
 	Common::Array<Common::Array<int16>> _planes;
 };
 

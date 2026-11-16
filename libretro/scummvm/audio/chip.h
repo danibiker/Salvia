@@ -127,8 +127,8 @@ public:
 
 protected:
 	// Chip API
-	void startCallbacks(int timerFrequency) override final;
-	void stopCallbacks() override final;
+	void startCallbacks(int timerFrequency) override;
+	void stopCallbacks() override;
 
 	/**
 	 * Read up to 'length' samples.

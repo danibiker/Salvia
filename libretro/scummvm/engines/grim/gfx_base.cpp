@@ -51,7 +51,7 @@ GfxBase::GfxBase() :
 		_currentPos(0, 0, 0), _dimLevel(0.0f),
 		_screenWidth(0), _screenHeight(0),
 		_scaleW(1.0f), _scaleH(1.0f), _currentShadowArray(nullptr),
-		_shadowColorR(255), _shadowColorG(255), _shadowColorB(255) {
+		_shadowColorR(255), _shadowColorG(255), _shadowColorB(255), _globalScaleW(1.0f), _globalScaleH(1.0f) {
 	for (unsigned int i = 0; i < _numSpecialtyTextures; i++) {
 		_specialtyTextures[i]._isShared = true;
 	}

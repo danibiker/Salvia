@@ -210,7 +210,7 @@ public: // Used by createSound()
 
 public:
 	SoundHE(ScummEngine *parent, Audio::Mixer *mixer, Common::Mutex *mutex);
-	~SoundHE() override;
+	~SoundHE();
 
 	void startSound(int sound, int heOffset = 0, int heChannel = 0, int heFlags = 0, int heFreq = 0, int hePan = 0, int heVol = 0) override;
 	void addSoundToQueue(int sound, int heOffset = 0, int heChannel = 0, int heFlags = 0, int heFreq = 0, int hePan = 0, int heVol = 0) override;
@@ -267,14 +267,14 @@ protected:
 	void processSoundQueues() override;
 
 private:
-	int _heTalkOffset = 0;
-	bool _stopActorTalkingFlag = false;
-	bool _inSoundCallbackFlag = false;
-	int _soundCallbacksQueueSize = 0;
-	int _soundAlreadyInQueueCount = 0;
-	int _inUnqueueCallbackScripts = 0;
-	int _soundsDebugFrameCounter = 0;
-	int _dynamicSoundAgeCounter = 0;
+	int _heTalkOffset;
+	bool _stopActorTalkingFlag;
+	bool _inSoundCallbackFlag;
+	int _soundCallbacksQueueSize;
+	int _soundAlreadyInQueueCount;
+	int _inUnqueueCallbackScripts;
+	int _soundsDebugFrameCounter;
+	int _dynamicSoundAgeCounter;
 };
 
 

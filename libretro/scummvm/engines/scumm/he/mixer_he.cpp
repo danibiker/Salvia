@@ -28,7 +28,7 @@
 
 namespace Scumm {
 
-HEMixer::HEMixer(Audio::Mixer *mixer, ScummEngine_v60he *vm, bool useMilesSoundSystem) {
+HEMixer::HEMixer(Audio::Mixer *mixer, ScummEngine_v60he *vm, bool useMilesSoundSystem) : _useMilesSoundSystem(false), _mixerPaused(false), _pauseCount(0) {
 	_mixer = mixer;
 	_vm = vm;
 	_useMilesSoundSystem = useMilesSoundSystem;

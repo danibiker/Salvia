@@ -45,7 +45,7 @@ static const int NUMCHANS = 4;
 class Player_NES : public Audio::AudioStream, public MusicEngine {
 public:
 	Player_NES(ScummEngine *scumm, Audio::Mixer *mixer);
-	~Player_NES() override;
+	~Player_NES();
 
 	void setMusicVolume(int vol) override;
 	void startSound(int sound) override;

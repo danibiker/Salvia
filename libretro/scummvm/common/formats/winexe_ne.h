@@ -43,10 +43,10 @@ class SeekableReadStream;
 
 // NE executable segment
 struct NESegment {
-	static constexpr uint16 kFlagSingleData = 1;
-	static constexpr uint16 kFlagMultipleData = 2;
-	static constexpr uint16 kFlagLinkError = 0x2000u;
-	static constexpr uint16 kFlagLibModule = 0x8000u;
+	static const uint16 kFlagSingleData = 1;
+	static const uint16 kFlagMultipleData = 2;
+	static const uint16 kFlagLinkError = 0x2000u;
+	static const uint16 kFlagLibModule = 0x8000u;
 
 	uint32 offset;
 	uint32 size;
@@ -64,7 +64,7 @@ public:
 	NEResources();
 	~NEResources();
 
-	static constexpr uint32 kInvalidAddress = 0xFFFFFFFF;
+	static const uint32 kInvalidAddress = 0xFFFFFFFF;
 
 	/** Clear all information. */
 	void clear() override;
@@ -111,7 +111,7 @@ private:
 	SeekableReadStream *_exe; ///< Current file.
 	DisposeAfterUse::Flag _disposeFileHandle;
 
-	uint32 _autoSegmentIndex = 0;
+	uint32 _autoSegmentIndex;
 	Array<NESegment> _segments;
 
 	/** All resources. */

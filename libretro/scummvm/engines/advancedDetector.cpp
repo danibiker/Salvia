@@ -54,7 +54,8 @@ public:
 
 	int listMembers(Common::ArchiveMemberList &list) const override {
 		int files = 0;
-		for (const auto &file : _fileMap) {
+		for (auto rfIt57 = _fileMap.begin(), rfEnd57 = _fileMap.end(); rfIt57 != rfEnd57; ++rfIt57) {
+			const auto &file = *rfIt57;
 			list.push_back(Common::ArchiveMemberPtr(new Common::FSNode(file._value)));
 			++files;
 		}
@@ -438,8 +439,8 @@ Common::Error AdvancedMetaEngineDetectionBase::identifyGame(DetectedGame &game, 
 		Common::StringArray dirs = getPathsFromEntry(agdDesc.desc);
 		Common::FSNode gameDataDir = Common::FSNode(ConfMan.getPath("path"));
 
-		for (auto &curDir : dirs)
-			SearchMan.addSubDirectoryMatching(gameDataDir, curDir, 0, _fullPathGlobsDepth);
+		for (auto rfIt441 = dirs.begin(), rfEnd441 = dirs.end(); rfIt441 != rfEnd441; ++rfIt441)
+			{ auto &curDir = *rfIt441; SearchMan.addSubDirectoryMatching(gameDataDir, curDir, 0, _fullPathGlobsDepth); }
 	}
 
 	game = toDetectedGame(agdDesc);
@@ -455,7 +456,8 @@ void AdvancedMetaEngineDetectionBase::composeFileHashMap(FileMap &allFiles, cons
 	if (fslist.empty())
 		return;
 
-	for (const auto &file : fslist) {
+	for (auto rfIt458 = fslist.begin(), rfEnd458 = fslist.end(); rfIt458 != rfEnd458; ++rfIt458) {
+		const auto &file = *rfIt458;
 		Common::String efname = Common::punycode_encodefilename(file.getName());
 		Common::Path tstr = (_flags & kADFlagMatchFullPaths) ? parentName.appendComponent(efname) : Common::Path(efname, Common::Path::kNoSeparator);
 
@@ -1125,7 +1127,8 @@ void AdvancedMetaEngineDetectionBase::detectClashes() const {
 		}
 
 		// Perform sanity checks for entries with files inside archives
-		for (const ADGameFileDescription &fileDesc : ((const ADGameDescription *)descPtr)->filesDescriptions) {
+		for (auto rfIt1128 = &(((const ADGameDescription *)descPtr)->filesDescriptions)[0], rfEnd1128 = &(((const ADGameDescription *)descPtr)->filesDescriptions)[0] + sizeof((((const ADGameDescription *)descPtr)->filesDescriptions)) / sizeof((((const ADGameDescription *)descPtr)->filesDescriptions)[0]); rfIt1128 != rfEnd1128; ++rfIt1128) {
+			const ADGameFileDescription &fileDesc = *rfIt1128;
 			if (fileDesc.fileName == nullptr && fileDesc.md5 == nullptr) {
 				break;
 			}
@@ -1149,7 +1152,8 @@ void AdvancedMetaEngineDetectionBase::detectClashes() const {
 		}
 	}
 
-	for (auto &k : idsMap) {
+	for (auto rfIt1152 = idsMap.begin(), rfEnd1152 = idsMap.end(); rfIt1152 != rfEnd1152; ++rfIt1152) {
+		auto &k = *rfIt1152;
 		if (k._value == 0 && k._key != getName())
 			debug(0, "WARNING: Detection gameId for '%s:%s' has no games in the detection table", getName(), k._key.c_str());
 	}
@@ -1182,7 +1186,8 @@ Common::Error AdvancedMetaEngineBase::createInstance(OSystem *syst, Engine **eng
 
 	debug("Running %s", gameDescriptor.description.c_str());
 	Common::Array<Common::Path> filenames;
-	for (const auto &file : gameDescriptor.matchedFiles) {
+	for (auto rfIt1185 = gameDescriptor.matchedFiles.begin(), rfEnd1185 = gameDescriptor.matchedFiles.end(); rfIt1185 != rfEnd1185; ++rfIt1185) {
+		const auto &file = *rfIt1185;
 		filenames.push_back(file._key);
 	}
 	Common::sort(filenames.begin(), filenames.end());

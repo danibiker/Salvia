@@ -345,7 +345,7 @@ public:
 	};
 
 	VMDPlayer(EventManager *eventMan, SegManager *segMan);
-	~VMDPlayer() override;
+	~VMDPlayer();
 
 private:
 	SegManager *_segMan;

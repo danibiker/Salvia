@@ -31,7 +31,7 @@ class CreateDirectoryHandler: public FilesBaseHandler {
 	void setJsonResponseHandler(Client &client, const Common::String &type, const Common::String &message) const;
 public:
 	CreateDirectoryHandler();
-	~CreateDirectoryHandler() override;
+	~CreateDirectoryHandler();
 
 	void handle(Client &client) override;
 };

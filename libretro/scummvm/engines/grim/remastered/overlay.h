@@ -47,7 +47,7 @@ public:
 	Material *_material;
 	float _x;
 	float _y;
-	int _layer = 0;
+	int _layer;
 };
 
 }

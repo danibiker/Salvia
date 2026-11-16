@@ -133,7 +133,7 @@ int ra1ShotDirection(int16 x1, int16 y1, int16 x2, int16 y2);
 class InsaneRebel1 : public Insane, public Common::EventObserver {
 public:
 	InsaneRebel1(ScummEngine_v7 *scumm);
-	~InsaneRebel1() override;
+	~InsaneRebel1();
 
 	SmushPlayerRebel1 *ra1Player() const { return static_cast<SmushPlayerRebel1 *>(_player); }
 

@@ -43,7 +43,7 @@ namespace GUI {
 #define kPadY 0.05
 
 TextViewerDialog::TextViewerDialog(const Common::Path &fname)
-	: Dialog(0, 0, 1, 1), _fname(fname) {
+	: Dialog(0, 0, 1, 1), _fname(fname), _font(nullptr) {
 	_font = &g_gui.getFont(ThemeEngine::kFontStyleConsole);
 	_charWidth = _font->getMaxCharWidth();
 	_lineHeight = _font->getFontHeight() + 2;

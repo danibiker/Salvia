@@ -56,8 +56,8 @@ public:
 		}
 	};
 public:
-	using iterator = typename Common::SortedArray<T, const T &>::iterator;
-	using const_iterator = typename Common::SortedArray<T, const T &>::const_iterator;
+	typedef typename Common::SortedArray<T, const T &>::iterator iterator;
+	typedef typename Common::SortedArray<T, const T &>::const_iterator const_iterator;
 
 	/**
 	 * Constructor

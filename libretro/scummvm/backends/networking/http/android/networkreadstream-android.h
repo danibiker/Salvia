@@ -56,7 +56,7 @@ public:
 
 	NetworkReadStreamAndroid(const char *url, RequestHeaders *headersList, const byte *buffer, uint32 bufferSize, bool uploading, bool usingPatch, bool post, bool keepAlive, long keepAliveIdle, long keepAliveInterval);
 
-	~NetworkReadStreamAndroid() override;
+	~NetworkReadStreamAndroid();
 
 	/** Send <postFields>, using POST by default. */
 	bool reuse(const char *url, RequestHeaders *headersList, const Common::String &postFields, bool uploading = false, bool usingPatch = false) override;

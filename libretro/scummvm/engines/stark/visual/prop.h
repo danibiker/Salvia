@@ -44,7 +44,7 @@ public:
 	static const VisualType TYPE = Visual::kRendered;
 
 	VisualProp();
-	~VisualProp() override;
+	~VisualProp();
 
 	void setModel(Formats::BiffMesh *model);
 	void setTexture(Gfx::TextureSet *texture);

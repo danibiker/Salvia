@@ -59,7 +59,7 @@ public:
 	/**
 	 * Construct a new empty list.
 	 */
-	constexpr List() : _anchor(&_anchor, &_anchor) {}
+	List() : _anchor(&_anchor, &_anchor) {}
 	List(const List<t_T> &list) {  /*!< Construct a new list as a copy of the given @p list. */
 		_anchor._prev = &_anchor;
 		_anchor._next = &_anchor;
@@ -74,11 +74,49 @@ public:
 	/**
 	 * Construct an @p element before @p pos.
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	iterator emplace(iterator pos, TArgs &&...args) {
 		emplace(pos._node, Common::forward<TArgs>(args)...);
 		return --pos;
 	}
+#else
+	
+	iterator emplace(iterator pos) {
+		emplace(pos._node);
+		return --pos;
+	}
+	template<class A1>
+	iterator emplace(iterator pos, A1 &&a1) {
+		emplace(pos._node, Common::forward<A1>(a1));
+		return --pos;
+	}
+	template<class A1, class A2>
+	iterator emplace(iterator pos, A1 &&a1, A2 &&a2) {
+		emplace(pos._node, Common::forward<A1>(a1), Common::forward<A2>(a2));
+		return --pos;
+	}
+	template<class A1, class A2, class A3>
+	iterator emplace(iterator pos, A1 &&a1, A2 &&a2, A3 &&a3) {
+		emplace(pos._node, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+		return --pos;
+	}
+	template<class A1, class A2, class A3, class A4>
+	iterator emplace(iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		emplace(pos._node, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+		return --pos;
+	}
+	template<class A1, class A2, class A3, class A4, class A5>
+	iterator emplace(iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		emplace(pos._node, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+		return --pos;
+	}
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	iterator emplace(iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		emplace(pos._node, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+		return --pos;
+	}
+#endif
 
 	/**
 	 * Insert an @p element before @p pos.
@@ -149,10 +187,41 @@ public:
 	}
 
 	/** Construct an @p element at the start of the list. */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	void emplace_front(TArgs &&...args) {
 		emplace(_anchor._next, Common::forward<TArgs>(args)...);
 	}
+#else
+	
+	void emplace_front() {
+		emplace(_anchor._next);
+	}
+	template<class A1>
+	void emplace_front(A1 &&a1) {
+		emplace(_anchor._next, Common::forward<A1>(a1));
+	}
+	template<class A1, class A2>
+	void emplace_front(A1 &&a1, A2 &&a2) {
+		emplace(_anchor._next, Common::forward<A1>(a1), Common::forward<A2>(a2));
+	}
+	template<class A1, class A2, class A3>
+	void emplace_front(A1 &&a1, A2 &&a2, A3 &&a3) {
+		emplace(_anchor._next, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+	}
+	template<class A1, class A2, class A3, class A4>
+	void emplace_front(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		emplace(_anchor._next, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+	}
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace_front(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		emplace(_anchor._next, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+	}
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace_front(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		emplace(_anchor._next, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+	}
+#endif
 
 	/** Insert an @p element at the start of the list. */
 	void push_front(const t_T &element) {
@@ -165,10 +234,41 @@ public:
 	}
 
 	/** Construct an @p element at the end of the list. */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	void emplace_back(TArgs &&...args) {
 		emplace(&_anchor, Common::forward<TArgs>(args)...);
 	}
+#else
+	
+	void emplace_back() {
+		emplace(&_anchor);
+	}
+	template<class A1>
+	void emplace_back(A1 &&a1) {
+		emplace(&_anchor, Common::forward<A1>(a1));
+	}
+	template<class A1, class A2>
+	void emplace_back(A1 &&a1, A2 &&a2) {
+		emplace(&_anchor, Common::forward<A1>(a1), Common::forward<A2>(a2));
+	}
+	template<class A1, class A2, class A3>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3) {
+		emplace(&_anchor, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+	}
+	template<class A1, class A2, class A3, class A4>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		emplace(&_anchor, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+	}
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		emplace(&_anchor, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+	}
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		emplace(&_anchor, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+	}
+#endif
 
 	/** Append an @p element to the end of the list. */
 	void push_back(const t_T &element) {
@@ -317,6 +417,7 @@ protected:
 	/**
 	 * Construct an @p element before @p pos.
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	void emplace(NodeBase *pos, TArgs&&... args) {
 		ListInternal::NodeBase *newNode = new Node(Common::forward<TArgs>(args)...);
@@ -327,6 +428,78 @@ protected:
 		newNode->_prev->_next = newNode;
 		newNode->_next->_prev = newNode;
 	}
+#else
+	
+	void emplace(NodeBase *pos) {
+		ListInternal::NodeBase *newNode = new Node();
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1>
+	void emplace(NodeBase *pos, A1 &&a1) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1, class A2>
+	void emplace(NodeBase *pos, A1 &&a1, A2 &&a2) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1), Common::forward<A2>(a2));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1, class A2, class A3>
+	void emplace(NodeBase *pos, A1 &&a1, A2 &&a2, A3 &&a3) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1, class A2, class A3, class A4>
+	void emplace(NodeBase *pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace(NodeBase *pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace(NodeBase *pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		ListInternal::NodeBase *newNode = new Node(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+		assert(newNode);
+
+		newNode->_next = pos;
+		newNode->_prev = pos->_prev;
+		newNode->_prev->_next = newNode;
+		newNode->_next->_prev = newNode;
+	}
+#endif
 
 	/**
 	 * Insert an @p element before @p pos.

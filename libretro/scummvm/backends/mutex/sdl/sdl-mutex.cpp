@@ -32,7 +32,7 @@
 class SdlMutexInternal final : public Common::MutexInternal {
 public:
 	SdlMutexInternal() { _mutex = SDL_CreateMutex(); }
-	~SdlMutexInternal() override { SDL_DestroyMutex(_mutex); }
+	~SdlMutexInternal() { SDL_DestroyMutex(_mutex); }
 
 	bool lock() override {
 #if SDL_VERSION_ATLEAST(3, 0, 0)

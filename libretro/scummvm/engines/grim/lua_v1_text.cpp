@@ -134,9 +134,10 @@ void Lua_V1::GetTextObjectDimensions() {
 
 void Lua_V1::ExpireText() {
 	// Cleanup actor references to deleted text objects
-	for (Actor *a : Actor::getPool()) {
+	{ auto &rfRange137 = Actor::getPool(); for (auto rfIt137 = rfRange137.begin(), rfEnd137 = rfRange137.end(); rfIt137 != rfEnd137; ++rfIt137) {
+		Actor *a = *rfIt137;
 		a->lineCleanup();
-	}
+	} }
 }
 
 void Lua_V1::GetTextCharPosition() {

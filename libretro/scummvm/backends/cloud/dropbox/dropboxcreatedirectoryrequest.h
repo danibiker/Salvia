@@ -45,7 +45,7 @@ class DropboxCreateDirectoryRequest: public Networking::Request {
 	void finishCreation(bool success);
 public:
 	DropboxCreateDirectoryRequest(DropboxStorage *storage, const Common::String &path, Storage::BoolCallback cb, Networking::ErrorCallback ecb);
-	~DropboxCreateDirectoryRequest() override;
+	~DropboxCreateDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

@@ -51,7 +51,7 @@ class IdCreateDirectoryRequest: public Networking::Request {
 	void finishCreation(bool success);
 public:
 	IdCreateDirectoryRequest(IdStorage *storage, const Common::String &parentPath, const Common::String &directoryName, Storage::BoolCallback cb, Networking::ErrorCallback ecb);
-	~IdCreateDirectoryRequest() override;
+	~IdCreateDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

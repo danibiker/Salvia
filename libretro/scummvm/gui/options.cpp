@@ -174,12 +174,12 @@ static const int guiBaseValues[] = { 200, 175, 150, 125, 100, 75, 50, 25, -1 };
 static const char *const kbdMouseSpeedLabels[] = { "3", "5", "8", "10", "13", "15", "18", "20", nullptr };
 
 OptionsDialog::OptionsDialog(const Common::String &domain, int x, int y, int w, int h)
-	: Dialog(x, y, w, h), _domain(domain), _graphicsTabId(-1), _midiTabId(-1), _pathsContainer(nullptr), _tabWidget(nullptr) {
+	: Dialog(x, y, w, h), _domain(domain), _graphicsTabId(-1), _midiTabId(-1), _pathsContainer(nullptr), _tabWidget(nullptr), _updateShadersButton(nullptr) {
 	init();
 }
 
 OptionsDialog::OptionsDialog(const Common::String &domain, const Common::String &name)
-	: Dialog(name), _domain(domain), _graphicsTabId(-1), _midiTabId(-1), _pathsContainer(nullptr), _tabWidget(nullptr) {
+	: Dialog(name), _domain(domain), _graphicsTabId(-1), _midiTabId(-1), _pathsContainer(nullptr), _tabWidget(nullptr), _updateShadersButton(nullptr) {
 	init();
 }
 
@@ -1768,9 +1768,11 @@ void OptionsDialog::addAudioControls(GuiObject *boss, const Common::String &pref
 	bool hasMidiDefined = _guioptions.contains(GUIO_MIDI_PREFIX);
 
 	const PluginList p = MusicMan.getPlugins();
-	for (const auto &m : p) {
+	for (auto rfIt1771 = p.begin(), rfEnd1771 = p.end(); rfIt1771 != rfEnd1771; ++rfIt1771) {
+		const auto &m = *rfIt1771;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt1773 = i.begin(), rfEnd1773 = i.end(); rfIt1773 != rfEnd1773; ++rfIt1773) {
+			auto &d = *rfIt1773;
 			Common::String deviceGuiOption = MidiDriver::musicType2GUIO(d.getMusicType());
 
 			if ((_domain == Common::ConfigManager::kApplicationDomain && d.getMusicType() != MT_TOWNS  // global dialog - skip useless FM-Towns, C64, Amiga, AppleIIGS, Macintosh and SegaCD options there
@@ -1810,17 +1812,21 @@ void OptionsDialog::addMIDIControls(GuiObject *boss, const Common::String &prefi
 	const PluginList p = MusicMan.getPlugins();
 	// Make sure the null device is the first one in the list to avoid undesired
 	// auto detection for users who don't have a saved setting yet.
-	for (const auto &m : p) {
+	for (auto rfIt1813 = p.begin(), rfEnd1813 = p.end(); rfIt1813 != rfEnd1813; ++rfIt1813) {
+		const auto &m = *rfIt1813;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt1815 = i.begin(), rfEnd1815 = i.end(); rfIt1815 != rfEnd1815; ++rfIt1815) {
+			auto &d = *rfIt1815;
 			if (d.getMusicDriverId() == "null")
 				_gmDevicePopUp->appendEntry(_("Don't use General MIDI music"), d.getHandle());
 		}
 	}
 	// Now we add the other devices.
-	for (const auto &m : p) {
+	for (auto rfIt1821 = p.begin(), rfEnd1821 = p.end(); rfIt1821 != rfEnd1821; ++rfIt1821) {
+		const auto &m = *rfIt1821;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt1823 = i.begin(), rfEnd1823 = i.end(); rfIt1823 != rfEnd1823; ++rfIt1823) {
+			auto &d = *rfIt1823;
 			if (d.getMusicType() >= MT_GM) {
 				if (d.getMusicType() != MT_MT32)
 					_gmDevicePopUp->appendEntry(d.getCompleteName(), d.getHandle());
@@ -1880,17 +1886,21 @@ void OptionsDialog::addMT32Controls(GuiObject *boss, const Common::String &prefi
 	const PluginList p = MusicMan.getPlugins();
 	// Make sure the null device is the first one in the list to avoid undesired
 	// auto detection for users who don't have a saved setting yet.
-	for (const auto &m : p) {
+	for (auto rfIt1883 = p.begin(), rfEnd1883 = p.end(); rfIt1883 != rfEnd1883; ++rfIt1883) {
+		const auto &m = *rfIt1883;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt1885 = i.begin(), rfEnd1885 = i.end(); rfIt1885 != rfEnd1885; ++rfIt1885) {
+			auto &d = *rfIt1885;
 			if (d.getMusicDriverId() == "null")
 				_mt32DevicePopUp->appendEntry(_("Don't use Roland MT-32 music"), d.getHandle());
 		}
 	}
 	// Now we add the other devices.
-	for (const auto &m : p) {
+	for (auto rfIt1891 = p.begin(), rfEnd1891 = p.end(); rfIt1891 != rfEnd1891; ++rfIt1891) {
+		const auto &m = *rfIt1891;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt1893 = i.begin(), rfEnd1893 = i.end(); rfIt1893 != rfEnd1893; ++rfIt1893) {
+			auto &d = *rfIt1893;
 			if (d.getMusicType() >= MT_GM)
 				_mt32DevicePopUp->appendEntry(d.getCompleteName(), d.getHandle());
 			else if (d.getMusicDriverId() == "auto")
@@ -1999,9 +2009,11 @@ bool OptionsDialog::loadMusicDeviceSetting(PopUpWidget *popup, Common::String se
 		const Common::String drv = ConfMan.get(setting, (_domain != Common::ConfigManager::kApplicationDomain && !ConfMan.hasKey(setting, _domain)) ? Common::ConfigManager::kApplicationDomain : _domain);
 		const PluginList p = MusicMan.getPlugins();
 
-		for (const auto &m : p) {
+		for (auto rfIt2002 = p.begin(), rfEnd2002 = p.end(); rfIt2002 != rfEnd2002; ++rfIt2002) {
+			const auto &m = *rfIt2002;
 			MusicDevices i = m->get<MusicPluginObject>().getDevices();
-			for (auto &d : i) {
+			for (auto rfIt2004 = i.begin(), rfEnd2004 = i.end(); rfIt2004 != rfEnd2004; ++rfIt2004) {
+				auto &d = *rfIt2004;
 				if (setting.empty() ? (preferredType == d.getMusicType()) : (drv == d.getCompleteId())) {
 					popup->setSelectedTag(d.getHandle());
 					return popup->getSelected() != -1;
@@ -2021,7 +2033,8 @@ void OptionsDialog::saveMusicDeviceSetting(PopUpWidget *popup, Common::String se
 	bool found = false;
 	for (PluginList::const_iterator m = p.begin(); m != p.end() && !found; ++m) {
 		MusicDevices i = (*m)->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt2024 = i.begin(), rfEnd2024 = i.end(); rfIt2024 != rfEnd2024; ++rfIt2024) {
+			auto &d = *rfIt2024;
 			if (d.getHandle() == popup->getSelectedTag()) {
 				ConfMan.set(setting, d.getCompleteId(), _domain);
 				found = true;
@@ -2132,7 +2145,8 @@ void OptionsDialog::updateScaleFactors(uint32 tag) {
 		const Common::Array<uint> &factors = scalerPlugins[tag]->get<ScalerPluginObject>().getFactors();
 
 		_scaleFactorPopUp->clearEntries();
-		for (const auto &factor : factors) {
+		for (auto rfIt2135 = factors.begin(), rfEnd2135 = factors.end(); rfIt2135 != rfEnd2135; ++rfIt2135) {
+			const auto &factor = *rfIt2135;
 			_scaleFactorPopUp->appendEntry(Common::U32String::format("%dx", factor), factor);
 		}
 

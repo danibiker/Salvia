@@ -95,9 +95,11 @@ MusicType MidiDriver::getMusicType(MidiDriver::DeviceHandle handle) {
 
 	if (handle) {
 		const PluginList p = MusicMan.getPlugins();
-		for (const auto &m : p) {
+		for (auto rfIt98 = p.begin(), rfEnd98 = p.end(); rfIt98 != rfEnd98; ++rfIt98) {
+			const auto &m = *rfIt98;
 			MusicDevices i = m->get<MusicPluginObject>().getDevices();
-			for (auto &d : i) {
+			for (auto rfIt100 = i.begin(), rfEnd100 = i.end(); rfIt100 != rfEnd100; ++rfIt100) {
+				auto &d = *rfIt100;
 				if (handle == d.getHandle())
 					return d.getMusicType();
 			}
@@ -110,9 +112,11 @@ MusicType MidiDriver::getMusicType(MidiDriver::DeviceHandle handle) {
 Common::String MidiDriver::getDeviceString(DeviceHandle handle, DeviceStringType type) {
 	if (handle) {
 		const PluginList p = MusicMan.getPlugins();
-		for (const auto &m : p) {
+		for (auto rfIt113 = p.begin(), rfEnd113 = p.end(); rfIt113 != rfEnd113; ++rfIt113) {
+			const auto &m = *rfIt113;
 			MusicDevices i = m->get<MusicPluginObject>().getDevices();
-			for (auto &d : i) {
+			for (auto rfIt115 = i.begin(), rfEnd115 = i.end(); rfIt115 != rfEnd115; ++rfIt115) {
+				auto &d = *rfIt115;
 				if (handle == d.getHandle()) {
 					if (type == kDriverName)
 						return d.getMusicDriverName();
@@ -310,9 +314,11 @@ MidiDriver::DeviceHandle MidiDriver::detectDevice(int flags) {
 				// and there is no preferred MT32 or GM device selected either or if the detected device is unavailable we arrive here.
 				// If MT32 is preferred we try for the first available device with music type 'MT_MT32' (usually the mt32 emulator).
 				if (flags & MDT_PREFER_MT32) {
-					for (const auto &m : p) {
+					for (auto rfIt313 = p.begin(), rfEnd313 = p.end(); rfIt313 != rfEnd313; ++rfIt313) {
+						const auto &m = *rfIt313;
 						MusicDevices i = m->get<MusicPluginObject>().getDevices();
-						for (auto &d : i) {
+						for (auto rfIt315 = i.begin(), rfEnd315 = i.end(); rfIt315 != rfEnd315; ++rfIt315) {
+							auto &d = *rfIt315;
 							if (d.getMusicType() == MT_MT32) {
 								hdl = d.getHandle();
 								if (checkDevice(hdl, checkFlags | MDCK_AUTO, true))
@@ -325,9 +331,11 @@ MidiDriver::DeviceHandle MidiDriver::detectDevice(int flags) {
 				// Now we default to the first available device with music type 'MT_GM' if not
 				// MT-32 is preferred or if MT-32 is preferred but all other devices have failed.
 				if (!(flags & MDT_PREFER_MT32) || flags == (MDT_PREFER_MT32 | MDT_MIDI)) {
-					for (const auto &m : p) {
+					for (auto rfIt328 = p.begin(), rfEnd328 = p.end(); rfIt328 != rfEnd328; ++rfIt328) {
+						const auto &m = *rfIt328;
 						MusicDevices i = m->get<MusicPluginObject>().getDevices();
-						for (auto &d : i) {
+						for (auto rfIt330 = i.begin(), rfEnd330 = i.end(); rfIt330 != rfEnd330; ++rfIt330) {
+							auto &d = *rfIt330;
 							if (d.getMusicType() == MT_GM || d.getMusicType() == MT_GS) {
 								hdl = d.getHandle();
 								if (checkDevice(hdl, checkFlags | MDCK_AUTO, true))
@@ -389,9 +397,11 @@ MidiDriver::DeviceHandle MidiDriver::detectDevice(int flags) {
 			tp = MT_AUTO;
 		}
 
-		for (const auto &m : p) {
+		for (auto rfIt392 = p.begin(), rfEnd392 = p.end(); rfIt392 != rfEnd392; ++rfIt392) {
+			const auto &m = *rfIt392;
 			MusicDevices i = m->get<MusicPluginObject>().getDevices();
-			for (auto &d : i) {
+			for (auto rfIt394 = i.begin(), rfEnd394 = i.end(); rfIt394 != rfEnd394; ++rfIt394) {
+				auto &d = *rfIt394;
 				if (d.getMusicType() == tp) {
 					hdl = d.getHandle();
 					if (checkDevice(hdl, checkFlags, true))
@@ -407,7 +417,8 @@ MidiDriver::DeviceHandle MidiDriver::detectDevice(int flags) {
 MidiDriver *MidiDriver::createMidi(MidiDriver::DeviceHandle handle) {
 	MidiDriver *driver = nullptr;
 	const PluginList p = MusicMan.getPlugins();
-	for (const auto &m : p) {
+	for (auto rfIt410 = p.begin(), rfEnd410 = p.end(); rfIt410 != rfEnd410; ++rfIt410) {
+		const auto &m = *rfIt410;
 		const MusicPluginObject &musicPlugin = m->get<MusicPluginObject>();
 		if (getDeviceString(handle, MidiDriver::kDriverId).equals(musicPlugin.getId()))
 			musicPlugin.createInstance(&driver, handle);
@@ -418,7 +429,8 @@ MidiDriver *MidiDriver::createMidi(MidiDriver::DeviceHandle handle) {
 
 bool MidiDriver::checkDevice(MidiDriver::DeviceHandle handle, int flags, bool quiet) {
 	const PluginList p = MusicMan.getPlugins();
-	for (const auto &m : p) {
+	for (auto rfIt421 = p.begin(), rfEnd421 = p.end(); rfIt421 != rfEnd421; ++rfIt421) {
+		const auto &m = *rfIt421;
 		const MusicPluginObject &musicPlugin = m->get<MusicPluginObject>();
 		if (getDeviceString(handle, MidiDriver::kDriverId).equals(musicPlugin.getId()))
 			return musicPlugin.checkDevice(handle, flags, quiet);
@@ -433,9 +445,11 @@ MidiDriver::DeviceHandle MidiDriver::getDeviceHandle(const Common::String &ident
 	if (p.begin() == p.end())
 		error("MidiDriver::getDeviceHandle: Music plugins must be loaded prior to calling this method");
 
-	for (const auto &m : p) {
+	for (auto rfIt436 = p.begin(), rfEnd436 = p.end(); rfIt436 != rfEnd436; ++rfIt436) {
+		const auto &m = *rfIt436;
 		MusicDevices i = m->get<MusicPluginObject>().getDevices();
-		for (auto &d : i) {
+		for (auto rfIt438 = i.begin(), rfEnd438 = i.end(); rfIt438 != rfEnd438; ++rfIt438) {
+			auto &d = *rfIt438;
 			// The music driver id isn't unique, but it will match
 			// driver's first device. This is useful when selecting
 			// the driver from the command line.

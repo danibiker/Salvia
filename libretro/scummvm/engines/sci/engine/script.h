@@ -133,7 +133,7 @@ public:
 
 public:
 	Script();
-	~Script() override;
+	~Script();
 
 	void freeScript(const bool keepLocalsSegment = false);
 	void load(int script_nr, ResourceManager *resMan, ScriptPatcher *scriptPatcher, bool applyScriptPatches = true);

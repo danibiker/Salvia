@@ -31,7 +31,7 @@
 
 namespace Scumm {
 
-MacGui::MacGui(ScummEngine *vm, const Common::Path &resourceFile) {
+MacGui::MacGui(ScummEngine *vm, const Common::Path &resourceFile) : _impl(nullptr) {
 	switch (vm->_game.id) {
 	case GID_INDY3:
 		_impl = new MacIndy3Gui(vm, resourceFile);

@@ -62,7 +62,7 @@ public:
 	/** This constructor extracts tokens from JSON acquired via OAuth code flow. */
 	GoogleDriveStorage(const Networking::JsonResponse &codeFlowJson, Networking::ErrorCallback cb);
 
-	~GoogleDriveStorage() override;
+	~GoogleDriveStorage();
 
 	/**
 	 * Storage methods, which are used by CloudManager to save

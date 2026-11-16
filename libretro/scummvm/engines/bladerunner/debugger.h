@@ -105,7 +105,7 @@ public:
 	DebuggerPendingOuttake _dbgPendingOuttake;
 
 	Debugger(BladeRunnerEngine *vm);
-	~Debugger() override;
+	~Debugger();
 
 	bool cmdAnimation(int argc, const char **argv);
 	bool cmdHealth(int argc, const char **argv);

@@ -70,6 +70,7 @@ template<class T> struct add_volatile {
 	typedef volatile T type;
 };
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class T>
 using remove_cv_t        = typename remove_cv<T>::type;
 template<class T>
@@ -83,6 +84,7 @@ template<class T>
 using add_const_t     = typename add_const<T>::type;
 template<class T>
 using add_volatile_t  = typename add_volatile<T>::type;
+#endif
 
 /**
  * A set of templates which removes the reference over types.
@@ -101,8 +103,10 @@ struct remove_reference<T &&> {
 	typedef T type;
 };
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class T>
 using remove_reference_t = typename remove_reference<T>::type;
+#endif
 
 template<bool b, class T, class F>
 struct conditional {
@@ -113,12 +117,15 @@ struct conditional<false, T, F> {
 	typedef F type;
 };
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<bool b, class T, class F>
 using conditional_t = typename conditional<b, T, F>::type;
+#endif
 
+#ifndef SCUMMVM_CXX03_COMPAT
 // additional helper necessary only for GCC 4.7.4
 template<class...>
-struct void_t_helper { using type = void; };
+struct void_t_helper { typedef void type; };
 
 template<class... Ts>
 using void_t = typename void_t_helper<Ts...>::type;
@@ -128,12 +135,12 @@ inline T &&declval(); // not implemented as it may not be called anyways
 
 template<class, class T, class... Args>
 struct is_constructible_helper {
-	static constexpr const bool v = false;
+	static const bool v = false;
 };
 
 template<class T, class... Args>
 struct is_constructible_helper<void_t<decltype(T(declval<Args>()...))>, T, Args...> {
-	static constexpr const bool v = true;
+	static const bool v = true;
 };
 
 template<class T, class... Args>
@@ -147,12 +154,12 @@ using is_copy_constructible = is_constructible<T, const remove_cv_t<T> &>;
 
 template<class, class T, class U>
 struct is_assignable_helper {
-	static constexpr const bool v = false;
+	static const bool v = false;
 };
 
 template<class T, class U>
 struct is_assignable_helper<void_t<decltype(declval<remove_cv_t<T>>() = declval<remove_cv_t<U>>())>, T, U> {
-	static constexpr const bool v = true;
+	static const bool v = true;
 };
 
 template<class T, class U>
@@ -163,6 +170,34 @@ using is_move_assignable = is_assignable<T, remove_cv_t<T> &&>;
 
 template<class T>
 using is_copy_assignable = is_assignable<T, const remove_cv_t<T> &>;
+#else
+// MSVC 2010: no variadic templates, alias templates nor expression SFINAE.
+// These traits are only used to decide whether move semantics can be used,
+// which is always safe (moving falls back to copying for types without move
+// constructor/assignment).
+template<typename T>
+inline T &&declval(); // not implemented as it may not be called anyways
+
+template<class T>
+struct is_move_constructible {
+	static const bool v = true;
+};
+
+template<class T>
+struct is_copy_constructible {
+	static const bool v = true;
+};
+
+template<class T>
+struct is_move_assignable {
+	static const bool v = true;
+};
+
+template<class T>
+struct is_copy_assignable {
+	static const bool v = true;
+};
+#endif
 
 } // End of namespace Common
 

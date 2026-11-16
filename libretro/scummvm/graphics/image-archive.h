@@ -37,6 +37,10 @@ struct Surface;
  */
 class ImageArchive {
 public:
+	ImageArchive() : _imageArchive(nullptr), _filtering(true) {}
+private:
+
+public:
 	~ImageArchive();
 
 	/* Frees all previously loaded images. */
@@ -58,8 +62,8 @@ private:
 #ifdef USE_PNG
 	Common::HashMap<Common::Path, Surface *, Common::Path::IgnoreCase_Hash, Common::Path::IgnoreCase_EqualTo> _imageCache;
 #endif
-	Common::Archive *_imageArchive = nullptr;
-	bool _filtering = true;
+	Common::Archive *_imageArchive;
+	bool _filtering;
 };
 
 } // End of namespace Graphics

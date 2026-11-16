@@ -99,7 +99,7 @@ struct SciCallOrigin {
 
 struct EngineState : public Common::Serializable {
 	EngineState(SegManager *segMan);
-	~EngineState() override;
+	~EngineState();
 
 	void saveLoadWithSerializer(Common::Serializer &ser) override;
 

@@ -193,7 +193,7 @@ ThemeEngine::ThemeEngine(Common::String id, GraphicsMode mode) :
 	_system(nullptr), _vectorRenderer(nullptr),
 	_layerToDraw(kDrawLayerBackground), _bytesPerPixel(0),  _graphicsMode(kGfxDisabled),
 	_font(nullptr), _initOk(false), _themeOk(false), _enabled(false), _themeFiles(),
-	_cursor(nullptr), _scaleFactor(1.0f) {
+	_cursor(nullptr), _scaleFactor(1.0f), _activeCursorType(kCursorNormal), _useCursor(false), _needScaleRefresh(false) {
 
 	_baseWidth = 640;	// Default sane values
 	_baseHeight = 480;
@@ -893,7 +893,8 @@ bool ThemeEngine::loadThemeXML(const Common::String &themeId) {
 	//
 	// Loop over all STX files, load and parse them
 	//
-	for (auto &member : members) {
+	for (auto rfIt896 = members.begin(), rfEnd896 = members.end(); rfIt896 != rfEnd896; ++rfIt896) {
+		auto &member = *rfIt896;
 		assert(member->getName().hasSuffix(".stx"));
 
 		if (_parser->loadStream(member->createReadStream()) == false) {
@@ -2073,7 +2074,8 @@ void ThemeEngine::listUsableThemes(Common::List<ThemeDescriptor> &list) {
 	// in the config file we can not do any better currently.
 	Common::List<ThemeDescriptor> output;
 
-	for (const auto &theme : list) {
+	for (auto rfIt2076 = list.begin(), rfEnd2076 = list.end(); rfIt2076 != rfEnd2076; ++rfIt2076) {
+		const auto &theme = *rfIt2076;
 		if (Common::find_if(output.begin(), output.end(), TDComparator(theme.id)) == output.end())
 			output.push_back(theme);
 	}
@@ -2176,7 +2178,8 @@ void ThemeEngine::listUsableThemes(const Common::FSNode &node, Common::List<Them
 	if (!node.getChildren(fileList, Common::FSNode::kListAll))
 		return;
 
-	for (auto &file : fileList) {
+	for (auto rfIt2179 = fileList.begin(), rfEnd2179 = fileList.end(); rfIt2179 != rfEnd2179; ++rfIt2179) {
+		auto &file = *rfIt2179;
 		td.name.clear();
 		bool isUnpackedTheme = false;
 		if (!file.getPath().baseName().matchString("*.zip", true)) {
@@ -2251,7 +2254,8 @@ Common::Path ThemeEngine::getThemeFile(const Common::String &id) {
 	Common::List<ThemeDescriptor> list;
 	listUsableThemes(list);
 
-	for (const auto &theme : list) {
+	for (auto rfIt2254 = list.begin(), rfEnd2254 = list.end(); rfIt2254 != rfEnd2254; ++rfIt2254) {
+		const auto &theme = *rfIt2254;
 		if (id.equalsIgnoreCase(theme.id))
 			return theme.filename;
 	}
@@ -2293,7 +2297,8 @@ Common::String ThemeEngine::getThemeId(const Common::Path &filename) {
 	Common::List<ThemeDescriptor> list;
 	listUsableThemes(list);
 
-	for (const auto &theme : list) {
+	for (auto rfIt2296 = list.begin(), rfEnd2296 = list.end(); rfIt2296 != rfEnd2296; ++rfIt2296) {
+		const auto &theme = *rfIt2296;
 		if (filename.equalsIgnoreCase(theme.filename))
 			return theme.id;
 	}

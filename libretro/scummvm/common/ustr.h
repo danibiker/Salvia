@@ -52,14 +52,19 @@ class String;
  * The presence of \0 characters in the string will cause undefined
  * behavior in some operations.
  */
+#ifdef SCUMMVM_CXX03_COMPAT
+// MSVC 2010 has no native char32_t type
+typedef uint32 u32char_type_t;
+#else
 typedef char32_t u32char_type_t;
+#endif
 
 class U32String : public BaseString<u32char_type_t> {
 public:
 	typedef uint32 unsigned_type; /*!< Unsigned version of the underlying type. */
 public:
 	/** Construct a new empty string. */
-	constexpr U32String() : BaseString<u32char_type_t>() {}
+	U32String() : BaseString<u32char_type_t>() {}
 
 	/** Construct a new string from the given null-terminated C string. */
 	explicit U32String(const value_type *str) : BaseString<u32char_type_t>(str) {}
@@ -89,7 +94,7 @@ public:
 	U32String(const String &str, CodePage page = kUtf8);
 
 	/** Construct a string consisting of the given character. */
-	explicit constexpr U32String(value_type c) : BaseString<u32char_type_t>(c) {}
+	explicit U32String(value_type c) : BaseString<u32char_type_t>(c) {}
 
 	/** Construct a string consisting of n copies of the given character. */
 	U32String(size_t n, value_type c) : BaseString<u32char_type_t>(n, c) {}
@@ -134,8 +139,29 @@ public:
 	 * Similar to sprintf, except that it stores the result
 	 * in a (variably sized) string instead of a fixed-size buffer.
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TParam>
 	static U32String format(const U32String &fmt, TParam... param);
+#else
+	
+	static U32String format(const U32String &fmt) { return formatInternal(&fmt); }
+	template<class A1>
+	static U32String format(const U32String &fmt, A1 a1) { return formatInternal(&fmt, Common::forward<A1>(a1)); }
+	template<class A1, class A2>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2)); }
+	template<class A1, class A2, class A3>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3)); }
+	template<class A1, class A2, class A3, class A4>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4)); }
+	template<class A1, class A2, class A3, class A4, class A5>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5)); }
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6)); }
+	template<class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6), Common::forward<A7>(a7)); }
+	template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+	static U32String format(const U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8) { return formatInternal(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6), Common::forward<A7>(a7), Common::forward<A8>(a8)); }
+#endif
 
 	/** @overload **/
 	static U32String format(const char *fmt, ...);
@@ -197,10 +223,12 @@ private:
 	friend class String;
 };
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class... TParam>
 inline U32String U32String::format(const U32String &fmt, TParam... param) {
 	return formatInternal(&fmt, Common::forward<TParam>(param)...);
 }
+#endif
 
 /** Concatenate strings @p x and @p y. */
 U32String operator+(const U32String &x, const U32String &y);

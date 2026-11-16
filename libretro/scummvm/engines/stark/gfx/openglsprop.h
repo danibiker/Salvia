@@ -45,7 +45,7 @@ class Driver;
 class OpenGLSPropRenderer : public VisualProp {
 public:
 	explicit OpenGLSPropRenderer(Driver *gfx);
-	~OpenGLSPropRenderer() override;
+	~OpenGLSPropRenderer();
 
 	void render(const Math::Vector3d &position, float direction, const LightEntryArray &lights) override;
 

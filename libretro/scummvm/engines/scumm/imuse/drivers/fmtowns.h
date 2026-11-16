@@ -36,7 +36,7 @@ friend class TownsMidiInputChannel;
 friend class TownsMidiOutputChannel;
 public:
 	IMuseDriver_FMTowns(Audio::Mixer *mixer);
-	~IMuseDriver_FMTowns() override;
+	~IMuseDriver_FMTowns();
 
 	int open() override;
 	bool isOpen() const override { return _isOpen; }

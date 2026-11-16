@@ -31,7 +31,7 @@ namespace Video {
 class ASFDecoder : public VideoDecoder {
 public:
 	ASFDecoder();
-	~ASFDecoder() override;
+	~ASFDecoder();
 	bool loadStream(Common::SeekableReadStream *stream) override;
 	void close() override;
 protected:

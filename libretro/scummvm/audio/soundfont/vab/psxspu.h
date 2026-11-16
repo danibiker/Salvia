@@ -409,7 +409,7 @@ public:
 			uint32 dataLen, uint8 nChannels, uint16 theBPS, uint32 theRate,
 			Common::String name, bool bSetLoopOnConversion = true);
 
-	~PSXSamp() override {}
+	~PSXSamp() {}
 
 	// ratio of space conserved.  should generally be > 1
 	// used to calculate both uncompressed sample size and loopOff after conversion

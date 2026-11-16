@@ -257,7 +257,8 @@ void FlicDecoder::FlicVideoTrack::handleFrame() {
 }
 
 void FlicDecoder::FlicVideoTrack::copyDirtyRectsToBuffer(uint8 *dst, uint pitch) {
-	for (const auto &dirtyRect : _dirtyRects) {
+	for (auto rfIt260 = _dirtyRects.begin(), rfEnd260 = _dirtyRects.end(); rfIt260 != rfEnd260; ++rfIt260) {
+		const auto &dirtyRect = *rfIt260;
 		for (int y = dirtyRect.top; y < dirtyRect.bottom; ++y) {
 			const int x = dirtyRect.left;
 			memcpy(dst + y * pitch + x, (byte *)_surface->getBasePtr(x, y), dirtyRect.right - x);

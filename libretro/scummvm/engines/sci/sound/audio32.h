@@ -174,7 +174,7 @@ enum AudioChannelIndex {
 class Audio32 : public Audio::AudioStream, public Common::Serializable {
 public:
 	Audio32(ResourceManager *resMan);
-	~Audio32() override;
+	~Audio32();
 
 	void saveLoadWithSerializer(Common::Serializer &s) override;
 

@@ -45,7 +45,7 @@ private:
 
 public:
 	CDDAStream(Common::SeekableReadStream *stream, DisposeAfterUse::Flag disposeAfterUse);
-	~CDDAStream() override;
+	~CDDAStream();
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 	bool isStereo() const override { return true; }

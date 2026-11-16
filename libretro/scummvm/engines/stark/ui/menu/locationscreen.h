@@ -46,7 +46,7 @@ class StaticLocationWidget;
 class StaticLocationScreen : public SingleWindowScreen {
 public:
 	StaticLocationScreen(Gfx::Driver *gfx, Cursor *cursor, const char *locationName, Screen::Name screenName);
-	~StaticLocationScreen() override;
+	~StaticLocationScreen();
 
 	// Screen API
 	void open() override;

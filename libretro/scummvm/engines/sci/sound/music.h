@@ -127,7 +127,7 @@ public:
 
 public:
 	MusicEntry();
-	~MusicEntry() override;
+	~MusicEntry();
 
 	void doFade();
 	void onTimer();
@@ -177,7 +177,7 @@ class SciMusic : public Common::Serializable {
 
 public:
 	SciMusic(SciVersion soundVersion, bool useDigitalSFX);
-	~SciMusic() override;
+	~SciMusic();
 
 	void init();
 

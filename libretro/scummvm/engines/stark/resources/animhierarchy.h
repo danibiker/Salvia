@@ -53,7 +53,7 @@ public:
 	static const Type::ResourceType TYPE = Type::kAnimHierarchy;
 
 	AnimHierarchy(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~AnimHierarchy() override;
+	~AnimHierarchy();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;

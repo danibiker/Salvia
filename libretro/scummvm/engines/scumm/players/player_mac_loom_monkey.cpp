@@ -82,10 +82,10 @@ protected:
 	const bool _useInstrTag;
 };
 
-class LoomMacSndLoader final : public MacSndLoader {
+class LoomMacSndLoader : public MacSndLoader {
 public:
 	LoomMacSndLoader() : MacSndLoader(false) {}
-	~LoomMacSndLoader() override {}
+	~LoomMacSndLoader() {}
 
 	bool init() override;
 	bool checkResource(const byte *data, uint32 dataSize) const override;
@@ -103,10 +103,10 @@ private:
 	const Common::SharedPtr<MacSndResource> *fetchInstrument(uint16 id) const;
 };
 
-class MonkeyMacSndLoader final : public MacSndLoader {
+class MonkeyMacSndLoader : public MacSndLoader {
 public:
 	MonkeyMacSndLoader() : MacSndLoader(true), _numInstrumentsMax(17), _blockSfx(false), _transpose(0) {}
-	~MonkeyMacSndLoader() override {}
+	~MonkeyMacSndLoader() {}
 
 	bool init() override;
 	bool checkResource(const byte *data, uint32 dataSize) const override;

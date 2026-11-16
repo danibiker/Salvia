@@ -60,7 +60,7 @@ typedef _PropVertex PropVertex;
 class OpenGLPropRenderer : public VisualProp {
 public:
 	explicit OpenGLPropRenderer(OpenGLDriver *gfx);
-	~OpenGLPropRenderer() override;
+	~OpenGLPropRenderer();
 
 	void render(const Math::Vector3d &position, float direction, const LightEntryArray &lights) override;
 

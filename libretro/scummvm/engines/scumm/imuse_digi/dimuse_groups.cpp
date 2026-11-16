@@ -24,7 +24,7 @@
 
 namespace Scumm {
 
-IMuseDigiGroupsHandler::IMuseDigiGroupsHandler(IMuseDigital *engine, Common::Mutex *mutex) {
+IMuseDigiGroupsHandler::IMuseDigiGroupsHandler(IMuseDigital *engine, Common::Mutex *mutex) : _effVols(), _vols() {
 	_engine = engine;
 	_mutex = mutex;
 }

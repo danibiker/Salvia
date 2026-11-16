@@ -40,7 +40,7 @@ class MacGui {
 	friend class ScummEngine;
 
 private:
-	MacGuiImpl *_impl = nullptr;
+	MacGuiImpl *_impl;
 
 public:
 	MacGui(ScummEngine *vm, const Common::Path &resourceFile);

@@ -38,12 +38,12 @@ class ScrollContainerWidget: public Widget, public CommandSender {
 	ThemeEngine::WidgetBackground _backgroundType;
 	Common::String _dialogName;
 	static const int kDragThreshold = 5;
-	int _mouseDownY = 0;
-	int _mouseDownStartY = 0;
-	bool _isMouseDown = false;
-	bool _isDragging = false;
-	float _scrollPos = 0.0f;
-	FluidScroller *_fluidScroller = nullptr;
+	int _mouseDownY;
+	int _mouseDownStartY;
+	bool _isMouseDown;
+	bool _isDragging;
+	float _scrollPos;
+	FluidScroller *_fluidScroller;
 
 	void recalc();
 	void applyScrollPos();
@@ -51,7 +51,7 @@ class ScrollContainerWidget: public Widget, public CommandSender {
 public:
 	ScrollContainerWidget(GuiObject *boss, int x, int y, int w, int h, uint32 reflowCmd = 0);
 	ScrollContainerWidget(GuiObject *boss, const Common::String &name, const Common::String &dialogName, uint32 reflowCmd = 0);
-	~ScrollContainerWidget() override;
+	~ScrollContainerWidget();
 
 	void init();
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;

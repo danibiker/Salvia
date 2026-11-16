@@ -86,7 +86,7 @@ public:
 
 	void removeWidget(MacWidget *child, bool del = true);
 
-	virtual Graphics::ManagedSurface *getSurface() final { return _composeSurface; }
+	virtual Graphics::ManagedSurface *getSurface() { return _composeSurface; }
 	void setSurface(Graphics::ManagedSurface *srf, DisposeAfterUse::Flag dispose);
 
 protected:

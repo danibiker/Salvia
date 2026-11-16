@@ -521,7 +521,7 @@ public:
 	static CGdiObject *FromHandle(HGDIOBJ h);
 
 public:
-	~CGdiObject() override;
+	~CGdiObject();
 
 	bool Attach(HGDIOBJ hObject);
 	HGDIOBJ Detach();
@@ -557,7 +557,7 @@ public:
 public:
 	CPen() {}
 	CPen(int nPenStyle, int nWidth, COLORREF crColor);
-	~CPen() override {}
+	~CPen() {}
 
 	bool CreatePen(int nPenStyle, int nWidth, COLORREF crColor);
 };
@@ -572,7 +572,7 @@ public:
 		Impl(COLORREF crColor);
 		Impl(int nIndex, COLORREF crColor);
 		Impl(CBitmap *pBitmap);
-		~Impl() override {}
+		~Impl() {}
 
 		byte getColor() const;
 	};
@@ -591,7 +591,7 @@ public:
 	CBrush(CBitmap *pBitmap);
 	CBrush(COLORREF crColor);
 	CBrush(int nIndex, COLORREF crColor);
-	~CBrush() override {
+	~CBrush() {
 	}
 
 	bool CreateSolidBrush(COLORREF crColor);
@@ -606,7 +606,7 @@ public:
 		Gfx::Font *_font;
 	public:
 		Impl(Gfx::Font *font) : _font(font) {}
-		~Impl() override {}
+		~Impl() {}
 		operator Gfx::Font *() const {
 			return _font;
 		}
@@ -622,7 +622,7 @@ public:
 	}
 
 public:
-	~CFont() override {}
+	~CFont() {}
 
 	bool CreateFont(int nHeight, int nWidth, int nEscapement,
 	    int nOrientation, int nWeight, byte bItalic, byte bUnderline,
@@ -636,7 +636,7 @@ class CBitmap : public CGdiObject {
 public:
 	struct Impl : public CGdiObjectImpl,
 		public Gfx::Surface {
-		~Impl() override {}
+		~Impl() {}
 	};
 
 	Impl *bitmap() const {
@@ -649,7 +649,7 @@ public:
 	}
 
 public:
-	~CBitmap() override {
+	~CBitmap() {
 	}
 
 	bool Attach(HBITMAP hObject);
@@ -670,7 +670,7 @@ public:
 			public Graphics::Palette {
 		Impl(const LPLOGPALETTE pal);
 		Impl(const Graphics::Palette &pal);
-		~Impl() override {}
+		~Impl() {}
 	};
 
 	Impl *palette() const {
@@ -683,7 +683,7 @@ public:
 	}
 
 public:
-	~CPalette() override {
+	~CPalette() {
 	}
 
 	bool CreatePalette(LPLOGPALETTE lpLogPalette);
@@ -709,7 +709,7 @@ public:
 	int _polyFillMode = 0;
 
 public:
-	~CRgn() override {
+	~CRgn() {
 	}
 
 	bool CreateRectRgn(int x1, int y1, int x2, int y2);
@@ -733,7 +733,7 @@ protected:
 public:
 	class DefaultBitmap : public CBitmap {
 	public:
-		~DefaultBitmap() override {
+		~DefaultBitmap() {
 		};
 	};
 
@@ -861,7 +861,7 @@ public:
 	static CDC *FromHandle(HDC hDC);
 
 public:
-	~CDC() override;
+	~CDC();
 
 	operator HDC() const {
 		return m_hDC;
@@ -1013,7 +1013,7 @@ protected:
 
 public:
 	explicit CPaintDC(CWnd *pWnd);
-	~CPaintDC() override;
+	~CPaintDC();
 };
 
 class CCmdTarget : public CObject {
@@ -1029,7 +1029,7 @@ protected:
 		unsigned int nSig, AFX_CMDHANDLERINFO *pHandlerInfo);
 
 public:
-	~CCmdTarget() override {
+	~CCmdTarget() {
 	}
 
 	static const AFX_MSGMAP *GetThisMessageMap();
@@ -1072,7 +1072,7 @@ public:
 	CDocTemplate *m_pDocTemplate = nullptr;
 
 public:
-	~CDocument() override {}
+	~CDocument() {}
 
 	void UpdateAllViews(CView *pSender, LPARAM lHint = 0,
 	                    CObject *pHint = nullptr);
@@ -1388,7 +1388,7 @@ public:
 
 public:
 	CWnd();
-	~CWnd() override;
+	~CWnd();
 
 	bool Create(const char *lpszClassName, const char *lpszWindowName,
 	    uint32 dwStyle, const RECT &rect, CWnd *pParentWnd, unsigned int nID,
@@ -1566,7 +1566,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-	~CFrameWnd() override {
+	~CFrameWnd() {
 	}
 
 	bool Create(const char *lpszClassName,
@@ -1638,7 +1638,7 @@ public:
 	                 CWnd *pParentWnd = nullptr);
 	explicit CDialog(unsigned int nIDTemplate,
 	                 CWnd *pParentWnd = nullptr);
-	~CDialog() override {}
+	~CDialog() {}
 	bool Create(const char *lpszTemplateName,
 	            CWnd *pParentWnd = nullptr);
 	bool Create(unsigned int nIDTemplate,
@@ -1682,7 +1682,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-	~CStatic() override {
+	~CStatic() {
 	}
 };
 
@@ -1707,7 +1707,7 @@ protected:
 	LRESULT OnBnSetCheck(WPARAM wParam, LPARAM lParam);
 
 public:
-	~CButton() override {
+	~CButton() {
 	}
 	CVIRTUAL bool Create(const char *lpszCaption, uint32 dwStyle,
 	                     const RECT &rect, CWnd *pParentWnd, unsigned int nID);
@@ -1725,14 +1725,14 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-	~CListBox() override {
+	~CListBox() {
 	}
 };
 
 class CCheckListBox : public CListBox {
 	DECLARE_DYNAMIC(CCheckListBox)
 public:
-	~CCheckListBox() override {
+	~CCheckListBox() {
 	}
 };
 
@@ -1747,7 +1747,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-	~CEdit() override {
+	~CEdit() {
 	}
 	CVIRTUAL bool Create(uint32 dwStyle, const RECT &rect, CWnd *pParentWnd, unsigned int nID);
 	void LimitText(int nChars);
@@ -1785,7 +1785,7 @@ protected:
 	void OnMouseMove(unsigned int, CPoint point);
 
 public:
-	~CScrollBar() override { }
+	~CScrollBar() { }
 	CVIRTUAL bool Create(uint32 dwStyle, const RECT &rect, CWnd *pParentWnd, unsigned int nID);
 
 	int GetScrollPos() const override;
@@ -1811,7 +1811,7 @@ public:
 	CDocument *m_pDocument = nullptr;
 
 public:
-	~CView() override {
+	~CView() {
 	}
 
 	int OnCreate(LPCREATESTRUCT lpcs);
@@ -1841,7 +1841,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-	~CScrollView() override {
+	~CScrollView() {
 	}
 
 	void SetScrollSizes(
@@ -1959,7 +1959,7 @@ template<class T>class CHandleMap;
 class CWinThread : public CCmdTarget {
 	DECLARE_DYNAMIC(CWinThread)
 public:
-	~CWinThread() override {
+	~CWinThread() {
 	}
 };
 
@@ -2000,7 +2000,7 @@ public:
 
 public:
 	CWinApp(const char *appName = nullptr);
-	~CWinApp() override;
+	~CWinApp();
 
 	/**
 	 * Main execution for MFC applications

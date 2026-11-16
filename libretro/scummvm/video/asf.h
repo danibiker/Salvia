@@ -36,21 +36,25 @@ public:
 	enum ReadResult { kObject, kEnd, kError };
 
 	struct Stream {
-		uint8 id = 0;
-		StreamType type = kUnknown;
-		uint64 timeOffset = 0;
-		uint64 frameTime = 0;
-		uint32 aspectNum = 0, aspectDen = 0;
+	Stream() : id(0), type(kUnknown), timeOffset(0), frameTime(0), aspectNum(0), aspectDen(0) {}
+
+		uint8 id;
+		StreamType type;
+		uint64 timeOffset;
+		uint64 frameTime;
+		uint32 aspectNum, aspectDen;
 		Common::Array<byte> typeData;
 		Common::Array<byte> errorData;
 	};
 
 	struct Object {
-		uint8 stream = 0;
-		uint32 sequence = 0;
-		int64 pts = kNoTimestamp, dts = kNoTimestamp;
-		int64 position = -1;
-		bool keyframe = false;
+	Object() : stream(0), sequence(0), pts(kNoTimestamp), dts(kNoTimestamp), position(-1), keyframe(false) {}
+
+		uint8 stream;
+		uint32 sequence;
+		int64 pts, dts;
+		int64 position;
+		bool keyframe;
 		Common::Array<byte> data;
 		Common::Array<uint32> palette;
 	};
@@ -68,8 +72,8 @@ public:
 	bool endOfData() const;
 
 private:
-	ASFDemuxer(const ASFDemuxer &) = delete;
-	ASFDemuxer &operator=(const ASFDemuxer &) = delete;
+	ASFDemuxer(const ASFDemuxer &); // = delete (not implemented)
+	ASFDemuxer &operator=(const ASFDemuxer &); // = delete (not implemented)
 	struct Context;
 	Context *_ctx;
 };

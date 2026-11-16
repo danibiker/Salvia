@@ -28,12 +28,12 @@
 namespace GUI {
 
 ScrollContainerWidget::ScrollContainerWidget(GuiObject *boss, int x, int y, int w, int h, uint32 reflowCmd)
-	: Widget(boss, x, y, w, h), CommandSender(nullptr), _reflowCmd(reflowCmd) {
+	: Widget(boss, x, y, w, h), CommandSender(nullptr), _reflowCmd(reflowCmd), _mouseDownY(0), _mouseDownStartY(0), _isMouseDown(false), _isDragging(false), _scrollPos(0.0f), _fluidScroller(nullptr) {
 	init();
 }
 
 ScrollContainerWidget::ScrollContainerWidget(GuiObject *boss, const Common::String &name, const Common::String &dialogName, uint32 reflowCmd)
-	: Widget(boss, name), CommandSender(nullptr), _reflowCmd(reflowCmd), _dialogName(dialogName) {
+	: Widget(boss, name), CommandSender(nullptr), _reflowCmd(reflowCmd), _dialogName(dialogName), _mouseDownY(0), _mouseDownStartY(0), _isMouseDown(false), _isDragging(false), _scrollPos(0.0f), _fluidScroller(nullptr) {
 	init();
 }
 

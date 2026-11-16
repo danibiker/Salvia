@@ -240,7 +240,8 @@ bool INIFile::saveToSaveFile(const String &filename) {
 }
 
 bool INIFile::saveToStream(WriteStream &stream) {
-	for (auto &curSection : _sections) {
+	for (auto rfIt243 = _sections.begin(), rfEnd243 = _sections.end(); rfIt243 != rfEnd243; ++rfIt243) {
+		auto &curSection = *rfIt243;
 		// Write out the section comment, if any
 		if (!curSection.comment.empty()) {
 			stream.writeString(curSection.comment);
@@ -253,7 +254,8 @@ bool INIFile::saveToStream(WriteStream &stream) {
 		stream.writeByte('\n');
 
 		// Write out the key/value pairs
-		for (auto &kv : curSection.keys) {
+		for (auto rfIt256 = curSection.keys.begin(), rfEnd256 = curSection.keys.end(); rfIt256 != rfEnd256; ++rfIt256) {
+			auto &kv = *rfIt256;
 			// Write out the comment, if any
 			if (!kv.comment.empty()) {
 				stream.writeString(kv.comment);
@@ -431,7 +433,8 @@ const INIFile::SectionKeyList INIFile::getKeys(const String &section) const {
 }
 
 INIFile::Section *INIFile::getSection(const String &section) {
-	for (auto &curSection : _sections) {
+	for (auto rfIt434 = _sections.begin(), rfEnd434 = _sections.end(); rfIt434 != rfEnd434; ++rfIt434) {
+		auto &curSection = *rfIt434;
 		if (section.equalsIgnoreCase(curSection.name)) {
 			return &curSection;
 		}
@@ -440,7 +443,8 @@ INIFile::Section *INIFile::getSection(const String &section) {
 }
 
 const INIFile::Section *INIFile::getSection(const String &section) const {
-	for (const auto &curSection : _sections) {
+	for (auto rfIt443 = _sections.begin(), rfEnd443 = _sections.end(); rfIt443 != rfEnd443; ++rfIt443) {
+		const auto &curSection = *rfIt443;
 		if (section.equalsIgnoreCase(curSection.name)) {
 			return &curSection;
 		}
@@ -453,7 +457,8 @@ bool INIFile::Section::hasKey(const String &key) const {
 }
 
 const INIFile::KeyValue* INIFile::Section::getKey(const String &key) const {
-	for (const auto &curKey : keys) {
+	for (auto rfIt456 = keys.begin(), rfEnd456 = keys.end(); rfIt456 != rfEnd456; ++rfIt456) {
+		const auto &curKey = *rfIt456;
 		if (key.equalsIgnoreCase(curKey.key)) {
 			return &curKey;
 		}
@@ -462,7 +467,8 @@ const INIFile::KeyValue* INIFile::Section::getKey(const String &key) const {
 }
 
 void INIFile::Section::setKey(const String &key, const String &value) {
-	for (auto &curKey : keys) {
+	for (auto rfIt465 = keys.begin(), rfEnd465 = keys.end(); rfIt465 != rfEnd465; ++rfIt465) {
+		auto &curKey = *rfIt465;
 		if (key.equalsIgnoreCase(curKey.key)) {
 			curKey.value = value;
 			return;

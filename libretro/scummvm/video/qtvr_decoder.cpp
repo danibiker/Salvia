@@ -446,9 +446,10 @@ void QuickTimeDecoder::nudge(const Common::String &direction) {
 }
 
 QuickTimeDecoder::NodeData QuickTimeDecoder::getNodeData(uint32 nodeID) {
-	for (const auto &sample : _panoTrack->panoSamples) {
+	for (auto rfIt449 = _panoTrack->panoSamples.begin(), rfEnd449 = _panoTrack->panoSamples.end(); rfIt449 != rfEnd449; ++rfIt449) {
+		const auto &sample = *rfIt449;
 		if (sample.hdr.nodeID == nodeID) {
-			return {
+			NodeData nodeData = {
 				nodeID,
 				sample.hdr.defHPan,
 				sample.hdr.defVPan,
@@ -459,12 +460,13 @@ QuickTimeDecoder::NodeData QuickTimeDecoder::getNodeData(uint32 nodeID) {
 				sample.hdr.maxVPan,
 				sample.hdr.minZoom,
 				sample.strTable.getString(sample.hdr.nameStrOffset)};
+			return nodeData;
 		}
 	}
 
 	error("QuickTimeDecoder::getNodeData(): Node with nodeID %d not found!", nodeID);
 
-	return {};
+	return NodeData();
 }
 
 void QuickTimeDecoder::goToNode(uint32 nodeID) {
@@ -496,7 +498,7 @@ void QuickTimeDecoder::goToNode(uint32 nodeID) {
 // PANO Track
 ////////////////////////
 
-QuickTimeDecoder::PanoTrackHandler::PanoTrackHandler(QuickTimeDecoder *decoder, Common::QuickTimeParser::Track *parent) : _decoder(decoder), _parent(parent) {
+QuickTimeDecoder::PanoTrackHandler::PanoTrackHandler(QuickTimeDecoder *decoder, Common::QuickTimeParser::Track *parent) : _decoder(decoder), _parent(parent), _upscaleLevel(0), _currentFOV(0), _currentHFOV(0), _currentPanAngle(0), _currentTiltAngle(0) {
 	if (decoder->_qtvrType != QTVRType::PANORAMA)
 		error("QuickTimeDecoder::PanoTrackHandler: Incorrect track passed");
 

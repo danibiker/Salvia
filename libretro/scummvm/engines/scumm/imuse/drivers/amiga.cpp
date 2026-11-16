@@ -131,7 +131,7 @@ private:
 class IMusePart_Amiga : public MidiChannel {
 public:
 	IMusePart_Amiga(IMuseDriver_Amiga *driver, int id);
-	~IMusePart_Amiga() override {}
+	~IMusePart_Amiga() {}
 
 	MidiDriver *device() override { return _driver; }
 	byte getNumber() override { return _id; }

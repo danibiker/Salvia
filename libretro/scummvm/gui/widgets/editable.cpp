@@ -36,7 +36,11 @@ EditableWidget::EditableWidget(GuiObject *boss, int x, int y, int w, int h, bool
 }
 
 EditableWidget::EditableWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip, uint32 cmd)
-	: EditableWidget(boss, x, y, w, h, false, tooltip, cmd) {
+	: Widget(boss, x, y, w, h, false, tooltip), CommandSender(boss), _cmd(cmd) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	// WIDGET_HOOK_DRAG: prevent hooking by a container as we need drag for ourselves
+	setFlags(WIDGET_TRACK_MOUSE | WIDGET_HOOK_DRAG);
+	init();
 }
 
 EditableWidget::EditableWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip, uint32 cmd)

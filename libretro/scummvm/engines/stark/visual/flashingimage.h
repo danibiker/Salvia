@@ -53,7 +53,7 @@ public:
 	static const VisualType TYPE = Visual::kFlashingImage;
 
 	explicit VisualFlashingImage(Gfx::Driver *gfx);
-	~VisualFlashingImage() override;
+	~VisualFlashingImage();
 
 	/** Prepare flashing the specified image */
 	void initFromSurface(const Graphics::Surface *surface, uint originalWidth, uint originalHeight);

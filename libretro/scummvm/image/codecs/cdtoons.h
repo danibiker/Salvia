@@ -47,7 +47,7 @@ struct CDToonsBlock {
 class CDToonsDecoder : public Codec {
 public:
 	CDToonsDecoder(uint16 width, uint16 height);
-	~CDToonsDecoder() override;
+	~CDToonsDecoder();
 
 	Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return Graphics::PixelFormat::createFormatCLUT8(); }

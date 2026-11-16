@@ -70,7 +70,7 @@ ScummEngine *MacIndy3Gui::Widget::_vm = nullptr;
 Graphics::Surface *MacIndy3Gui::Widget::_surface = nullptr;
 MacIndy3Gui *MacIndy3Gui::Widget::_gui = nullptr;
 
-MacIndy3Gui::Widget::Widget(int x, int y, int width, int height) : MacGuiObject(Common::Rect(x, y, x + width, y + height), false) {
+MacIndy3Gui::Widget::Widget(int x, int y, int width, int height) : MacGuiObject(Common::Rect(x, y, x + width, y + height), false), _timer(0) {
 }
 
 void MacIndy3Gui::Widget::reset() {
@@ -601,7 +601,7 @@ void MacIndy3Gui::Inventory::draw() {
 // Inventory::Slot is a widget for a single inventory object.
 // ---------------------------------------------------------------------------
 
-MacIndy3Gui::Inventory::Slot::Slot(int slot, int x, int y, int width, int height) : MacIndy3Gui::Widget(x, y, width, height) {
+MacIndy3Gui::Inventory::Slot::Slot(int slot, int x, int y, int width, int height) : MacIndy3Gui::Widget(x, y, width, height), _slot(-1), _obj(-1) {
 	_slot = slot;
 }
 
@@ -706,7 +706,7 @@ void MacIndy3Gui::Inventory::Slot::draw() {
 // more objects than are visible on screen.
 // ---------------------------------------------------------------------------
 
-MacIndy3Gui::Inventory::ScrollBar::ScrollBar(int x, int y, int width, int height) : MacIndy3Gui::Widget(x, y, width, height) {
+MacIndy3Gui::Inventory::ScrollBar::ScrollBar(int x, int y, int width, int height) : MacIndy3Gui::Widget(x, y, width, height), _invCount(0), _invOffset(0) {
 }
 
 bool MacIndy3Gui::Inventory::ScrollBar::handleEvent(Common::Event &event) {
@@ -891,7 +891,7 @@ void MacIndy3Gui::Inventory::ScrollButton::draw() {
 // ---------------------------------------------------------------------------
 
 MacIndy3Gui::MacIndy3Gui(ScummEngine *vm, const Common::Path &resourceFile) :
-	MacGuiImpl(vm, resourceFile), _visible(false) {
+	MacGuiImpl(vm, resourceFile), _visible(false), _verbGuiTop(0), _leftButtonIsPressed(false), _timer(0) {
 
 	Common::Rect verbGuiArea(640, 112);
 	verbGuiArea.translate(0, 288 + _vm->_macScreenDrawOffset * 2);
@@ -936,16 +936,16 @@ MacIndy3Gui::MacIndy3Gui(ScummEngine *vm, const Common::Path &resourceFile) :
 	_widgets[124] = new Button( 67, 64, 151, 18); // Converse 5
 	_widgets[125] = new Button(423, 64, 151, 18); // Converse 6
 
-	for (auto &it: _widgets)
-		it._value->setVerbid(it._key);
+	for (auto rfIt939 = _widgets.begin(), rfEnd939 = _widgets.end(); rfIt939 != rfEnd939; ++rfIt939)
+		{ auto &it = *rfIt939; it._value->setVerbid(it._key); }
 
 	_dirtyRects.clear();
 	_textArea.create(448, 47, Graphics::PixelFormat::createFormatCLUT8());
 }
 
 MacIndy3Gui::~MacIndy3Gui() {
-	for (auto &it: _widgets)
-		delete it._value;
+	for (auto rfIt947 = _widgets.begin(), rfEnd947 = _widgets.end(); rfIt947 != rfEnd947; ++rfIt947)
+		{ auto &it = *rfIt947; delete it._value; }
 	_textArea.free();
 }
 
@@ -1729,8 +1729,8 @@ bool MacIndy3Gui::isVerbGuiActive() const {
 void MacIndy3Gui::reset() {
 	_visible = false;
 
-	for (auto &it: _widgets)
-		it._value->reset();
+	for (auto rfIt1732 = _widgets.begin(), rfEnd1732 = _widgets.end(); rfIt1732 != rfEnd1732; ++rfIt1732)
+		{ auto &it = *rfIt1732; it._value->reset(); }
 }
 
 void MacIndy3Gui::resetAfterLoad() {
@@ -1772,7 +1772,8 @@ bool MacIndy3Gui::updateVerbs(int delta) {
 	// Tentatively mark the verb widgets for removal. Any widget that wants
 	// to stay has to say so.
 
-	for (auto &it: _widgets) {
+	for (auto rfIt1775 = _widgets.begin(), rfEnd1775 = _widgets.end(); rfIt1775 != rfEnd1775; ++rfIt1775) {
+		auto &it = *rfIt1775;
 		VerbWidget *w = it._value;
 
 		if (delta > 0)
@@ -1816,7 +1817,8 @@ void MacIndy3Gui::updateMouseHeldTimer(int delta) {
 
 			_timer = REPEAT_TIMER_JIFFIES;
 
-			for (auto &it: _widgets) {
+			for (auto rfIt1819 = _widgets.begin(), rfEnd1819 = _widgets.end(); rfIt1819 != rfEnd1819; ++rfIt1819) {
+				auto &it = *rfIt1819;
 				if (it._value->handleMouseHeld(_leftButtonPressed, _leftButtonHeld))
 					break;
 			}
@@ -1827,7 +1829,8 @@ void MacIndy3Gui::updateMouseHeldTimer(int delta) {
 void MacIndy3Gui::drawVerbs() {
 	// The possible verbs overlap each other. Remove the dead ones first, then draw the live ones.
 
-	for (auto &it: _widgets) {
+	for (auto rfIt1830 = _widgets.begin(), rfEnd1830 = _widgets.end(); rfIt1830 != rfEnd1830; ++rfIt1830) {
+		auto &it = *rfIt1830;
 		VerbWidget *w = it._value;
 
 		if (w->isDying() && w->isVisible()) {
@@ -1836,7 +1839,8 @@ void MacIndy3Gui::drawVerbs() {
 		}
 	}
 
-	for (auto &it: _widgets) {
+	for (auto rfIt1839 = _widgets.begin(), rfEnd1839 = _widgets.end(); rfIt1839 != rfEnd1839; ++rfIt1839) {
+		auto &it = *rfIt1839;
 		VerbWidget *w = it._value;
 
 		if (w->hasVerb())
@@ -1889,7 +1893,8 @@ bool MacIndy3Gui::handleEvent(Common::Event event) {
 	// responds to an event, and marks itself as wanting to be redrawn,
 	// we do that redrawing immediately, not on the next update.
 
-	for (auto &it: _widgets) {
+	for (auto rfIt1892 = _widgets.begin(), rfEnd1892 = _widgets.end(); rfIt1892 != rfEnd1892; ++rfIt1892) {
+		auto &it = *rfIt1892;
 		Widget *w = it._value;
 
 		if (w->handleEvent(event)) {

@@ -54,7 +54,7 @@ namespace Scumm {
 // it is worth.
 // ===========================================================================
 
-MacV6Gui::MacV6Gui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile) {
+MacV6Gui::MacV6Gui(ScummEngine *vm, const Common::Path &resourceFile) : MacGuiImpl(vm, resourceFile), _screenSaveLevel(0), _skipScene(false), _oldMusicVolume(-1), _oldSfxVolume(-1) {
 	_backupScreen = nullptr;
 	_backupPalette = nullptr;
 

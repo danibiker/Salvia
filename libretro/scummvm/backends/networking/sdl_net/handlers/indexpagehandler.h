@@ -31,7 +31,7 @@ class LocalWebserver;
 class IndexPageHandler: public BaseHandler, public GUI::CommandSender {
 public:
 	IndexPageHandler();
-	~IndexPageHandler() override;
+	~IndexPageHandler();
 
 	void handle(Client &client) override;
 	bool minimalModeSupported() override;

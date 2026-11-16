@@ -200,7 +200,8 @@ void dumpAllDialogs(const Common::String &message) {
 		g_system->endGFXTransaction();
 
 		// Iterate through all langauges
-		for (Common::String &lang : list) {
+		for (auto rfIt203 = list.begin(), rfEnd203 = list.end(); rfIt203 != rfEnd203; ++rfIt203) {
+Common::String &lang = *rfIt203;
 
 			dumpDialogs(message, lang);
 		}

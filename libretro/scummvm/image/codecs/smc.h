@@ -41,7 +41,7 @@ enum {
 class SMCDecoder : public Codec {
 public:
 	SMCDecoder(uint16 width, uint16 height);
-	~SMCDecoder() override;
+	~SMCDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return Graphics::PixelFormat::createFormatCLUT8(); }

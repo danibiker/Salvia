@@ -44,7 +44,7 @@ class GetClientHandler: public ClientHandler {
 
 public:
 	GetClientHandler(Common::SeekableReadStream *stream);
-	~GetClientHandler() override;
+	~GetClientHandler();
 
 	void handle(Client *client) override;
 	void setHeader(const Common::String &name, const Common::String &value);

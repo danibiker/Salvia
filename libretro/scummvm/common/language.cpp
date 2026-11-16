@@ -188,7 +188,8 @@ const String getGameGUIOptionsDescriptionLanguage(Language lang) {
 const String getGameGUIOptionsDescriptionLanguages(const List<Language> &languages) {
 	Common::String result;
 
-	for (const Language &lang : languages) {
+	for (auto rfIt191 = languages.begin(), rfEnd191 = languages.end(); rfIt191 != rfEnd191; ++rfIt191) {
+		const Language &lang = *rfIt191;
 		if (lang != UNK_LANG)
 			result = result + getGameGUIOptionsDescriptionLanguage(lang) + " ";
 	}

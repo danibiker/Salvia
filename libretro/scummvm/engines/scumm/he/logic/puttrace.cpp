@@ -34,7 +34,7 @@ private:
 	double *_userDataD;
 public:
 	LogicHErace(ScummEngine_v90he *vm);
-	~LogicHErace() override;
+	~LogicHErace();
 
 	int versionID() override;
 	int32 dispatch(int op, int numArgs, int32 *args) override;

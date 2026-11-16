@@ -108,7 +108,7 @@ protected:
 	int _width, _height;
 
 	// actor _palette
-	uint16 _palette[256] = {};
+	uint16 _palette[256];
 
 public:
 	struct ByleRLEData {
@@ -131,7 +131,7 @@ public:
 #endif
 	};
 
-    BaseCostumeRenderer(ScummEngine *scumm, bool akosRendering = false) {
+    BaseCostumeRenderer(ScummEngine *scumm, bool akosRendering = false) : _palette() {
 		_actorID = 0;
 		_shadowMode = 0;
 		_shadowTable = nullptr;

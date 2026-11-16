@@ -82,7 +82,12 @@ public:
 	 *
 	 *  @param freqs     Frequencies,
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	static Huffman fromFrequencies(std::initializer_list<uint32> freqs);
+#endif
+
+	/** Same as above, taking the frequencies from a plain array (@p count values). */
+	static Huffman fromFrequencyList(const uint32 *init, uint count);
 
 	/** Return the next symbol in the bit stream. */
 	uint32 getSymbol(BITSTREAM &bits) const;
@@ -114,11 +119,12 @@ private:
 };
 
 template<class BITSTREAM>
-Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(std::initializer_list<uint32> init) {
+Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencyList(const uint32 *init, uint count) {
 	Common::Array<uint32> freqs;
 	Common::Array<uint32> symbols;
 	uint32 sym = 0;
-	for (auto freq : init) {
+	for (uint i = 0; i < count; i++) {
+		uint32 freq = init[i];
 		if (freq != 0) {
 			freqs.push_back(freq);
 			symbols.push_back(sym);
@@ -127,6 +133,13 @@ Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(std::initializer_list<uin
 	}
 	return fromFrequencies(freqs.size(), freqs.data(), symbols.data());
 }
+
+#ifndef SCUMMVM_CXX03_COMPAT
+template<class BITSTREAM>
+Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(std::initializer_list<uint32> init) {
+	return fromFrequencyList(init.begin(), init.size());
+}
+#endif
 
 template<class BITSTREAM>
 Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(uint32 freqCount, const uint32 *freq, const uint32 *symbols) {
@@ -137,15 +150,17 @@ Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(uint32 freqCount, const u
 	Common::Array<uint32> codes(freqCount, 0);
 	Common::Array<uint8> lengths(freqCount, 0);
 
-	static constexpr uint32 End = ~uint32(0);
+	static const uint32 End = ~uint32(0);
 	struct Symbol {
 		uint32 zero, one;
 		uint32 freq;
 	};
 
 	Common::Array<Symbol> syms;
-	for (uint32_t i = 0; i != freqCount; ++i)
-		syms.push_back(Symbol{End, End, freq[i]});
+	for (uint32_t i = 0; i != freqCount; ++i) {
+		Symbol sym = {End, End, freq[i]};
+		syms.push_back(sym);
+	}
 
 	auto appendBit = [&](uint32 top, bool bit) {
 		Common::Queue<uint32> queue;
@@ -190,12 +205,13 @@ Huffman<BITSTREAM> Huffman<BITSTREAM>::fromFrequencies(uint32 freqCount, const u
 		auto sum = zero.freq + one.freq;
 		zero.freq = 0;
 		one.freq = 0;
-		syms.push_back(Symbol{smallest1, smallest2, sum});
+		Symbol newSym = {smallest1, smallest2, sum};
+		syms.push_back(newSym);
 		appendBit(smallest1, false);
 		appendBit(smallest2, true);
 	}
 
-	return Huffman<BITSTREAM>{0, freqCount, codes.data(), lengths.data(), symbols};
+	return Huffman<BITSTREAM>(0, freqCount, codes.data(), lengths.data(), symbols);
 }
 
 template<class BITSTREAM>

@@ -90,26 +90,34 @@ static const byte LengthCounts[32] = {
 };
 
 class SoundGen {
+public:
+	SoundGen() : wavehold(0), freq(0), CurD(1), Timer(0), Pos(0), Cycles(1) {}
+private:
+
 protected:
-	byte wavehold = 0;
-	uint32 freq = 0;	// short
-	uint32 CurD = 1;
+	byte wavehold;
+	uint32 freq;	// short
+	uint32 CurD;
 
 public:
-	byte Timer = 0;
-	int32 Pos = 0;
-	uint32 Cycles = 1;	// short
+	byte Timer;
+	int32 Pos;
+	uint32 Cycles;	// short
 
 	inline byte GetTimer() const { return Timer; }
 };
 
 class Square : public SoundGen {
+public:
+	Square() : volume(0), envelope(0), duty(0), swpspeed(0), swpdir(0), swpstep(0), swpenab(0), Vol(0), EnvCtr(1), Envelope(0), BendCtr(1), Enabled(0), ValidFreq(0), Active(0), EnvClk(0), SwpClk(0) {}
+private:
+
 protected:
-	byte volume = 0, envelope = 0, duty = 0, swpspeed = 0, swpdir = 0, swpstep = 0, swpenab = 0;
-	byte Vol = 0;
-	byte EnvCtr = 1, Envelope = 0, BendCtr = 1;
-	bool Enabled = 0, ValidFreq = 0, Active = 0;
-	bool EnvClk = 0, SwpClk = 0;
+	byte volume, envelope, duty, swpspeed, swpdir, swpstep, swpenab;
+	byte Vol;
+	byte EnvCtr, Envelope, BendCtr;
+	bool Enabled, ValidFreq, Active;
+	bool EnvClk, SwpClk;
 
 	void CheckActive();
 
@@ -234,11 +242,15 @@ void Square::HalfFrame() {
 
 
 class Triangle : public SoundGen {
+public:
+	Triangle() : linear(0), LinCtr(0), Enabled(false), Active(false), LinClk(false) {}
+private:
+
 protected:
-	byte linear = 0;
-	byte LinCtr = 0;
-	bool Enabled = false, Active = false;
-	bool LinClk = false;
+	byte linear;
+	byte LinCtr;
+	bool Enabled, Active;
+	bool LinClk;
 
 	void CheckActive();
 
@@ -338,12 +350,16 @@ void Triangle::HalfFrame() {
 }
 
 class Noise : public SoundGen {
+public:
+	Noise() : volume(0), envelope(0), datatype(0), Vol(0), EnvCtr(1), Envelope(0), Enabled(false), EnvClk(false) {}
+private:
+
 protected:
-	byte volume = 0, envelope = 0, datatype = 0;
-	byte Vol = 0;
-	byte EnvCtr = 1, Envelope = 0;
-	bool Enabled = false;
-	bool EnvClk = false;
+	byte volume, envelope, datatype;
+	byte Vol;
+	byte EnvCtr, Envelope;
+	bool Enabled;
+	bool EnvClk;
 
 public:
 	void Reset();

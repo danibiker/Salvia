@@ -302,7 +302,7 @@ protected:
 };
 
 
-class SID final : public ::SID::SID, public Audio::EmulatedChip {
+class SID : public ::SID::SID, public Audio::EmulatedChip {
 public:
 	SID(::SID::Config::SidType videoSystem);
 	~SID();

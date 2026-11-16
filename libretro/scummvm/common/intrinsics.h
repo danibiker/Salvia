@@ -25,7 +25,8 @@
 #define COMMON_INTRINSICS_H
 
 #include "common/scummsys.h"
-#ifdef _MSC_VER
+// Xbox 360 (PowerPC) has no intrin.h nor _BitScanReverse: use the generic code.
+#if defined(_MSC_VER) && !defined(_XBOX)
 // HACK:
 // intrin.h on MSVC includes setjmp.h, which will fail compiling due to our
 // forbidden symbol colde. Since we also can not assure that defining
@@ -66,7 +67,7 @@ inline int intLog2(uint32 v) {
 		// limits.h
 		return (sizeof(unsigned int) * 8 - 1) - __builtin_clz(v);
 }
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) && !defined(_XBOX)
 inline int intLog2(uint32 v) {
 	unsigned long result = 0;
 	unsigned char nonZero = _BitScanReverse(&result, v);

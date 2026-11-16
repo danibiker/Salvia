@@ -25,8 +25,11 @@
 
 // The initialization of the static const integral data members is done in the class definition,
 // but we still need to provide a definition if they are odr-used (e.g. GCC 4.7 wants this).
+// MSVC 2010 emits in-class initialized static const members itself (LNK2005 otherwise)
+#if !defined(_MSC_VER) || _MSC_VER >= 1900
 const uint8 MidiDriver_ADLIB_Multisource::OPL2_NUM_CHANNELS;
 const uint8 MidiDriver_ADLIB_Multisource::OPL3_NUM_CHANNELS;
+#endif
 
 bool OplInstrumentOperatorDefinition::isEmpty() const {
 	return freqMultMisc == 0 && level == 0 && decayAttack == 0 &&

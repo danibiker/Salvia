@@ -254,7 +254,7 @@ MPEGPSDecoder::PrivateStreamType MPEGPSDecoder::detectPrivateStreamType(Common::
 
 #define AUDIO_THRESHOLD     100
 
-MPEGPSDecoder::MPEGPSDemuxer::MPEGPSDemuxer() {
+MPEGPSDecoder::MPEGPSDemuxer::MPEGPSDemuxer() : _firstAudioPacketPts(0xFFFFFFFF), _firstVideoPacketPts(0xFFFFFFFF), _prebufferedPackets(150) {
 	_stream = 0;
 }
 

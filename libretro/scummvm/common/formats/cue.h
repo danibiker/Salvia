@@ -68,20 +68,24 @@ public:
 	};
 
 	struct CueFile {
+	CueFile() : type(kFileTypeBinary) {}
+
 		String name;
-		FileType type = kFileTypeBinary;
+		FileType type;
 	};
 
 	struct CueTrack {
-		int number = 0;
+	CueTrack() : number(0), pregap(0), size(2352) {}
+
+		int number;
 		CueFile file;
 		TrackType type;
 		String title;
 		String performer;
 		Array<int> indices;
-		int pregap = 0;
+		int pregap;
 		uint32 flags;
-		int size = 2352;
+		int size;
 	};
 
 	struct CueMetadata {
@@ -110,10 +114,10 @@ private:
 	void parseTracksContext(const char *line);
 
 private:
-	int _lineNum = 0;
+	int _lineNum;
 	int _context;
-	int _currentFile = -1;
-	int _currentTrack = -1;
+	int _currentFile;
+	int _currentTrack;
 
 	Array<CueFile> _files;
 	Array<CueTrack> _tracks;

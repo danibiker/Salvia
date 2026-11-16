@@ -53,8 +53,8 @@ public:
 	void redrawV2Inventory();
 
 protected:
-	byte _hiLiteColorVerbArrow = 0x0E;
-	byte _hiLiteColorInvSentence = 0x0E;
+	byte _hiLiteColorVerbArrow;
+	byte _hiLiteColorInvSentence;
 
 protected:
 	void setupOpcodes() override;

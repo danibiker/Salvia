@@ -142,7 +142,7 @@ bool QuickTimeParser::parsePanoramaAtoms() {
 	Array<uint32> sizes;
 
 	if (_panoTrack->sampleSize) {
-		sizes = { _panoTrack->sampleSize };
+		sizes = Array<uint32>(1, _panoTrack->sampleSize);
 	} else {
 		sizes.resize(_panoTrack->sampleCount);
 		for (uint32 i = 0; i < _panoTrack->sampleCount; i++)
@@ -1268,11 +1268,13 @@ void QuickTimeParser::flattenEditLists() {
 	// 4375) has a brief silent edit followed by the actual audio track.  If we
 	// collapse the audio track into the silent edit, then it causes the entire track
 	// to be silent.
-	for (Track *track : _tracks) {
+	for (auto rfIt1271 = _tracks.begin(), rfEnd1271 = _tracks.end(); rfIt1271 != rfEnd1271; ++rfIt1271) {
+		Track *track = *rfIt1271;
 		if (track->editList.size() >= 2) {
 			Common::Array<EditListEntry> newEdits;
 
-			for (const EditListEntry &curEdit : track->editList) {
+			for (auto rfIt1275 = track->editList.begin(), rfEnd1275 = track->editList.end(); rfIt1275 != rfEnd1275; ++rfIt1275) {
+				const EditListEntry &curEdit = *rfIt1275;
 				if (newEdits.size() == 0) {
 					newEdits.push_back(curEdit);
 					continue;

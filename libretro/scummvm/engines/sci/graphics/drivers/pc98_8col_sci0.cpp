@@ -26,10 +26,10 @@
 
 namespace Sci {
 
-class SCI0_PC98Gfx8ColorsDriver final : public UpscaledGfxDriver {
+class SCI0_PC98Gfx8ColorsDriver : public UpscaledGfxDriver {
 public:
 	SCI0_PC98Gfx8ColorsDriver(bool cursorScaleHeight, bool useTextModeForSJISChars, bool rgbRendering);
-	~SCI0_PC98Gfx8ColorsDriver() override;
+	~SCI0_PC98Gfx8ColorsDriver();
 	bool initScreen(const Graphics::PixelFormat *format) override;
 	void setPalette(const byte*, uint, uint, bool, const PaletteMod*, const byte*) override {}
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;

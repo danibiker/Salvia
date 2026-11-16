@@ -56,7 +56,7 @@ public:
 	/**
 	 * Deallocate all memory associated with the segment manager.
 	 */
-	~SegManager() override;
+	~SegManager();
 
 	void resetSegMan();
 

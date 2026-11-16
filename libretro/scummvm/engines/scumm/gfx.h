@@ -476,7 +476,7 @@ protected:
 
 public:
 	GdiPCEngine(ScummEngine *vm);
-	~GdiPCEngine() override;
+	~GdiPCEngine();
 
 	void loadTiles(byte *roomptr) override;
 	void roomChanged(byte *roomptr) override;
@@ -492,7 +492,7 @@ protected:
 		byte maskMap[4096], maskChar[4096];
 	} _V1;
 
-	const byte *_colorMap = 0;
+	const byte *_colorMap;
 
 protected:
 	void decodeV1Gfx(const byte *src, byte *dst, int size) const;
@@ -544,7 +544,7 @@ protected:
 
 public:
 	GdiV2(ScummEngine *vm);
-	~GdiV2() override;
+	~GdiV2();
 
 	void roomChanged(byte *roomptr) override;
 };
@@ -594,21 +594,23 @@ public:
 
 private:
 	struct TownsScreenLayer {
-		uint8 *pixels = nullptr;
-		uint8 *palette = nullptr;
-		int pitch = 0;
-		int width = 0;
-		int height = 0;
-		int bpp = 0;
-		int numCol = 0;
-		uint16 hScroll = 0;
-		uint8 scaleW = 0;
-		uint8 scaleH = 0;
-		int scrollRemainder = 0;
-		bool onBottom = false;
-		bool enabled = false;
-		bool ready = false;
-		uint16 *bltTmpPal= nullptr;
+	TownsScreenLayer() : pixels(nullptr), palette(nullptr), pitch(0), width(0), height(0), bpp(0), numCol(0), hScroll(0), scaleW(0), scaleH(0), scrollRemainder(0), onBottom(false), enabled(false), ready(false), bltTmpPal(nullptr) {}
+
+		uint8 *pixels;
+		uint8 *palette;
+		int pitch;
+		int width;
+		int height;
+		int bpp;
+		int numCol;
+		uint16 hScroll;
+		uint8 scaleW;
+		uint8 scaleH;
+		int scrollRemainder;
+		bool onBottom;
+		bool enabled;
+		bool ready;
+		uint16 *bltTmpPal;
 	} _layers[2];
 
 	template<typename dstPixelType, typename srcPixelType, int scaleW, int scaleH, bool col4bit> void transferRect(uint8 *dst, int pitch, TownsScreenLayer *l, int x, int y, int w, int h);

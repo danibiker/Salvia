@@ -279,7 +279,7 @@ uint NormalScaler::decreaseFactor() {
 }
 
 
-class NormalPlugin final : public ScalerPluginObject {
+class NormalPlugin : public ScalerPluginObject {
 public:
 	NormalPlugin();
 

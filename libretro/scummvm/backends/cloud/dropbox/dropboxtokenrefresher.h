@@ -39,7 +39,7 @@ class DropboxTokenRefresher: public Networking::HttpJsonRequest {
 	void finishError(const Networking::ErrorResponse &error, Networking::RequestState state = Networking::FINISHED) override;
 public:
 	DropboxTokenRefresher(DropboxStorage *parent, Networking::JsonCallback callback, Networking::ErrorCallback ecb, const char *url);
-	~DropboxTokenRefresher() override;
+	~DropboxTokenRefresher();
 };
 
 } // End of namespace Dropbox

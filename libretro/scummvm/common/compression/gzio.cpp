@@ -216,7 +216,7 @@ static const ush mask_bits[] =
 class GzioReadStream : public Common::SeekableReadStream
 {
 public:
-	enum class Mode { ZLIB, CLICKTEAM } _mode;
+	enum Mode { ZLIB, CLICKTEAM } _mode;
 
 	GzioReadStream(Common::SeekableReadStream *parent, DisposeAfterUse::Flag disposeParent, uint64 uncompressedSize, Mode mode, const byte *dict = nullptr, uint32 dict_size = 0) :
 		_dataOffset(parent->pos()), _blockType(0), _blockLen(0),
@@ -231,7 +231,7 @@ public:
 			memcpy(_slide + sizeof(_slide) - dict_size, dict, dict_size);
 		}
 	}
-	~GzioReadStream() override;
+	~GzioReadStream();
 
 	uint32 read(void *dataPtr, uint32 dataSize) override;
 

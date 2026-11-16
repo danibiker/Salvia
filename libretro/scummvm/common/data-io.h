@@ -26,7 +26,7 @@
 
 namespace Common {
 
-enum class EndianStorageFormat {
+enum EndianStorageFormat {
 	Big,
 	Little,
 };
@@ -163,11 +163,17 @@ template<class TDataFormat>
 struct DataIO<TDataFormat, double> : public SimpleDataIO<TDataFormat, double> {
 };
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class TDataFormat, class T, class... TMore>
 struct DataMultipleIO;
 
 template<class TDataFormat, class T>
 struct DataMultipleIO<TDataFormat, T> {
+#else
+// MSVC 2010: no variadic templates, only single values (and arrays) are supported
+template<class TDataFormat, class T>
+struct DataMultipleIO {
+#endif
 	static const uint kMaxSize = DataIO<TDataFormat, T>::kMaxSize;
 
 	static uint computeSize(TDataFormat dataFormat);
@@ -220,6 +226,7 @@ void DataMultipleIO<TDataFormat, T[TSize]>::decode(TDataFormat dataFormat, const
 		DataMultipleIO<TDataFormat, T>::decode(dataFormat, data + elementSize * i, value[i]);
 }
 
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class TDataFormat, class T, class... TMore>
 struct DataMultipleIO {
 	static const uint kMaxSize = DataIO<TDataFormat, T>::kMaxSize + DataMultipleIO<TDataFormat, TMore...>::kMaxSize;
@@ -246,6 +253,7 @@ void DataMultipleIO<TDataFormat, T, TMore...>::decode(TDataFormat dataFormat, co
 	DataMultipleIO<TDataFormat, T>::decode(dataFormat, data, firstValue);
 	DataMultipleIO<TDataFormat, TMore...>::decode(dataFormat, data + DataMultipleIO<TDataFormat, T>::computeSize(dataFormat), moreValues...);
 }
+#endif
 
 } // End of namespace Common
 

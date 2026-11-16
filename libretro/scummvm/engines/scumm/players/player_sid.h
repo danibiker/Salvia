@@ -46,7 +46,7 @@ class ScummEngine;
 class Player_SID : public MusicEngine {
 public:
 	Player_SID(ScummEngine *scumm);
-	~Player_SID() override;
+	~Player_SID();
 
 	void setMusicVolume(int vol) override { _maxvol = vol; }
 	void startSound(int sound) override;

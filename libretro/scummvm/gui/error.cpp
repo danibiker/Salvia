@@ -20,12 +20,17 @@
  */
 
 #include "common/error.h"
+#include "common/system.h"
 #include "gui/message.h"
 #include "gui/error.h"
 
 namespace GUI {
 
 void displayErrorDialog(const Common::U32String &text) {
+#ifdef __LIBRETRO__
+	// The libretro frontend may not show ScummVM's GUI: tell it as well.
+	g_system->messageBox(LogMessageType::kError, text.encode().c_str());
+#endif
 	GUI::MessageDialog alert(text);
 	alert.runModal();
 }
@@ -34,6 +39,10 @@ void displayErrorDialog(const Common::Error &error, const Common::U32String &ext
 	Common::U32String errorText(extraText);
 	errorText += Common::U32String(" ");
 	errorText += error.getTranslatedDesc();
+#ifdef __LIBRETRO__
+	// The libretro frontend may not show ScummVM's GUI: tell it as well.
+	g_system->messageBox(LogMessageType::kError, errorText.encode().c_str());
+#endif
 	GUI::MessageDialog alert(errorText);
 	alert.runModal();
 }

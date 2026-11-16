@@ -187,7 +187,7 @@ public:
 	void drawPoint(int x, int y, uint32 color, void *data) override;
 };
 
-MacWindowManager::MacWindowManager(uint32 mode, MacPatterns *patterns, Common::Language language, const Graphics::PixelFormat &pixelformat) {
+MacWindowManager::MacWindowManager(uint32 mode, MacPatterns *patterns, Common::Language language, const Graphics::PixelFormat &pixelformat) : _tempType(kMacCursorArrow), _cursor(nullptr) {
 	_screen = nullptr;
 	_screenCopy = nullptr;
 	_desktopBmp = nullptr;
@@ -989,7 +989,7 @@ void MacWindowManager::drawDesktop() {
 	} else {
 		Common::Rect r(_desktop->getBounds());
 
-		MacPlotData pd(_desktop, nullptr, &_patterns, kPatternCheckers, 0, 0, {1, 1}, _colorWhite);
+		MacPlotData pd(_desktop, nullptr, &_patterns, kPatternCheckers, 0, 0, Common::Point(1, 1), _colorWhite);
 
 		getDrawPrimitives().drawRoundRect(r, kDesktopArc, _colorBlack, true, &pd);
 	}
@@ -1043,7 +1043,8 @@ void MacWindowManager::draw() {
 
 		bool forceRedraw = _fullRefresh;
 		if (!forceRedraw && dirtyRects.size()) {
-			for (auto &dirty : dirtyRects) {
+			for (auto rfIt1046 = dirtyRects.begin(), rfEnd1046 = dirtyRects.end(); rfIt1046 != rfEnd1046; ++rfIt1046) {
+				auto &dirty = *rfIt1046;
 				if (clip.intersects(dirty)) {
 					forceRedraw = true;
 					break;
@@ -1107,7 +1108,8 @@ void MacWindowManager::draw() {
 		else {
 			// add intersection check with menu
 			bool menuRedraw = false;
-			for (auto &dirty : dirtyRects) {
+			for (auto rfIt1110 = dirtyRects.begin(), rfEnd1110 = dirtyRects.end(); rfIt1110 != rfEnd1110; ++rfIt1110) {
+				auto &dirty = *rfIt1110;
 				if (_menu->checkIntersects(dirty)) {
 					menuRedraw = true;
 					break;
@@ -1286,7 +1288,7 @@ void MacWindowManager::renderZoomBox(bool redraw) {
 	ZoomBox *box = _zoomBoxes.front();
 	uint32 t = g_system->getMillis();
 
-	MacPlotData pd(_screen, nullptr, &getPatterns(), Graphics::kPatternCheckers, 0, 0, {1, 1}, 0, true);
+	MacPlotData pd(_screen, nullptr, &getPatterns(), Graphics::kPatternCheckers, 0, 0, Common::Point(1, 1), 0, true);
 
 	// Undraw the previous boxes
 	if (box->last.size() != 0) {

@@ -74,7 +74,8 @@ PrintingDialog::PrintingDialog(const Graphics::ManagedSurface &surface, bool def
 
 	uint32 defaultPrinterId = 0;
 	uint32 tag = 0;
-	for (auto &name : printerNames) {
+	for (auto rfIt77 = printerNames.begin(), rfEnd77 = printerNames.end(); rfIt77 != rfEnd77; ++rfIt77) {
+		auto &name = *rfIt77;
 		_printersListPopUp->appendEntry(name, tag);
 		_tagToPrinterName[tag] = name;
 		if (name == defaultPrinterName)

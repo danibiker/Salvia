@@ -49,7 +49,7 @@ class DownloadRequest: public Networking::Request {
 
 public:
 	DownloadRequest(Storage *storage, Storage::BoolCallback callback, Networking::ErrorCallback ecb, const Common::String &remoteFileId, Common::DumpFile *dumpFile);
-	~DownloadRequest() override;
+	~DownloadRequest();
 
 	void handle() override;
 	void restart() override;

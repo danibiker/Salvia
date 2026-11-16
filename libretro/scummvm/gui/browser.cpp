@@ -211,7 +211,8 @@ void BrowserDialog::updateListing() {
 	// Populate the ListWidget
 	Common::U32StringArray list;
 	Common::U32String color = ListWidget::getThemeColor(ThemeEngine::kFontColorNormal);
-	for (auto &node : _nodeContent) {
+	for (auto rfIt214 = _nodeContent.begin(), rfEnd214 = _nodeContent.end(); rfIt214 != rfEnd214; ++rfIt214) {
+		auto &node = *rfIt214;
 		if (_isDirBrowser) {
 			if (node.isDirectory())
 				color = ListWidget::getThemeColor(ThemeEngine::kFontColorNormal);

@@ -60,7 +60,7 @@ class UploadFileClientHandler: public ClientHandler {
 
 public:
 	UploadFileClientHandler(const Common::Path &parentDirectoryPath);
-	~UploadFileClientHandler() override;
+	~UploadFileClientHandler();
 
 	void handle(Client *client) override;
 };

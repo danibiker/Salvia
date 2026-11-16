@@ -61,7 +61,7 @@ private:
 #endif
 
 	Common::Path _fname;
-	const Graphics::Font *_font = nullptr;
+	const Graphics::Font *_font;
 
 	bool loadFile(const Common::Path &fname);
 	void reflowLayout() override;

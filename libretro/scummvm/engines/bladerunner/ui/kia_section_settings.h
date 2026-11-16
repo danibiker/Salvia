@@ -73,7 +73,7 @@ class KIASectionSettings : public KIASectionBase {
 
 public:
 	KIASectionSettings(BladeRunnerEngine *vm);
-	~KIASectionSettings() override;
+	~KIASectionSettings();
 
 	void open() override;
 	void close() override;

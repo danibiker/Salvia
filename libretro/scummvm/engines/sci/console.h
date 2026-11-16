@@ -36,7 +36,7 @@ bool isJumpOpcode(EngineState *s, reg_t pos, reg_t& jumpOffset);
 class Console : public GUI::Debugger {
 public:
 	Console(SciEngine *engine);
-	~Console() override;
+	~Console();
 
 	/**
 	 * 'Attach' the debugger. This ensures that the next time onFrame()

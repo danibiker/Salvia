@@ -32,10 +32,8 @@
 namespace GUI {
 
 SaveLoadChooser::SaveLoadChooser(bool saveMode)
-	: SaveLoadChooser(
-		saveMode ? _("Save game:") : _("Restore game:"),
-		saveMode ? _("Save") : _("Restore"),
-		saveMode) {
+	: _impl(nullptr), _title((saveMode ? _("Save game:") : _("Restore game:"))), _buttonLabel((saveMode ? _("Save") : _("Restore"))), _saveMode(saveMode) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
 }
 
 SaveLoadChooser::SaveLoadChooser(const Common::U32String &title, const Common::U32String &buttonLabel, bool saveMode)

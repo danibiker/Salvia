@@ -108,7 +108,7 @@ struct LauncherEntry {
 class LauncherDialog : public Dialog {
 public:
 	LauncherDialog(const Common::String &dialogName);
-	~LauncherDialog() override;
+	~LauncherDialog();
 
 	void rebuild();
 
@@ -260,7 +260,7 @@ private:
 class RemovalConfirmationDialog : public Dialog {
 public:
 	RemovalConfirmationDialog(const Common::U32String &message, const Common::StringArray &gameTitles);
-	~RemovalConfirmationDialog() override;
+	~RemovalConfirmationDialog();
 
 	void reflowLayout() override;
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
@@ -303,7 +303,7 @@ public:
 class LauncherSimple : public LauncherDialog {
 public:
 	LauncherSimple(const Common::String &title);
-	~LauncherSimple() override;
+	~LauncherSimple();
 
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
 	void handleKeyDown(Common::KeyState state) override;

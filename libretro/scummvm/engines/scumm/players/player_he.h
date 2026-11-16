@@ -35,7 +35,7 @@ class ScummEngine;
 class Player_HE : public MusicEngine, public MidiDriver {
 public:
 	Player_HE(ScummEngine *scumm);
-	~Player_HE() override;
+	~Player_HE();
 	void setMusicVolume(int vol) override;
 	void startSound(int sound) override { startSoundWithTrackID(sound, 0); }
 	void startSoundWithTrackID(int sound, int track) override;

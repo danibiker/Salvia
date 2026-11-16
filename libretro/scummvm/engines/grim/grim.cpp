@@ -88,7 +88,7 @@ GfxBase *g_driver = nullptr;
 int g_imuseState = -1;
 
 GrimEngine::GrimEngine(OSystem *syst, uint32 gameFlags, GrimGameType gameType, Common::Platform platform, Common::Language language) :
-		Engine(syst), _currSet(nullptr), _selectedActor(nullptr), _pauseStartTime(0), _language(0) {
+		Engine(syst), _currSet(nullptr), _selectedActor(nullptr), _pauseStartTime(0), _language(0), _savegameLoadRequest(false), _savegameSaveRequest(false), _refreshShadowMask(false), _shortFrame(false), _setupChanged(true), _frameStart(0), _frameTime(0), _movieTime(0), _prevSmushFrame(0), _frameCounter(0), _lastFrameTime(0), _changeHardwareState(false), _saveMeta2(0), _cursorX(0), _cursorY(0), _isUtf8(false), _transcodeChineseToSimplified(false), _overrideFont(nullptr) {
 	g_grim = this;
 
 	setDebugger(new Debugger());
@@ -787,9 +787,10 @@ void GrimEngine::handleDebugLoadResource() {
 }
 
 void GrimEngine::drawTextObjects() {
-	for (TextObject *t : TextObject::getPool()) {
+	{ auto &rfRange790 = TextObject::getPool(); for (auto rfIt790 = rfRange790.begin(), rfEnd790 = rfRange790.end(); rfIt790 != rfEnd790; ++rfIt790) {
+		TextObject *t = *rfIt790;
 		t->draw();
-	}
+	} }
 }
 
 void GrimEngine::playIrisAnimation(Iris::Direction dir, int x, int y, int time) {
@@ -828,7 +829,8 @@ void GrimEngine::luaUpdate() {
 		// Update the actors. Do it here so that we are sure to react asap to any change
 		// in the actors state caused by lua.
 		buildActiveActorsList();
-		for (Actor *a : _activeActors) {
+		for (auto rfIt831 = _activeActors.begin(), rfEnd831 = _activeActors.end(); rfIt831 != rfEnd831; ++rfIt831) {
+			Actor *a = *rfIt831;
 			// Note that the actor need not be visible to update chores, for example:
 			// when Manny has just brought Meche back he is offscreen several times
 			// when he needs to perform certain chores
@@ -837,9 +839,10 @@ void GrimEngine::luaUpdate() {
 
 		_iris->update(_frameTime);
 
-		for (TextObject *t : TextObject::getPool()) {
+		{ auto &rfRange840 = TextObject::getPool(); for (auto rfIt840 = rfRange840.begin(), rfEnd840 = rfRange840.end(); rfIt840 != rfEnd840; ++rfIt840) {
+			TextObject *t = *rfIt840;
 			t->update();
-		}
+		} }
 	}
 }
 
@@ -934,13 +937,15 @@ void GrimEngine::drawNormalMode() {
 	_currSet->drawBitmaps(ObjectState::OBJSTATE_UNDERLAY);
 
 	// Draw Primitives
-	for (PrimitiveObject *p : PrimitiveObject::getPool()) {
+	{ auto &rfRange937 = PrimitiveObject::getPool(); for (auto rfIt937 = rfRange937.begin(), rfEnd937 = rfRange937.end(); rfIt937 != rfEnd937; ++rfIt937) {
+		PrimitiveObject *p = *rfIt937;
 		p->draw();
-	}
+	} }
 
-	for (Overlay *p : Overlay::getPool()) {
+	{ auto &rfRange941 = Overlay::getPool(); for (auto rfIt941 = rfRange941.begin(), rfEnd941 = rfRange941.end(); rfIt941 != rfEnd941; ++rfIt941) {
+		Overlay *p = *rfIt941;
 		p->draw();
-	}
+	} }
 
 	_currSet->setupCamera();
 
@@ -953,7 +958,8 @@ void GrimEngine::drawNormalMode() {
 
 	// Draw actors
 	buildActiveActorsList();
-	for (Actor *a : _activeActors) {
+	for (auto rfIt956 = _activeActors.begin(), rfEnd956 = _activeActors.end(); rfIt956 != rfEnd956; ++rfIt956) {
+		Actor *a = *rfIt956;
 		if (a->isVisible())
 			a->draw();
 	}
@@ -1487,10 +1493,11 @@ void GrimEngine::saveGRIM() {
 
 Set *GrimEngine::findSet(const Common::String &name) {
 	// Find scene object
-	for (Set *s : Set::getPool()) {
+	{ auto &rfRange1490 = Set::getPool(); for (auto rfIt1490 = rfRange1490.begin(), rfEnd1490 = rfRange1490.end(); rfIt1490 != rfEnd1490; ++rfIt1490) {
+		Set *s = *rfIt1490;
 		if (s->getName() == name)
 			return s;
-	}
+	} }
 	return nullptr;
 }
 
@@ -1535,16 +1542,18 @@ void GrimEngine::setSet(Set *scene) {
 		return;
 
 	if (getGameType() == GType_MONKEY4) {
-		for (PoolSound *s : PoolSound::getPool()) {
+		{ auto &rfRange1538 = PoolSound::getPool(); for (auto rfIt1538 = rfRange1538.begin(), rfEnd1538 = rfRange1538.end(); rfIt1538 != rfEnd1538; ++rfIt1538) {
+			PoolSound *s = *rfIt1538;
 			s->stop();
-		}
+		} }
 	}
 	// Stop the actors. This fixes bug #289 (https://github.com/residualvm/residualvm/issues/289)
 	// and it makes sense too, since when changing set the directions
 	// and coords change too.
-	for (Actor *a : Actor::getPool()) {
+	{ auto &rfRange1545 = Actor::getPool(); for (auto rfIt1545 = rfRange1545.begin(), rfEnd1545 = rfRange1545.end(); rfIt1545 != rfEnd1545; ++rfIt1545) {
+		Actor *a = *rfIt1545;
 		a->stopWalking();
-	}
+	} }
 
 	Set *lastSet = _currSet;
 	_currSet = scene;
@@ -1609,11 +1618,12 @@ void GrimEngine::buildActiveActorsList() {
 	}
 
 	_activeActors.clear();
-	for (Actor *a : Actor::getPool()) {
+	{ auto &rfRange1612 = Actor::getPool(); for (auto rfIt1612 = rfRange1612.begin(), rfEnd1612 = rfRange1612.end(); rfIt1612 != rfEnd1612; ++rfIt1612) {
+		Actor *a = *rfIt1612;
 		if (((_mode == NormalMode || _mode == DrawMode) && a->isDrawableInSet(_currSet->getName())) || a->isInOverworld()) {
 			_activeActors.push_back(a);
 		}
-	}
+	} }
 	_buildActiveActorsList = false;
 }
 
@@ -1624,7 +1634,8 @@ void GrimEngine::addTalkingActor(Actor *a) {
 bool GrimEngine::areActorsTalking() const {
 	//This takes into account that there may be actors which are still talking, but in the background.
 	bool talking = false;
-	for (Actor *a : _talkingActors) {
+	for (auto rfIt1627 = _talkingActors.begin(), rfEnd1627 = _talkingActors.end(); rfIt1627 != rfEnd1627; ++rfIt1627) {
+		Actor *a = *rfIt1627;
 		if (a->isTalkingForeground()) {
 			talking = true;
 			break;

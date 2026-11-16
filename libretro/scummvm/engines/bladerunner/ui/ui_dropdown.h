@@ -81,7 +81,7 @@ public:
 	                                  int controlLeftX,
 	                                  int controlTopY,
 	                                  int scrollBoxMaxLineCount);
-	~UIDropDown() override;
+	~UIDropDown();
 
 	void draw(Graphics::Surface &surface) override;
 

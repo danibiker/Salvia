@@ -95,12 +95,12 @@ static inline uint32 ROTATE_RIGHT_32(const uint32 x, const uint32 r) {
 	return (x << (32 - r)) | (x >> r);
 }
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1910
+#if !defined(SCUMMVM_CXX03_COMPAT) && (!defined(_MSC_VER) || _MSC_VER >= 1910)
 /** Template method to return the number of arguments passed to it. */
-template<typename... A> constexpr size_t NUMARGS(A&&...)	{ return sizeof...(A); }
+template<typename... A> size_t NUMARGS(A&&...)	{ return sizeof...(A); }
 #else
 /** Macro that returns the number of arguments passed to it. */
-using int_c_array = int[]; // MSVC 2015 doesn't like the template method above
+typedef int int_c_array[]; // MSVC 2015 doesn't like the template method above
 #define NUMARGS(...)	(sizeof(int_c_array{__VA_ARGS__})/sizeof(int))
 #endif
 
@@ -157,17 +157,17 @@ class U32String;
  * A reimplementation of std::move.
  */
 template<class T>
-constexpr remove_reference_t<T> &&move(T &&t) noexcept {
-  return static_cast<remove_reference_t<T> &&>(t);
+inline typename remove_reference<T>::type &&move(T &&t) {
+  return static_cast<typename remove_reference<T>::type &&>(t);
 }
 
 template<class T>
-constexpr T&& forward(remove_reference_t<T> &&t) noexcept {
+inline T&& forward(typename remove_reference<T>::type &&t) {
 	return static_cast<T &&>(t);
 }
 
 template<class T>
-constexpr T&& forward(remove_reference_t<T> &t) noexcept {
+inline T&& forward(typename remove_reference<T>::type &t) {
 	return static_cast<T &&>(t);
 }
 
@@ -179,25 +179,25 @@ struct Pair {
 	T1 first;
 	T2 second;
 
-	constexpr Pair() {
+	Pair() {
 	}
 
-	constexpr Pair(const Pair &other) : first(other.first), second(other.second) {
+	Pair(const Pair &other) : first(other.first), second(other.second) {
 	}
 
-	constexpr Pair(Pair &&other) : first(Common::move(other.first)), second(Common::move(other.second)) {
+	Pair(Pair &&other) : first(Common::move(other.first)), second(Common::move(other.second)) {
 	}
 
-	constexpr Pair(const T1 &first_, const T2 &second_) : first(first_), second(second_) {
+	Pair(const T1 &first_, const T2 &second_) : first(first_), second(second_) {
 	}
 
-	constexpr Pair(T1 &&first_, T2 &&second_) : first(Common::move(first_)), second(Common::move(second_)) {
+	Pair(T1 &&first_, T2 &&second_) : first(Common::move(first_)), second(Common::move(second_)) {
 	}
 
-	constexpr Pair(T1 &&first_, const T2 &second_) : first(Common::move(first_)), second(second_) {
+	Pair(T1 &&first_, const T2 &second_) : first(Common::move(first_)), second(second_) {
 	}
 
-	constexpr Pair(const T1 &first_, T2 &&second_) : first(first_), second(Common::move(second_)) {
+	Pair(const T1 &first_, T2 &&second_) : first(first_), second(Common::move(second_)) {
 	}
 
 	Pair &operator=(const Pair &other) {

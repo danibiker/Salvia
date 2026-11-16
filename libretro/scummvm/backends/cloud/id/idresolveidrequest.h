@@ -47,7 +47,7 @@ class IdResolveIdRequest: public Networking::Request {
 	void finishFile(const StorageFile &file);
 public:
 	IdResolveIdRequest(IdStorage *storage, const Common::String &path, Storage::UploadCallback cb, Networking::ErrorCallback ecb, bool recursive = false); //TODO: why upload?
-	~IdResolveIdRequest() override;
+	~IdResolveIdRequest();
 
 	void handle() override;
 	void restart() override;

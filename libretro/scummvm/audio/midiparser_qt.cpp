@@ -329,7 +329,8 @@ void MidiParser_QT::deallocateFreeChannel() {
 }
 
 void MidiParser_QT::deallocateChannel(byte channel) {
-	for (auto &curChannel : _channelMap) {
+	for (auto rfIt332 = _channelMap.begin(), rfEnd332 = _channelMap.end(); rfIt332 != rfEnd332; ++rfIt332) {
+		auto &curChannel = *rfIt332;
 		if (curChannel._value == channel) {
 			_channelMap.erase(curChannel._key);
 			return;
@@ -338,9 +339,9 @@ void MidiParser_QT::deallocateChannel(byte channel) {
 }
 
 bool MidiParser_QT::isChannelAllocated(byte channel) const {
-	for (const auto &curChannel : _channelMap)
-		if (curChannel._value == channel)
-			return true;
+	for (auto rfIt341 = _channelMap.begin(), rfEnd341 = _channelMap.end(); rfIt341 != rfEnd341; ++rfIt341)
+		{ const auto &curChannel = *rfIt341; if (curChannel._value == channel)
+			return true; }
 
 	return false;
 }
@@ -352,9 +353,9 @@ bool MidiParser_QT::allChannelsAllocated() const {
 
 	// 15? One of the allocated channels might be the percussion one
 	if (_channelMap.size() == 15)
-		for (const auto &channel : _channelMap)
-			if (channel._value == 9)
-				return false;
+		for (auto rfIt355 = _channelMap.begin(), rfEnd355 = _channelMap.end(); rfIt355 != rfEnd355; ++rfIt355)
+			{ const auto &channel = *rfIt355; if (channel._value == 9)
+				return false; }
 
 	// 16 -> definitely all allocated
 	return true;

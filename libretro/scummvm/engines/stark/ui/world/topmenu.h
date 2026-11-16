@@ -39,7 +39,7 @@ class Sound;
 class TopMenu : public Window {
 public:
 	TopMenu(Gfx::Driver *gfx, Cursor *cursor);
-	~TopMenu() override;
+	~TopMenu();
 
 	// Window API
 	void onGameLoop() override;

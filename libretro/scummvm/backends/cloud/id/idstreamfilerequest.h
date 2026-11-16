@@ -46,7 +46,7 @@ class IdStreamFileRequest: public Networking::Request {
 	void finishStream(Networking::NetworkReadStream *stream);
 public:
 	IdStreamFileRequest(IdStorage *storage, const Common::String &path, Networking::NetworkReadStreamCallback cb, Networking::ErrorCallback ecb);
-	~IdStreamFileRequest() override;
+	~IdStreamFileRequest();
 
 	void handle() override;
 	void restart() override;

@@ -57,7 +57,7 @@ class GoogleDriveUploadRequest: public Networking::Request {
 
 public:
 	GoogleDriveUploadRequest(GoogleDriveStorage *storage, const Common::String &path, Common::SeekableReadStream *contents, Storage::UploadCallback callback, Networking::ErrorCallback ecb);
-	~GoogleDriveUploadRequest() override;
+	~GoogleDriveUploadRequest();
 
 	void handle() override;
 	void restart() override;

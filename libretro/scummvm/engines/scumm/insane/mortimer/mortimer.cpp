@@ -1449,10 +1449,10 @@ void MortimerEngine::drawDashboard() {
 	const uint level = _isDemo || _shellShocks <= 10 ? _shellShocks / 2 : _shellShocks - 5;
 	const uint gauge = level < 8 ? 19 + level : 27 + _shockFrame;
 	drawSprite(_dashboard[gauge], 180, 442);
-	const Common::Point demoIconOrigins[] = {{158, 364}, {203, 358}, {248, 358}, {293, 354}, {339, 355}, {383, 360}, {428, 361}};
+	const Common::Point demoIconOrigins[] = {Common::Point(158, 364), Common::Point(203, 358), Common::Point(248, 358), Common::Point(293, 354), Common::Point(339, 355), Common::Point(383, 360), Common::Point(428, 361)};
 	// Retail uses centered icons (SHELL 43f12c, 44304c); the demo uses sprite origins.
-	const Common::Point iconCenters[] = {{176, 384}, {222, 378}, {265, 378}, {310, 376}, {355, 379}, {399, 380}, {444, 384}};
-	const Common::Point flashOrigins[] = {{154, 345}, {198, 338}, {243, 334}, {288, 332}, {333, 334}, {378, 338}, {422, 345}};
+	const Common::Point iconCenters[] = {Common::Point(176, 384), Common::Point(222, 378), Common::Point(265, 378), Common::Point(310, 376), Common::Point(355, 379), Common::Point(399, 380), Common::Point(444, 384)};
+	const Common::Point flashOrigins[] = {Common::Point(154, 345), Common::Point(198, 338), Common::Point(243, 334), Common::Point(288, 332), Common::Point(333, 334), Common::Point(378, 338), Common::Point(422, 345)};
 	for (uint species = 0; species < 7; ++species) {
 		if ((_iconFlash[species] & 1) || (_interviewActive && int(species) == _interview.highlightedAnimal()))
 			drawSprite(_dashboard[species], flashOrigins[species].x, flashOrigins[species].y);

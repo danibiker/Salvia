@@ -43,7 +43,10 @@ Widget::Widget(GuiObject *boss, int x, int y, int w, int h, bool scale, const Co
 }
 
 Widget::Widget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip)
-	: Widget(boss, x, y, w, h, false, tooltip) {
+	: GuiObject(x, y, w, h, false), _type(0), _boss(boss), _tooltip(tooltip),
+	  _flags(0), _hasFocus(false), _state(ThemeEngine::kStateEnabled) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	init();
 }
 
 Widget::Widget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip)
@@ -254,7 +257,8 @@ uint8 Widget::parseHotkey(const Common::U32String &label) {
 Common::U32String Widget::cleanupHotkey(const Common::U32String &label) {
 	Common::U32String res("");
 
-	for (const auto &itr : label) {
+	for (auto rfIt257 = label.begin(), rfEnd257 = label.end(); rfIt257 != rfEnd257; ++rfIt257) {
+		const auto &itr = *rfIt257;
 		if (itr != '~') {
 			res += itr;
 		}
@@ -287,7 +291,15 @@ StaticTextWidget::StaticTextWidget(GuiObject *boss, int x, int y, int w, int h, 
 }
 
 StaticTextWidget::StaticTextWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &text, Graphics::TextAlign align, const Common::U32String &tooltip, ThemeEngine::FontStyle font, Common::Language lang, bool useEllipsis)
-	: StaticTextWidget(boss, x, y, w, h, false, text, align, tooltip, font, lang, useEllipsis) {
+	: Widget(boss, x, y, w, h, false, tooltip) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(WIDGET_ENABLED);
+	_type = kStaticTextWidget;
+	_label = text;
+	_align = Graphics::convertTextAlignH(align, g_gui.useRTL() && _useRTL);
+	setFont(font, lang);
+	_fontColor = ThemeEngine::FontColor::kFontColorNormal;
+	_useEllipsis = useEllipsis;
 }
 
 StaticTextWidget::StaticTextWidget(GuiObject *boss, const Common::String &name, const Common::U32String &text, const Common::U32String &tooltip, ThemeEngine::FontStyle font, Common::Language lang, bool useEllipsis)
@@ -372,7 +384,22 @@ ButtonWidget::ButtonWidget(GuiObject *boss, int x, int y, int w, int h, bool sca
 }
 
 ButtonWidget::ButtonWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey, const Common::U32String &lowresLabel)
-	: ButtonWidget(boss, x, y, w, h, false, label, tooltip, cmd, hotkey, lowresLabel) {
+	: StaticTextWidget(boss, x, y, w, h, false, cleanupHotkey(label), Graphics::kTextAlignCenter, tooltip), CommandSender(boss),
+	  _cmd(cmd), _hotkey(hotkey), _duringPress(false) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_lowresLabel = cleanupHotkey(lowresLabel);
+
+	if (hotkey == 0) {
+		_highresHotkey = parseHotkey(label);
+		_hotkey = _highresHotkey;
+		_lowresHotkey = parseHotkey(lowresLabel);
+	} else {
+		_highresHotkey = hotkey;
+		_lowresHotkey = hotkey;
+	}
+
+	setFlags(WIDGET_ENABLED | WIDGET_CLEARBG);
+	_type = kButtonWidget;
 }
 
 ButtonWidget::ButtonWidget(GuiObject *boss, const Common::String &name, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey, const Common::U32String &lowresLabel)
@@ -482,8 +509,11 @@ DropdownButtonWidget::DropdownButtonWidget(GuiObject *boss, int x, int y, int w,
 	reset();
 }
 
-DropdownButtonWidget::DropdownButtonWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey, const Common::U32String &lowresLabel) :
-		DropdownButtonWidget(boss, x, y, w, h, false, label, tooltip, cmd, hotkey, lowresLabel) {
+DropdownButtonWidget::DropdownButtonWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey, const Common::U32String &lowresLabel) : ButtonWidget(boss, x, y, w, h, false, label, tooltip, cmd, hotkey, lowresLabel) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(getFlags() | WIDGET_TRACK_MOUSE);
+
+	reset();
 }
 
 DropdownButtonWidget::DropdownButtonWidget(GuiObject *boss, const Common::String &name, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey, const Common::U32String &lowresLabel) :
@@ -594,7 +624,12 @@ PicButtonWidget::PicButtonWidget(GuiObject *boss, int x, int y, int w, int h, bo
 }
 
 PicButtonWidget::PicButtonWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey)
-	: PicButtonWidget(boss, x, y, w, h, false, tooltip, cmd, hotkey) {
+	: ButtonWidget(boss, x, y, w, h, false, Common::U32String(), tooltip, cmd, hotkey),
+	  _showButton(true) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	Common::fill(_alphaType, _alphaType + ARRAYSIZE(_alphaType), Graphics::ALPHA_OPAQUE);
+	setFlags(WIDGET_ENABLED | WIDGET_CLEARBG);
+	_type = kButtonWidget;
 }
 
 PicButtonWidget::PicButtonWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey)
@@ -712,7 +747,11 @@ CheckboxWidget::CheckboxWidget(GuiObject *boss, int x, int y, int w, int h, bool
 }
 
 CheckboxWidget::CheckboxWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey)
-	: CheckboxWidget(boss, x, y, w, h, false, label, tooltip, cmd, hotkey) {
+	: ButtonWidget(boss, x, y, w, h, false, label, tooltip, cmd, hotkey), _state(false), _overrideText(false) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(WIDGET_ENABLED);
+	_type = kCheckboxWidget;
+	_spacing = g_gui.xmlEval()->getVar("Globals.Checkbox.Spacing", 15);
 }
 
 CheckboxWidget::CheckboxWidget(GuiObject *boss, const Common::String &name, const Common::U32String &label, const Common::U32String &tooltip, uint32 cmd, uint8 hotkey)
@@ -785,7 +824,12 @@ RadiobuttonWidget::RadiobuttonWidget(GuiObject *boss, int x, int y, int w, int h
 }
 
 RadiobuttonWidget::RadiobuttonWidget(GuiObject *boss, int x, int y, int w, int h, RadiobuttonGroup *group, int value, const Common::U32String &label, const Common::U32String &tooltip, uint8 hotkey)
-	: RadiobuttonWidget(boss, x, y, w, h, false, group, value, label, tooltip, hotkey) {
+	: ButtonWidget(boss, x, y, w, h, false, label, tooltip, 0, hotkey), _state(false), _value(value), _group(group) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(WIDGET_ENABLED);
+	_type = kRadiobuttonWidget;
+	_group->addButton(this);
+	_spacing = g_gui.xmlEval()->getVar("Globals.Radiobutton.Spacing", 15);
 }
 
 RadiobuttonWidget::RadiobuttonWidget(GuiObject *boss, const Common::String &name, RadiobuttonGroup *group, int value, const Common::U32String &label, const Common::U32String &tooltip, uint8 hotkey)
@@ -832,7 +876,12 @@ SliderWidget::SliderWidget(GuiObject *boss, int x, int y, int w, int h, bool sca
 }
 
 SliderWidget::SliderWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip, uint32 cmd)
-	: SliderWidget(boss, x, y, w, h, false, tooltip, cmd) {
+	: Widget(boss, x, y, w, h, false, tooltip), CommandSender(boss),
+	  _cmd(cmd), _value(0), _oldValue(0), _valueMin(0), _valueMax(100), _isDragging(false), _labelWidth(0) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	// WIDGET_HOOK_DRAG: prevent hooking by a container as we need drag for ourselves
+	setFlags(WIDGET_ENABLED | WIDGET_TRACK_MOUSE | WIDGET_CLEARBG | WIDGET_HOOK_DRAG);
+	_type = kSliderWidget;
 }
 
 SliderWidget::SliderWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip, uint32 cmd)
@@ -922,7 +971,10 @@ GraphicsWidget::GraphicsWidget(GuiObject *boss, int x, int y, int w, int h, bool
 }
 
 GraphicsWidget::GraphicsWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip)
-	: GraphicsWidget(boss, x, y, w, h, false, tooltip) {
+	: Widget(boss, x, y, w, h, false, tooltip), _alphaType(Graphics::ALPHA_OPAQUE) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	setFlags(WIDGET_ENABLED | WIDGET_CLEARBG);
+	_type = kGraphicsWidget;
 }
 
 GraphicsWidget::GraphicsWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip)

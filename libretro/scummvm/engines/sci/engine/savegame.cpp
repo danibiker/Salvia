@@ -132,7 +132,7 @@ struct SegmentObjTableEntrySyncer : Common::BinaryFunction<Common::Serializer, t
 			syncWithSerializer(s, *entry.data);
 		} else if (s.isLoading()) {
 			if (s.getVersion() < 37) {
-				typename T::value_type dummy{};
+				typename T::value_type dummy = typename T::value_type();
 				syncWithSerializer(s, dummy);
 			}
 			entry.data = nullptr;
@@ -1454,7 +1454,7 @@ void gamestate_restore(EngineState *s, Common::SeekableReadStream *fh) {
 			if (meta.version < MINIMUM_SAVEGAME_VERSION) {
 				showScummVMDialog(_("The format of this saved game is obsolete, unable to load it"));
 			} else {
-				Common::U32String msg = Common::U32String::format(_("Savegame version is %d, maximum supported is %0d"), meta.version, CURRENT_SAVEGAME_VERSION);
+				Common::U32String msg = Common::U32String::format(_("Savegame version is %d, maximum supported is %0d"), meta.version, (int)CURRENT_SAVEGAME_VERSION);
 				showScummVMDialog(msg);
 			}
 

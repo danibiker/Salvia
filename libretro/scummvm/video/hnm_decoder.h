@@ -57,7 +57,7 @@ namespace Video {
 class HNMDecoder : public VideoDecoder {
 public:
 	HNMDecoder(const Graphics::PixelFormat &format, bool loop = false, byte *initialPalette = nullptr);
-	~HNMDecoder() override;
+	~HNMDecoder();
 	bool loadStream(Common::SeekableReadStream *stream) override;
 	void readNextPacket() override;
 	void close() override;
@@ -106,7 +106,7 @@ private:
 		HNM45VideoTrack(uint32 width, uint32 height, uint32 frameSize, uint32 frameCount,
 		                uint32 regularFrameDelayMs, uint32 audioSampleRate,
 		                const byte *initialPalette = nullptr);
-		~HNM45VideoTrack() override;
+		~HNM45VideoTrack();
 
 		/** Decode a video chunk. */
 		void decodePalette(byte *data, uint32 size);
@@ -125,7 +125,7 @@ private:
 		HNM4VideoTrack(uint32 width, uint32 height, uint32 frameSize, uint32 frameCount,
 		               uint32 regularFrameDelayMs, uint32 audioSampleRate,
 		               const byte *initialPalette = nullptr);
-		~HNM4VideoTrack() override;
+		~HNM4VideoTrack();
 
 		/** Decode a video chunk. */
 		void decodeChunk(byte *data, uint32 size,
@@ -162,7 +162,7 @@ private:
 		HNM6VideoTrack(uint32 width, uint32 height, uint32 frameSize, uint32 frameCount,
 		               uint32 regularFrameDelayMs, uint32 audioSampleRate,
 		               const Graphics::PixelFormat &format);
-		~HNM6VideoTrack() override;
+		~HNM6VideoTrack();
 
 		uint16 getWidth() const override;
 		uint16 getHeight() const override;
@@ -190,7 +190,7 @@ private:
 	public:
 		DPCMAudioTrack(uint16 format, uint16 bits, uint sampleRate, bool stereo,
 		               Audio::Mixer::SoundType soundType);
-		~DPCMAudioTrack() override;
+		~DPCMAudioTrack();
 
 		uint32 decodeSound(uint16 chunkType, byte *data, uint32 size) override;
 	protected:
@@ -209,7 +209,7 @@ private:
 	public:
 		APCAudioTrack(uint sampleRate, byte stereo,
 		              Audio::Mixer::SoundType soundType);
-		~APCAudioTrack() override;
+		~APCAudioTrack();
 
 		uint32 decodeSound(uint16 chunkType, byte *data, uint32 size) override;
 	protected:

@@ -47,7 +47,7 @@ public:
 	static const VisualType TYPE = Visual::kImageXMG;
 
 	explicit VisualImageXMG(Gfx::Driver *gfx);
-	~VisualImageXMG() override;
+	~VisualImageXMG();
 
 	/**
 	 * Load the pixel data from a XMG image

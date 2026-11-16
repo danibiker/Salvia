@@ -79,13 +79,15 @@ struct MilesModifiers {
 class HEMilesChannel {
 protected:
 	struct MilesStream {
-		Audio::QueuingAudioStream *streamObj = nullptr;
+	MilesStream() : streamObj(nullptr), loopFlag(false), fileHandle(nullptr), dataLength(0), curDataPos(0), dataOffset(0) {}
+
+		Audio::QueuingAudioStream *streamObj;
 		Audio::SoundHandle streamHandle;
-		bool loopFlag = false;
-		Common::File *fileHandle = nullptr;
-		uint32 dataLength = 0;
-		uint32 curDataPos = 0;
-		uint32 dataOffset = 0;
+		bool loopFlag;
+		Common::File *fileHandle;
+		uint32 dataLength;
+		uint32 curDataPos;
+		uint32 dataOffset;
 	};
 
 public:
@@ -93,21 +95,21 @@ public:
 	MilesStream _stream;
 	int _baseFrequency;
 	Audio::SoundHandle _audioHandle;
-	bool _audioHandleActive = false;
+	bool _audioHandleActive;
 	uint32 _lastPlayPosition;
 	uint32 _playFlags;
 	int _dataOffset;
 	int _globType;
 	int _globNum;
 
-	uint16 _blockAlign = 0;
-	uint16 _numChannels = 1;
-	uint16 _bitsPerSample = 8;
-	uint16 _dataFormat = 1;
+	uint16 _blockAlign;
+	uint16 _numChannels;
+	uint16 _bitsPerSample;
+	uint16 _dataFormat;
 
-	bool _isUsingStreamOverride = false;
+	bool _isUsingStreamOverride;
 
-	HEMilesChannel() {
+	HEMilesChannel() : _audioHandleActive(false), _blockAlign(0), _numChannels(1), _bitsPerSample(8), _dataFormat(1), _isUsingStreamOverride(false) {
 		clearChannelData();
 	}
 
@@ -126,32 +128,34 @@ class HEMixer {
 protected:
 	ScummEngine *_vm;
 	Audio::Mixer *_mixer;
-	bool _useMilesSoundSystem = false;
-	bool _mixerPaused = false;
-	int _pauseCount = 0;
+	bool _useMilesSoundSystem;
+	bool _mixerPaused;
+	int _pauseCount;
 	Common::HashMap<int32, int32> _offsetsToSongId;
 
 	HEMilesChannel _milesChannels[MILES_MAX_CHANNELS];
 
 	struct HEMixerChannel {
+	HEMixerChannel() : stream(nullptr), fileHandle(nullptr), number(0), volume(0), frequency(0), globType(0), globNum(0), callbackID(0), endSampleAdjustment(0), lastReadPosition(0), initialSpoolingFileOffset(0), sampleLen(0), dataOffset(0), flags(0), callbackOnNextFrame(false), isUsingStreamOverride(false), residualData(nullptr) {}
+
 		Audio::SoundHandle handle;
-		Audio::QueuingAudioStream *stream = nullptr;
-		Common::File *fileHandle = nullptr;
-		int number = 0;
-		int volume = 0;
-		int frequency = 0;
-		int globType = 0;
-		int globNum = 0;
-		int callbackID = 0;
-		int endSampleAdjustment = 0;
-		uint32 lastReadPosition = 0;
-		uint32 initialSpoolingFileOffset = 0;
-		uint32 sampleLen = 0;
-		uint32 dataOffset = 0;
-		uint32 flags = 0;
-		bool callbackOnNextFrame = false;
-		bool isUsingStreamOverride = false;
-		byte *residualData = nullptr; // For early callbacks
+		Audio::QueuingAudioStream *stream;
+		Common::File *fileHandle;
+		int number;
+		int volume;
+		int frequency;
+		int globType;
+		int globNum;
+		int callbackID;
+		int endSampleAdjustment;
+		uint32 lastReadPosition;
+		uint32 initialSpoolingFileOffset;
+		uint32 sampleLen;
+		uint32 dataOffset;
+		uint32 flags;
+		bool callbackOnNextFrame;
+		bool isUsingStreamOverride;
+		byte *residualData; // For early callbacks
 	};
 
 	HEMixerChannel _mixerChannels[MIXER_MAX_CHANNELS];

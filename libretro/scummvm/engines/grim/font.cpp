@@ -65,16 +65,18 @@ Font *Font::load(SaveGame *state) {
 }
 
 Font *Font::getByFileName(const Common::String& fontName) {
-	for (Font *f : BitmapFont::getPool()) {
+	{ auto &rfRange68 = BitmapFont::getPool(); for (auto rfIt68 = rfRange68.begin(), rfEnd68 = rfRange68.end(); rfIt68 != rfEnd68; ++rfIt68) {
+		Font *f = *rfIt68;
 		if (f->getFilename() == fontName) {
 			return f;
 		}
-	}
-	for (Font *f : FontTTF::getPool()) {
+	} }
+	{ auto &rfRange73 = FontTTF::getPool(); for (auto rfIt73 = rfRange73.begin(), rfEnd73 = rfRange73.end(); rfIt73 != rfEnd73; ++rfIt73) {
+		Font *f = *rfIt73;
 		if (f->getFilename() == fontName) {
 			return f;
 		}
-	}
+	} }
 	return nullptr;
 }
 

@@ -72,7 +72,7 @@ private:
 
 public:
 	Player_PCE(ScummEngine *scumm, Audio::Mixer *mixer);
-	~Player_PCE() override;
+	~Player_PCE();
 
 	void setMusicVolume(int vol) override { _maxvol = vol; }
 	void startSound(int sound) override;

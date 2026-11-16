@@ -27,8 +27,10 @@
 #include <file/file_path.h>
 #include <retro_dirent.h>
 #include "graphics/surface.h"
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #include <direct.h>
+#elif defined(_XBOX)
+// Xbox 360: no unistd.h nor direct.h
 #else
 #include <unistd.h>
 #endif
@@ -40,6 +42,7 @@
 #include <libgen.h>
 #endif
 
+#include <setjmp.h>
 #include <features/features_cpu.h> // cpu_features_get_time_usec()
 #include <retro_atomic.h>
 #include <retro_miscellaneous.h> // PATH_MAX_LENGTH
@@ -278,6 +281,9 @@ static void audio_run(void) {
 	if (samples_to_read > samples_buffer_size)
 		samples_to_read = samples_buffer_size;
 
+	if (!audio_sample_buffer)
+		return;
+
 	samples_produced = ((Audio::MixerImpl *)g_system->getMixer())->mixCallback((byte *) audio_sample_buffer, samples_to_read * 2 * sizeof(int16));
 
 	/* Workaround as currently there's no way to detect silence-only buffers from the mixer */
@@ -294,7 +300,17 @@ static void audio_run(void) {
 		av_status &= ~AUDIO_STATUS_MUTE;
 	else {
 		av_status |= AUDIO_STATUS_MUTE;
-		return;
+		/* A frontend that renders MIDI itself (RETRO_ENVIRONMENT_GET_MIDI_INTERFACE)
+		 * may mix its synthesizer into this audio stream instead of playing it
+		 * on a separate device (Salvia does). MIDI music does not go through
+		 * ScummVM's mixer, so with no digital sound playing the mixer output is
+		 * silent; skipping the batch would then silence the music as well.
+		 * Keep such a frontend fed with silence. */
+		if (!(retro_midi_interface && retro_midi_interface->output_enabled &&
+		      retro_midi_interface->output_enabled()))
+			return;
+		memset(audio_sample_buffer, 0, samples_to_read * 2 * sizeof(int16));
+		samples_produced = samples_to_read;
 	}
 
 	/* Workaround for a RetroArch audio driver
@@ -312,18 +328,140 @@ static void audio_run(void) {
 	}
 }
 
-void retro_osd_notification(const char *msg, enum retro_log_level level) {
-	if (!msg || *msg == '\0')
+void retro_osd_notification(const char *msg, enum retro_log_level level, unsigned duration_ms) {
+	if (!msg || *msg == '\0' || !environ_cb)
 		return;
 	struct retro_message_ext retro_msg = {};
 	retro_msg.type = RETRO_MESSAGE_TYPE_NOTIFICATION;
 	retro_msg.target = RETRO_MESSAGE_TARGET_OSD;
-	retro_msg.duration = 3000;
+	retro_msg.duration = duration_ms;
 	retro_msg.priority = (level >= RETRO_LOG_WARN) ? 3 : 1;
 	retro_msg.level = level;
 	retro_msg.progress = -1;
 	retro_msg.msg = msg;
-	environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &retro_msg);
+	if (environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &retro_msg))
+		return;
+
+	/* Frontends without RETRO_ENVIRONMENT_SET_MESSAGE_EXT (Salvia): fall back
+	 * to the plain message, whose duration is given in frames. Only for
+	 * errors: the plain message has no level, and the informational ones
+	 * (missing theme / extra folders...) would pop up on every start. */
+	if (level < RETRO_LOG_ERROR)
+		return;
+	struct retro_message legacy_msg;
+	legacy_msg.msg = msg;
+	legacy_msg.frames = (duration_ms * 60 + 999) / 1000;
+	environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &legacy_msg);
+}
+
+/* ---- Fatal error handling -------------------------------------------------
+ * error() logs its message (stored by retro_store_error_message) and then calls
+ * OSystem_libretro::fatalError() -> retro_fatal_error(). ScummVM code relies on
+ * error() never returning, so execution cannot simply continue; instead:
+ *  - on the emulation thread (engines, GUI, launcher...) that thread is
+ *    abandoned and control goes back to retro_run() for good;
+ *  - on the main thread, inside the guarded parts of retro_run() and
+ *    retro_load_game() (audio mixing, video, input, game detection), we
+ *    longjmp back to the guard.
+ * Either way the error is shown to the user, the frontend is asked to shut the
+ * core down and the ScummVM singletons are torn down on unload, without
+ * exit()ing the process. */
+static char fatal_error_msg[512] = {0};
+static char fatal_error_text[600] = {0};
+static bool fatal_error_reported = false;
+static bool fatal_error_message_sent = false;
+static bool fatal_error_needs_cleanup = false;
+static jmp_buf main_fatal_jmp;
+static bool main_fatal_jmp_armed = false;
+
+void retro_store_error_message(const char *msg) {
+	size_t len;
+	if (!msg)
+		return;
+	strncpy(fatal_error_msg, msg, sizeof(fatal_error_msg) - 1);
+	fatal_error_msg[sizeof(fatal_error_msg) - 1] = '\0';
+	len = strlen(fatal_error_msg);
+	while (len > 0 && (fatal_error_msg[len - 1] == '\n' || fatal_error_msg[len - 1] == '\r' || fatal_error_msg[len - 1] == ' '))
+		fatal_error_msg[--len] = '\0';
+}
+
+void retro_fatal_error(void) {
+	fatal_error_needs_cleanup = true;
+
+	if (retro_emu_thread_is_current())
+		retro_emu_thread_abort(Common::kUnknownError); /* does not return */
+
+	if (main_fatal_jmp_armed) {
+		main_fatal_jmp_armed = false;
+		longjmp(main_fatal_jmp, 1);
+	}
+
+	if (retro_log_cb)
+		retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Fatal error outside of a recoverable context.\n");
+}
+
+/* Runs fn on the main thread; returns false if it ended in a fatal error.
+ * Kept free of C++ objects so that longjmp() skips no destructors here. */
+static bool run_guarded(void (*fn)(void *), void *arg) {
+	if (setjmp(main_fatal_jmp) != 0) {
+		main_fatal_jmp_armed = false;
+		return false;
+	}
+	main_fatal_jmp_armed = true;
+	fn(arg);
+	main_fatal_jmp_armed = false;
+	return true;
+}
+
+static void report_fatal_error(void) {
+	if (fatal_error_reported)
+		return;
+	fatal_error_reported = true;
+
+	snprintf(fatal_error_text, sizeof(fatal_error_text), "ScummVM: %s",
+	         fatal_error_msg[0] ? fatal_error_msg : "fatal error");
+
+	if (retro_log_cb)
+		retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Stopped by a fatal error: %s\n", fatal_error_text);
+
+	/* error() normally shows its text through OSystem::messageBox() just
+	 * before stopping (see OSystem_libretro::messageBox), so it may already
+	 * be on screen. */
+	if (!fatal_error_message_sent)
+		retro_osd_notification(fatal_error_text, RETRO_LOG_ERROR, 10000);
+}
+
+/* Error texts ScummVM wants the user to see (OSystem::messageBox: error() and
+ * the "Error running game" dialog): forward them to the frontend as well, as
+ * the frontend may hide ScummVM's own GUI or stop the core right after. */
+void retro_message_box(const char *message, enum retro_log_level level) {
+	static char text[600];
+	size_t len;
+	if (!message || !*message)
+		return;
+	snprintf(text, sizeof(text), "ScummVM: %s", message);
+	len = strlen(text);
+	while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r' || text[len - 1] == ' '))
+		text[--len] = '\0';
+	if (level >= RETRO_LOG_ERROR)
+		fatal_error_message_sent = true;
+	retro_osd_notification(text, level, level >= RETRO_LOG_ERROR ? 10000 : 5000);
+}
+
+static void reset_fatal_error_state(void) {
+	fatal_error_msg[0] = '\0';
+	fatal_error_reported = false;
+	fatal_error_message_sent = false;
+	fatal_error_needs_cleanup = false;
+	main_fatal_jmp_armed = false;
+}
+
+static void cleanup_after_fatal_error(void) {
+	if (!fatal_error_needs_cleanup)
+		return;
+	fatal_error_needs_cleanup = false;
+	if (g_system)
+		LIBRETRO_G_SYSTEM->cleanupAfterFatalError();
 }
 
 static void update_variables(void) {
@@ -717,7 +855,8 @@ uint16 retro_setting_get_audio_samples_buffer_size(void) {
 	static const uint16 allowed[] = {256,512,1024,2048,4096,8192,16384,32768};
 	uint32 target = (uint32)(audio_samples_per_frame * 2.0f + 0.5f); // stereo
 	uint32 pow2   = next_pow2(target);
-	for (uint16 v : allowed) {
+	for (auto rfIt720 = &allowed[0], rfEnd720 = &allowed[0] + sizeof(allowed) / sizeof(allowed[0]); rfIt720 != rfEnd720; ++rfIt720) {
+		uint16 v = *rfIt720;
 		if (pow2 <= v) return v;
 	}
 	return allowed[ARRAYSIZE(allowed) - 1];
@@ -801,6 +940,11 @@ static void close_emu_thread(void) {
 		LIBRETRO_G_SYSTEM->requestQuit();
 		retro_switch_to_emu_thread();
 	}
+	/* scummvm_main() was abandoned by a fatal error (possibly while quitting,
+	 * above): tell the user, then do its final teardown. */
+	if (retro_emu_thread_aborted())
+		report_fatal_error();
+	cleanup_after_fatal_error();
 	retro_deinit_emu_thread();
 }
 
@@ -810,7 +954,7 @@ static void close_emu_thread(void) {
 char *dirname(char *path) {
 	char *p;
 	if (path == NULL || *path == '\0')
-		return ".";
+		return (char *)".";
 	p = path + strlen(path) - 1;
 	while (*p == '/') {
 		if (p == path)
@@ -819,7 +963,7 @@ char *dirname(char *path) {
 	}
 	while (p >= path && *p != '/')
 		p--;
-	return p < path ? "." : p == path ? "/" : (*p = '\0', path);
+	return p < path ? (char *)"." : p == path ? (char *)"/" : (*p = '\0', path);
 }
 #endif
 
@@ -970,6 +1114,37 @@ const char *retro_get_playlist_dir(void) {
 	return playlistdir;
 }
 
+/* MIDI diagnostics: cumulative counters, summarized in the log every few
+ * seconds while there is MIDI activity (see retro_midi_queue_drain). The
+ * producer-side counters are only written by the producer; reading them from
+ * the consumer for the log is a benign race. */
+static uint32 midi_stat_queued   = 0; /* bytes accepted into the queue */
+static uint32 midi_stat_dropped  = 0; /* bytes lost because the queue was full */
+static uint32 midi_stat_written  = 0; /* bytes the frontend accepted */
+static uint32 midi_stat_refused  = 0; /* bytes the frontend's write() rejected */
+static uint32 midi_stat_disabled = 0; /* drains skipped: output_enabled() == false */
+static uint32 midi_stat_logged_total = 0;
+static retro_time_t midi_stat_last_log_usec = 0;
+
+/* Define LIBRETRO_MIDI_DEBUG to get these counters in the log. */
+static void retro_midi_log_stats(bool force) {
+#ifndef LIBRETRO_MIDI_DEBUG
+	return;
+#endif
+	if (!retro_log_cb)
+		return;
+	uint32 total = midi_stat_queued + midi_stat_dropped + midi_stat_disabled;
+	if (total == midi_stat_logged_total && !force)
+		return;
+	retro_time_t now = cpu_features_get_time_usec();
+	if (!force && now - midi_stat_last_log_usec < 5000000)
+		return;
+	midi_stat_last_log_usec = now;
+	midi_stat_logged_total = total;
+	retro_log_cb(RETRO_LOG_INFO, "[scummvm] MIDI out: %u bytes queued, %u sent to frontend, %u refused by frontend, %u dropped (queue full), %u drains skipped (frontend output disabled)\n",
+	             midi_stat_queued, midi_stat_written, midi_stat_refused, midi_stat_dropped, midi_stat_disabled);
+}
+
 void retro_midi_queue_push(uint8 byte, uint32 delta_us) {
 	/* The producer owns head, so it can read it plainly; tail needs an
 	   acquire load to pair with the consumer's release below. */
@@ -978,8 +1153,10 @@ void retro_midi_queue_push(uint8 byte, uint32 delta_us) {
 
 	if (next == retro_atomic_load_acquire_int(&midi_tail)) {
 		/* Queue full → drop event (acceptable for MIDI) */
+		midi_stat_dropped++;
 		return;
 	}
+	midi_stat_queued++;
 
 	midi_queue[head].byte     = byte;
 	midi_queue[head].delta_us = delta_us;
@@ -994,8 +1171,13 @@ static void retro_midi_queue_drain(void) {
 		return;
 	if (!retro_midi_interface->output_enabled)
 		return;
-	if (!retro_midi_interface->output_enabled())
+	if (!retro_midi_interface->output_enabled()) {
+		if (retro_atomic_load_acquire_int(&midi_tail) != retro_atomic_load_acquire_int(&midi_head)) {
+			midi_stat_disabled++;
+			retro_midi_log_stats(false);
+		}
 		return;
+	}
 
 	bool did_write = false;
 	int tail = retro_atomic_load_acquire_int(&midi_tail);
@@ -1005,7 +1187,10 @@ static void retro_midi_queue_drain(void) {
 		retro_midi_event_t ev = midi_queue[tail];
 		tail = (tail + 1) & (MIDI_QUEUE_SIZE - 1);
 
-		retro_midi_interface->write(ev.byte, ev.delta_us);
+		if (retro_midi_interface->write(ev.byte, ev.delta_us))
+			midi_stat_written++;
+		else
+			midi_stat_refused++;
 		did_write = true;
 	}
 
@@ -1015,6 +1200,7 @@ static void retro_midi_queue_drain(void) {
 		retro_atomic_store_release_int(&midi_tail, tail);
 		retro_midi_interface->flush();
 	}
+	retro_midi_log_stats(false);
 }
 
 /* Authorized storage roots (e.g. Android SAF trees) as granted through the
@@ -1108,7 +1294,9 @@ void retro_init(void) {
 }
 
 void retro_deinit(void) {
-	LIBRETRO_G_SYSTEM->destroy();
+	if (g_system)
+		LIBRETRO_G_SYSTEM->destroy();
+	g_system = nullptr;
 
 	if (audio_sample_buffer)
 		free(audio_sample_buffer);
@@ -1116,6 +1304,21 @@ void retro_deinit(void) {
 	audio_sample_buffer       = NULL;
 	audio_samples_per_frame   = 0.0f;
 	audio_samples_accumulator = 0.0f;
+
+	/* A frontend that links the core statically (Salvia) calls retro_init()
+	 * again for the next game without reloading the module, so every static
+	 * that retro_init() / update_variables() rely on must go back to its
+	 * initial value here. In particular the audio buffer freed above is only
+	 * reallocated by update_variables() when the frame or sample rate
+	 * "changes": with the old rates still set, the next game mixed into a
+	 * NULL buffer. */
+	frame_rate     = 0;
+	sample_rate    = 0;
+	av_status      = AUDIO_STATUS_MUTE;
+	video_hw_mode  = 0;
+	retro_atomic_store_release_int(&midi_head, 0);
+	retro_atomic_store_release_int(&midi_tail, 0);
+
 	log_scummvm_exit_code();
 }
 
@@ -1141,6 +1344,33 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 	}
 }
 
+struct test_game_args {
+	const char *data;
+	bool autodetect;
+	int result;
+};
+
+static void test_game_guarded_fn(void *arg) {
+	test_game_args *a = (test_game_args *)arg;
+	a->result = LIBRETRO_G_SYSTEM->testGame(a->data, a->autodetect);
+}
+
+/* testGame() runs game detection on the main thread: guard it so that an
+ * error() there fails the load instead of terminating the frontend. */
+static bool test_game_guarded(const char *data, bool autodetect, int *result) {
+	test_game_args args;
+	args.data = data;
+	args.autodetect = autodetect;
+	args.result = TEST_GAME_KO_NOT_FOUND;
+	if (!run_guarded(test_game_guarded_fn, &args)) {
+		report_fatal_error();
+		cleanup_after_fatal_error();
+		return false;
+	}
+	*result = args.result;
+	return true;
+}
+
 bool retro_load_game(const struct retro_game_info *game) {
 	if (!g_system) {
 		if (retro_log_cb)
@@ -1152,6 +1382,8 @@ bool retro_load_game(const struct retro_game_info *game) {
 	char debug_buf[] = "--debuglevel=11";
 	parse_command_params(debug_buf);
 #endif
+
+	reset_fatal_error_state();
 
 	if (game) {
 		game_buf_ptr = &game_buf;
@@ -1199,7 +1431,8 @@ bool retro_load_game(const struct retro_game_info *game) {
 				return false;
 			}
 
-			test_game_status = LIBRETRO_G_SYSTEM->testGame(target_id, false);
+			if (!test_game_guarded(target_id, false, &test_game_status))
+				return false;
 		} else {
 			if (detect_target.isDirectory()) {
 				parent_dir = detect_target;
@@ -1211,7 +1444,8 @@ bool retro_load_game(const struct retro_game_info *game) {
 				}
 			}
 
-			test_game_status = LIBRETRO_G_SYSTEM->testGame(parent_dir.getPath().toString().c_str(), true);
+			if (!test_game_guarded(parent_dir.getPath().toString().c_str(), true, &test_game_status))
+				return false;
 		}
 
 		// Preliminary game scan results
@@ -1255,7 +1489,69 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 	return false;
 }
 
+/* Audio, video and input part of retro_run(), run under run_guarded(). */
+static void retro_run_frame_av(void *arg) {
+	int audio_video_enable = *(int *)arg;
+
+	/* Retrieve audio */
+	if (audio_video_enable & 2)
+		audio_run();
+
+	/* Retrieve video */
+	if (audio_video_enable & 1) {
+		// Software rendering unless hardware rendering was actually requested
+		// (video_hw_mode stays 0 if the frontend does not provide core options)
+		if ((video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) || !(video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_HW)) {
+			const Graphics::ManagedSurface *screen = nullptr;
+			LIBRETRO_G_SYSTEM->getScreen(screen);
+			if (screen)
+				video_cb(screen->getPixels(), screen->w, screen->h, screen->pitch);
+		} else
+			video_cb(RETRO_HW_FRAME_BUFFER_VALID, LIBRETRO_G_SYSTEM->getScreenWidth(),  LIBRETRO_G_SYSTEM->getScreenHeight(), 0);
+
+	}
+
+	poll_cb();
+	LIBRETRO_G_SYSTEM->processInputs();
+}
+
+/* Performance log: every ~5 s, average time per frame spent inside
+ * retro_run() (the core), in the frame copy of realUpdateScreen() and
+ * between two retro_run() calls (the frontend). */
+extern uint64 retro_perf_blit_usec;
+static void retro_perf_log(uint64 run_start, uint64 run_end) {
+	static uint64 last_end = 0, sum_core = 0, sum_front = 0, window_start = 0;
+	static uint32 frames = 0;
+	if (!retro_log_cb)
+		return;
+	if (!window_start) {
+		window_start = run_start;
+		retro_perf_blit_usec = 0;
+	}
+	sum_core += run_end - run_start;
+	if (last_end)
+		sum_front += run_start - last_end;
+	last_end = run_end;
+	if (++frames >= 300) {
+		const double secs = (run_end - window_start) / 1000000.0;
+		retro_log_cb(RETRO_LOG_INFO, "[scummvm] perf: %.1f fps | core %.2f ms/frame (frame copy %.2f) | frontend %.2f ms/frame\n",
+			secs > 0 ? frames / secs : 0.0, sum_core / 1000.0 / frames, retro_perf_blit_usec / 1000.0 / frames, sum_front / 1000.0 / frames);
+		frames = 0;
+		sum_core = sum_front = 0;
+		retro_perf_blit_usec = 0;
+		window_start = run_end;
+	}
+}
+
+static void retro_run_inner(void);
+
 void retro_run(void) {
+	const uint64 t0 = cpu_features_get_time_usec();
+	retro_run_inner();
+	retro_perf_log(t0, cpu_features_get_time_usec());
+}
+
+static void retro_run_inner(void) {
 	/* Settings change is covered by RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK
 	except in case of core options reset to defaults, for which the following call is needed*/
 	retro_update_options_display();
@@ -1307,27 +1603,20 @@ void retro_run(void) {
 		retro_switch_to_emu_thread();
 
 		if (retro_emu_thread_exited()) {
+			if (retro_emu_thread_aborted())
+				report_fatal_error();
 			exit_to_frontend();
 			return;
 		}
 
-		/* Retrieve audio */
-		if (audio_video_enable & 2)
-			audio_run();
-
-		/* Retrieve video */
-		if (audio_video_enable & 1) {
-			if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) {
-				const Graphics::ManagedSurface *screen;
-				LIBRETRO_G_SYSTEM->getScreen(screen);
-				video_cb(screen->getPixels(), screen->w, screen->h, screen->pitch);
-			} else
-				video_cb(RETRO_HW_FRAME_BUFFER_VALID, LIBRETRO_G_SYSTEM->getScreenWidth(),  LIBRETRO_G_SYSTEM->getScreenHeight(), 0);
-
+		/* Audio mixing, video and input run ScummVM code on this thread: an
+		 * error() there must not terminate the frontend either. */
+		if (!run_guarded(retro_run_frame_av, &audio_video_enable)) {
+			retro_emu_thread_mark_aborted(Common::kUnknownError);
+			report_fatal_error();
+			exit_to_frontend();
+			return;
 		}
-
-		poll_cb();
-		LIBRETRO_G_SYSTEM->processInputs();
 	}
 
 	retro_midi_queue_drain();

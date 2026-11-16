@@ -61,7 +61,7 @@ protected:
 
 public:
 	AboutDialog(bool inGame = false);
-	~AboutDialog() override;
+	~AboutDialog();
 
 	void open() override;
 	void close() override;

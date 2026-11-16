@@ -57,7 +57,7 @@ protected:
 class ScummMenuDialog : public MainMenuDialog {
 public:
 	ScummMenuDialog(ScummEngine *scumm);
-	~ScummMenuDialog() override;
+	~ScummMenuDialog();
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
 protected:
@@ -151,11 +151,11 @@ protected:
 		kDisplayDelay = 1500
 	};
 	Common::U32String _label;
-	const int _min = 0, _max = 0;
-	const uint16 _incKey = 0, _decKey = 0;
-	int _percentBarWidth = 0;
-	int _value = 0;
-	uint32 _timer = 0;
+	const int _min, _max;
+	const uint16 _incKey, _decKey;
+	int _percentBarWidth;
+	int _value;
+	uint32 _timer;
 };
 
 /**
@@ -257,7 +257,7 @@ protected:
 class ScummGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	ScummGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, const ExtraGuiOptions &options);
-	~ScummGameOptionsWidget() override {};
+	~ScummGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;
@@ -268,10 +268,10 @@ private:
 	};
 
 #ifdef USE_SID_AUDIO
-	GUI::CheckboxWidget *_c64SidTypeCheckbox = nullptr;
+	GUI::CheckboxWidget *_c64SidTypeCheckbox;
 #endif
-	GUI::CheckboxWidget *_smoothScrollCheckbox = nullptr;
-	GUI::CheckboxWidget *_semiSmoothScrollCheckbox = nullptr;
+	GUI::CheckboxWidget *_smoothScrollCheckbox;
+	GUI::CheckboxWidget *_semiSmoothScrollCheckbox;
 
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
@@ -286,7 +286,7 @@ private:
 class LoomEgaGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	LoomEgaGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~LoomEgaGameOptionsWidget() override {};
+	~LoomEgaGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;
@@ -299,14 +299,14 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
-	GUI::CheckboxWidget *_enableCopyProtectionCheckbox = nullptr;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
+	GUI::CheckboxWidget *_enableCopyProtectionCheckbox;
 #ifdef USE_TTS
 	GUI::CheckboxWidget *_enableTTSCheckbox = nullptr;
 #endif
 
-	GUI::SliderWidget *_overtureTicksSlider = nullptr;
-	GUI::StaticTextWidget *_overtureTicksValue = nullptr;
+	GUI::SliderWidget *_overtureTicksSlider;
+	GUI::StaticTextWidget *_overtureTicksValue;
 
 	void updateOvertureTicksValue();
 };
@@ -317,7 +317,7 @@ private:
 class MacGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	MacGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, int gameId, const Common::String &extra);
-	~MacGameOptionsWidget() override {};
+	~MacGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;
@@ -329,15 +329,15 @@ private:
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 	void updateQualitySlider();
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
-	GUI::CheckboxWidget *_enableGammaCorrectionCheckbox = nullptr;
-	GUI::CheckboxWidget *_enableCopyProtectionCheckbox = nullptr;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
+	GUI::CheckboxWidget *_enableGammaCorrectionCheckbox;
+	GUI::CheckboxWidget *_enableCopyProtectionCheckbox;
 #ifdef USE_TTS
 	GUI::CheckboxWidget *_enableTTSCheckbox = nullptr;
 #endif
-	GUI::SliderWidget *_sndQualitySlider = nullptr;
-	GUI::StaticTextWidget *_sndQualityValue = nullptr;
-	int _quality = 0;
+	GUI::SliderWidget *_sndQualitySlider;
+	GUI::StaticTextWidget *_sndQualityValue;
+	int _quality;
 };
 
 /**
@@ -346,7 +346,7 @@ private:
 class LoomVgaGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	LoomVgaGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~LoomVgaGameOptionsWidget() override {};
+	~LoomVgaGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;
@@ -359,13 +359,13 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
 #ifdef USE_TTS
 	GUI::CheckboxWidget *_enableTTSCheckbox = nullptr;
 #endif
 
-	GUI::SliderWidget *_playbackAdjustmentSlider = nullptr;
-	GUI::StaticTextWidget *_playbackAdjustmentValue = nullptr;
+	GUI::SliderWidget *_playbackAdjustmentSlider;
+	GUI::StaticTextWidget *_playbackAdjustmentValue;
 
 	void updatePlaybackAdjustmentValue();
 };
@@ -376,7 +376,7 @@ private:
 class MI1CdGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	MI1CdGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~MI1CdGameOptionsWidget() override {};
+	~MI1CdGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;
@@ -390,17 +390,17 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
-	GUI::CheckboxWidget *_enableSegaShadowModeCheckbox = nullptr;
-	GUI::CheckboxWidget *_enableSegaCdWaitCursorWhenPausedCheckbox = nullptr;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
+	GUI::CheckboxWidget *_enableSegaShadowModeCheckbox;
+	GUI::CheckboxWidget *_enableSegaCdWaitCursorWhenPausedCheckbox;
 #ifdef USE_TTS
 	GUI::CheckboxWidget *_enableTTSCheckbox = nullptr;
 #endif
 
-	GUI::SliderWidget *_introAdjustmentSlider = nullptr;
-	GUI::StaticTextWidget *_introAdjustmentValue = nullptr;
-	GUI::SliderWidget *_outlookAdjustmentSlider = nullptr;
-	GUI::StaticTextWidget *_outlookAdjustmentValue = nullptr;
+	GUI::SliderWidget *_introAdjustmentSlider;
+	GUI::StaticTextWidget *_introAdjustmentValue;
+	GUI::SliderWidget *_outlookAdjustmentSlider;
+	GUI::StaticTextWidget *_outlookAdjustmentValue;
 
 	void updateIntroAdjustmentValue();
 	void updateOutlookAdjustmentValue();
@@ -415,7 +415,7 @@ private:
 class HENetworkGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
 	HENetworkGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, const Common::String &&gameid);
-	~HENetworkGameOptionsWidget() override {};
+	~HENetworkGameOptionsWidget() {};
 
 	void load() override;
 	bool save() override;

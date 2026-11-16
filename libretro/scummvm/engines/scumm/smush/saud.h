@@ -30,10 +30,12 @@ class SeekableReadStream;
 namespace Scumm {
 
 struct SaudHeader {
-	uint32 dataSize = 0;
-	uint32 sampleRate = 11025;
-	int64 scriptOffset = -1;
-	uint32 scriptSize = 0;
+	SaudHeader() : dataSize(0), sampleRate(11025), scriptOffset(-1), scriptSize(0) {}
+
+	uint32 dataSize;
+	uint32 sampleRate;
+	int64 scriptOffset;
+	uint32 scriptSize;
 };
 
 // Read a SAUD container spanning the rest of the stream, leaving it at its PCM.
@@ -64,9 +66,11 @@ enum SaudValueId {
 };
 
 struct SaudSpan {
-	uint32 offset = 0;
-	uint32 length = 0;
-	uint32 rate = 0;
+	SaudSpan() : offset(0), length(0), rate(0) {}
+
+	uint32 offset;
+	uint32 length;
+	uint32 rate;
 };
 
 // STRK interpreter shared by the standalone INSANE sound players.

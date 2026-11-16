@@ -46,7 +46,7 @@ public:
 	static const VisualType TYPE = Visual::kImageText;
 
 	explicit VisualText(Gfx::Driver *gfx);
-	~VisualText() override;
+	~VisualText();
 
 	Common::Rect getRect();
 

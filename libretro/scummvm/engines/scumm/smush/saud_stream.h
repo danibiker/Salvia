@@ -52,7 +52,7 @@ public:
 	enum { kRate = 22050 };
 	SaudStream(const Common::Array<byte> &samples, const Common::Array<byte> &script,
 		uint rate, SaudStreamState &state, byte volume, int8 pan);
-	~SaudStream() override;
+	~SaudStream();
 
 	int readBuffer(int16 *buffer, int numSamples) override;
 	bool isStereo() const override { return true; }

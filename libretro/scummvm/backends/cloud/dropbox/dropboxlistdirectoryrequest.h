@@ -49,7 +49,7 @@ class DropboxListDirectoryRequest: public Networking::Request {
 	void finishListing(const Common::Array<StorageFile> &files);
 public:
 	DropboxListDirectoryRequest(DropboxStorage *storage, const Common::String &path, Storage::ListDirectoryCallback cb, Networking::ErrorCallback ecb, bool recursive = false);
-	~DropboxListDirectoryRequest() override;
+	~DropboxListDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

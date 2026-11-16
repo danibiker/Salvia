@@ -56,7 +56,7 @@ class Font : public Graphics::Font {
 	bool                     _useFontColor;
 
 public:
-	~Font() override;
+	~Font();
 
 	static Font* load(BladeRunnerEngine *vm, const Common::String &fileName, int spacing, bool useFontColor);
 

@@ -602,7 +602,8 @@ void MacResManager::listFiles(Array<Path> &files, const Path &pattern) {
 	SearchMan.listMatchingMembers(memberList, pattern.append(".bin"));
 	SearchMan.listMatchingMembers(memberList, constructAppleDoubleName(pattern));
 
-	for (const auto &member : memberList) {
+	for (auto rfIt605 = memberList.begin(), rfEnd605 = memberList.end(); rfIt605 != rfEnd605; ++rfIt605) {
+		const auto &member = *rfIt605;
 		String filename = member->getFileName();
 
 		// For raw resource forks and MacBinary files we strip the extension
@@ -657,7 +658,8 @@ void MacResManager::listFiles(Array<Path> &files, const Path &pattern) {
 	}
 
 	// Append resulting base names to list to indicate found files.
-	for (const auto &baseName : baseNames) {
+	for (auto rfIt660 = baseNames.begin(), rfEnd660 = baseNames.end(); rfIt660 != rfEnd660; ++rfIt660) {
+		const auto &baseName = *rfIt660;
 		files.push_back(baseName._key);
 	}
 }

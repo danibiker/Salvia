@@ -52,17 +52,20 @@ EventDispatcher::EventDispatcher() {
 }
 
 EventDispatcher::~EventDispatcher() {
-	for (auto &mapper : _mappers) {
+	for (auto rfIt55 = _mappers.begin(), rfEnd55 = _mappers.end(); rfIt55 != rfEnd55; ++rfIt55) {
+		auto &mapper = *rfIt55;
 		if (mapper.autoFree)
 			delete mapper.mapper;
 	}
 
-	for (auto &source : _sources) {
+	for (auto rfIt60 = _sources.begin(), rfEnd60 = _sources.end(); rfIt60 != rfEnd60; ++rfIt60) {
+		auto &source = *rfIt60;
 		if (source.autoFree)
 			delete source.source;
 	}
 
-	for (auto &observer : _observers) {
+	for (auto rfIt65 = _observers.begin(), rfEnd65 = _observers.end(); rfIt65 != rfEnd65; ++rfIt65) {
+		auto &observer = *rfIt65;
 		if (observer.autoFree)
 			delete observer.observer;
 	}
@@ -74,7 +77,8 @@ void EventDispatcher::dispatch() {
 
 	dispatchPoll();
 
-	for (auto &source : _sources) {
+	for (auto rfIt77 = _sources.begin(), rfEnd77 = _sources.end(); rfIt77 != rfEnd77; ++rfIt77) {
+		auto &source = *rfIt77;
 		if (source.ignore)
 			continue;
 		while (source.source->pollEvent(event)) {
@@ -90,14 +94,16 @@ void EventDispatcher::dispatch() {
 				assert(event.type != EVENT_CUSTOM_ENGINE_ACTION_START);
 				assert(event.type != EVENT_CUSTOM_ENGINE_ACTION_END);
 
-				for (auto &m : _mappers) {
+				for (auto rfIt93 = _mappers.begin(), rfEnd93 = _mappers.end(); rfIt93 != rfEnd93; ++rfIt93) {
+					auto &m = *rfIt93;
 					if (!mappedEvents.empty())
 						mappedEvents.clear();
 
 					if (!m.mapper->mapEvent(event, mappedEvents))
 						continue;
 
-					for (auto &mappedEvent : mappedEvents) {
+					for (auto rfIt100 = mappedEvents.begin(), rfEnd100 = mappedEvents.end(); rfIt100 != rfEnd100; ++rfIt100) {
+						auto &mappedEvent = *rfIt100;
 						dispatchEvent(mappedEvent);
 					}
 
@@ -116,7 +122,8 @@ void EventDispatcher::dispatch() {
 void EventDispatcher::clearEvents() {
 	Event event;
 
-	for (auto &source : _sources) {
+	for (auto rfIt119 = _sources.begin(), rfEnd119 = _sources.end(); rfIt119 != rfEnd119; ++rfIt119) {
+		auto &source = *rfIt119;
 		if (source.ignore)
 			continue;
 		while (source.source->pollEvent(event)) {}
@@ -168,7 +175,8 @@ void EventDispatcher::unregisterSource(EventSource *source) {
 }
 
 void EventDispatcher::ignoreSources(bool ignore) {
-	for (auto &source : _sources) {
+	for (auto rfIt171 = _sources.begin(), rfEnd171 = _sources.end(); rfIt171 != rfEnd171; ++rfIt171) {
+		auto &source = *rfIt171;
 		source.ignore = ignore;
 	}
 }
@@ -205,14 +213,16 @@ void EventDispatcher::unregisterObserver(EventObserver *obs) {
 }
 
 void EventDispatcher::dispatchEvent(const Event &event) {
-	for (auto &observer : _observers) {
+	for (auto rfIt208 = _observers.begin(), rfEnd208 = _observers.end(); rfIt208 != rfEnd208; ++rfIt208) {
+		auto &observer = *rfIt208;
 		if (observer.observer->notifyEvent(event))
 			break;
 	}
 }
 
 void EventDispatcher::dispatchPoll() {
-	for (auto &observer : _observers) {
+	for (auto rfIt215 = _observers.begin(), rfEnd215 = _observers.end(); rfIt215 != rfEnd215; ++rfIt215) {
+		auto &observer = *rfIt215;
 		if (observer.poll)
 			observer.observer->notifyPoll();
 	}

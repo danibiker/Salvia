@@ -32,7 +32,7 @@ class Shader;
 class ShaderPipeline : public Pipeline {
 public:
 	ShaderPipeline(Shader *shader);
-	~ShaderPipeline() override;
+	~ShaderPipeline();
 
 	void setColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) override;
 

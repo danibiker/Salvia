@@ -35,7 +35,7 @@
 namespace Scumm {
 
 CUP_Player::CUP_Player(OSystem *sys, ScummEngine_vCUPhe *vm, Audio::Mixer *mixer)
-	: _vm(vm), _mixer(mixer), _system(sys) {
+	: _vm(vm), _mixer(mixer), _system(sys), _playbackRate(0), _width(0), _height(0), _paletteData(), _paletteChanged(false), _offscreenBuffer(nullptr), _inLzssBufData(nullptr), _inLzssBufSize(0), _outLzssBufData(nullptr), _outLzssBufSize(0), _dataSize(0), _sfxCount(0), _sfxBuffer(nullptr), _sfxChannels(), _sfxQueue(), _sfxQueuePos(0), _lastSfxChannel(0) {
 }
 
 bool CUP_Player::open(const char *filename) {

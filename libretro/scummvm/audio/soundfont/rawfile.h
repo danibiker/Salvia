@@ -60,7 +60,7 @@ private:
 
 public:
 	MemFile(const byte *data, uint32 size);
-	~MemFile() override;
+	~MemFile();
 
 	const char *data() const override;
 

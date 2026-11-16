@@ -135,7 +135,8 @@ void MassAddDialog::handleCommand(CommandSender *sender, uint32 cmd, uint32 data
 		// people who want to edit their config file by hand after a mass add.
 		Common::sort(_games.begin(), _games.end(), GameTargetLess());
 		// Add all the detected games to the config
-		for (auto &game : _games) {
+		for (auto rfIt138 = _games.begin(), rfEnd138 = _games.end(); rfIt138 != rfEnd138; ++rfIt138) {
+			auto &game = *rfIt138;
 			// Make sure the game is selected
 			if (game.isSelected) {
 				debug(1, "  Added gameid '%s', desc '%s'",
@@ -176,7 +177,8 @@ void MassAddDialog::updateGameList() {
 	_list->setList(l);
 	_list->clearSelectedList();
 
-	for (const auto &game : _games) {
+	for (auto rfIt179 = _games.begin(), rfEnd179 = _games.end(); rfIt179 != rfEnd179; ++rfIt179) {
+		const auto &game = *rfIt179;
 		Common::U32String displayString = game.isSelected ? Common::String("[x] ") + game.description : Common::String("[\u2000] ") + game.description;
 		_list->append(displayString);
 		_list->appendToSelectedList(game.isSelected);
@@ -213,7 +215,8 @@ void MassAddDialog::handleTickle() {
 		//
 		// However, we only add games which are not already in the config file.
 		DetectedGames candidates = detectionResults.listRecognizedGames();
-		for (const auto &cand : candidates) {
+		for (auto rfIt216 = candidates.begin(), rfEnd216 = candidates.end(); rfIt216 != rfEnd216; ++rfIt216) {
+			const auto &cand = *rfIt216;
 			const DetectedGame &result = cand;
 
 			Common::Path path = dir.getPath();
@@ -226,7 +229,8 @@ void MassAddDialog::handleTickle() {
 
 				bool duplicate = false;
 				const Common::StringArray &targets = _pathToTargets[path];
-				for (const auto &target : targets) {
+				for (auto rfIt229 = targets.begin(), rfEnd229 = targets.end(); rfIt229 != rfEnd229; ++rfIt229) {
+					const auto &target = *rfIt229;
 					// If the engineid, gameid, platform and language match -> skip it
 					Common::ConfigManager::Domain *dom = ConfMan.getDomain(target);
 					assert(dom);
@@ -249,14 +253,16 @@ void MassAddDialog::handleTickle() {
 			_list->append(result.description);
 		}
 
-		for (DetectedGame &game : _games) {
+		for (auto rfIt252 = _games.begin(), rfEnd252 = _games.end(); rfIt252 != rfEnd252; ++rfIt252) {
+			DetectedGame &game = *rfIt252;
 			game.isSelected = true;
 		}
 
 		updateGameList();
 
 		// Recurse into all subdirs
-		for (const auto &file : files) {
+		for (auto rfIt259 = files.begin(), rfEnd259 = files.end(); rfIt259 != rfEnd259; ++rfIt259) {
+			const auto &file = *rfIt259;
 			if (file.isDirectory()) {
 				_scanStack.push(file);
 

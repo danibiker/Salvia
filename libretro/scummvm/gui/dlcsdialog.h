@@ -39,7 +39,7 @@ class ButtonWidget;
 class DLCsDialog : public Dialog {
 public:
 	DLCsDialog();
-	~DLCsDialog() override;
+	~DLCsDialog();
 
 	void handleTickle() override;
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;

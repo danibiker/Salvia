@@ -53,7 +53,7 @@ protected:
 public:
 	IdStorage();
 	IdStorage(const Common::String &token, const Common::String &refreshToken, bool enabled);
-	~IdStorage() override;
+	~IdStorage();
 
 	/** Public Cloud API comes down there. */
 

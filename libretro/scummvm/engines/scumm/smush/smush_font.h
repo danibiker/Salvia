@@ -36,7 +36,7 @@ public:
 		_r = new TextRenderer_v7(vm, this);
 	}
 
-	~SmushFont() override {	delete _r;}
+	~SmushFont() {	delete _r;}
 
 	void drawString(const char *str, byte *buffer, Common::Rect &clipRect, int x, int y, int16 col, TextStyleFlags flags) {
 		_r->drawString(str, buffer, clipRect, x, y, _vm->_screenWidth, col, flags);

@@ -323,13 +323,14 @@ void EMIModel::updateLighting(const Math::Matrix4 &modelToWorld) {
 
 	Actor *actor = _costume->getOwner();
 
-	for (Light *l : g_grim->getCurrSet()->getLights(actor->isInOverworld())) {
+	{ auto &rfRange326 = g_grim->getCurrSet()->getLights(actor->isInOverworld()); for (auto rfIt326 = rfRange326.begin(), rfEnd326 = rfRange326.end(); rfIt326 != rfEnd326; ++rfIt326) {
+		Light *l = *rfIt326;
 		if (l->_enabled) {
 			activeLights.push_back(l);
 			if (l->_type == Light::Ambient)
 				hasAmbient = true;
 		}
-	}
+	} }
 
 	for (int i = 0; i < _numVertices; i++) {
 		Math::Vector3d &result = _lighting[i];

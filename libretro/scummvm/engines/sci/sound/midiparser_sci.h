@@ -50,7 +50,7 @@ namespace Sci {
 class MidiParser_SCI : public MidiParser {
 public:
 	MidiParser_SCI(SciVersion soundVersion, SciMusic *music);
-	~MidiParser_SCI() override;
+	~MidiParser_SCI();
 
 	void mainThreadBegin();
 	void mainThreadEnd();

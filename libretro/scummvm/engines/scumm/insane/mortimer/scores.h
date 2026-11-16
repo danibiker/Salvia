@@ -38,6 +38,10 @@ const MortimerScoring &mortimerScoring(uint flightDifficulty, uint riddleDifficu
 
 class MortimerHighScores {
 public:
+	MortimerHighScores() : _score(0), _selected(-1), _enteringName(false), _didNotQualify(false) {}
+private:
+
+public:
 	bool load(Common::SaveFileManager &saveFileMan, const Common::String &fileName);
 	void start(uint32 score, bool allowEntry);
 	bool handleKey(const Common::KeyState &key);
@@ -59,9 +63,9 @@ private:
 	Entry _entries[10];
 	MortimerFont _font;
 	MortimerSubtitles _text;
-	uint32 _score = 0;
-	int _selected = -1;
-	bool _enteringName = false, _didNotQualify = false;
+	uint32 _score;
+	int _selected;
+	bool _enteringName, _didNotQualify;
 };
 
 } // End of namespace Scumm

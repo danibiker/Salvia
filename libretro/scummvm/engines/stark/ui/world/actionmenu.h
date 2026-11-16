@@ -40,7 +40,7 @@ class Sound;
 class ActionMenu : public Window {
 public:
 	ActionMenu(Gfx::Driver *gfx, Cursor *cursor);
-	~ActionMenu() override;
+	~ActionMenu();
 
 	void setInventory(InventoryWindow *inventory);
 

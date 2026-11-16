@@ -36,7 +36,7 @@ namespace Scumm {
 class Player_V2 : public Audio::AudioStream, public Player_V2Base {
 public:
 	Player_V2(ScummEngine *scumm, Audio::Mixer *mixer, bool pcjr);
-	~Player_V2() override;
+	~Player_V2();
 
 	// MusicEngine API
 	void setMusicVolume(int vol) override;

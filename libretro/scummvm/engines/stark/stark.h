@@ -91,7 +91,7 @@ enum STARKAction {
 class StarkEngine : public Engine {
 public:
 	StarkEngine(OSystem *syst, const ADGameDescription *gameDesc);
-	~StarkEngine() override;
+	~StarkEngine();
 
 	/** Build a save file name for the specified target and slot */
 	static Common::String formatSaveName(const char *target, int slot);

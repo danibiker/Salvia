@@ -79,11 +79,11 @@ private:
 	uint16 _charCount;
 	byte _firstChar;
 	// uint16 _pixHeight;
-	uint16 _maxWidth = 10;
-	uint32 _totalWidth = 0;
-	int16 _totalHeight = 0;
-	int8 _originToAscender = 0;
-	int8 _originToDescender = 0;
+	uint16 _maxWidth;
+	uint32 _totalWidth;
+	int16 _totalHeight;
+	int8 _originToAscender;
+	int8 _originToDescender;
 	Common::Array<CachedFont *> _fontCache;
 
 	uint16 characterToIndex(uint32 character) const;

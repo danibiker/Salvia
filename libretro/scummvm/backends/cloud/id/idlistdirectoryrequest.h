@@ -52,7 +52,7 @@ class IdListDirectoryRequest: public Networking::Request {
 	void finishListing(const Common::Array<StorageFile> &files);
 public:
 	IdListDirectoryRequest(IdStorage *storage, const Common::String &path, Storage::ListDirectoryCallback cb, Networking::ErrorCallback ecb, bool recursive = false);
-	~IdListDirectoryRequest() override;
+	~IdListDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

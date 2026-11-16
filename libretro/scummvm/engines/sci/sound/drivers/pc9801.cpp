@@ -128,7 +128,7 @@ private:
 class SoundChannel_PC9801_FM4OP : public SoundChannel_PC9801 {
 public:
 	SoundChannel_PC9801_FM4OP(uint8 id, PC98AudioCore *pc98a, MidiPart_PC9801 **parts, SciVersion version, SciSpan<const uint8> instrumentData, uint8 patchSize, bool &soundOn);
-	~SoundChannel_PC9801_FM4OP() override {}
+	~SoundChannel_PC9801_FM4OP() {}
 
 private:
 	void programChange(uint8 program) override;
@@ -148,7 +148,7 @@ private:
 class SoundChannel_PC9801_FM2OP : public SoundChannel_PC9801 {
 public:
 	SoundChannel_PC9801_FM2OP(uint8 id, PC98AudioCore *pc98a, MidiPart_PC9801 **parts,  SciVersion version, SciSpan<const uint8> instrumentData, uint8 patchSize, bool &soundOn);
-	~SoundChannel_PC9801_FM2OP() override {}
+	~SoundChannel_PC9801_FM2OP() {}
 
 	void processNoteEvent(uint8 note, bool soundOn) override;
 	void reset() override;
@@ -181,7 +181,7 @@ private:
 class SoundChannel_PC9801_SSG : public SoundChannel_PC9801 {
 public:
 	SoundChannel_PC9801_SSG(uint8 id, PC98AudioCore *pc98a, MidiPart_PC9801 **parts, SciVersion version, SciSpan<const uint8> instrumentData, uint8 patchOffset, uint8 patchSize, bool &soundOn);
-	~SoundChannel_PC9801_SSG() override {}
+	~SoundChannel_PC9801_SSG() {}
 	void reset() override;
 	void toggleNoiseGenerator(bool enable) override;
 
@@ -277,7 +277,7 @@ public:
 	};
 
 	MidiDriver_PC9801(Audio::Mixer *mixer, SciVersion version);
-	~MidiDriver_PC9801() override;
+	~MidiDriver_PC9801();
 
 	int open() override;
 	bool isOpen() const override { return _isOpen; }
@@ -340,7 +340,7 @@ public:
 	};
 
 	MidiPlayer_PC9801(SciVersion version);
-	~MidiPlayer_PC9801() override;
+	~MidiPlayer_PC9801();
 
 	bool hasRhythmChannel() const override;
 	byte getPlayId() const override;

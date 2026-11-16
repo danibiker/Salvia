@@ -36,7 +36,7 @@ class KIASectionHelp : public KIASectionBase {
 
 public:
 	KIASectionHelp(BladeRunnerEngine *vm);
-	~KIASectionHelp() override;
+	~KIASectionHelp();
 
 	void open() override;
 	void close() override;

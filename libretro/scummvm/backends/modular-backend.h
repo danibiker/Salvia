@@ -72,71 +72,71 @@ public:
 	void *getImGuiTexture(const Graphics::Surface &image, const byte *palette, int palCount) override final;
 	void freeImGuiTexture(void *texture) override final;
 #endif
-	bool setShader(const Common::Path &name) override final;
-	const GraphicsMode *getSupportedStretchModes() const override final;
-	int getDefaultStretchMode() const override final;
-	bool setStretchMode(int mode) override final;
-	int getStretchMode() const override final;
-	bool setRotationMode(Common::RotationMode rotation) override final;
-	uint getDefaultScaler() const override final;
-	uint getDefaultScaleFactor() const override final;
+	bool setShader(const Common::Path &name) override;
+	const GraphicsMode *getSupportedStretchModes() const override;
+	int getDefaultStretchMode() const override;
+	bool setStretchMode(int mode) override;
+	int getStretchMode() const override;
+	bool setRotationMode(Common::RotationMode rotation) override;
+	uint getDefaultScaler() const override;
+	uint getDefaultScaleFactor() const override;
 	using BaseBackend::setScaler;
-	bool setScaler(uint mode, int factor) override final;
-	uint getScaler() const override final;
-	uint getScaleFactor() const override final;
+	bool setScaler(uint mode, int factor) override;
+	uint getScaler() const override;
+	uint getScaleFactor() const override;
 #ifdef USE_RGB_COLOR
-	Graphics::PixelFormat getScreenFormat() const override final;
-	Common::List<Graphics::PixelFormat> getSupportedFormats() const override final;
+	Graphics::PixelFormat getScreenFormat() const override;
+	Common::List<Graphics::PixelFormat> getSupportedFormats() const override;
 #endif
-	void initSize(uint width, uint height, const Graphics::PixelFormat *format = NULL) override final;
-	void initSizeHint(const Graphics::ModeList &modes) override final;
-	int getScreenChangeID() const override final;
+	void initSize(uint width, uint height, const Graphics::PixelFormat *format = NULL) override;
+	void initSizeHint(const Graphics::ModeList &modes) override;
+	int getScreenChangeID() const override;
 
-	void beginGFXTransaction() override final;
-	OSystem::TransactionError endGFXTransaction() override final;
+	void beginGFXTransaction() override;
+	OSystem::TransactionError endGFXTransaction() override;
 
-	int16 getHeight() override final;
-	int16 getWidth() override final;
-	PaletteManager *getPaletteManager() override final;
-	void copyRectToScreen(const void *buf, int pitch, int x, int y, int w, int h) override final;
-	Graphics::Surface *lockScreen() override final;
-	void unlockScreen() override final;
-	void fillScreen(uint32 col) override final;
-	void fillScreen(const Common::Rect &r, uint32 col) override final;
-	void updateScreen() override final;
-	void presentBuffer() override final;
-	void setShakePos(int shakeXOffset, int shakeYOffset) override final;
-	void setFocusRectangle(const Common::Rect& rect) override final;
-	void clearFocusRectangle() override final;
+	int16 getHeight() override;
+	int16 getWidth() override;
+	PaletteManager *getPaletteManager() override;
+	void copyRectToScreen(const void *buf, int pitch, int x, int y, int w, int h) override;
+	Graphics::Surface *lockScreen() override;
+	void unlockScreen() override;
+	void fillScreen(uint32 col) override;
+	void fillScreen(const Common::Rect &r, uint32 col) override;
+	void updateScreen() override;
+	void presentBuffer() override;
+	void setShakePos(int shakeXOffset, int shakeYOffset) override;
+	void setFocusRectangle(const Common::Rect& rect) override;
+	void clearFocusRectangle() override;
 
-	void showOverlay(bool inGUI) override final;
-	void hideOverlay() override final;
-	bool isOverlayVisible() const override final;
-	Graphics::PixelFormat getOverlayFormat() const override final;
-	void clearOverlay() override final;
-	void grabOverlay(Graphics::Surface &surface) override final;
-	void copyRectToOverlay(const void *buf, int pitch, int x, int y, int w, int h) override final;
-	int16 getOverlayHeight() const override final;
-	int16 getOverlayWidth() const override final;
-	Common::Rect getSafeOverlayArea(int16 *width, int16 *height) const override final;
+	void showOverlay(bool inGUI) override;
+	void hideOverlay() override;
+	bool isOverlayVisible() const override;
+	Graphics::PixelFormat getOverlayFormat() const override;
+	void clearOverlay() override;
+	void grabOverlay(Graphics::Surface &surface) override;
+	void copyRectToOverlay(const void *buf, int pitch, int x, int y, int w, int h) override;
+	int16 getOverlayHeight() const override;
+	int16 getOverlayWidth() const override;
+	Common::Rect getSafeOverlayArea(int16 *width, int16 *height) const override;
 
-	float getHiDPIScreenFactor() const override final;
+	float getHiDPIScreenFactor() const override;
 
-	bool showMouse(bool visible) override final;
-	void warpMouse(int x, int y) override final;
-	void setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, const Graphics::PixelFormat *format, const byte *mask, frac_t scaleX, frac_t scaleY) override final;
-	void setCursorPalette(const byte *colors, uint start, uint num) override final;
-	bool lockMouse(bool lock) override final;
+	bool showMouse(bool visible) override;
+	void warpMouse(int x, int y) override;
+	void setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, const Graphics::PixelFormat *format, const byte *mask, frac_t scaleX, frac_t scaleY) override;
+	void setCursorPalette(const byte *colors, uint start, uint num) override;
+	bool lockMouse(bool lock) override;
 
 	//@}
 
 	/** @name Miscellaneous */
 	//@{
 
-	void displayMessageOnOSD(const Common::U32String &msg) override final;
-	void displayActivityIconOnOSD(const Graphics::Surface *icon) override final;
+	void displayMessageOnOSD(const Common::U32String &msg) override;
+	void displayActivityIconOnOSD(const Graphics::Surface *icon) override;
 
-	void saveScreenshot() override final;
+	void saveScreenshot() override;
 
 	//@}
 
@@ -158,7 +158,7 @@ public:
 	//@{
 
 	virtual MixerManager *getMixerManager();
-	Audio::Mixer *getMixer() override final;
+	Audio::Mixer *getMixer() override;
 
 	//@}
 

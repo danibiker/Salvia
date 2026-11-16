@@ -67,7 +67,7 @@ protected:
 	T *_storage;  /*!< Memory used for element storage. */
 
 public:
-	constexpr Array() : _capacity(0), _size(0), _storage(nullptr) {}
+	Array() : _capacity(0), _size(0), _storage(nullptr) {}
 
 	/**
 	 * Construct an array with @p count default-inserted instances of @p T. No
@@ -117,11 +117,13 @@ public:
 	 * @endcode
 	 * constructs an array with 3 elements whose values are 1, 7, and 42 respectively.
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	Array(std::initializer_list<T> list) : _size(list.size()) {
 		allocCapacity(list.size());
 		if (_storage)
 			Common::uninitialized_copy(list.begin(), list.end(), _storage);
 	}
+#endif
 
 	/**
 	 * Construct an array by copying data from a regular array.
@@ -139,6 +141,7 @@ public:
 		_capacity = _size = 0;
 	}
 
+#ifndef SCUMMVM_CXX03_COMPAT
 	/** Construct an element into a position in the array. */
 	template<class... TArgs>
 	void emplace(const_iterator pos, TArgs&&... args) {
@@ -176,6 +179,184 @@ public:
 	void emplace_back(TArgs &&...args) {
 		emplace(begin() + _size, Common::forward<TArgs>(args)...);
 	}
+#else
+	/** Construct an element into a position in the array (fixed arity versions for MSVC 2010). */
+	
+	void emplace(const_iterator pos) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T();
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T();
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	
+	void emplace_back() {
+		emplace(begin() + _size);
+	}
+
+	template<class A1>
+	void emplace(const_iterator pos, A1 &&a1) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1>
+	void emplace_back(A1 &&a1) {
+		emplace(begin() + _size, Common::forward<A1>(a1));
+	}
+
+	template<class A1, class A2>
+	void emplace(const_iterator pos, A1 &&a1, A2 &&a2) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1, class A2>
+	void emplace_back(A1 &&a1, A2 &&a2) {
+		emplace(begin() + _size, Common::forward<A1>(a1), Common::forward<A2>(a2));
+	}
+
+	template<class A1, class A2, class A3>
+	void emplace(const_iterator pos, A1 &&a1, A2 &&a2, A3 &&a3) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1, class A2, class A3>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3) {
+		emplace(begin() + _size, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+	}
+
+	template<class A1, class A2, class A3, class A4>
+	void emplace(const_iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1, class A2, class A3, class A4>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		emplace(begin() + _size, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+	}
+
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace(const_iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		emplace(begin() + _size, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+	}
+
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace(const_iterator pos, A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		assert(pos >= _storage && pos <= _storage + _size);
+
+		const size_type index = static_cast<size_type>(pos - _storage);
+
+		if (_size != _capacity && index == _size) {
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+		} else {
+			T *oldStorage = _storage;
+			allocCapacity(roundUpCapacity(_size + 1));
+			new (_storage + index) T(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+			uninitialized_move(oldStorage, oldStorage + index, _storage);
+			uninitialized_move(oldStorage + index, oldStorage + _size, _storage + index + 1);
+			freeStorage(oldStorage, _size);
+		}
+
+		_size++;
+	}
+
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		emplace(begin() + _size, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+	}
+
+#endif
 
 	/** Append an element to the end of the array. */
 	void push_back(const T &element) {

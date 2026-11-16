@@ -826,14 +826,14 @@ bool InsaneRebel1::runLevel8() {
 
 bool InsaneRebel1::runLevel9() {
 	uint8 originalRouteSeed = 0;
-	auto getOriginalRouteBit = [&originalRouteSeed]() {
+	auto getOriginalRouteBit = [&originalRouteSeed]() -> int {
 		originalRouteSeed = (uint8)(originalRouteSeed * 9 + 0x35);
 		return (2 * originalRouteSeed) >> 8;
 	};
 	const int randPath1 = getOriginalRouteBit();
 	const int randPath2 = getOriginalRouteBit();
 	const int randPath3 = getOriginalRouteBit();
-	auto playLevel9PathSelector = [&](const char *filename, bool hasExitAnimation) {
+	auto playLevel9PathSelector = [&](const char *filename, bool hasExitAnimation) -> int {
 		// L9PLAY6 stores both exit animations after its idle loop. Frame 1
 		// restores the STOR background without repeating frame 0's GAME reset.
 		const int32 loopOffset = hasExitAnimation ? findAnimFrameChunkOffset(_vm, filename, 1) : -1;

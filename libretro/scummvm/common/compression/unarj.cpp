@@ -720,7 +720,8 @@ public:
 
 ArjArchive::~ArjArchive() {
        debug(0, "ArjArchive Destructor Called");
-       for (auto &header : _headers) {
+       for (auto rfIt723 = _headers.begin(), rfEnd723 = _headers.end(); rfIt723 != rfEnd723; ++rfIt723) {
+	       auto &header = *rfIt723;
 	       for (uint i = 0; i < header._value.size(); i++)
 		       delete header._value[i]._header;
        }
@@ -779,7 +780,8 @@ bool ArjArchive::hasFile(const Path &path) const {
 int ArjArchive::listMembers(ArchiveMemberList &list) const {
 	int matches = 0;
 
-	for (const auto &header : _headers) {
+	for (auto rfIt782 = _headers.begin(), rfEnd782 = _headers.end(); rfIt782 != rfEnd782; ++rfIt782) {
+		const auto &header = *rfIt782;
 		list.push_back(ArchiveMemberList::value_type(new GenericArchiveMember(Path(header._value[0]._header->filename), *this)));
 		matches++;
 	}
@@ -859,7 +861,7 @@ Common::SharedArchiveContents ArjArchive::readContentsForPath(const Common::Path
 }
 
 Archive *makeArjArchive(const Path &name, bool flattenTree) {
-	return new ArjArchive({name}, flattenTree);
+	return new ArjArchive(Array<Path>(1, name), flattenTree);
 }
 
 Archive *makeArjArchive(const Array<Path> &names, bool flattenTree) {

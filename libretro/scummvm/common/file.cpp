@@ -166,7 +166,8 @@ bool DumpFile::open(const Path &filename, bool createPath) {
 			StringArray components = dirname.splitComponents();
 
 			Common::Path subpath;
-			for (auto &component : components) {
+			for (auto rfIt169 = components.begin(), rfEnd169 = components.end(); rfIt169 != rfEnd169; ++rfIt169) {
+				auto &component = *rfIt169;
 				subpath.appendInPlace(component, Common::Path::kNoSeparator);
 				// Add a trailing path separator
 				subpath.appendInPlace("/");

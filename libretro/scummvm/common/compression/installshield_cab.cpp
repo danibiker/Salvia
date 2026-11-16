@@ -373,8 +373,8 @@ bool InstallShieldCabinet::hasFile(const Path &path) const {
 }
 
 int InstallShieldCabinet::listMembers(ArchiveMemberList &list) const {
-	for (const auto &file : _map)
-		list.push_back(getMember(file._key));
+	for (auto rfIt376 = _map.begin(), rfEnd376 = _map.end(); rfIt376 != rfEnd376; ++rfIt376)
+		{ const auto &file = *rfIt376; list.push_back(getMember(file._key)); }
 
 	return _map.size();
 }

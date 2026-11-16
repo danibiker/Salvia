@@ -66,7 +66,7 @@ struct channel_data {
 class Player_V2Base : public MusicEngine {
 public:
 	Player_V2Base(ScummEngine *scumm, bool pcjr);
-	~Player_V2Base() override;
+	~Player_V2Base();
 
 	// MusicEngine API
 // 	virtual void setMusicVolume(int vol);

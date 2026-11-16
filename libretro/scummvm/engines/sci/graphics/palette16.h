@@ -41,7 +41,7 @@ class GfxScreen;
 class GfxPalette : public Common::Serializable {
 public:
 	GfxPalette(ResourceManager *resMan, GfxScreen *screen);
-	~GfxPalette() override;
+	~GfxPalette();
 
 	bool isMerging();
 	bool isUsing16bitColorMatch();

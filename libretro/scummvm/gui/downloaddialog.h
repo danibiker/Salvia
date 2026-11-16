@@ -67,7 +67,7 @@ class DownloadDialog : public Dialog {
 
 public:
 	DownloadDialog(uint32 storageId, LauncherDialog *launcher);
-	~DownloadDialog() override;
+	~DownloadDialog();
 
 	void open() override;
 	void close() override;

@@ -34,7 +34,7 @@ namespace Sci {
 class GfxCursor32 : public Common::Serializable {
 public:
 	GfxCursor32();
-	~GfxCursor32() override;
+	~GfxCursor32();
 
 	/**
 	 * Initialises the cursor system with the given buffer to use as the output

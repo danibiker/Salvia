@@ -390,7 +390,7 @@ void AmigaFont::initFromData(const byte *data, uint32 dataSize, uint32 fontOffse
 }
 
 bool AmigaFont::isProportional() const {
-	static constexpr byte kAmigaFpfProportional = 0x20;
+	static const byte kAmigaFpfProportional = 0x20;
 	return (_font->_flags & kAmigaFpfProportional) != 0;
 }
 

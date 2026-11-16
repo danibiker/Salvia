@@ -308,7 +308,7 @@ void DialogScreen::freeDialogLineTexts() {
 }
 
 ChapterTitleText::ChapterTitleText(Gfx::Driver *gfx, uint chapter) :
-		_pos(), _text(gfx) {
+		_pos(), _text(gfx), _color(Gfx::Color(0x68, 0x05, 0x04)) {
 	Common::String text = Common::String::format(
 			"%s: %s",
 			StarkGameChapter->getChapterTitle(chapter).c_str(),
@@ -322,7 +322,7 @@ ChapterTitleText::ChapterTitleText(Gfx::Driver *gfx, uint chapter) :
 
 DialogLineText::DialogLineText(Gfx::Driver *gfx, uint logIndex, uint lineIndex, uint boxWidth) :
 		_namePos(), _linePos(), _boxWidth(boxWidth),
-		_nameText(gfx), _lineText(gfx) {
+		_nameText(gfx), _lineText(gfx), _textColorApril(Gfx::Color(0x68, 0x05, 0x04)), _textColorNormal(Gfx::Color(0x1E, 0x1E, 0x96)) {
 	Diary::ConversationLogLine logLine = StarkDiary->getDialog(logIndex).lines[lineIndex];
 
 	Common::String name = StarkGlobal->getCharacterName(logLine.characterId);
@@ -360,7 +360,7 @@ void DialogLineText::setPosition(const Common::Point &pos) {
 DialogTitleWidget::DialogTitleWidget(DialogScreen *screen, Gfx::Driver *gfx, uint logIndex) :
 		StaticLocationWidget(nullptr, nullptr, nullptr),
 		_logIndex(logIndex), _pos(), _text(gfx),
-		_screen(screen) {
+		_screen(screen), _textColorHovered(Gfx::Color(0x1E, 0x1E, 0x96)), _textColorDefault(Gfx::Color(0x00, 0x00, 0x00)) {
 	const Diary::ConversationLog &dialog = StarkDiary->getDialog(_logIndex);
 
 	_chapter = dialog.chapter;

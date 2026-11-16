@@ -53,7 +53,7 @@ SoundHE::SoundHE(ScummEngine *parent, Audio::Mixer *mixer, Common::Mutex *mutex)
 	_mutex(mutex),
 	_overrideFreq(0),
 	_heSpoolingMusicTable(nullptr),
-	_heSpoolingMusicCount(0) {
+	_heSpoolingMusicCount(0), _heTalkOffset(0), _stopActorTalkingFlag(false), _inSoundCallbackFlag(false), _soundCallbacksQueueSize(0), _soundAlreadyInQueueCount(0), _inUnqueueCallbackScripts(0), _soundsDebugFrameCounter(0), _dynamicSoundAgeCounter(0) {
 
 	_createSndId = 0;
 	_createSndLastAppend = 0;

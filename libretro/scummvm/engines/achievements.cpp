@@ -148,7 +148,8 @@ bool AchievementsManager::loadAchievementsData(const char *platform, const char 
 
 	_achievements.clear();
 	INIFile::SectionList sections = cfgFile.getSections();
-	for (const auto &section : sections) {
+	for (auto rfIt151 = sections.begin(), rfEnd151 = sections.end(); rfIt151 != rfEnd151; ++rfIt151) {
+		const auto &section = *rfIt151;
 		if (!(section.name.hasPrefix("achievements:"))) {
 			continue;
 		}

@@ -49,7 +49,7 @@ class BoxListDirectoryByIdRequest: public Networking::Request {
 	void finishListing(Common::Array<StorageFile> &files);
 public:
 	BoxListDirectoryByIdRequest(BoxStorage *storage, const Common::String &id, Storage::ListDirectoryCallback cb, Networking::ErrorCallback ecb);
-	~BoxListDirectoryByIdRequest() override;
+	~BoxListDirectoryByIdRequest();
 
 	void handle() override;
 	void restart() override;

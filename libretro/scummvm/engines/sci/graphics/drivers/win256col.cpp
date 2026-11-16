@@ -26,10 +26,10 @@
 
 namespace Sci {
 
-class WindowsGfx256ColorsDriver final : public UpscaledGfxDriver {
+class WindowsGfx256ColorsDriver : public UpscaledGfxDriver {
 public:
 	WindowsGfx256ColorsDriver(bool coloredDosStyleCursors, bool smallWindow, bool rgbRendering);
-	~WindowsGfx256ColorsDriver() override {}
+	~WindowsGfx256ColorsDriver() {}
 	bool initScreen(const Graphics::PixelFormat *format) override;
 	void copyRectToScreen(const byte *src, int srcX, int srcY, int pitch, int destX, int destY, int w, int h, const PaletteMod *palMods, const byte *palModMapping) override;
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;

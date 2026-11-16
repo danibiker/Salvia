@@ -31,7 +31,7 @@ namespace Stark {
 
 SettingsMenuScreen::SettingsMenuScreen(Gfx::Driver *gfx, Cursor *cursor) :
 		StaticLocationScreen(gfx, cursor, "OptionLocation", Screen::kScreenSettingsMenu),
-		_soundManager() {
+		_soundManager(), _textColorHovered(Gfx::Color(0x1E, 0x1E, 0x96)), _textColorDefault(Gfx::Color(0x00, 0x00, 0x00)) {
 }
 
 SettingsMenuScreen::~SettingsMenuScreen() {
@@ -277,7 +277,7 @@ VolumeWidget::VolumeWidget(const char *renderEntryName, Cursor *cursor,
 		_soundManager(soundManager),
 		_soundIndex(soundIndex),
 		_settingIndex(settingIndex),
-		_isDragged(false) {
+		_isDragged(false), _textColorBgHovered(Gfx::Color(0xFF, 0xFF, 0xFF)) {
 	// Load images
 	_sliderImage = StarkStaticProvider->getUIElement(StaticProvider::kVolume, 0);
 	_bgImage = StarkStaticProvider->getUIElement(StaticProvider::kVolume, 1);

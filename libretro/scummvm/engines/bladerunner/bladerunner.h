@@ -347,7 +347,7 @@ private:
 
 public:
 	BladeRunnerEngine(OSystem *syst, const ADGameDescription *desc);
-	~BladeRunnerEngine() override;
+	~BladeRunnerEngine();
 
 	bool hasFeature(EngineFeature f) const override;
 	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
@@ -450,7 +450,7 @@ public:
 	void  setExtraCNotify(uint8 val);
 };
 
-static inline constexpr Graphics::PixelFormat gameDataPixelFormat() {
+static inline Graphics::PixelFormat gameDataPixelFormat() {
 	return Graphics::PixelFormat(2, 5, 5, 5, 0, 10, 5, 0, 0);
 }
 

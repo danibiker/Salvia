@@ -97,8 +97,8 @@ public:
 	void onScreenChanged() { _title.reset(); }
 
 private:
-	const Gfx::Color _textColorHovered = Gfx::Color(0x1E, 0x1E, 0x96);
-	const Gfx::Color _textColorDefault = Gfx::Color(0x00, 0x00, 0x00);
+	const Gfx::Color _textColorHovered;
+	const Gfx::Color _textColorDefault;
 
 	Common::Point _formatRectPos;
 	int _fontHeight;

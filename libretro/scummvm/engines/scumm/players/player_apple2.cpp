@@ -34,6 +34,10 @@ namespace Scumm {
  */
 class AppleII_SoundFunction1_FreqUpDown : public AppleII_SoundFunction {
 public:
+	AppleII_SoundFunction1_FreqUpDown() : _delta(0), _count(0), _interval(0), _limit(0), _decInterval(false) {}
+private:
+
+public:
 	void init(Player_AppleII *player, const byte *params) override {
 		_player = player;
 		_delta = params[0];
@@ -70,17 +74,21 @@ private:
 	}
 
 protected:
-	int _delta = 0;
-	int _count = 0;
-	byte _interval = 0; // must be unsigned byte ("interval < delta" possible)
-	int _limit = 0;
-	bool _decInterval = false;
+	int _delta;
+	int _count;
+	byte _interval; // must be unsigned byte ("interval < delta" possible)
+	int _limit;
+	bool _decInterval;
 };
 
 /*
  * SoundFunction2: symmetric wave (~)
  */
 class AppleII_SoundFunction2_SymmetricWave : public AppleII_SoundFunction {
+public:
+	AppleII_SoundFunction2_SymmetricWave() : _params(0), _pos(0) {}
+private:
+
 public:
 	void init(Player_AppleII *player, const byte *params) override {
 		_player = player;
@@ -122,14 +130,18 @@ private:
 	}
 
 protected:
-	const byte *_params = 0;
-	int _pos = 0;
+	const byte *_params;
+	int _pos;
 };
 
 /*
  * SoundFunction3: asymmetric wave (__-)
  */
 class AppleII_SoundFunction3_AsymmetricWave : public AppleII_SoundFunction {
+public:
+	AppleII_SoundFunction3_AsymmetricWave() : _params(nullptr), _pos(0) {}
+private:
+
 public:
 	void init(Player_AppleII *player, const byte *params) override {
 		_player = player;
@@ -167,14 +179,18 @@ private:
 	}
 
 protected:
-	const byte *_params = nullptr;
-	int _pos = 0;
+	const byte *_params;
+	int _pos;
 };
 
 /*
  * SoundFunction4: polyphone (2 voices)
  */
 class AppleII_SoundFunction4_Polyphone : public AppleII_SoundFunction {
+public:
+	AppleII_SoundFunction4_Polyphone() : _params(nullptr), _updateRemain1(0), _updateRemain2(0), _count(0), _bitmask1(0), _bitmask2(0), _updateInterval1(0), _updateInterval2(0), _speakerShiftReg(0) {}
+private:
+
 public:
 	void init(Player_AppleII *player, const byte *params) override {
 		_player = player;
@@ -256,23 +272,27 @@ private:
 	}
 
 protected:
-	const byte *_params = nullptr;
+	const byte *_params;
 
-	byte _updateRemain1 = 0;
-	byte _updateRemain2 = 0;
+	byte _updateRemain1;
+	byte _updateRemain2;
 
-	uint16 _count = 0;
-	byte _bitmask1 = 0;
-	byte _bitmask2 = 0;
-	byte _updateInterval1 = 0;
-	byte _updateInterval2 = 0;
-	byte _speakerShiftReg = 0;
+	uint16 _count;
+	byte _bitmask1;
+	byte _bitmask2;
+	byte _updateInterval1;
+	byte _updateInterval2;
+	byte _speakerShiftReg;
 };
 
 /*
  * SoundFunction5: periodic noise
  */
 class AppleII_SoundFunction5_Noise : public AppleII_SoundFunction {
+public:
+	AppleII_SoundFunction5_Noise() : _index(0), _param0(0) {}
+private:
+
 public:
 	void init(Player_AppleII *player, const byte *params) override {
 		_player = player;
@@ -324,8 +344,8 @@ private:
 	}
 
 protected:
-	int _index = 0;
-	int _param0 = 0;
+	int _index;
+	int _param0;
 
 private:
 	static const byte _noiseTable[256];
@@ -356,7 +376,7 @@ const byte AppleII_SoundFunction5_Noise::_noiseTable[256] = {
  ************************************/
 
 Player_AppleII::Player_AppleII(ScummEngine *scumm, Audio::Mixer *mixer)
-	: _mixer(mixer), _vm(scumm), _soundFunc(nullptr) {
+	: _mixer(mixer), _vm(scumm), _soundFunc(nullptr), _soundNr(0), _type(0), _loop(0), _params(nullptr), _speakerState(0), _sampleRate(0) {
 	resetState();
 	setSampleRate(_mixer->getOutputRate());
 	_mixer->playStream(Audio::Mixer::kPlainSoundType, &_soundHandle, this, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO, true);

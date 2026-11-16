@@ -45,7 +45,7 @@ class DropboxInfoRequest: public Networking::Request {
 	void finishInfo(const StorageInfo &info);
 public:
 	DropboxInfoRequest(DropboxStorage *storage, Storage::StorageInfoCallback cb, Networking::ErrorCallback ecb);
-	~DropboxInfoRequest() override;
+	~DropboxInfoRequest();
 
 	void handle() override;
 	void restart() override;

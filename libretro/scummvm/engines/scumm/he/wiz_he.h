@@ -313,7 +313,7 @@ public:
 		if (_lifes)
 			++*_lifes;
 	}
-	WizPxShrdBuffer(WizPxShrdBuffer &&other) noexcept : _buff(other._buff), _lifes(other._lifes), _xstart(other._xstart) {
+	WizPxShrdBuffer(WizPxShrdBuffer &&other) : _buff(other._buff), _lifes(other._lifes), _xstart(other._xstart) {
 		other._lifes = nullptr;
 	}
 	~WizPxShrdBuffer() {
@@ -631,13 +631,13 @@ public:
 		NUM_IMAGES   = 255
 	};
 
-	WizBufferElement _wizBuffer[NUM_IMAGES] = {};
-	uint16 _wizBufferIndex = 0;
-	WizPolygon _polygons[NUM_POLYGONS] = {};
+	WizBufferElement _wizBuffer[NUM_IMAGES];
+	uint16 _wizBufferIndex;
+	WizPolygon _polygons[NUM_POLYGONS];
 
 	// For collision
-	WizRawPixel _compareBufferA[640] = {};
-	WizRawPixel _compareBufferB[640] = {};
+	WizRawPixel _compareBufferA[640];
+	WizRawPixel _compareBufferB[640];
 
 	Wiz(ScummEngine_v71he *vm);
 	~Wiz() {
@@ -648,9 +648,9 @@ public:
 
 	void clearWizBuffer();
 	Common::Rect _wizClipRect;
-	bool _useWizClipRect = false;
-	bool _uses16BitColor = false;
-	int _wizActiveShadow = 0;
+	bool _useWizClipRect;
+	bool _uses16BitColor;
+	int _wizActiveShadow;
 
 	void deleteLocalPolygons();
 	void polygonLoad(const uint8 *polData);
@@ -968,8 +968,8 @@ public:
 	void auxHistogramTRLEPrim(int *histogramTablePtr, byte *compData, Common::Rect *sourceRect);
 
 	// TRLE
-	int _trlePutSize = 0;
-	byte _trleBuf[(128 * 2) * sizeof(WizRawPixel)] = {};
+	int _trlePutSize;
+	byte _trleBuf[(128 * 2) * sizeof(WizRawPixel)];
 
 	byte *trlePutDump(byte *dest, int nn);
 	byte *trlePutRun(byte *dest, int nn, int cc, int tcolor);
@@ -977,9 +977,9 @@ public:
 	int trleCompressImageArea(byte *destBuffer, const WizRawPixel *sourceBuffer, int sourceBufferWidth, int x1, int y1, int x2, int y2, WizRawPixel transparentColor);
 
 	// TRLE FLIP
-	bool _initializeAlphaTable = true;
-	float _alphaTable[256] = {};
-	int _precomputed16bppTable[WIZ_QUANTIZED_ALPHA_COUNT][WIZ_COLOR16_COMPONENT_COUNT][WIZ_COLOR16_COMPONENT_COUNT] = { {}, {}, {} };
+	bool _initializeAlphaTable;
+	float _alphaTable[256];
+	int _precomputed16bppTable[WIZ_QUANTIZED_ALPHA_COUNT][WIZ_COLOR16_COMPONENT_COUNT][WIZ_COLOR16_COMPONENT_COUNT];
 
 	void trleFLIPDecompressImage(
 		WizRawPixel *bufferPtr, const byte *compData, int bufferWidth, int bufferHeight,

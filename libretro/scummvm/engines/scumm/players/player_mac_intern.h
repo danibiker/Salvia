@@ -29,7 +29,7 @@ namespace Scumm {
 
 class LegacyMusicDriver;
 class ScummEngine;
-class Indy3MacSnd final : public VblTaskClientDriver {
+class Indy3MacSnd : public VblTaskClientDriver {
 private:
 	Indy3MacSnd(ScummEngine *vm, Audio::Mixer *mixer);
 public:
@@ -186,7 +186,7 @@ public:
 };
 
 class MacSndLoader;
-class LoomMonkeyMacSnd final : public VblTaskClientDriver, public MacLowLevelPCMDriver::CallbackClient {
+class LoomMonkeyMacSnd : public VblTaskClientDriver, public MacLowLevelPCMDriver::CallbackClient {
 private:
 	LoomMonkeyMacSnd(ScummEngine *vm, Audio::Mixer *mixer);
 public:

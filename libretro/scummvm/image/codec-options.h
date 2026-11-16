@@ -24,7 +24,7 @@
 
 namespace Image {
 
-enum class CodecAccuracy {
+enum CodecAccuracy {
 	Fast,
 	Default,
 	Accurate,

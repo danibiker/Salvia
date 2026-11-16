@@ -43,7 +43,7 @@ namespace Image {
 class XanDecoder : public Codec {
 public:
 	XanDecoder (int width, int height, int bitsPerPixel);
-	~XanDecoder() override;
+	~XanDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _pixelFormat; }

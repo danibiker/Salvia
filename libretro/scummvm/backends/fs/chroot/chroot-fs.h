@@ -33,7 +33,7 @@ class ChRootFilesystemNode final : public AbstractFSNode {
 
 public:
 	ChRootFilesystemNode(const Common::String &root, const Common::String &path, const Common::String &drive = Common::String());
-	~ChRootFilesystemNode() override;
+	~ChRootFilesystemNode();
 
 	bool exists() const override;
 	Common::U32String getDisplayName() const override;

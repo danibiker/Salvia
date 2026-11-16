@@ -69,7 +69,7 @@ protected:
 public:
 	TabWidget(GuiObject *boss, int x, int y, int w, int h, ThemeEngine::TextAlignVertical alignV = ThemeEngine::kTextAlignVTop);
 	TabWidget(GuiObject *boss, const Common::String &name, ThemeEngine::TextAlignVertical alignV = ThemeEngine::kTextAlignVTop);
-	~TabWidget() override;
+	~TabWidget();
 
 	void init();
 

@@ -33,7 +33,7 @@ public:
 	void initBackend() override;
 
 	using OSystem::setScaler;
-	bool setScaler(const char *name, int factor) override final;
+	bool setScaler(const char *name, int factor) override;
 	void displayMessageOnOSD(const Common::U32String &msg) override;
 	void displayActivityIconOnOSD(const Graphics::Surface *icon) override {}
 	void fillScreen(uint32 col) override;

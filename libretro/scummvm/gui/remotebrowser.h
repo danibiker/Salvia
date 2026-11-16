@@ -38,7 +38,7 @@ class CommandSender;
 class RemoteBrowserDialog : public Dialog {
 public:
 	RemoteBrowserDialog(const Common::U32String &title);
-	~RemoteBrowserDialog() override;
+	~RemoteBrowserDialog();
 
 	void open() override;
 	void close() override;

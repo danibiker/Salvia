@@ -90,10 +90,49 @@ void GUIErrorMessageFormatU32StringPtr(const Common::U32String *fmt, ...);
 /**
  * Initialize graphics and show an error message.
  */
+#ifndef SCUMMVM_CXX03_COMPAT
 template<class... TParam>
 inline void GUIErrorMessageFormat(const Common::U32String &fmt, TParam... param) {
 	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<TParam>(param)...);
 }
+#else
+
+inline void GUIErrorMessageFormat(const Common::U32String &fmt) {
+	GUIErrorMessageFormatU32StringPtr(&fmt);
+}
+template<class A1>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1));
+}
+template<class A1, class A2>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2));
+}
+template<class A1, class A2, class A3>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+}
+template<class A1, class A2, class A3, class A4>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+}
+template<class A1, class A2, class A3, class A4, class A5>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+}
+template<class A1, class A2, class A3, class A4, class A5, class A6>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+}
+template<class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6), Common::forward<A7>(a7));
+}
+template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+inline void GUIErrorMessageFormat(const Common::U32String &fmt, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8) {
+	GUIErrorMessageFormatU32StringPtr(&fmt, Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6), Common::forward<A7>(a7), Common::forward<A8>(a8));
+}
+#endif
 /**
  * Initialize graphics and show an error message.
  */
@@ -109,7 +148,7 @@ class Engine;
 */
 class PauseToken {
 public:
-	constexpr PauseToken() : _engine(nullptr) {}
+	PauseToken() : _engine(nullptr) {}
 	/**
 	 * Construct a pause token.
 	 */
@@ -137,7 +176,7 @@ public:
 	bool isActive() const { return _engine != nullptr; }
 
 private:
-	constexpr PauseToken(Engine *engine) : _engine(engine) {}
+	PauseToken(Engine *engine) : _engine(engine) {}
 
 	Engine *_engine;
 	/**
@@ -185,7 +224,7 @@ protected:
 	 */
 	const Common::String _targetName;
 
-	int32 _activeEnhancements = kEnhGameBreakingBugFixes;
+	int32 _activeEnhancements;
 
 	/**
 	 * Flag for whether hotspots should be displayed
@@ -386,7 +425,7 @@ public:
 	/**
 	 * Return the engine's debugger instance, if any.
 	 */
-	virtual GUI::Debugger *getDebugger() final { return _debugger; }
+	virtual GUI::Debugger *getDebugger() { return _debugger; }
 
 	/**
 	 * Set the engine's debugger.

@@ -34,7 +34,7 @@ class AtariSurface : public Graphics::ManagedSurface {
 public:
 	AtariSurface() = default;
 	AtariSurface(int16 width, int16 height, const Graphics::PixelFormat &pixelFormat);
-	~AtariSurface() override;
+	~AtariSurface();
 
 	using Graphics::ManagedSurface::create;
 	void create(int16 width, int16 height, const Graphics::PixelFormat &pixelFormat) final override;

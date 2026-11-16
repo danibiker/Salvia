@@ -39,7 +39,7 @@ namespace Scumm {
 class Player_MOD : public Audio::AudioStream {
 public:
 	Player_MOD(Audio::Mixer *mixer);
-	~Player_MOD() override;
+	~Player_MOD();
 	virtual void setMusicVolume(int vol);
 
 	virtual void startChannel(int id, void *data, int size, int rate, uint8 vol, int loopStart = 0, int loopEnd = 0, int8 pan = 0);

@@ -36,7 +36,7 @@ namespace Image {
 class QTRLEDecoder : public Codec {
 public:
 	QTRLEDecoder(uint16 width, uint16 height, byte bitsPerPixel);
-	~QTRLEDecoder() override;
+	~QTRLEDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override;

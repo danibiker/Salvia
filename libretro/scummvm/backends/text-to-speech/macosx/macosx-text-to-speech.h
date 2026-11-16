@@ -33,7 +33,7 @@
 class MacOSXTextToSpeechManager : public Common::TextToSpeechManager {
 public:
 	MacOSXTextToSpeechManager();
-	~MacOSXTextToSpeechManager() override;
+	~MacOSXTextToSpeechManager();
 
 	bool say(const Common::U32String &str, Action action) override;
 

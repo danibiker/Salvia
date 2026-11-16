@@ -45,6 +45,10 @@ class RewindableAudioStream;
 
 class AIFFHeader {
 public:
+	AIFFHeader() : _channels(0), _frameCount(0), _bitsPerSample(0), _rate(0), _codec(0), _dataStream(nullptr) {}
+private:
+
+public:
 	static AIFFHeader *readAIFFHeader(Common::SeekableReadStream *stream, DisposeAfterUse::Flag disposeAfterUse);
 	RewindableAudioStream *makeAIFFStream(Common::SeekableReadStream *stream, DisposeAfterUse::Flag disposeAfterUse);
 
@@ -52,12 +56,12 @@ public:
 	uint32 getFrameRate() const { return _rate; }
 
 private:
-	uint16 _channels = 0;
-	uint32 _frameCount = 0;
-	uint16 _bitsPerSample = 0;
-	uint32 _rate = 0;
-	uint32 _codec = 0;
-	Common::SeekableReadStream *_dataStream = nullptr;
+	uint16 _channels;
+	uint32 _frameCount;
+	uint16 _bitsPerSample;
+	uint32 _rate;
+	uint32 _codec;
+	Common::SeekableReadStream *_dataStream;
 };
 
 /**

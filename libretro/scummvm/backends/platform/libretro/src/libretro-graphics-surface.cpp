@@ -28,6 +28,8 @@
 #include "backends/platform/libretro/include/libretro-timer.h"
 #include "backends/platform/libretro/include/libretro-graphics-surface.h"
 
+#include <features/features_cpu.h>
+
 LibretroGraphics::LibretroGraphics() : _cursorPaletteEnabled(false),
 	_cursorKeyColor(0),
 	_cursorScaleX(0),
@@ -125,17 +127,96 @@ void LibretroGraphics::updateScreen() {
 	dynamic_cast<LibretroTimerManager *>(LIBRETRO_G_SYSTEM->getTimerManager())->checkThread(THREAD_SWITCH_UPDATE);
 }
 
+/* Time spent in realUpdateScreen(), read by the performance log in libretro-core.cpp. */
+uint64 retro_perf_blit_usec = 0;
+
+/* Fast copy of a full frame into the RGB565 output surface when no scaling is
+ * needed (the usual case: _screen is created with the size of _gameScreen and
+ * _overlay).  ManagedSurface::blitFrom() handles every case through a generic
+ * per-pixel loop (format checks, alpha tests, scale counters for every pixel),
+ * which on the in-order Xbox 360 CPU costs tens of milliseconds for a
+ * 1280x720 launcher frame.  Returns false when the generic path is needed. */
+static bool fastBlitToScreen(Graphics::ManagedSurface &dst, const Graphics::Surface &src, const Graphics::Palette &palette) {
+	if (src.w != dst.w || src.h != dst.h || dst.format.bytesPerPixel != 2)
+		return false;
+
+	byte *dstRow = (byte *)dst.getPixels();
+	const byte *srcRow = (const byte *)src.getPixels();
+	const int w = src.w;
+	const int h = src.h;
+
+	if (src.format == dst.format) {
+		const uint rowBytes = w * 2;
+		if ((uint)src.pitch == rowBytes && (uint)dst.pitch == rowBytes) {
+			memcpy(dstRow, srcRow, rowBytes * h);
+		} else {
+			for (int y = 0; y < h; ++y, dstRow += dst.pitch, srcRow += src.pitch)
+				memcpy(dstRow, srcRow, rowBytes);
+		}
+		return true;
+	}
+
+	if (src.format.isCLUT8()) {
+		uint16 lut[256];
+		const uint palSize = palette.size();
+		for (uint i = 0; i < 256; ++i) {
+			byte r = 0, g = 0, b = 0;
+			if (i < palSize)
+				palette.get(i, r, g, b);
+			lut[i] = (uint16)dst.format.RGBToColor(r, g, b);
+		}
+		for (int y = 0; y < h; ++y, dstRow += dst.pitch, srcRow += src.pitch) {
+			uint16 *d = (uint16 *)dstRow;
+			const byte *sp = srcRow;
+			int x = 0;
+			for (; x + 4 <= w; x += 4) {
+				d[x]     = lut[sp[x]];
+				d[x + 1] = lut[sp[x + 1]];
+				d[x + 2] = lut[sp[x + 2]];
+				d[x + 3] = lut[sp[x + 3]];
+			}
+			for (; x < w; ++x)
+				d[x] = lut[sp[x]];
+		}
+		return true;
+	}
+
+	if (dst.format == Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0) &&
+	    src.format.bytesPerPixel == 4 && src.format.rLoss == 0 && src.format.gLoss == 0 && src.format.bLoss == 0) {
+		/* 32 bpp with 8-bit components (TinyGL engines) -> RGB565, opaque copy
+		 * like the generic path does for fully opaque pixels. */
+		const uint rS = src.format.rShift, gS = src.format.gShift, bS = src.format.bShift;
+		for (int y = 0; y < h; ++y, dstRow += dst.pitch, srcRow += src.pitch) {
+			uint16 *d = (uint16 *)dstRow;
+			const uint32 *sp = (const uint32 *)srcRow;
+			for (int x = 0; x < w; ++x) {
+				const uint32 c = sp[x];
+				d[x] = (uint16)((((c >> rS) & 0xF8) << 8) | (((c >> gS) & 0xFC) << 3) | (((c >> bS) & 0xFF) >> 3));
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
 void LibretroGraphics::realUpdateScreen(void) {
+	const uint64 t0 = cpu_features_get_time_usec();
 	const Graphics::Surface &srcSurface = _overlayVisible ? _overlay : _gameScreen;
 
-	if (srcSurface.w && srcSurface.h)
-		_screen.blitFrom(srcSurface, Common::Rect(srcSurface.w, srcSurface.h), Common::Rect(_screen.w, _screen.h), &_gamePalette);
+	if (srcSurface.w && srcSurface.h) {
+#ifndef LIBRETRO_NO_FAST_BLIT /* define it to compare against the generic path */
+		if (!fastBlitToScreen(_screen, srcSurface, _gamePalette))
+#endif
+			_screen.blitFrom(srcSurface, Common::Rect(srcSurface.w, srcSurface.h), Common::Rect(_screen.w, _screen.h), &_gamePalette);
+	}
 
 	if (_cursorVisible && _cursor.w && _cursor.h) {
 		Common::Point topLeft(_cursorX - _cursorHotspotXScaled, _cursorY - _cursorHotspotYScaled);
 		_screen.transBlitFrom(_cursor, Common::Rect(_cursor.w, _cursor.h), Common::Rect(topLeft, topLeft + Common::Point(_cursorWidthScaled, _cursorHeightScaled)),  _cursorKeyColor, false, 0xff,  _cursorPaletteEnabled ? &_cursorPalette : &_gamePalette);
 	}
 	_screenUpdatePending = false;
+	retro_perf_blit_usec += cpu_features_get_time_usec() - t0;
 }
 
 void LibretroGraphics::clearOverlay() {

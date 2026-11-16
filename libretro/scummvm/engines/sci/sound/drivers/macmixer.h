@@ -70,8 +70,58 @@ public:
 	Common::Mutex _mutex;
 
 private:
+	// Defined in the class: MSVC 2010 cannot match an out-of-class definition
+	// of a member template whose parameter is a dependent enum (C2244).
 	template <Mode mode>
-	void generateSamples(int16 *buf, int len);
+	void generateSamples(int16 *data, int len) {
+		for (int i = 0; i < len; ++i) {
+			int32 mixL = 0;
+			int32 mixR = 0;
+
+			for (int ci = 0; ci < kChannels; ++ci) {
+				Channel &ch = _mixChannels[ci];
+
+				if (!ch.data)
+					continue;
+
+				const uint16 curOffset = ufracToUint(ch.pos);
+
+				if (mode == kModeHq || mode == kModeHqStereo) {
+					int32 sample = (ch.data[curOffset] - 0x80) << 8;
+					// Since _extraSamples > 0, we can safely access this sample
+					const int32 sample2 = (ch.data[curOffset + 1] - 0x80) << 8;
+					sample += fracToInt((sample2 - sample) * (ch.pos & FRAC_LO_MASK));
+					sample *= ch.volume;
+
+					if (mode == kModeHqStereo) {
+						mixL += sample * (127 - ch.pan) / (63 * 64);
+						mixR += sample * ch.pan / (63 * 64);
+					} else {
+						mixL += sample / 63;
+					}
+				} else {
+					mixL += static_cast<T *>(this)->applyChannelVolume(ch.volume, ch.data[curOffset]) << 8;
+				}
+
+				ch.pos += ch.step;
+
+				if (ufracToUint(ch.pos) > ch.endOffset) {
+					if (ch.loopLength > 0) {
+						do {
+							ch.pos -= uintToUfrac(ch.loopLength);
+						} while (ufracToUint(ch.pos) > ch.endOffset);
+					} else {
+						static_cast<T *>(this)->onChannelFinished(ci);
+						ch.data = nullptr;
+					}
+				}
+			}
+
+			*data++ = (int16)CLIP<int32>(mixL, -32768, 32767) * _mixVolume / 8;
+			if (mode == kModeHqStereo)
+				*data++ = (int16)CLIP<int32>(mixR, -32768, 32767) * _mixVolume / 8;
+		}
+	}
 
 	struct Channel {
 		ufrac_t pos;
@@ -150,58 +200,6 @@ template <typename T>
 void Mixer_Mac<T>::setChannelPan(uint channel, byte pan) {
 	assert(channel < kChannels);
 	_mixChannels[channel].pan = pan;
-}
-
-template <typename T>
-template <typename Mixer_Mac<T>::Mode mode>
-void Mixer_Mac<T>::generateSamples(int16 *data, int len) {
-	for (int i = 0; i < len; ++i) {
-		int32 mixL = 0;
-		int32 mixR = 0;
-
-		for (int ci = 0; ci < kChannels; ++ci) {
-			Channel &ch = _mixChannels[ci];
-
-			if (!ch.data)
-				continue;
-
-			const uint16 curOffset = ufracToUint(ch.pos);
-
-			if (mode == kModeHq || mode == kModeHqStereo) {
-				int32 sample = (ch.data[curOffset] - 0x80) << 8;
-				// Since _extraSamples > 0, we can safely access this sample
-				const int32 sample2 = (ch.data[curOffset + 1] - 0x80) << 8;
-				sample += fracToInt((sample2 - sample) * (ch.pos & FRAC_LO_MASK));
-				sample *= ch.volume;
-
-				if (mode == kModeHqStereo) {
-					mixL += sample * (127 - ch.pan) / (63 * 64);
-					mixR += sample * ch.pan / (63 * 64);
-				} else {
-					mixL += sample / 63;
-				}
-			} else {
-				mixL += static_cast<T *>(this)->applyChannelVolume(ch.volume, ch.data[curOffset]) << 8;
-			}
-
-			ch.pos += ch.step;
-
-			if (ufracToUint(ch.pos) > ch.endOffset) {
-				if (ch.loopLength > 0) {
-					do {
-						ch.pos -= uintToUfrac(ch.loopLength);
-					} while (ufracToUint(ch.pos) > ch.endOffset);
-				} else {
-					static_cast<T *>(this)->onChannelFinished(ci);
-					ch.data = nullptr;
-				}
-			}
-		}
-
-		*data++ = (int16)CLIP<int32>(mixL, -32768, 32767) * _mixVolume / 8;
-		if (mode == kModeHqStereo)
-			*data++ = (int16)CLIP<int32>(mixR, -32768, 32767) * _mixVolume / 8;
-	}
 }
 
 template <typename T>

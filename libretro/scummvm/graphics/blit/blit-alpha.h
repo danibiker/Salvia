@@ -33,7 +33,7 @@ protected:
 template<bool rgbmod, bool alphamod>
 struct BaseBlend {
 public:
-	constexpr BaseBlend(const uint32 color) :
+	BaseBlend(const uint32 color) :
 		ca(alphamod ? ((color >> BlendBlit::kAModShift) & 0xFF) : 255),
 		cr(rgbmod   ? ((color >> BlendBlit::kRModShift) & 0xFF) : 255),
 		cg(rgbmod   ? ((color >> BlendBlit::kGModShift) & 0xFF) : 255),
@@ -46,7 +46,7 @@ protected:
 template<bool rgbmod, bool alphamod>
 struct AlphaBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr AlphaBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	AlphaBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		uint32 ina;
@@ -128,7 +128,7 @@ public:
 template<bool rgbmod, bool alphamod>
 struct MultiplyBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr MultiplyBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	MultiplyBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		uint32 ina;
@@ -188,7 +188,7 @@ public:
 template<bool rgbmod, bool alphamod>
 struct OpaqueBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr OpaqueBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	OpaqueBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		*(uint32 *)out = *(const uint32 *)in | BlendBlit::kAModMask;
@@ -198,7 +198,7 @@ public:
 template<bool rgbmod, bool alphamod>
 struct BinaryBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr BinaryBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	BinaryBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		uint32 pix = *(const uint32 *)in;
@@ -213,7 +213,7 @@ public:
 template<bool rgbmod, bool alphamod>
 struct AdditiveBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr AdditiveBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	AdditiveBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		uint32 ina;
@@ -277,7 +277,7 @@ public:
 template<bool rgbmod, bool alphamod>
 struct SubtractiveBlend : public BaseBlend<rgbmod, alphamod> {
 public:
-	constexpr SubtractiveBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
+	SubtractiveBlend(const uint32 color) : BaseBlend<rgbmod, alphamod>(color) {}
 
 	inline void normal(const byte *in, byte *out) const {
 		uint32 ina = in[BlendBlit::kAIndex];

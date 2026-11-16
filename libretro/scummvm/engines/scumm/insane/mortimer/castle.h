@@ -64,8 +64,10 @@ protected:
 private:
 	enum Stage { kEntry, kRoom, kLeft, kDrop, kExit, kGate, kSong, kIdle, kRiddle, kWrong, kCorrect, kFinished };
 	struct SpeechBlock {
+	SpeechBlock() : next(0), count(0), size(0) {}
+
 		Common::Array<byte> data;
-		uint next = 0, count = 0, size = 0;
+		uint next, count, size;
 	};
 
 	bool loadResources();

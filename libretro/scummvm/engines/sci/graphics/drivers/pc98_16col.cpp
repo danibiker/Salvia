@@ -26,7 +26,7 @@
 
 namespace Sci {
 
-class PC98Gfx16ColorsDriver final : public UpscaledGfxDriver {
+class PC98Gfx16ColorsDriver : public UpscaledGfxDriver {
 public:
 	enum SjisFontStyle {
 		kFontStyleNone,
@@ -35,7 +35,7 @@ public:
 	};
 
 	PC98Gfx16ColorsDriver(int textAlignX, bool cursorScaleWidth, bool cursorScaleHeight, SjisFontStyle sjisFontStyle, bool rgbRendering, bool needsUnditheringPalette);
-	~PC98Gfx16ColorsDriver() override;
+	~PC98Gfx16ColorsDriver();
 	bool initScreen(const Graphics::PixelFormat *format) override;
 	void setPalette(const byte*, uint, uint, bool, const PaletteMod*, const byte*) override {}
 	void replaceCursor(const void *cursor, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor) override;

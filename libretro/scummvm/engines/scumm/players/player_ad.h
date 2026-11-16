@@ -41,7 +41,7 @@ class ScummEngine;
 class Player_AD : public MusicEngine {
 public:
 	Player_AD(ScummEngine *scumm, Common::Mutex &mutex);
-	~Player_AD() override;
+	~Player_AD();
 
 	// MusicEngine API
 	void setMusicVolume(int vol) override;

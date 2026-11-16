@@ -37,15 +37,15 @@ private:
 	Graphics::Surface *_backupScreen;
 	byte *_backupPalette;
 
-	int _screenSaveLevel = 0;
-	bool _skipScene = false;
+	int _screenSaveLevel;
+	bool _skipScene;
 
 #if ENABLE_SCUMM_7_8
 	// V7 games don't honor the music_mute and sfx_mute settings, so we
 	// have to set the volume directly.
 
-	int _oldMusicVolume = -1;
-	int _oldSfxVolume = -1;
+	int _oldMusicVolume;
+	int _oldSfxVolume;
 #endif
 
 public:

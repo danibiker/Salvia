@@ -37,7 +37,7 @@ class PopUpWidget;
 class UpdatesDialog : public Dialog {
 public:
 	UpdatesDialog();
-	~UpdatesDialog() override {}
+	~UpdatesDialog() {}
 
 	void handleCommand(CommandSender *sender, uint32 cmd, uint32 data) override;
 

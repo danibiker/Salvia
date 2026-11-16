@@ -655,14 +655,16 @@ protected:
 	void setGraphicsMode(GraphicsMode mode);
 
 	struct CursorData {
+	CursorData() : hotspotX(0), hotspotY(0) {}
+
 		Common::SharedPtr<Graphics::ManagedSurface> surface;
-		int hotspotX = 0;
-		int hotspotY = 0;
+		int hotspotX;
+		int hotspotY;
 	};
 
 	CursorData _cursors[kCursorMax];
-	CursorType _activeCursorType = kCursorNormal;
-	bool _useCursor = false;
+	CursorType _activeCursorType;
+	bool _useCursor;
 
 public:
 	inline ThemeEval *getEvaluator() { return _themeEval; }
@@ -826,7 +828,7 @@ protected:
 
 	int16 _baseWidth, _baseHeight;
 	float _scaleFactor;
-	bool _needScaleRefresh = false;
+	bool _needScaleRefresh;
 
 	/** Font info. */
 	const Graphics::Font *_font;

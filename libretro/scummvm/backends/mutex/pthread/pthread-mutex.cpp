@@ -31,7 +31,7 @@
 class PthreadMutexInternal final : public Common::MutexInternal {
 public:
 	PthreadMutexInternal();
-	~PthreadMutexInternal() override;
+	~PthreadMutexInternal();
 
 	bool lock() override;
 	bool unlock() override;

@@ -111,10 +111,10 @@ void TinyGLSurfaceRenderer::fill(const Color &color, const Common::Point &dest, 
 void TinyGLSurfaceRenderer::convertToVertices(SurfaceVertex *vertices, const Common::Point &dest, uint width, uint height) const {
 	const Math::Vector2d surfaceVertices[] = {
 		// X   Y
-		{ 0.0f, 0.0f },
-		{ 1.0f, 0.0f },
-		{ 0.0f, 1.0f },
-		{ 1.0f, 1.0f },
+		Math::Vector2d(0.0f, 0.0f),
+		Math::Vector2d(1.0f, 0.0f),
+		Math::Vector2d(0.0f, 1.0f),
+		Math::Vector2d(1.0f, 1.0f),
 	};
 
 	Math::Vector2d verSizeWH;

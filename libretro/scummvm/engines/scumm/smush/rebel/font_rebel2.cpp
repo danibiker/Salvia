@@ -131,7 +131,7 @@ public:
 		loadRebel2SpriteFromData(data, dataSize);
 	}
 
-	~Rebel2NutRenderer() override {
+	~Rebel2NutRenderer() {
 		delete[] _spriteData;
 	}
 

@@ -724,7 +724,7 @@ class NamedSpanImpl : public SpanImpl<ValueType, Derived> {
 public:
 	COMMON_SPAN_TYPEDEFS;
 
-	inline NamedSpanImpl() = default;
+	inline NamedSpanImpl() : super_type(), _name(), _sourceByteOffset(0) {}
 
 	inline NamedSpanImpl(const pointer data_,
 						 const size_type size_,
@@ -754,7 +754,7 @@ public:
 
 private:
 	String _name;
-	size_type _sourceByteOffset = 0;
+	size_type _sourceByteOffset;
 
 #pragma mark -
 #pragma mark NamedSpanImpl - Subspan
@@ -870,7 +870,7 @@ class NamedSpan : public NamedSpanImpl<ValueType, NamedSpan> {
 public:
 	COMMON_SPAN_TYPEDEFS;
 
-	inline NamedSpan() = default;
+	inline NamedSpan() : super_type() {}
 
 	inline NamedSpan(const pointer data_,
 					 const size_type size_,

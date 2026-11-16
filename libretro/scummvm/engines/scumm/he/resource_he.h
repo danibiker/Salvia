@@ -70,7 +70,7 @@ private:
 class Win32ResExtractor : public ResExtractor {
 public:
 	Win32ResExtractor(ScummEngine_v70he *scumm);
-	~Win32ResExtractor() override;
+	~Win32ResExtractor();
 
 private:
 	Common::PEResources *_exe;
@@ -81,7 +81,7 @@ private:
 class MacResExtractor : public ResExtractor {
 public:
 	MacResExtractor(ScummEngine_v70he *scumm);
-	~MacResExtractor() override {}
+	~MacResExtractor() {}
 
 private:
 	Common::MacResManager *_resMgr;

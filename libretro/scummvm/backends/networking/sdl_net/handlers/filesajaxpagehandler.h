@@ -29,7 +29,7 @@ namespace Networking {
 class FilesAjaxPageHandler: public FilesBaseHandler {
 public:
 	FilesAjaxPageHandler();
-	~FilesAjaxPageHandler() override;
+	~FilesAjaxPageHandler();
 
 	void handle(Client &client) override;
 };

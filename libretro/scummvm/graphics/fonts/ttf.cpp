@@ -163,7 +163,7 @@ unsigned long TTFLibrary::readCallback(FT_Stream stream, unsigned long offset, u
 class TTFFont : public Font {
 public:
 	TTFFont();
-	~TTFFont() override;
+	~TTFFont();
 
 	bool load(Common::SeekableReadStream *ttfFile, DisposeAfterUse::Flag disposeAfterUse, int size, TTFSizeMode sizeMode,
 	          uint xdpi, uint ydpi, TTFRenderMode renderMode, const uint32 *mapping, bool stemDarkening,
@@ -1059,7 +1059,8 @@ Font *findTTFace(const Common::Array<Common::Path> &files, const Common::U32Stri
 	uint32 bestFaceId = (uint32) -1;
 	uint32 bestPenalty = (uint32) -1;
 
-	for (const auto &curFile : files) {
+	for (auto rfIt1062 = files.begin(), rfEnd1062 = files.end(); rfIt1062 != rfEnd1062; ++rfIt1062) {
+		const auto &curFile = *rfIt1062;
 		Common::File *ttfFile = new Common::File();
 		if (!ttfFile->open(curFile)) {
 			delete ttfFile;

@@ -27,7 +27,7 @@
 /**
  * Provides a savefile manager implementation for Windows.
  */
-class WindowsSaveFileManager final : public DefaultSaveFileManager {
+class WindowsSaveFileManager : public DefaultSaveFileManager {
 public:
 	WindowsSaveFileManager(bool isPortable);
 

@@ -35,7 +35,7 @@ class PicButtonWidget;
 class PredictiveDialog : public GUI::Dialog {
 public:
 	PredictiveDialog();
-	~PredictiveDialog() override;
+	~PredictiveDialog();
 
 	void reflowLayout() override;
 

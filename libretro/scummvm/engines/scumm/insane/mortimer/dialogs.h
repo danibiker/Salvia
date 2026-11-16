@@ -35,7 +35,7 @@ namespace Scumm {
 class MortimerDifficultyDialog : public GUI::Dialog {
 public:
 	MortimerDifficultyDialog(bool isDemo, uint flightDifficulty, uint riddleDifficulty, bool girl = false, bool newPilot = false);
-	~MortimerDifficultyDialog() override;
+	~MortimerDifficultyDialog();
 	uint flightDifficulty() const;
 	uint riddleDifficulty() const;
 	bool girl() const;

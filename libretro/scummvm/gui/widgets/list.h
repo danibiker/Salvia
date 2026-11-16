@@ -61,7 +61,7 @@ public:
 	};
 
 	typedef Common::Array<ListData> ListDataArray;
-	~ListWidget() override;
+	~ListWidget();
 
 protected:
 	Common::U32StringArray	_list;

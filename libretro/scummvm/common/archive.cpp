@@ -107,7 +107,8 @@ int Archive::listMatchingMembers(ArchiveMemberList &list, const Path &pattern, b
 
 	const char *wildcardExclusions = matchPathComponents ? NULL : pathSepString;
 
-	for (const auto &archive : allNames) {
+	for (auto rfIt110 = allNames.begin(), rfEnd110 = allNames.end(); rfIt110 != rfEnd110; ++rfIt110) {
+		const auto &archive = *rfIt110;
 		// TODO: We match case-insenstivie for now, our API does not define whether that's ok or not though...
 		// For our use case case-insensitive is probably what we want to have though.
 		if (archive->getName().matchString(patternString, true, wildcardExclusions)) {
@@ -156,7 +157,8 @@ Common::Error Archive::dumpArchive(const Path &destPath) {
 
 	listMembers(files);
 
-	for (auto &f : files) {
+	for (auto rfIt159 = files.begin(), rfEnd159 = files.end(); rfIt159 != rfEnd159; ++rfIt159) {
+		auto &f = *rfIt159;
 		Common::Path filePath = f->getPathInArchive().punycodeEncode();
 		debug(1, "dumpArchive(): File: %s", filePath.toString().c_str());
 
@@ -208,13 +210,13 @@ bool Archive::getChildren(const Common::Path &path, Common::Array<Common::String
 	if (!_fileMap.contains(pathNorm) && !_directoryMap.contains(pathNorm))
 		return false;
 	if (mode == kListDirectoriesOnly || mode == kListAll)
-		for (auto &dir : _directoryMap[pathNorm])
-		  if (hidden || dir._key.firstChar() != '.')
-				list.push_back(dir._key);
+		{ auto &rfRange211 = _directoryMap[pathNorm]; for (auto rfIt211 = rfRange211.begin(), rfEnd211 = rfRange211.end(); rfIt211 != rfEnd211; ++rfIt211)
+		  { auto &dir = *rfIt211; if (hidden || dir._key.firstChar() != '.')
+				list.push_back(dir._key); } }
 	if (mode == kListFilesOnly || mode == kListAll)
-		for (auto &file : _fileMap[pathNorm])
-			if (hidden || file._key.firstChar() != '.')
-				list.push_back(file._key);
+		{ auto &rfRange215 = _fileMap[pathNorm]; for (auto rfIt215 = rfRange215.begin(), rfEnd215 = rfRange215.end(); rfIt215 != rfEnd215; ++rfIt215)
+			{ auto &file = *rfIt215; if (hidden || file._key.firstChar() != '.')
+				list.push_back(file._key); } }
 	return true;
 }
 
@@ -230,7 +232,8 @@ void Archive::prepareMaps() const {
 	ArchiveMemberList list;
 	listMembers(list);
 
-	for (auto &archive : list) {
+	for (auto rfIt233 = list.begin(), rfEnd233 = list.end(); rfIt233 != rfEnd233; ++rfIt233) {
+		auto &archive = *rfIt233;
 		Common::Path cur = archive->getPathInArchive().normalize();
 		if (!archive->isDirectory()) {
 			Common::Path parent = cur.getParent().normalize();
@@ -247,8 +250,10 @@ void Archive::prepareMaps() const {
 		}
 	}
 
-	for (auto &dir : _directoryMap) {
-		for (auto &file : dir._value) {
+	for (auto rfIt250 = _directoryMap.begin(), rfEnd250 = _directoryMap.end(); rfIt250 != rfEnd250; ++rfIt250) {
+		auto &dir = *rfIt250;
+		for (auto rfIt251 = dir._value.begin(), rfEnd251 = dir._value.end(); rfIt251 != rfEnd251; ++rfIt251) {
+			auto &file = *rfIt251;
 			_fileMap[dir._key].erase(file._key);
 		}
 	}
@@ -426,7 +431,8 @@ void SearchSet::addSubDirectoriesMatching(const FSNode &directory, String origPa
 	MatchList multipleMatches;
 	MatchList::iterator matchIter;
 
-	for (const auto &subDir : subDirs) {
+	for (auto rfIt429 = subDirs.begin(), rfEnd429 = subDirs.end(); rfIt429 != rfEnd429; ++rfIt429) {
+		const auto &subDir = *rfIt429;
 		String name = subDir.getName();
 
 		if (matchString(name.c_str(), pattern.c_str(), ignoreCase)) {
@@ -475,7 +481,8 @@ Archive *SearchSet::getArchive(const String &name) const {
 }
 
 void SearchSet::clear() {
-	for (auto &archive : _list) {
+	for (auto rfIt478 = _list.begin(), rfEnd478 = _list.end(); rfIt478 != rfEnd478; ++rfIt478) {
+		auto &archive = *rfIt478;
 		if (archive._autoFree)
 			delete archive._arc;
 	}
@@ -503,7 +510,8 @@ bool SearchSet::hasFile(const Path &path) const {
 	if (path.empty())
 		return false;
 
-	for (const auto &archive : _list) {
+	for (auto rfIt506 = _list.begin(), rfEnd506 = _list.end(); rfIt506 != rfEnd506; ++rfIt506) {
+		const auto &archive = *rfIt506;
 		if (archive._arc->hasFile(path))
 			return true;
 	}
@@ -537,7 +545,8 @@ bool SearchSet::isPathDirectory(const Path &path) const {
 bool SearchSet::getChildren(const Common::Path &path, Common::Array<Common::String> &list, ListMode mode, bool hidden) const {
 	bool hasAny = false;
 	list.clear();
-	for (const auto &archive : _list) {
+	for (auto rfIt540 = _list.begin(), rfEnd540 = _list.end(); rfIt540 != rfEnd540; ++rfIt540) {
+		const auto &archive = *rfIt540;
 		Common::Array<Common::String> tmpList;
 		if (archive._arc->getChildren(path, tmpList, mode, hidden)) {
 			list.push_back(tmpList);
@@ -551,8 +560,8 @@ bool SearchSet::getChildren(const Common::Path &path, Common::Array<Common::Stri
 int SearchSet::listMatchingMembers(ArchiveMemberList &list, const Path &pattern, bool matchPathComponents) const {
 	int matches = 0;
 
-	for (const auto &archive : _list)
-		matches += archive._arc->listMatchingMembers(list, pattern, matchPathComponents);
+	for (auto rfIt554 = _list.begin(), rfEnd554 = _list.end(); rfIt554 != rfEnd554; ++rfIt554)
+		{ const auto &archive = *rfIt554; matches += archive._arc->listMatchingMembers(list, pattern, matchPathComponents); }
 
 	return matches;
 }
@@ -560,11 +569,12 @@ int SearchSet::listMatchingMembers(ArchiveMemberList &list, const Path &pattern,
 int SearchSet::listMatchingMembers(ArchiveMemberDetailsList &list, const Path &pattern, bool matchPathComponents) const {
 	int matches = 0;
 
-	for (const auto &archive : _list) {
+	for (auto rfIt563 = _list.begin(), rfEnd563 = _list.end(); rfIt563 != rfEnd563; ++rfIt563) {
+		const auto &archive = *rfIt563;
 		List<ArchiveMemberPtr> matchingMembers;
 		matches += archive._arc->listMatchingMembers(matchingMembers, pattern, matchPathComponents);
-		for (ArchiveMemberPtr &member : matchingMembers)
-			list.push_back(ArchiveMemberDetails(member, archive._name));
+		for (auto rfIt566 = matchingMembers.begin(), rfEnd566 = matchingMembers.end(); rfIt566 != rfEnd566; ++rfIt566)
+			{ ArchiveMemberPtr &member = *rfIt566; list.push_back(ArchiveMemberDetails(member, archive._name)); }
 	}
 
 	return matches;
@@ -573,8 +583,8 @@ int SearchSet::listMatchingMembers(ArchiveMemberDetailsList &list, const Path &p
 int SearchSet::listMembers(ArchiveMemberList &list) const {
 	int matches = 0;
 
-	for (const auto &archive : _list)
-		matches += archive._arc->listMembers(list);
+	for (auto rfIt576 = _list.begin(), rfEnd576 = _list.end(); rfIt576 != rfEnd576; ++rfIt576)
+		{ const auto &archive = *rfIt576; matches += archive._arc->listMembers(list); }
 
 	return matches;
 }
@@ -583,7 +593,8 @@ const ArchiveMemberPtr SearchSet::getMember(const Path &path, Archive **containe
 	if (path.empty())
 		return ArchiveMemberPtr();
 
-	for (const auto &archive : _list) {
+	for (auto rfIt586 = _list.begin(), rfEnd586 = _list.end(); rfIt586 != rfEnd586; ++rfIt586) {
+		const auto &archive = *rfIt586;
 		if (archive._arc->hasFile(path)) {
 			if (container) {
 				*container = archive._arc;
@@ -603,7 +614,8 @@ SeekableReadStream *SearchSet::createReadStreamForMember(const Path &path) const
 	if (path.empty())
 		return nullptr;
 
-	for (const auto &archive : _list) {
+	for (auto rfIt606 = _list.begin(), rfEnd606 = _list.end(); rfIt606 != rfEnd606; ++rfIt606) {
+		const auto &archive = *rfIt606;
 		SeekableReadStream *stream = archive._arc->createReadStreamForMember(path);
 		if (stream)
 			return stream;
@@ -616,7 +628,8 @@ SeekableReadStream *SearchSet::createReadStreamForMemberAltStream(const Path &pa
 	if (path.empty())
 		return nullptr;
 
-	for (const auto &archive : _list) {
+	for (auto rfIt619 = _list.begin(), rfEnd619 = _list.end(); rfIt619 != rfEnd619; ++rfIt619) {
+		const auto &archive = *rfIt619;
 		SeekableReadStream *stream = archive._arc->createReadStreamForMemberAltStream(path, altStreamType);
 		if (stream)
 			return stream;

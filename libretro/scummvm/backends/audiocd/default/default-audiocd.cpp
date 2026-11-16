@@ -84,7 +84,8 @@ bool DefaultAudioCDManager::existExtractedCDAudioFiles(uint track) {
 	Common::Array<Common::String> trackNames;
 	fillPotentialTrackNames(trackNames, track);
 
-	for (auto &trackName : trackNames) {
+	for (auto rfIt87 = trackNames.begin(), rfEnd87 = trackNames.end(); rfIt87 != rfEnd87; ++rfIt87) {
+		auto &trackName = *rfIt87;
 		for (const char **ext = extensions; *ext; ++ext) {
 			const Common::String &filename = Common::String::format("%s.%s", trackName.c_str(), *ext);
 			if (Common::File::exists(Common::Path(filename, '/'))) {
@@ -112,7 +113,8 @@ bool DefaultAudioCDManager::play(int track, int numLoops, int startFrame, int du
 		fillPotentialTrackNames(trackNames, track);
 		Audio::SeekableAudioStream *stream = nullptr;
 
-		for (auto &trackName : trackNames) {
+		for (auto rfIt115 = trackNames.begin(), rfEnd115 = trackNames.end(); rfIt115 != rfEnd115; ++rfIt115) {
+			auto &trackName = *rfIt115;
 			stream = Audio::SeekableAudioStream::openStreamFile(Common::Path(trackName, '/'));
 			if (stream)
 				break;

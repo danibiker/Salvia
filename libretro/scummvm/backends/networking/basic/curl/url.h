@@ -31,7 +31,7 @@ class CurlURL : public URL {
 public:
 	CurlURL(CURLU *curlu);
 
-	~CurlURL() override;
+	~CurlURL();
 
 	Common::String getScheme() const override;
 	Common::String getHost() const override;

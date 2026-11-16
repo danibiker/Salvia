@@ -46,7 +46,7 @@ public:
 	typedef Common::Array<Keymap *> KeymapArray;
 
 	RemapWidget(GuiObject *boss, const Common::String &name, const KeymapArray &keymaps);
-	~RemapWidget() override;
+	~RemapWidget();
 	void load() override;
 	bool save() override;
 	void handleInputChanged();

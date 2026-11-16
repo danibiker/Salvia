@@ -44,7 +44,8 @@ bool generateZipSet(SearchSet &searchSet, const char *defaultFile, const char *p
 		iconDir->listMatchingMembers(iconFiles, packsMask);
 		sort(iconFiles.begin(), iconFiles.end(), ArchiveMemberListBackComparator());
 
-		for (auto &ic : iconFiles) {
+		for (auto rfIt47 = iconFiles.begin(), rfEnd47 = iconFiles.end(); rfIt47 != rfEnd47; ++rfIt47) {
+			auto &ic = *rfIt47;
 			dat = makeZipArchive(ic->createReadStream());
 
 			if (dat) {

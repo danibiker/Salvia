@@ -480,9 +480,9 @@ private:
 	void *_engineAM;
 	void (*_activateMenuCallback)(void *engine);
 
-	MacCursorType _tempType = kMacCursorArrow;
+	MacCursorType _tempType;
 	Common::Stack<MacCursorType> _cursorTypeStack;
-	Cursor *_cursor = nullptr;
+	Cursor *_cursor;
 
 	MacWidget *_activeWidget;
 	MacWidget *_lockedWidget;

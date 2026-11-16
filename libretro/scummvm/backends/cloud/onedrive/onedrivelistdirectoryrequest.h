@@ -52,7 +52,7 @@ class OneDriveListDirectoryRequest: public Networking::Request {
 	void finishListing(const Common::Array<StorageFile> &files);
 public:
 	OneDriveListDirectoryRequest(OneDriveStorage *storage, const Common::String &path, Storage::ListDirectoryCallback cb, Networking::ErrorCallback ecb, bool recursive = false);
-	~OneDriveListDirectoryRequest() override;
+	~OneDriveListDirectoryRequest();
 
 	void handle() override;
 	void restart() override;

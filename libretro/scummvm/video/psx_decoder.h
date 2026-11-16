@@ -65,7 +65,7 @@ public:
 	};
 
 	PSXStreamDecoder(CDSpeed speed, uint32 frameCount = 0);
-	~PSXStreamDecoder() override;
+	~PSXStreamDecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream) override;
 	void close() override;
@@ -78,7 +78,7 @@ private:
 	class PSXVideoTrack : public VideoTrack {
 	public:
 		PSXVideoTrack(Common::SeekableReadStream *firstSector, CDSpeed speed, int frameCount, byte channel);
-		~PSXVideoTrack() override;
+		~PSXVideoTrack();
 
 		byte getChannel() const { return _channel; }
 		uint16 getWidth() const override { return _width; }
@@ -138,7 +138,7 @@ private:
 	class PSXAudioTrack : public AudioTrack {
 	public:
 		PSXAudioTrack(Common::SeekableReadStream *sector, Audio::Mixer::SoundType soundType, byte channel);
-		~PSXAudioTrack() override;
+		~PSXAudioTrack();
 
 		byte getChannel() const { return _channel; }
 		bool endOfTrack() const override;

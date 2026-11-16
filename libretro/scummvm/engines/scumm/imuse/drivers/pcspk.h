@@ -30,7 +30,7 @@ namespace Scumm {
 class IMuseDriver_PCSpk : public MidiDriver_Emulated {
 public:
 	IMuseDriver_PCSpk(Audio::Mixer *mixer);
-	~IMuseDriver_PCSpk() override;
+	~IMuseDriver_PCSpk();
 
 	int open() override;
 	void close() override;

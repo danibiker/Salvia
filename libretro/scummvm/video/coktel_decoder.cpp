@@ -2879,9 +2879,9 @@ bool VMDDecoder::hasEmbeddedFiles() const {
 }
 
 bool VMDDecoder::hasEmbeddedFile(const Common::String &fileName) const {
-	for (const auto &file : _files)
-		if (!file.name.compareToIgnoreCase(fileName))
-			return true;
+	for (auto rfIt2882 = _files.begin(), rfEnd2882 = _files.end(); rfIt2882 != rfEnd2882; ++rfIt2882)
+		{ const auto &file = *rfIt2882; if (!file.name.compareToIgnoreCase(fileName))
+			return true; }
 
 	return false;
 }
@@ -2889,11 +2889,11 @@ bool VMDDecoder::hasEmbeddedFile(const Common::String &fileName) const {
 Common::SeekableReadStream *VMDDecoder::getEmbeddedFile(const Common::String &fileName) const {
 	const File *file = nullptr;
 
-	for (const auto &curFile : _files)
-		if (!curFile.name.compareToIgnoreCase(fileName)) {
+	for (auto rfIt2892 = _files.begin(), rfEnd2892 = _files.end(); rfIt2892 != rfEnd2892; ++rfIt2892)
+		{ const auto &curFile = *rfIt2892; if (!curFile.name.compareToIgnoreCase(fileName)) {
 			file = &curFile;
 			break;
-		}
+		} }
 
 	if (!file)
 		return nullptr;

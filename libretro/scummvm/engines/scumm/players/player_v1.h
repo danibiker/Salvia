@@ -32,7 +32,7 @@ namespace Scumm {
 class Player_V1 : public Player_V2 {
 public:
 	Player_V1(ScummEngine *scumm, Audio::Mixer *mixer, bool pcjr);
-	~Player_V1() override;
+	~Player_V1();
 
 	void startSound(int sound) override;
 	void stopSound(int sound) override;

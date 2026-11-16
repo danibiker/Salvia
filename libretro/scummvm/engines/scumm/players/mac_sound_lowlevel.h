@@ -72,7 +72,7 @@ protected:
 };
 
 class MacSndChannel;
-class MacLowLevelPCMDriver final : public MacSoundDriver {
+class MacLowLevelPCMDriver : public MacSoundDriver {
 public:
 	struct PCMSound {
 		PCMSound() : len(0), rate(0), loopst(0), loopend(0), baseFreq(0), stereo(false), enc(0) {}
@@ -138,7 +138,7 @@ public:
 
 public:
 	MacLowLevelPCMDriver(Common::Mutex &mutex, uint32 deviceRate, bool internal16Bit);
-	~MacLowLevelPCMDriver() override;
+	~MacLowLevelPCMDriver();
 
 	void feed(int8 *dst, uint32 byteSize, Audio::Mixer::SoundType type, bool expectStereo) override;
 
@@ -168,7 +168,7 @@ private:
 	MacSndChannel *findChannel(ChanHandle h) const;
 	Common::Array<MacSndChannel*> _channels;
 	int _numInternalMixChannels[4];
-	int32 *_mixBuffer = 0;
+	int32 *_mixBuffer;
 	uint32 _mixBufferSize;
 };
 
@@ -183,7 +183,7 @@ public:
 class MacPlayerAudioStream : public Audio::AudioStream {
 public:
 	MacPlayerAudioStream(VblTaskClientDriver *drv, uint32 scummVMOutputrate, bool stereo, bool interpolate, bool internal16Bit);
-	~MacPlayerAudioStream() override;
+	~MacPlayerAudioStream();
 
 	void initBuffers(uint32 feedBufferSize);
 	void initDrivers();

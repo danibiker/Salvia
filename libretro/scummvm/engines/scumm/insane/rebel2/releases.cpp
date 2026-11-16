@@ -227,7 +227,8 @@ const Rebel2AccuracyOverride *Rebel2Release::getAccuracyOverride(int chapter) co
 Rebel2Release getRebel2Release(const char *variant, bool restoredContent) {
 	if (!variant)
 		variant = "";
-	for (const Rebel2Release &release : kReleases) {
+	for (auto rfIt230 = &kReleases[0], rfEnd230 = &kReleases[0] + sizeof(kReleases) / sizeof(kReleases[0]); rfIt230 != rfEnd230; ++rfIt230) {
+		const Rebel2Release &release = *rfIt230;
 		if (!strcmp(variant, release.variant)) {
 			Rebel2Release result = release;
 			if (restoredContent && release.canRestoreMiningFacilityAttack)

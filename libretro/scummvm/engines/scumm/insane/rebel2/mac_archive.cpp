@@ -71,7 +71,8 @@ bool Rebel2MacArchive::load() {
 
 bool Rebel2MacArchive::hasFile(const Common::Path &path) const {
 	const Common::String name = path.baseName();
-	for (const Common::String &member : _members) {
+	for (auto rfIt74 = _members.begin(), rfEnd74 = _members.end(); rfIt74 != rfEnd74; ++rfIt74) {
+		const Common::String &member = *rfIt74;
 		if (member.equalsIgnoreCase(name))
 			return true;
 	}
@@ -79,8 +80,8 @@ bool Rebel2MacArchive::hasFile(const Common::Path &path) const {
 }
 
 int Rebel2MacArchive::listMembers(Common::ArchiveMemberList &list) const {
-	for (const Common::String &member : _members)
-		list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(member, *this)));
+	for (auto rfIt82 = _members.begin(), rfEnd82 = _members.end(); rfIt82 != rfEnd82; ++rfIt82)
+		{ const Common::String &member = *rfIt82; list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(member, *this))); }
 	return _members.size();
 }
 

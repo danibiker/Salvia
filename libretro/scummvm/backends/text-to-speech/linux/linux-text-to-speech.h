@@ -57,7 +57,7 @@ public:
 	};
 
 	SpeechDispatcherManager();
-	~SpeechDispatcherManager() override;
+	~SpeechDispatcherManager();
 
 	bool say(const Common::U32String &str, Action action) override;
 

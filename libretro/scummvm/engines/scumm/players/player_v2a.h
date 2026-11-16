@@ -39,7 +39,7 @@ class V2A_Sound;
 class Player_V2A : public MusicEngine {
 public:
 	Player_V2A(ScummEngine *scumm, Audio::Mixer *mixer);
-	~Player_V2A() override;
+	~Player_V2A();
 
 	void setMusicVolume(int vol) override;
 	void startSound(int sound) override;

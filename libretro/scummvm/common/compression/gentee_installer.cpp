@@ -48,7 +48,7 @@ struct HuffmanTreeNode {
 	uint16 _symbol;
 };
 
-HuffmanTreeNode::HuffmanTreeNode() : _parent(nullptr), _children{nullptr, nullptr}, _freq(0), _symbol(0) {
+HuffmanTreeNode::HuffmanTreeNode() : _parent(nullptr), _children(), _freq(0), _symbol(0) {
 }
 
 class HuffmanTree {
@@ -256,15 +256,15 @@ private:
 };
 
 DecompressorState::DecompressorState(Common::ReadStream *inputStream)
-	: _inputStream(inputStream), _bitstreamBitsRemaining(0), _bitstreamByte(0), _matchRemaining(0), _matchReadPos(0), _failed(false), _matchOffsetHistory{0, 0, 0, 0}, _windowOffset(0) {
+	: _inputStream(inputStream), _bitstreamBitsRemaining(0), _bitstreamByte(0), _matchRemaining(0), _matchReadPos(0), _failed(false), _matchOffsetHistory(), _windowOffset(0) {
 	resetEverything();
 }
 
 void DecompressorState::resetEverything() {
 	resetBitstream();
 
-	for (byte &b : _window)
-		b = 0;
+	for (auto rfIt266 = &_window[0], rfEnd266 = &_window[0] + sizeof(_window) / sizeof(_window[0]); rfIt266 != rfEnd266; ++rfIt266)
+		{ byte &b = *rfIt266; b = 0; }
 
 	_windowOffset = 0;
 
@@ -891,8 +891,8 @@ bool PackageArchive::hasFile(const Common::Path &path) const {
 }
 
 int PackageArchive::listMembers(Common::ArchiveMemberList &list) const {
-	for (const Common::SharedPtr<ArchiveItem> &item : _items)
-		list.push_back(item.staticCast<Common::ArchiveMember>());
+	for (auto rfIt894 = _items.begin(), rfEnd894 = _items.end(); rfIt894 != rfEnd894; ++rfIt894)
+		{ const Common::SharedPtr<ArchiveItem> &item = *rfIt894; list.push_back(item.staticCast<Common::ArchiveMember>()); }
 
 	return _items.size();
 }
@@ -901,7 +901,8 @@ int PackageArchive::listMatchingMembers(Common::ArchiveMemberList &list, const C
 	int matches = 0;
 	const char *wildcardExclusions = matchPathComponents ? NULL : "/";
 
-	for (const Common::SharedPtr<ArchiveItem> &item : _items) {
+	for (auto rfIt904 = _items.begin(), rfEnd904 = _items.end(); rfIt904 != rfEnd904; ++rfIt904) {
+		const Common::SharedPtr<ArchiveItem> &item = *rfIt904;
 		if (normalizePath(item->getPathInArchive()).matchString(normalizePath(pattern), false, wildcardExclusions)) {
 			list.push_back(item.staticCast<Common::ArchiveMember>());
 			matches++;

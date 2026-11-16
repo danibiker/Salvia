@@ -116,7 +116,8 @@ bool LibretroOptionsWidget::cleanFolder(Common::String &path) {
 	bool res = true;
 	Common::ArchiveMemberList listHooks;
 	Common::FSNode(Common::Path(path)).listChildren(listHooks, "*." CORE_EXTENSIONS);
-	for (Common::ArchiveMemberPtr hook : listHooks) {
+	for (auto rfIt119 = listHooks.begin(), rfEnd119 = listHooks.end(); rfIt119 != rfEnd119; ++rfIt119) {
+		Common::ArchiveMemberPtr hook = *rfIt119;
 		Common::FSNode *fshook = dynamic_cast<Common::FSNode *>(hook.get());
 		if (!fshook || fshook->isDirectory())
 			continue;

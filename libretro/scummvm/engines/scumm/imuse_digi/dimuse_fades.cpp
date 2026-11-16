@@ -24,7 +24,7 @@
 
 namespace Scumm {
 
-IMuseDigiFadesHandler::IMuseDigiFadesHandler(IMuseDigital *engine, Common::Mutex *mutex) {
+IMuseDigiFadesHandler::IMuseDigiFadesHandler(IMuseDigital *engine, Common::Mutex *mutex) : _fades(), _fadesOn(0) {
 	_engine = engine;
 	_mutex = mutex;
 }

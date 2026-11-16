@@ -52,10 +52,41 @@ public:
 		_impl.clear();
 	}
 
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	void emplace(TArgs&&... args) {
 		_impl.emplace_back(Common::forward<TArgs>(args)...);
 	}
+#else
+	
+	void emplace() {
+		_impl.emplace_back();
+	}
+	template<class A1>
+	void emplace(A1 &&a1) {
+		_impl.emplace_back(Common::forward<A1>(a1));
+	}
+	template<class A1, class A2>
+	void emplace(A1 &&a1, A2 &&a2) {
+		_impl.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2));
+	}
+	template<class A1, class A2, class A3>
+	void emplace(A1 &&a1, A2 &&a2, A3 &&a3) {
+		_impl.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3));
+	}
+	template<class A1, class A2, class A3, class A4>
+	void emplace(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) {
+		_impl.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4));
+	}
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) {
+		_impl.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5));
+	}
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) {
+		_impl.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6));
+	}
+#endif
 
 	void push(const T &x) {
 		_impl.push_back(x);

@@ -45,7 +45,7 @@ protected:
 	bool urlToPath(Common::String &url, Common::Path &path, Common::String &baseUrl, Common::Path &basePath, bool isDirectory = true);
 public:
 	FilesBaseHandler();
-	~FilesBaseHandler() override;
+	~FilesBaseHandler();
 };
 
 } // End of namespace Networking

@@ -36,7 +36,7 @@ class IMuseDriver_GMidi : public MidiDriver {
 	friend class IMSMidi::IMuseChannel_Midi;
 public:
 	IMuseDriver_GMidi(MidiDriver::DeviceHandle dev, bool rolandGSMode, bool newSystem);
-	virtual ~IMuseDriver_GMidi() override;
+	virtual ~IMuseDriver_GMidi();
 
 	int open() override;
 	void close() override;
@@ -91,11 +91,11 @@ private:
 	byte *_midiRegState;
 };
 
-class IMuseDriver_MT32 final : public IMuseDriver_GMidi {
+class IMuseDriver_MT32 : public IMuseDriver_GMidi {
 	friend class IMSMidi::IMuseChannel_MT32;
 public:
 	IMuseDriver_MT32(MidiDriver::DeviceHandle dev, bool newSystem);
-	~IMuseDriver_MT32() override {}
+	~IMuseDriver_MT32() {}
 
 private:
 	void initDevice() override;

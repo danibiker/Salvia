@@ -53,7 +53,7 @@ struct Surface;
  *
  * Saves are writable and deletable by default.
  */
-class SaveStateDescriptor final {
+class SaveStateDescriptor {
 private:
 	enum SaveType {
 		kSaveTypeUndetermined,

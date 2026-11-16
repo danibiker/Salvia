@@ -32,7 +32,7 @@ namespace Scumm {
 class Player_Towns : public MusicEngine {
 public:
 	Player_Towns(ScummEngine *vm, bool isVersion2);
-	~Player_Towns() override {}
+	~Player_Towns() {}
 
 	virtual bool init() = 0;
 
@@ -70,9 +70,9 @@ protected:
 	} _pcmCurrentSound[9];
 	friend void syncWithSerializer(Common::Serializer &, PcmCurrentSound &);
 
-	uint8 _unkFlags = 0x33;
+	uint8 _unkFlags;
 
-	TownsAudioInterface *_intf = nullptr;
+	TownsAudioInterface *_intf;
 	ScummEngine *_vm;
 
 	const int _numSoundMax;
@@ -82,7 +82,7 @@ protected:
 class Player_Towns_v1 : public Player_Towns {
 public:
 	Player_Towns_v1(ScummEngine *vm, Audio::Mixer *mixer);
-	~Player_Towns_v1() override;
+	~Player_Towns_v1();
 
 	bool init() override;
 
@@ -118,30 +118,30 @@ private:
 		uint8 note;
 	};
 
-	SoundOvrParameters *_soundOverride = nullptr;
+	SoundOvrParameters *_soundOverride;
 
-	uint8 _cdaVolLeft = 0;
-	uint8 _cdaVolRight = 0;
+	uint8 _cdaVolLeft;
+	uint8 _cdaVolRight;
 
-	uint8 _eupCurrentSound = 0;
-	uint8 _eupLooping = 0;
-	uint8 _eupVolLeft = 0;
-	uint8 _eupVolRight = 0;
+	uint8 _eupCurrentSound;
+	uint8 _eupLooping;
+	uint8 _eupVolLeft;
+	uint8 _eupVolRight;
 
-	uint8 _cdaCurrentSound = 0;
-	uint8 _cdaNumLoops = 0;
-	uint8 _cdaForceRestart = 0;
+	uint8 _cdaCurrentSound;
+	uint8 _cdaNumLoops;
+	uint8 _cdaForceRestart;
 
-	uint8 _cdaCurrentSoundTemp = 0;
-	uint8 _cdaNumLoopsTemp = 0;
+	uint8 _cdaCurrentSoundTemp;
+	uint8 _cdaNumLoopsTemp;
 
-	EuphonyPlayer *_player = nullptr;
+	EuphonyPlayer *_player;
 };
 
 class Player_Towns_v2 : public Player_Towns {
 public:
 	Player_Towns_v2(ScummEngine *vm, Audio::Mixer *mixer, IMuse *imuse, bool disposeIMuse);
-	~Player_Towns_v2() override;
+	~Player_Towns_v2();
 
 	bool init() override;
 
@@ -165,11 +165,11 @@ private:
 		uint8 type;
 	};
 
-	SoundOvrParameters *_soundOverride = nullptr;
+	SoundOvrParameters *_soundOverride;
 
-	uint8 *_sblData = nullptr;
+	uint8 *_sblData;
 
-	IMuse *_imuse = nullptr;
+	IMuse *_imuse;
 	const bool _imuseDispose;
 };
 

@@ -89,8 +89,8 @@ public:
 		_data = nullptr;
 	}
 protected:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
 	char *_data;
 };
@@ -99,7 +99,7 @@ protected:
 class V2A_Sound_Music : public V2A_Sound {
 public:
 	V2A_Sound_Music(uint16 instoff, uint16 voloff, uint16 chan1off, uint16 chan2off, uint16 chan3off, uint16 chan4off, uint16 sampoff, bool looped) :
-		_instoff(instoff), _voloff(voloff), _chan1off(chan1off), _chan2off(chan2off), _chan3off(chan3off), _chan4off(chan4off), _sampoff(sampoff), _looped(looped) { }
+		_instoff(instoff), _voloff(voloff), _chan1off(chan1off), _chan2off(chan2off), _chan3off(chan3off), _chan4off(chan4off), _sampoff(sampoff), _looped(looped), _data(nullptr), _chan() { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -203,16 +203,16 @@ public:
 		_id = 0;
 	}
 private:
-	const uint16 _instoff = 0;
-	const uint16 _voloff = 0;
-	const uint16 _chan1off = 0;
-	const uint16 _chan2off = 0;
-	const uint16 _chan3off = 0;
-	const uint16 _chan4off = 0;
-	const uint16 _sampoff = 0;
-	const bool _looped = false;
+	const uint16 _instoff;
+	const uint16 _voloff;
+	const uint16 _chan1off;
+	const uint16 _chan2off;
+	const uint16 _chan3off;
+	const uint16 _chan4off;
+	const uint16 _sampoff;
+	const bool _looped;
 
-	char *_data = nullptr;
+	char *_data;
 
 	struct tchan {
 		uint16 dataptr_i;
@@ -222,14 +222,14 @@ private:
 		uint16 chan;
 		uint16 dur;
 		uint16 ticks;
-	} _chan[4] = {};
+	} _chan[4];
 };
 
 // plays a single waveform
 class V2A_Sound_Single : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Single(uint16 offset, uint16 size, uint16 freq, uint8 vol) :
-		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol) { }
+		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _ticks(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -248,10 +248,10 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq = 0;
-	const uint8 _vol = 0;
+	const uint16 _freq;
+	const uint8 _vol;
 
-	int _ticks = 0;
+	int _ticks;
 };
 
 // plays a single looped waveform
@@ -312,7 +312,7 @@ private:
 class V2A_Sound_MultiLoopedDuration : public V2A_Sound_MultiLooped {
 public:
 	V2A_Sound_MultiLoopedDuration(uint16 offset, uint16 size, uint16 freq1, uint8 vol1, uint16 freq2, uint8 vol2, uint16 numframes) :
-		V2A_Sound_MultiLooped(offset, size, freq1, vol1, freq2, vol2), _duration(numframes) { }
+		V2A_Sound_MultiLooped(offset, size, freq1, vol1, freq2, vol2), _duration(numframes), _ticks(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		V2A_Sound_MultiLooped::start(mod, id, data);
 		_ticks = 0;
@@ -325,16 +325,16 @@ public:
 		return true;
 	}
 private:
-	const uint16 _duration = 0;
+	const uint16 _duration;
 
-	int _ticks = 0;
+	int _ticks;
 };
 
 // plays a single looped waveform which starts at one frequency and bends to another frequency, where it remains until stopped
 class V2A_Sound_SingleLoopedPitchbend : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_SingleLoopedPitchbend(uint16 offset, uint16 size, uint16 freq1, uint16 freq2, uint8 vol, uint8 step) :
-		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _vol(vol), _step(step) { }
+		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _vol(vol), _step(step), _curfreq(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -362,12 +362,12 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
-	const uint8 _vol = 0;
-	const uint16 _step = 0;
+	const uint16 _freq1;
+	const uint16 _freq2;
+	const uint8 _vol;
+	const uint16 _step;
 
-	uint16 _curfreq = 0;
+	uint16 _curfreq;
 };
 
 // plays a single looped waveform starting at a specific frequency/volume, dropping in frequency and fading volume to zero
@@ -375,7 +375,7 @@ private:
 class V2A_Sound_Special_Maniac69 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Maniac69(uint16 offset, uint16 size, uint16 freq, uint8 vol) :
-		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol) { }
+		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _curfreq(0), _curvol(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -396,11 +396,11 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq = 0;
-	const uint8 _vol = 0;
+	const uint16 _freq;
+	const uint8 _vol;
 
-	uint16 _curfreq = 0;
-	uint16 _curvol = 0;
+	uint16 _curfreq;
+	uint16 _curvol;
 };
 
 // plays a single looped waveform, fading the volume from zero to maximum at one rate, then back to zero at another rate
@@ -493,7 +493,7 @@ private:
 class V2A_Sound_Special_ManiacTentacle : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_ManiacTentacle(uint16 offset, uint16 size, uint16 freq1, uint16 freq2, uint16 step) :
-		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _step(step) { }
+		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _step(step), _curfreq(0), _curvol(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -515,12 +515,12 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
-	const uint16 _step = 0;
+	const uint16 _freq1;
+	const uint16 _freq2;
+	const uint16 _step;
 
-	uint16 _curfreq = 0;
-	int _curvol = 0;
+	uint16 _curfreq;
+	int _curvol;
 };
 
 // plays a single looped waveform, starting at one frequency, bending down to another frequency, and then back up to the original frequency
@@ -573,7 +573,7 @@ private:
 class V2A_Sound_Special_Maniac61 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Maniac61(uint16 offset, uint16 size, uint16 freq1, uint16 freq2) :
-		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2) { }
+		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _curfreq(0), _curvol(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -595,11 +595,11 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
+	const uint16 _freq1;
+	const uint16 _freq2;
 
-	uint16 _curfreq = 0;
-	uint8 _curvol = 0;
+	uint16 _curfreq;
+	uint8 _curvol;
 };
 
 // intermittently plays two looped waveforms for a specific duration
@@ -662,7 +662,7 @@ private:
 class V2A_Sound_Special_Maniac46 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Maniac46(uint16 offset, uint16 size, uint16 freq, uint8 vol, uint8 loopwidth, uint8 numloops) :
-		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _loopwidth(loopwidth), _numloops(numloops) { }
+		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _loopwidth(loopwidth), _numloops(numloops), _loop(0), _loopctr(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -686,13 +686,13 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq = 0;
-	const uint8 _vol = 0;
-	const uint8 _loopwidth = 0;
-	const uint8 _numloops = 0;
+	const uint16 _freq;
+	const uint8 _vol;
+	const uint8 _loopwidth;
+	const uint8 _numloops;
 
-	int _loop = 0;
-	int _loopctr = 0;
+	int _loop;
+	int _loopctr;
 
 	void soundon() {
 		char *tmp_data = (char *)malloc(_size);
@@ -706,7 +706,7 @@ private:
 class V2A_Sound_Special_ManiacTypewriter : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_ManiacTypewriter(uint16 offset, uint16 size, uint16 freq, uint8 vol, uint8 numdurs, const uint8 *durations, bool looped) :
-		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _numdurs(numdurs), _durations(durations), _looped(looped) { }
+		V2A_Sound_Base<1>(offset, size), _freq(freq), _vol(vol), _numdurs(numdurs), _durations(durations), _looped(looped), _ticks(0), _curdur(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -733,14 +733,14 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq = 0;
-	const uint8 _vol = 0;
-	const uint8 _numdurs = 0;
-	const uint8 *_durations = nullptr;
-	const bool _looped = false;
+	const uint16 _freq;
+	const uint8 _vol;
+	const uint8 _numdurs;
+	const uint8 *_durations;
+	const bool _looped;
 
-	int _ticks = 0;
-	int _curdur = 0;
+	int _ticks;
+	int _curdur;
 
 	void soundon() {
 		char *tmp_data = (char *)malloc(_size);
@@ -754,7 +754,7 @@ private:
 class V2A_Sound_Special_Maniac44 : public V2A_Sound_Base<2> {
 public:
 	V2A_Sound_Special_Maniac44(uint16 offset1, uint16 size1, uint16 offset2, uint16 size2, uint16 freq1, uint16 freq2, uint8 vol) :
-		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq1(freq1), _freq2(freq2), _vol(vol) { }
+		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq1(freq1), _freq2(freq2), _vol(vol), _curfreq(0), _loopnum(0), _step(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -791,17 +791,17 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset1 = 0;
-	const uint16 _size1 = 0;
-	const uint16 _offset2 = 0;
-	const uint16 _size2 = 0;
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
-	const uint8 _vol = 0;
+	const uint16 _offset1;
+	const uint16 _size1;
+	const uint16 _offset2;
+	const uint16 _size2;
+	const uint16 _freq1;
+	const uint16 _freq2;
+	const uint8 _vol;
 
-	int _curfreq = 0;
-	uint16 _loopnum = 0;
-	uint16 _step = 0;
+	int _curfreq;
+	uint16 _loopnum;
+	uint16 _step;
 
 	void soundon(const char *data, int size) {
 		char *tmp_data1 = (char *)malloc(size);
@@ -819,7 +819,7 @@ private:
 class V2A_Sound_Special_Maniac32 : public V2A_Sound_Base<4> {
 public:
 	V2A_Sound_Special_Maniac32(uint16 offset1, uint16 size1, uint16 offset2, uint16 size2, uint8 vol) :
-		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _vol(vol) { }
+		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _vol(vol), _freq1(0), _step1(0), _freq2(0), _step2(0), _freq3(0), _step3(0), _freq4(0), _step4(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -859,20 +859,20 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset1 = 0;
-	const uint16 _size1 = 0;
-	const uint16 _offset2 = 0;
-	const uint16 _size2 = 0;
-	const uint8 _vol = 0;
+	const uint16 _offset1;
+	const uint16 _size1;
+	const uint16 _offset2;
+	const uint16 _size2;
+	const uint8 _vol;
 
-	uint16 _freq1 = 0;
-	int16 _step1 = 0;
-	uint16 _freq2 = 0;
-	int16 _step2 = 0;
-	uint16 _freq3 = 0;
-	int16 _step3 = 0;
-	uint16 _freq4 = 0;
-	int16 _step4 = 0;
+	uint16 _freq1;
+	int16 _step1;
+	uint16 _freq2;
+	int16 _step2;
+	uint16 _freq3;
+	int16 _step3;
+	uint16 _freq4;
+	int16 _step4;
 
 	void updatefreq(uint16 &freq, int16 &step, uint16 min, uint16 max) {
 		freq += step;
@@ -927,7 +927,7 @@ protected:
 class V2A_Sound_Special_Zak101 : public V2A_Sound_Special_Zak70 {
 public:
 	V2A_Sound_Special_Zak101(uint16 offset, uint16 size, uint16 freq1, uint16 freq2, uint16 freq3, uint16 freq4, uint8 vol, uint16 dur) :
-		V2A_Sound_Special_Zak70(offset, size, freq1, freq2, freq3, freq4, vol), _dur(dur) { }
+		V2A_Sound_Special_Zak70(offset, size, freq1, freq2, freq3, freq4, vol), _dur(dur), _ticks(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		V2A_Sound_Special_Zak70::start(mod, id, data);
 		_ticks = _dur;
@@ -945,9 +945,9 @@ public:
 		return true;
 	}
 private:
-	const uint16 _dur = 0;
+	const uint16 _dur;
 
-	int _ticks = 0;
+	int _ticks;
 };
 
 // plays a single looped waveform and slowly fades volume to zero
@@ -983,7 +983,7 @@ private:
 class V2A_Sound_Special_ZakAirplane : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_ZakAirplane(uint16 offset, uint16 size, uint16 freq1, uint16 freq2) :
-		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2) { }
+		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _curfreq(0), _curvol(0), _ticks(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1015,12 +1015,12 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
+	const uint16 _freq1;
+	const uint16 _freq2;
 
-	uint16 _curfreq = 0;
-	int _curvol = 0;
-	int _ticks = 0;
+	uint16 _curfreq;
+	int _curvol;
+	int _ticks;
 };
 
 // plays 4 looped waveforms, starting at specific frequencies and bending at different rates while fading volume to zero
@@ -1028,7 +1028,7 @@ private:
 class V2A_Sound_Special_Zak71 : public V2A_Sound_Base<4> {
 public:
 	V2A_Sound_Special_Zak71(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _freq1(0), _freq2(0), _freq3(0), _freq4(0), _vol(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1072,14 +1072,14 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _freq1 = 0;
-	uint16 _freq2 = 0;
-	uint16 _freq3 = 0;
-	uint16 _freq4 = 0;
-	uint8 _vol = 0;
+	uint16 _freq1;
+	uint16 _freq2;
+	uint16 _freq3;
+	uint16 _freq4;
+	uint8 _vol;
 };
 
 // plays a single looped waveform, bending the frequency upward at a varying rate
@@ -1087,7 +1087,7 @@ private:
 class V2A_Sound_Special_Zak99 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Zak99(uint16 offset, uint16 size, uint16 freq1, uint16 freq2, uint8 vol) :
-		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _vol(vol) { }
+		V2A_Sound_Base<1>(offset, size), _freq1(freq1), _freq2(freq2), _vol(vol), _curfreq(0), _bendrate(0), _bendctr(0), _holdctr(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1116,14 +1116,14 @@ public:
 		return true;
 	}
 private:
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
-	const uint16 _vol = 0;
+	const uint16 _freq1;
+	const uint16 _freq2;
+	const uint16 _vol;
 
-	uint16 _curfreq = 0;
-	uint16 _bendrate = 0;
-	uint16 _bendctr = 0;
-	uint16 _holdctr = 0;
+	uint16 _curfreq;
+	uint16 _bendrate;
+	uint16 _bendctr;
+	uint16 _holdctr;
 };
 
 // plays one waveform, then switches to a different looped waveform and slowly fades volume to zero
@@ -1131,7 +1131,7 @@ private:
 class V2A_Sound_Special_Zak54 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Zak54(uint16 offset1, uint16 size1, uint16 offset2, uint16 size2, uint16 freq) :
-		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq(freq) { }
+		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq(freq), _vol(0), _loop(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1161,14 +1161,14 @@ public:
 	}
 
 private:
-	const uint16 _offset1 = 0;
-	const uint16 _offset2 = 0;
-	const uint16 _size1 = 0;
-	const uint16 _size2 = 0;
-	const uint16 _freq = 0;
+	const uint16 _offset1;
+	const uint16 _offset2;
+	const uint16 _size1;
+	const uint16 _size2;
+	const uint16 _freq;
 
-	int _vol = 0;
-	int _loop = 0;
+	int _vol;
+	int _loop;
 };
 
 // plays 2 looped waveforms at different frequencies, pulsing at different frequencies and ramping the volume up and down once
@@ -1176,7 +1176,7 @@ private:
 class V2A_Sound_Special_Zak110 : public V2A_Sound_Base<2> {
 public:
 	V2A_Sound_Special_Zak110(uint16 offset1, uint16 size1, uint16 offset2, uint16 size2, uint16 freq1, uint16 freq2) :
-		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq1(freq1), _freq2(freq2) { }
+		_offset1(offset1), _size1(size1), _offset2(offset2), _size2(size2), _freq1(freq1), _freq2(freq2), _loopnum(0), _vol(0), _beepcount(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1236,16 +1236,16 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset1 = 0;
-	const uint16 _size1 = 0;
-	const uint16 _offset2 = 0;
-	const uint16 _size2 = 0;
-	const uint16 _freq1 = 0;
-	const uint16 _freq2 = 0;
+	const uint16 _offset1;
+	const uint16 _size1;
+	const uint16 _offset2;
+	const uint16 _size2;
+	const uint16 _freq1;
+	const uint16 _freq2;
 
-	uint16 _loopnum = 0;
-	uint16 _vol = 0;
-	uint16 _beepcount = 0;
+	uint16 _loopnum;
+	uint16 _vol;
+	uint16 _beepcount;
 };
 
 // plays a stereo siren, sweeping up and down quickly several times before sweeping up slowly, stopping, and then going silent
@@ -1253,7 +1253,7 @@ private:
 class V2A_Sound_Special_Zak32 : public V2A_Sound_Base<2> {
 public:
 	V2A_Sound_Special_Zak32(uint16 offset1, uint16 offset2, uint16 size1, uint16 size2) :
-		_offset1(offset1), _offset2(offset2), _size1(size1), _size2(size2) { }
+		_offset1(offset1), _offset2(offset2), _size1(size1), _size2(size2), _loopnum(0), _freqmod(0), _freq(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1313,14 +1313,14 @@ public:
 		}
 	}
 private:
-	const uint16 _offset1 = 0;
-	const uint16 _offset2 = 0;
-	const uint16 _size1 = 0;
-	const uint16 _size2 = 0;
+	const uint16 _offset1;
+	const uint16 _offset2;
+	const uint16 _size1;
+	const uint16 _size2;
 
-	uint16 _loopnum = 0;
-	int16 _freqmod = 0;
-	uint16 _freq = 0;
+	uint16 _loopnum;
+	int16 _freqmod;
+	uint16 _freq;
 };
 
 // plays a looped waveform, increasing frequency and reducing volume once the frequency reaches a certain point
@@ -1328,7 +1328,7 @@ private:
 class V2A_Sound_Special_Zak52 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Zak52(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _curfreq(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1356,10 +1356,10 @@ public:
 			return false;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _curfreq = 0;
+	uint16 _curfreq;
 };
 
 // plays a looped waveform, sweeping the frequency up while modulating it (alternating which channel updates) and fading volume out
@@ -1367,7 +1367,7 @@ private:
 class V2A_Sound_Special_Zak61 : public V2A_Sound_Base<2> {
 public:
 	V2A_Sound_Special_Zak61(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _loop(0), _curfreq(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1413,11 +1413,11 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _loop = 0;
-	uint16 _curfreq = 0;
+	uint16 _loop;
+	uint16 _curfreq;
 };
 
 // just like Zak61, but sweeps frequency in the other direction
@@ -1483,7 +1483,7 @@ private:
 class V2A_Sound_Special_Zak82 : public V2A_Sound_Base<4> {
 public:
 	V2A_Sound_Special_Zak82(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _loop(0), _playctr(0), _wait1(0), _wait2(0), _wait3(0), _wait4(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1568,15 +1568,15 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _loop = 0;
-	uint16 _playctr = 0;
-	uint16 _wait1 = 0;
-	uint16 _wait2 = 0;
-	uint16 _wait3 = 0;
-	uint16 _wait4 = 0;
+	uint16 _loop;
+	uint16 _playctr;
+	uint16 _wait1;
+	uint16 _wait2;
+	uint16 _wait3;
+	uint16 _wait4;
 };
 
 // plays a "ding" (volume 0-max-0) followed by a sound sample, a pause, then loops again
@@ -1584,7 +1584,7 @@ private:
 class V2A_Sound_Special_Zak86 : public V2A_Sound_Base<1> {
 public:
 	V2A_Sound_Special_Zak86(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _mode(0), _vol(0), _volmod(0) { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1648,12 +1648,12 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _mode = 0;
-	uint16 _vol = 0;
-	int16 _volmod = 0;
+	uint16 _mode;
+	uint16 _vol;
+	int16 _volmod;
 };
 
 // modulates volume on 4 samples, frequency on only 2 of them
@@ -1661,7 +1661,7 @@ private:
 class V2A_Sound_Special_Zak98 : public V2A_Sound_Base<4> {
 public:
 	V2A_Sound_Special_Zak98(uint16 offset, uint16 size) :
-		_offset(offset), _size(size) { }
+		_offset(offset), _size(size), _freq(), _vol(), _freqmod(0), _volmod() { }
 	void start(Player_MOD *mod, int id, const byte *data) override {
 		_mod = mod;
 		_id = id;
@@ -1724,13 +1724,13 @@ public:
 		return true;
 	}
 private:
-	const uint16 _offset = 0;
-	const uint16 _size = 0;
+	const uint16 _offset;
+	const uint16 _size;
 
-	uint16 _freq[4] = {};
-	uint16 _vol[4] = {};
-	int16 _freqmod = 0;
-	int16 _volmod[2] = {};
+	uint16 _freq[4];
+	uint16 _vol[4];
+	int16 _freqmod;
+	int16 _volmod[2];
 };
 
 #define CRCToSound(CRC, SOUND) \

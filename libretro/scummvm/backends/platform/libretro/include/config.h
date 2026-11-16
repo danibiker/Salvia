@@ -22,7 +22,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#if defined(WIIU) || defined(__CELLOS_LV2__) || defined(GEKKO)
+#if defined(WIIU) || defined(__CELLOS_LV2__) || defined(GEKKO) || defined(_XBOX)
 #undef  SCUMM_LITTLE_ENDIAN
 #define SCUMM_BIG_ENDIAN
 #else

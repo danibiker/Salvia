@@ -69,7 +69,7 @@ class DownloadPacksDialog : public Dialog, public CommandSender {
 
 public:
 	DownloadPacksDialog(Common::U32String packname, const char *listfname, const char *packsglob);
-	~DownloadPacksDialog() override;
+	~DownloadPacksDialog();
 
 	void open() override;
 	void close() override;

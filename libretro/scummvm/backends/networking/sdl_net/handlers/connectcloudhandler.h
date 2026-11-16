@@ -37,7 +37,7 @@ class ConnectCloudHandler: public BaseHandler {
 
 public:
 	ConnectCloudHandler();
-	~ConnectCloudHandler() override;
+	~ConnectCloudHandler();
 
 	void handle(Client &client) override;
 	bool minimalModeSupported() override { return true; }
@@ -60,7 +60,7 @@ class ConnectCloudClientHandler : public ClientHandler {
 
 public:
 	ConnectCloudClientHandler(const ConnectCloudHandler* cloudHandler);
-	~ConnectCloudClientHandler() override;
+	~ConnectCloudClientHandler();
 
 	void handle(Client *client) override;
 };

@@ -191,12 +191,12 @@ private:
 	Common::Point _origin;
 
 public:
-	int _currentSample = -1;
+	int _currentSample;
 	Common::Point _prevMouse;
-	bool _isMouseButtonDown = false;
+	bool _isMouseButtonDown;
 	Common::Point _mouseDrag;
 
-	bool _isKeyDown = false;
+	bool _isKeyDown;
 	Common::KeyState _lastKey;
 
 	enum {
@@ -219,30 +219,30 @@ public:
 private:
 	Common::Rect _curBbox;
 
-	int _currentQTVRCursor = -1;
-	Common::Archive *_dataBundle = nullptr;
-	Graphics::Cursor **_cursorCache = nullptr;
+	int _currentQTVRCursor;
+	Common::Archive *_dataBundle;
+	Graphics::Cursor **_cursorCache;
 	int _cursorDirMap[256];
 
-	bool _isVR = false;
+	bool _isVR;
 
-	uint8 _warpMode = 2; // (2 | 1 | 0) for 2-d, 1-d or no warping
-	float _quality = 0.0f;
-	int _transitionMode = kTransitionModeNormal;
-	float _transitionSpeed = 1.0f;
-	int _updateMode = kUpdateModeNormal;
+	uint8 _warpMode; // (2 | 1 | 0) for 2-d, 1-d or no warping
+	float _quality;
+	int _transitionMode;
+	float _transitionSpeed;
+	int _updateMode;
 
-	float _panAngle = 0.0f;
-	float _tiltAngle = 0.0f;
-	float _fov = 56.0f;
-	float _hfov = 56.0f;
-	int _zoomState = kZoomNone;
+	float _panAngle;
+	float _tiltAngle;
+	float _fov;
+	float _hfov;
+	int _zoomState;
 
-	const PanoHotSpot *_rolloverHotspot = nullptr;
-	int _rolloverHotspotID = 0;
-	const PanoHotSpot *_clickedHotspot = nullptr;
-	int _clickedHotspotID = 0;
-	bool _renderHotspots = false;
+	const PanoHotSpot *_rolloverHotspot;
+	int _rolloverHotspotID;
+	const PanoHotSpot *_clickedHotspot;
+	int _clickedHotspotID;
+	bool _renderHotspots;
 
 	Graphics::Surface *_scaledSurface;
 	void scaleSurface(const Graphics::Surface *src, Graphics::Surface *dst,
@@ -430,15 +430,15 @@ private:
 		// level 0 means that constructedPano was just contructed and hasn't been upscaled yet
 		// level 1 means only upscaled height (2x pixels)
 		// level 2 means upscaled height and width (4x pixels)
-		uint8 _upscaleLevel = 0;
+		uint8 _upscaleLevel;
 
 		// Defining these to make the swing transition happen
 		// which requires storing the previous point during every change in FOV, Pan Angle and Tilt Angle
 		// If swing transition is called, this will be the start point of the transition
-		float _currentFOV = 0;
-		float _currentHFOV = 0;
-		float _currentPanAngle = 0;
-		float _currentTiltAngle = 0;
+		float _currentFOV;
+		float _currentHFOV;
+		float _currentPanAngle;
+		float _currentTiltAngle;
 
 	private:
 		bool _isPanoConstructed;

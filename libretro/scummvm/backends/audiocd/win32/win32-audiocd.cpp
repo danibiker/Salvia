@@ -69,7 +69,7 @@
 #include <ntddcdrm.h>
 #endif
 
-class Win32AudioCDStream final : public AudioCDStream {
+class Win32AudioCDStream : public AudioCDStream {
 public:
 	Win32AudioCDStream(HANDLE handle, const TRACK_DATA &startEntry, const TRACK_DATA &endEntry);
 	~Win32AudioCDStream();
@@ -138,7 +138,7 @@ bool Win32AudioCDStream::readFrame(int frame, int16 *buffer) {
 }
 
 
-class Win32AudioCDManager final : public DefaultAudioCDManager {
+class Win32AudioCDManager : public DefaultAudioCDManager {
 public:
 	Win32AudioCDManager();
 	~Win32AudioCDManager();

@@ -37,7 +37,7 @@ class Palette;
 
 class ColorQuantizer {
 private:
-	Octree *_octree = nullptr;
+	Octree *_octree;
 
 public:
 	/**

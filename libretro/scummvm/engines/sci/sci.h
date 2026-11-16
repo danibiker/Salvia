@@ -136,7 +136,7 @@ class SciEngine : public Engine {
 	friend class Console;
 public:
 	SciEngine(OSystem *syst, const ADGameDescription *desc, SciGameId gameId);
-	~SciEngine() override;
+	~SciEngine();
 
 	// Engine APIs
 	Common::Error run() override;

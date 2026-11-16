@@ -36,7 +36,7 @@ namespace Scumm {
 class Player_V2CMS : public Player_V2Base {
 public:
 	Player_V2CMS(ScummEngine *scumm);
-	~Player_V2CMS() override;
+	~Player_V2CMS();
 
 	// MusicEngine API
 	void setMusicVolume(int vol) override;

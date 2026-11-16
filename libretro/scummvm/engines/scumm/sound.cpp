@@ -74,7 +74,7 @@ Sound::Sound(ScummEngine *parent, Audio::Mixer *mixer, bool useReplacementAudioT
 	_currentMusic(0),
 	_lastSound(0),
 	_soundsPaused(false),
-	_digiSndMode(DIGI_SND_MODE_EMPTY) {
+	_digiSndMode(DIGI_SND_MODE_EMPTY), _cachedSfxLocationInPak(-1), _cachedSfxLengthInPak(0), _soundCD(nullptr), _soundSE(nullptr), _useRemasteredAudio(false), _enableAmbienceSounds(false) {
 
 	memset(_midiQueue, 0, sizeof(_midiQueue));
 	memset(_soundQueue, 0, sizeof(_soundQueue));

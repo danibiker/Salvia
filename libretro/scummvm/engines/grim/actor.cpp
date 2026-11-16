@@ -514,9 +514,10 @@ void Actor::setPos(const Math::Vector3d &position) {
 
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		Math::Vector3d moveVec = position - _pos;
-		for (Actor *a : g_grim->getActiveActors()) {
+		{ auto &rfRange517 = g_grim->getActiveActors(); for (auto rfIt517 = rfRange517.begin(), rfEnd517 = rfRange517.end(); rfIt517 != rfEnd517; ++rfIt517) {
+			Actor *a = *rfIt517;
 			handleCollisionWith(a, _collisionMode, &moveVec);
-		}
+		} }
 	}
 }
 
@@ -790,9 +791,10 @@ void Actor::moveTo(const Math::Vector3d &pos) {
 	}
 
 	Math::Vector3d moveVec = pos - _pos;
-	for (Actor *a : g_grim->getActiveActors()) {
+	{ auto &rfRange793 = g_grim->getActiveActors(); for (auto rfIt793 = rfRange793.begin(), rfEnd793 = rfRange793.end(); rfIt793 != rfEnd793; ++rfIt793) {
+		Actor *a = *rfIt793;
 		handleCollisionWith(a, mode, &moveVec);
-	}
+	} }
 	_pos += moveVec;
 }
 
@@ -1237,19 +1239,21 @@ void Actor::sayLine(const char *msgId, bool background, float x, float y) {
 			// if we're talking background draw the text object only if there are no no-background
 			// talking actors. This prevents glottis and nick subtitles overlapping in the high roller lounge,
 			// where glottis is background and nick isn't. (https://github.com/residualvm/residualvm/issues/685)
-			for (Actor *a : g_grim->getTalkingActors()) {
+			{ auto &rfRange1240 = g_grim->getTalkingActors(); for (auto rfIt1240 = rfRange1240.begin(), rfEnd1240 = rfRange1240.end(); rfIt1240 != rfEnd1240; ++rfIt1240) {
+				Actor *a = *rfIt1240;
 				if (!a->_backgroundTalk && a->_sayLineText) {
 					return;
 				}
-			}
+			} }
 		} else {
 			// if we're not background then delete the TextObject of any talking background actor.
-			for (Actor *a : g_grim->getTalkingActors()) {
+			{ auto &rfRange1247 = g_grim->getTalkingActors(); for (auto rfIt1247 = rfRange1247.begin(), rfEnd1247 = rfRange1247.end(); rfIt1247 != rfEnd1247; ++rfIt1247) {
+				Actor *a = *rfIt1247;
 				if (a->_backgroundTalk && a->_sayLineText) {
 					delete TextObject::getPool().getObject(a->_sayLineText);
 					a->_sayLineText = 0;
 				}
-			}
+			} }
 		}
 
 		TextObject *textObject = new TextObject();
@@ -1992,12 +1996,13 @@ Math::Vector3d Actor::handleCollisionTo(const Math::Vector3d &from, const Math::
 
 	Math::Vector3d p = pos;
 	Math::Vector3d moveVec = pos - _pos;
-	for (Actor *a : Actor::getPool()) {
+	{ auto &rfRange1995 = Actor::getPool(); for (auto rfIt1995 = rfRange1995.begin(), rfEnd1995 = rfRange1995.end(); rfIt1995 != rfEnd1995; ++rfIt1995) {
+		Actor *a = *rfIt1995;
 		if (a != this && a->isInSet(_setName) && a->isVisible()) {
 			p = a->getTangentPos(from, p);
 			handleCollisionWith(a, _collisionMode, &moveVec);
 		}
-	}
+	} }
 	return p;
 }
 

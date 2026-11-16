@@ -46,7 +46,7 @@ namespace Image {
 class MPEGDecoder : public Codec {
 public:
 	MPEGDecoder();
-	~MPEGDecoder() override;
+	~MPEGDecoder();
 
 	// Codec interface
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;

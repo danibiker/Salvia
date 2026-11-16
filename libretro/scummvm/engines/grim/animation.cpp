@@ -195,7 +195,8 @@ AnimManager::AnimManager() {
 }
 
 AnimManager::~AnimManager() {
-	for (const AnimationEntry &entry : _activeAnims) {
+	for (auto rfIt198 = _activeAnims.begin(), rfEnd198 = _activeAnims.end(); rfIt198 != rfEnd198; ++rfIt198) {
+		const AnimationEntry &entry = *rfIt198;
 		Animation *anim = entry._anim;
 		// Don't call deactivate() here so we don't mess with the list we're using.
 		anim->_manager = nullptr;

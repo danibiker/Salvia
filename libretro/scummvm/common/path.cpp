@@ -836,7 +836,8 @@ Path Path::normalize() const {
 			// Well, we don't start with ESCAPE so there is still a chance we get unescaped
 			needUnescape = true;
 
-			for (const auto &comp : comps) {
+			for (auto rfIt839 = comps.begin(), rfEnd839 = comps.end(); rfIt839 != rfEnd839; ++rfIt839) {
+				const auto &comp = *rfIt839;
 				if (!canUnescape(false, false, comp.c_str())) {
 					// Nope we can't get unescaped
 					needUnescape = false;
@@ -861,7 +862,8 @@ Path Path::normalize() const {
 
 	// Finally, assemble all components back into a path
 	bool addSep = hasLeadingSeparator;
-	for (const auto &comp : comps) {
+	for (auto rfIt864 = comps.begin(), rfEnd864 = comps.end(); rfIt864 != rfEnd864; ++rfIt864) {
+		const auto &comp = *rfIt864;
 		if (addSep) {
 			result._str += SEPARATOR;
 		}
@@ -1046,58 +1048,91 @@ bool Path::compareComponents(bool (*comparator)(const String &x, const String &y
 	return comparator(item, itemOther);
 }
 
+// Reducer functions (lambdas can not be converted to function pointers with MSVC 2010)
+Path &Path::punycodeDecodeReducer(Path &path, const String &in, bool last) {
+	// We encode the result as UTF-8
+	String out = punycode_hasprefix(in) ?
+		     punycode_decodefilename(in).encode() :
+		     in;
+	path.appendInPlace(out, kNoSeparator);
+	if (!last) {
+		path._str += SEPARATOR;
+	}
+	return path;
+}
+
+Path &Path::punycodeEncodeReducer(Path &path, const String &in, bool last) {
+	// We decode the result as UTF-8
+	Common::String out = punycode_encodefilename(in.decode());
+	path.appendInPlace(out, kNoSeparator);
+	if (!last) {
+		path._str += SEPARATOR;
+	}
+	return path;
+}
+
+Path &Path::fromConfigReducer(Path &path, const String &in, bool last) {
+	// We encode the result as Latin-1: every byte has its own value
+	// This avoids error for non UTF-8 paths
+	String out = punycode_hasprefix(in) ?
+		     punycode_decodefilename(in).encode(kISO8859_1) :
+		     in;
+	path.appendInPlace(out, kNoSeparator);
+	if (!last) {
+		path._str += SEPARATOR;
+	}
+	return path;
+}
+
+static bool &punycodeNeedsEncodeReducer(bool &result, const String &in, bool last) {
+	// If we already need encode, we still need it
+	if (result) return result;
+
+	result = punycode_needEncode(in);
+	return result;
+}
+
+static bool &punycodeIsEncodedReducer(bool &result, const String &in, bool last) {
+	// If we already are encoded, we still are
+	if (result) return result;
+
+	result = punycode_hasprefix(in);
+	return result;
+}
+
+static String &toConfigReducer(String &path, const String &in, bool last) {
+	// We decode the result as Latin-1: every byte has its own value
+	// This avoids error for non UTF-8 paths
+	Common::String out = punycode_encodefilename(in.decode(kISO8859_1));
+	path += out;
+	if (!last) {
+		path += '/';
+	}
+	return path;
+}
+
 Path Path::punycodeDecode() const {
 	Path tmp;
 	return reduceComponents<Path &>(
-		[](Path &path, const String &in, bool last) -> Path & {
-			// We encode the result as UTF-8
-			String out = punycode_hasprefix(in) ?
-				     punycode_decodefilename(in).encode() :
-				     in;
-			path.appendInPlace(out, kNoSeparator);
-			if (!last) {
-				path._str += SEPARATOR;
-			}
-			return path;
-		}, tmp);
+		punycodeDecodeReducer, tmp);
 }
 
 Path Path::punycodeEncode() const {
 	Path tmp;
 	return reduceComponents<Path &>(
-		[](Path &path, const String &in, bool last) -> Path & {
-			// We decode the result as UTF-8
-			Common::String out = punycode_encodefilename(in.decode());
-			path.appendInPlace(out, kNoSeparator);
-			if (!last) {
-				path._str += SEPARATOR;
-			}
-			return path;
-		}, tmp);
+		punycodeEncodeReducer, tmp);
 }
 
 bool Path::punycodeNeedsEncode() const {
 	bool tmp = false;
 	return reduceComponents<bool &>(
-		[](bool &result, const String &in, bool last) -> bool & {
-			// If we already need encode, we still need it
-			if (result) return result;
-
-			result = punycode_needEncode(in);
-			return result;
-		}, tmp);
+		punycodeNeedsEncodeReducer, tmp);
 }
 
 bool Path::punycodeIsEncoded() const {
 	bool tmp = false;
 	return reduceComponents<bool &>(
-		[](bool &result, const String &in, bool last) -> bool & {
-			// If we already are encoded, we still are
-			if (result) return result;
-
-			result = punycode_hasprefix(in);
-			return result;
-		}, tmp);
+		punycodeIsEncodedReducer, tmp);
 }
 
 // For a path component creates a string with following property:
@@ -1134,24 +1169,33 @@ struct hasher {
 	uint mult;
 };
 
+static hasher &hashReducer(hasher &value, const String &in, bool last) {
+	uint hash = hashit_lower(getIdentifierComponent(in));
+
+	value.result = (value.result + hash) * value.mult;
+	value.mult = (value.mult * 69069);
+	return value;
+}
+
+static bool matchPatternComparator(const String &x, const String &y) {
+	return getIdentifierComponent(x).matchString(getIdentifierComponent(y), true);
+}
+
+static bool equalsIgnoreCaseAndMacComparator(const String &x, const String &y) {
+	return getIdentifierComponent(x).equalsIgnoreCase(getIdentifierComponent(y));
+}
+
+
 uint Path::hashIgnoreCaseAndMac() const {
 	hasher v = { 0x345678, 1000003 };
 	reduceComponents<hasher &>(
-		[](hasher &value, const String &in, bool last) -> hasher & {
-			uint hash = hashit_lower(getIdentifierComponent(in));
-
-			value.result = (value.result + hash) * value.mult;
-			value.mult = (value.mult * 69069);
-			return value;
-		}, v);
+		hashReducer, v);
 	return v.result;
 }
 
 bool Path::matchPattern(const Path &pattern) const {
 	return compareComponents(
-		[](const String &x, const String &y) {
-			return getIdentifierComponent(x).matchString(getIdentifierComponent(y), true);
-		}, pattern);
+		matchPatternComparator, pattern);
 }
 
 bool Path::equalsIgnoreCase(const Path &other) const {
@@ -1160,9 +1204,7 @@ bool Path::equalsIgnoreCase(const Path &other) const {
 
 bool Path::equalsIgnoreCaseAndMac(const Path &other) const {
 	return compareComponents(
-		[](const String &x, const String &y) {
-			return getIdentifierComponent(x).equalsIgnoreCase(getIdentifierComponent(y));
-		}, other);
+		equalsIgnoreCaseAndMacComparator, other);
 }
 
 bool Path::operator<(const Path &x) const {
@@ -1214,18 +1256,7 @@ Path Path::fromConfig(const String &value) {
 	// If the path is not punyencoded this will be a no-op
 	Path tmp;
 	return Path(value, '/').reduceComponents<Path &>(
-		[](Path &path, const String &in, bool last) -> Path & {
-			// We encode the result as Latin-1: every byte has its own value
-			// This avoids error for non UTF-8 paths
-			String out = punycode_hasprefix(in) ?
-				     punycode_decodefilename(in).encode(kISO8859_1) :
-				     in;
-			path.appendInPlace(out, kNoSeparator);
-			if (!last) {
-				path._str += SEPARATOR;
-			}
-			return path;
-		}, tmp);
+		fromConfigReducer, tmp);
 }
 
 String Path::toConfig() const {
@@ -1267,16 +1298,7 @@ String Path::toConfig() const {
 
 	String tmp;
 	return reduceComponents<String &>(
-		[](String &path, const String &in, bool last) -> String & {
-			// We decode the result as Latin-1: every byte has its own value
-			// This avoids error for non UTF-8 paths
-			Common::String out = punycode_encodefilename(in.decode(kISO8859_1));
-			path += out;
-			if (!last) {
-				path += '/';
-			}
-			return path;
-		}, tmp);
+		toConfigReducer, tmp);
 }
 
 Path Path::fromCommandLine(const String &value) {

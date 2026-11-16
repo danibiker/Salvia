@@ -56,7 +56,7 @@ public:
 class GfxFontFromResource : public GfxFont {
 public:
 	GfxFontFromResource(ResourceManager *resMan, GfxScreen *screen, GuiResourceId resourceId);
-	~GfxFontFromResource() override;
+	~GfxFontFromResource();
 
 	GuiResourceId getResourceId() override;
 	uint8 getHeight() override;

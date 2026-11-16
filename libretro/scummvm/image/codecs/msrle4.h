@@ -34,7 +34,7 @@ namespace Image {
 class MSRLE4Decoder : public Codec {
 public:
 	MSRLE4Decoder(uint16 width, uint16 height, byte bitsPerPixel);
-	~MSRLE4Decoder() override;
+	~MSRLE4Decoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return Graphics::PixelFormat::createFormatCLUT8(); }

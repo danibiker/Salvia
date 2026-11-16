@@ -551,14 +551,14 @@ public:
 	/* Put often used variables at the top.
 	 * That results in a shorter form of the opcode
 	 * on some architectures. */
-	IMuse *_imuse = nullptr;
-	IMuseDigital *_imuseDigital = nullptr;
-	MusicEngine *_musicEngine = nullptr;
-	Player_Towns *_townsPlayer = nullptr;
-	Sound *_sound = nullptr;
+	IMuse *_imuse;
+	IMuseDigital *_imuseDigital;
+	MusicEngine *_musicEngine;
+	Player_Towns *_townsPlayer;
+	Sound *_sound;
 
-	VerbSlot *_verbs = nullptr;
-	ObjectData *_objs = nullptr;
+	VerbSlot *_verbs;
+	ObjectData *_objs;
 
 	// Core variables
 	GameSettings _game;
@@ -568,32 +568,32 @@ public:
 	Common::RandomSource _rnd;
 
 	/** Graphics manager */
-	Gdi *_gdi = nullptr;
+	Gdi *_gdi;
 
 	/** Central resource data. */
-	ResourceManager *_res = nullptr;
-	int _insideCreateResource = 0; // Counter for HE sound
+	ResourceManager *_res;
+	int _insideCreateResource; // Counter for HE sound
 
-	bool _useOriginalGUI = true;
-	bool _enableAudioOverride = false;
-	bool _enableCOMISong = false;
-	bool _isAmigaPALSystem = false;
-	bool _isC64PALSystem = false;
-	bool _quitFromScriptCmd = false;
-	bool _isHE995 = false;
-	bool _enableHECompetitiveOnlineMods = false;
+	bool _useOriginalGUI;
+	bool _enableAudioOverride;
+	bool _enableCOMISong;
+	bool _isAmigaPALSystem;
+	bool _isC64PALSystem;
+	bool _quitFromScriptCmd;
+	bool _isHE995;
+	bool _enableHECompetitiveOnlineMods;
 
 	Common::Keymap *_insaneKeymap;
 
 protected:
 	VirtualMachineState vm;
 
-	bool _needsSoundUnpause = false;
+	bool _needsSoundUnpause;
 
 public:
 	// Constructor / Destructor
 	ScummEngine(OSystem *syst, const DetectorResult &dr);
-	~ScummEngine() override;
+	~ScummEngine();
 
 	// Engine APIs
 	Common::Error init();
@@ -671,7 +671,7 @@ protected:
 	 * integer part as needed on subsequent function calls.
 	 */
 	uint32 getIntegralTime(double fMsecs);
-	double _msecFractParts = 0.0;
+	double _msecFractParts;
 
 	virtual void processInput();
 	virtual void processKeyboard(Common::KeyState lastKeyHit);
@@ -693,12 +693,12 @@ public:
 	bool isUsingOriginalGUI() const;
 	bool isMessageBannerActive(); // For Indy4 Jap character shadows
 
-	bool _isIndy4Jap = false;
+	bool _isIndy4Jap;
 
 protected:
-	Dialog *_pauseDialog = nullptr;
-	Dialog *_messageDialog = nullptr;
-	Dialog *_versionDialog = nullptr;
+	Dialog *_pauseDialog;
+	Dialog *_messageDialog;
+	Dialog *_versionDialog;
 
 	void confirmExitDialog();
 	void confirmRestartDialog();
@@ -708,67 +708,67 @@ protected:
 
 	// Original GUI
 	int32 _bannerColors[50]; // Colors for the original GUI
-	byte *_bannerMem = nullptr;
-	uint32 _bannerMemSize = 0;
-	int _bannerSaveYStart = 0;
+	byte *_bannerMem;
+	uint32 _bannerMemSize;
+	int _bannerSaveYStart;
 
-	bool _messageBannerActive = false;
-	bool _comiQuitMenuIsOpen = false;
-	bool _closeBannerAndQueryQuitFlag = false;
+	bool _messageBannerActive;
+	bool _comiQuitMenuIsOpen;
+	bool _closeBannerAndQueryQuitFlag;
 
 	// The followings are needed for MI1 FM-Towns
-	byte *_textSurfBannerMem = nullptr;
-	uint32 _textSurfBannerMemSize = 0;
+	byte *_textSurfBannerMem;
+	uint32 _textSurfBannerMemSize;
 
 	InternalGUIControl _internalGUIControls[30];
 
 	// Special GUI strings
-	const char _emptyMsg[1] = {'\0'};
-	const char _uncheckedBox[2] = {' ', '\0'};
-	const char _checkedBox[2] = {'x', '\0'};
-	const char _arrowUp[2] = {'\x18', '\0'};
-	const char _arrowDown[2] = {'\x19', '\0'};
-	const char _arrowLeft[2] = {'\x3c', '\0'};
-	const char _arrowRight[2] = {'\x3d', '\0'};
+	static const char _emptyMsg[1];
+	static const char _uncheckedBox[2];
+	static const char _checkedBox[2];
+	static const char _arrowUp[2];
+	static const char _arrowDown[2];
+	static const char _arrowLeft[2];
+	static const char _arrowRight[2];
 
 	Common::StringArray _savegameNames;
-	int _menuPage = 0;
-	int _mainMenuSavegameLabel = 1;
-	int _curDisplayedSaveSlotPage = 0;
-	int _firstSaveStateOfList = 0; // For LOOM VGA
-	bool _mainMenuIsActive = false;
-	bool _quitByGUIPrompt = false;
+	int _menuPage;
+	int _mainMenuSavegameLabel;
+	int _curDisplayedSaveSlotPage;
+	int _firstSaveStateOfList; // For LOOM VGA
+	bool _mainMenuIsActive;
+	bool _quitByGUIPrompt;
 	char _mainMenuMusicSlider[17];
 	char _mainMenuSpeechSlider[17];
 	char _mainMenuSfxSlider[17];
 	char _mainMenuTextSpeedSlider[17];
 	char _mainMenuSegaCDPasscode[5];
-	int _spooledMusicIsToBeEnabled = 1;
-	int _saveScriptParam = 0;
-	int _guiCursorAnimCounter = 0;
-	int _v5VoiceMode = 0;
+	int _spooledMusicIsToBeEnabled;
+	int _saveScriptParam;
+	int _guiCursorAnimCounter;
+	int _v5VoiceMode;
 
 	// Fake flags just for sub v5 GUIs
-	int _internalSpeakerSoundsAreOn = 1;
-	int _guiMouseFlag = 1;
-	int _guiJoystickFlag = 1;
+	int _internalSpeakerSoundsAreOn;
+	int _guiMouseFlag;
+	int _guiJoystickFlag;
 
-	bool _mixerMutedByGUI = false;
+	bool _mixerMutedByGUI;
 
 	Graphics::Surface _savegameThumbnail;
-	byte *_tempTextSurface = nullptr;
-	byte *_tempMainSurface = nullptr;
-	byte *_tempVerbSurface = nullptr;
-	bool _postGUICharMask = false;
+	byte *_tempTextSurface;
+	byte *_tempMainSurface;
+	byte *_tempVerbSurface;
+	bool _postGUICharMask;
 
 	// Saved cursor pre and post GUI
-	byte *_curGrabbedCursor = nullptr;
-	int8 _oldCursorState = 0;
-	int _curCursorState = 0;
-	int _curCursorWidth = 0;
-	int _curCursorHeight = 0;
-	int _curCursorHotspotX = 0;
-	int _curCursorHotspotY = 0;
+	byte *_curGrabbedCursor;
+	int8 _oldCursorState;
+	int _curCursorState;
+	int _curCursorWidth;
+	int _curCursorHeight;
+	int _curCursorHotspotX;
+	int _curCursorHotspotY;
 
 	virtual void setSnailCursor() {}
 
@@ -837,15 +837,15 @@ public:
 	bool displayMessageOKQuit(MSVC_PRINTF const char *message, ...) GCC_PRINTF(2, 3);
 
 protected:
-	byte _fastMode = 0;
+	byte _fastMode;
 
-	byte _numActors = 0;
-	Actor **_actors = nullptr;	// Has _numActors elements
-	Actor **_sortedActors = nullptr;
+	byte _numActors;
+	Actor **_actors;	// Has _numActors elements
+	Actor **_sortedActors;
 
-	byte *_arraySlot = nullptr;
-	uint16 *_inventory = nullptr;
-	uint16 *_newNames = nullptr;
+	byte *_arraySlot;
+	uint16 *_inventory;
+	uint16 *_newNames;
 public:
 	// VAR is a wrapper around scummVar, which attempts to include additional
 	// useful information should an illegal var access be detected.
@@ -865,43 +865,47 @@ public:
 
 	bool applyMi2NiDemoOverride();
 	struct Playback {
-		struct FrameEvent {
-			bool hasPos = false;
-			uint16 x = 0;
-			uint16 y = 0;
+	Playback() : _loaded(false), _attempted(false), _active(false), _mi2DemoVarsApplied(false), _streamOff(0), _streamBytes(0), _nextIndex(0), _lastRoom(-1), _hasPrevMbs(false), _prevMbs(0), _firstInteractIndex(0), _firstInteractValid(false), _curX(0), _curY(0), _pendingLUp(false), _pendingRUp(false), _sputmCmdActive(false), _sputmCmdEnterCount(0) {}
 
-			uint16 mbs = 0;
-			uint16 key = 0;
+		struct FrameEvent {
+	FrameEvent() : hasPos(false), x(0), y(0), mbs(0), key(0) {}
+
+			bool hasPos;
+			uint16 x;
+			uint16 y;
+
+			uint16 mbs;
+			uint16 key;
 		};
 
 		static void parseStream(const Common::Array<byte> &stream, Common::Array<FrameEvent> &outEvents);
 
-		bool _loaded = false;
-		bool _attempted = false;
-		bool _active = false;
+		bool _loaded;
+		bool _attempted;
+		bool _active;
 
-		bool _mi2DemoVarsApplied = false;
+		bool _mi2DemoVarsApplied;
 
 		Common::Array<FrameEvent> _events;
 
-		uint32 _streamOff = 0;
-		uint32 _streamBytes = 0;
+		uint32 _streamOff;
+		uint32 _streamBytes;
 
-		uint32 _nextIndex = 0;
-		int _lastRoom = -1;
+		uint32 _nextIndex;
+		int _lastRoom;
 
-		bool _hasPrevMbs = false;
-		uint16 _prevMbs = 0;
-		uint32 _firstInteractIndex = 0;
-		bool _firstInteractValid = false;
+		bool _hasPrevMbs;
+		uint16 _prevMbs;
+		uint32 _firstInteractIndex;
+		bool _firstInteractValid;
 
-		int16 _curX = 0;
-		int16 _curY = 0;
-		bool _pendingLUp = false;
-		bool _pendingRUp = false;
+		int16 _curX;
+		int16 _curY;
+		bool _pendingLUp;
+		bool _pendingRUp;
 
-		bool _sputmCmdActive = false;
-		byte _sputmCmdEnterCount = 0;
+		bool _sputmCmdActive;
+		byte _sputmCmdEnterCount;
 		Common::String _sputmCmdBuf;
 		Common::String _name;
 
@@ -919,53 +923,53 @@ public:
 	Playback _playback;
 
 protected:
-	int16 _varwatch = 0;
-	int32 *_roomVars = nullptr;
-	int32 *_scummVars = nullptr;
-	byte *_bitVars = nullptr;
+	int16 _varwatch;
+	int32 *_roomVars;
+	int32 *_scummVars;
+	byte *_bitVars;
 
 	/* Global resource tables */
-	int _numVariables = 0;
-	int _numBitVariables = 0;
-	int _numLocalObjects = 0;
-	int _numGlobalObjects = 0;
-	int _numArray = 0;
-	int _numVerbs = 0;
-	int _numFlObject = 0;
-	int _numInventory = 0;
-	int _numNewNames = 0;
-	int _numGlobalScripts = 0;
-	int _numRoomVariables = 0;
-	int _numPalettes = 0;
-	int _numSprites = 0;
-	int _numTalkies = 0;
-	int _numWindows = 0;
-	int _HEHeapSize = 0;
+	int _numVariables;
+	int _numBitVariables;
+	int _numLocalObjects;
+	int _numGlobalObjects;
+	int _numArray;
+	int _numVerbs;
+	int _numFlObject;
+	int _numInventory;
+	int _numNewNames;
+	int _numGlobalScripts;
+	int _numRoomVariables;
+	int _numPalettes;
+	int _numSprites;
+	int _numTalkies;
+	int _numWindows;
+	int _HEHeapSize;
 
 public:
-	int _numLocalScripts = 60, _numImages = 0, _numRooms = 0, _numScripts = 0, _numSounds = 0;	// Used by HE games
-	int _numCostumes = 0;	// FIXME - should be protected, used by Actor::remapActorPalette
-	int32 _numCharsets = 0;	// FIXME - should be protected, used by CharsetRenderer
+	int _numLocalScripts, _numImages, _numRooms, _numScripts, _numSounds;	// Used by HE games
+	int _numCostumes;	// FIXME - should be protected, used by Actor::remapActorPalette
+	int32 _numCharsets;	// FIXME - should be protected, used by CharsetRenderer
 
-	BaseCostumeLoader *_costumeLoader = nullptr;
-	BaseCostumeRenderer *_costumeRenderer = nullptr;
+	BaseCostumeLoader *_costumeLoader;
+	BaseCostumeRenderer *_costumeRenderer;
 
-	int _NESCostumeSet = 0;
+	int _NESCostumeSet;
 	void NES_loadCostumeSet(int n);
-	byte *_NEScostdesc = nullptr, *_NEScostlens = nullptr, *_NEScostoffs = nullptr, *_NEScostdata = nullptr;
+	byte *_NEScostdesc, *_NEScostlens, *_NEScostoffs, *_NEScostdata;
 	byte _NESPatTable[2][4096];
 	byte _NESPalette[2][16];
-	byte _NESBaseTiles = 0;
+	byte _NESBaseTiles;
 
-	int _NESStartStrip = 0;
+	int _NESStartStrip;
 
 protected:
-	int _curPalIndex = 0;
+	int _curPalIndex;
 
 public:
-	byte _currentRoom = 0;	// FIXME - should be protected but Actor::isInCurrentRoom uses it
-	int _roomResource = 0;  // FIXME - should be protected but Sound::pauseSounds uses it
-	bool _egoPositioned = false;	// Used by Actor::putActor, hence public
+	byte _currentRoom;	// FIXME - should be protected but Actor::isInCurrentRoom uses it
+	int _roomResource;  // FIXME - should be protected but Sound::pauseSounds uses it
+	bool _egoPositioned;	// Used by Actor::putActor, hence public
 
 	FilenamePattern _filenamePattern;
 
@@ -979,35 +983,35 @@ protected:
 	Common::Point _mouse;
 	Common::Point _virtualMouse;
 
-	uint16 _mouseAndKeyboardStat = 0;
-	byte _leftBtnPressed = 0, _rightBtnPressed = 0;
+	uint16 _mouseAndKeyboardStat;
+	byte _leftBtnPressed, _rightBtnPressed;
 
-	int _mouseWheelFlag = 0; // For original save/load dialog only
+	int _mouseWheelFlag; // For original save/load dialog only
 
-	bool _setupIsComplete = false;
+	bool _setupIsComplete;
 
 	/**
 	 * Last time runInputScript was run (measured in terms of OSystem::getMillis()).
 	 * This is currently only used for Indy3 mac to detect "double clicks".
 	 */
-	uint32 _lastInputScriptTime = 0;
+	uint32 _lastInputScriptTime;
 
 	/** The bootparam, to be passed to the script 1, the bootscript. */
-	int _bootParam = 0;
+	int _bootParam;
 
 	// Various options useful for debugging
-	bool _dumpScripts = false;
-	bool _hexdumpScripts = false;
-	bool _showStack = false;
-	bool _debugMode = false;
+	bool _dumpScripts;
+	bool _hexdumpScripts;
+	bool _showStack;
+	bool _debugMode;
 
 	// Save/Load class - some of this may be GUI
-	byte _saveLoadFlag = 0, _saveLoadSlot = 0;
-	uint32 _lastSaveTime = 0;
-	bool _saveTemporaryState = false;
-	bool _pauseSoundsDuringSave = true;
-	bool _loadFromLauncher = false;
-	bool _videoModeChanged = false;
+	byte _saveLoadFlag, _saveLoadSlot;
+	uint32 _lastSaveTime;
+	bool _saveTemporaryState;
+	bool _pauseSoundsDuringSave;
+	bool _loadFromLauncher;
+	bool _videoModeChanged;
 	Common::String _saveLoadFileName;
 	Common::String _saveLoadDescription;
 
@@ -1057,13 +1061,13 @@ protected:
 	/* Script VM - should be in Script class */
 	uint32 _localScriptOffsets[1024];
 	Common::HashMap<int, byte *> _scriptOverrides;
-	const byte *_scriptPointer = nullptr;
-	const byte *_scriptOrgPointer = nullptr;
-	const byte * const *_lastCodePtr = nullptr;
-	byte _opcode = 0;
-	bool _debug = false;
-	byte _currentScript = 0xFF; // Let debug() work on init stage
-	int _scummStackPos = 0;
+	const byte *_scriptPointer;
+	const byte *_scriptOrgPointer;
+	const byte * const *_lastCodePtr;
+	byte _opcode;
+	bool _debug;
+	byte _currentScript; // Let debug() work on init stage
+	int _scummStackPos;
 	int _vmStack[256];
 
 	char _engineVersionString[50];
@@ -1152,8 +1156,8 @@ protected:
 	void doSentence(int c, int b, int a);
 
 	/* Should be in Resource class */
-	BaseScummFile *_fileHandle = nullptr;
-	uint32 _fileOffset = 0;
+	BaseScummFile *_fileHandle;
+	uint32 _fileOffset;
 public:
 	/** The name of the (macintosh/rescumm style) container file, if any. */
 	Common::Path _containerFile;
@@ -1163,7 +1167,7 @@ public:
 	ScummFile *instantiateScummFile(bool indexPAKFiles = true);
 
 protected:
-	int _resourceHeaderSize = 8;
+	int _resourceHeaderSize;
 	byte _resourceMapper[128];
 	const byte *_resourceLastSearchBuf; // FIXME: need to put it to savefile?
 	uint32 _resourceLastSearchSize;    // FIXME: need to put it to savefile?
@@ -1219,7 +1223,7 @@ protected:
 	virtual void loadCharset(int i);
 	void nukeCharset(int i);
 
-	int _lastLoadedRoom = 0;
+	int _lastLoadedRoom;
 public:
 	const byte *findResourceData(uint32 tag, const byte *ptr);
 	const byte *findResource(uint32 tag, const byte *ptr);
@@ -1233,17 +1237,17 @@ public:
 
 public:
 	/* Should be in Object class */
-	byte OF_OWNER_ROOM = 0;
+	byte OF_OWNER_ROOM;
 	int getInventorySlot();
 	int findInventory(int owner, int index);
 	int getInventoryCount(int owner);
 
 protected:
-	byte *_objectOwnerTable = nullptr, *_objectRoomTable = nullptr, *_objectStateTable = nullptr;
-	int _numObjectsInRoom = 0;
+	byte *_objectOwnerTable, *_objectRoomTable, *_objectStateTable;
+	int _numObjectsInRoom;
 
 public:
-	uint32 *_classData = nullptr;
+	uint32 *_classData;
 
 protected:
 	void markObjectRectAsDirty(int obj);
@@ -1306,9 +1310,9 @@ protected:
 
 protected:
 	/* Should be in Verb class */
-	uint16 _verbMouseOver = 0;
-	int8 _userPut = 0;
-	uint16 _userState = 0;
+	uint16 _verbMouseOver;
+	int8 _userPut;
+	uint16 _userState;
 
 	virtual void handleMouseOver(bool updateInventory);
 	virtual void redrawVerbs();
@@ -1346,14 +1350,14 @@ protected:
 
 public:
 	/* Actor talking stuff */
-	byte _actorToPrintStrFor = 0, _V1TalkingActor = 0;
-	int _sentenceNum = 0;
+	byte _actorToPrintStrFor, _V1TalkingActor;
+	int _sentenceNum;
 	SentenceTab _sentence[NUM_SENTENCE];
 	StringTab _string[6];
-	byte _haveMsg = 0;
-	int16 _talkDelay = 0;
-	int _NES_lastTalkingActor = 0;
-	int _NES_talkColor = 0;
+	byte _haveMsg;
+	int16 _talkDelay;
+	int _NES_lastTalkingActor;
+	int _NES_talkColor;
 
 	virtual void actorTalk(const byte *msg);
 	void stopTalk();
@@ -1365,17 +1369,17 @@ public:
 
 protected:
 	/* Should be in Graphics class? */
-	uint16 _screenB = 0, _screenH = 0;
+	uint16 _screenB, _screenH;
 public:
-	int _roomHeight = 0, _roomWidth = 0;
-	int _screenHeight = 0, _screenWidth = 0;
+	int _roomHeight, _roomWidth;
+	int _screenHeight, _screenWidth;
 	VirtScreen _virtscr[4];		// Virtual screen areas
 	CameraData camera;			// 'Camera' - viewport
-	bool _cameraIsFrozen = false;
+	bool _cameraIsFrozen;
 
-	int _screenStartStrip = 0, _screenEndStrip = 0;
-	int _screenTop = 0;
-	bool _forceBannerVirtScreen = false;
+	int _screenStartStrip, _screenEndStrip;
+	int _screenTop;
+	bool _forceBannerVirtScreen;
 
 	// For Mac versions of 320x200 games:
 	// these versions rendered at 640x480 without any aspect ratio correction;
@@ -1386,11 +1390,11 @@ public:
 	// maybe someday the screen correction can be activated or deactivated from the
 	// ScummVM GUI; but currently I'm not taking that responsibility, after all the
 	// work done on ensuring that old savegames translate correctly to the new setting... :-P
-	bool _useMacScreenCorrectHeight = true;
-	int _macScreenDrawOffset = 20;
+	bool _useMacScreenCorrectHeight;
+	int _macScreenDrawOffset;
 
 	Common::RenderMode _renderMode;
-	uint8 _bytesPerPixel = 1;
+	uint8 _bytesPerPixel;
 	Graphics::PixelFormat _outputPixelFormat;
 
 protected:
@@ -1398,14 +1402,14 @@ protected:
 	uint8 _colorUsedByCycle[256];
 	Graphics::PaletteLookup _pl; // Used by the internal GUI
 
-	uint32 _ENCD_offs = 0, _EXCD_offs = 0;
-	uint32 _CLUT_offs = 0, _EPAL_offs = 0;
-	uint32 _IM00_offs = 0, _PALS_offs = 0;
+	uint32 _ENCD_offs, _EXCD_offs;
+	uint32 _CLUT_offs, _EPAL_offs;
+	uint32 _IM00_offs, _PALS_offs;
 
 	//ender: fullscreen
-	bool _fullRedraw = false, _bgNeedsRedraw = false;
-	bool _screenEffectFlag = false, _completeScreenRedraw = false;
-	bool _disableFadeInEffect = false;
+	bool _fullRedraw, _bgNeedsRedraw;
+	bool _screenEffectFlag, _completeScreenRedraw;
+	bool _disableFadeInEffect;
 
 	struct {
 		int hotspotX, hotspotY, width, height;
@@ -1417,12 +1421,12 @@ protected:
 	// this should be dynamically allocated based on game depth instead.
 	byte _grabbedCursor[16384];
 	byte _macGrabbedCursor[16384 * 4]; // Double resolution cursor
-	byte _currentCursor = 0;
+	byte _currentCursor;
 
-	byte _newEffect = 0, _switchRoomEffect2 = 0, _switchRoomEffect = 0;
-	bool _doEffect = false;
+	byte _newEffect, _switchRoomEffect2, _switchRoomEffect;
+	bool _doEffect;
 
-	bool _snapScroll = false;
+	bool _snapScroll;
 
 	virtual void setBuiltinCursor(int index) {}
 public:
@@ -1510,10 +1514,10 @@ public:
 protected:
 	// Screen rendering
 	byte *_compositeBuf;
-	byte *_hercCGAScaleBuf = nullptr;
-	bool _enableEGADithering = false;
-	bool _supportsEGADithering = false;
-	bool _enableSegaShadowMode = false;
+	byte *_hercCGAScaleBuf;
+	bool _enableEGADithering;
+	bool _supportsEGADithering;
+	bool _enableSegaShadowMode;
 
 	virtual void drawDirtyScreenParts();
 	void updateDirtyScreen(VirtScreenNumber slot);
@@ -1558,17 +1562,17 @@ public:
 	double getAmigaMusicTimerFrequency(); // For setting up Players v2 and v3
 
 protected:
-	bool _shakeEnabled = false;
-	bool _shakeTempSavedState = false; // For saving and restoring before and after GUI calls
-	uint _shakeFrame = 0;
-	uint32 _shakeNextTick = 0;
-	uint32 _shakeTickCounter = 0;
+	bool _shakeEnabled;
+	bool _shakeTempSavedState; // For saving and restoring before and after GUI calls
+	uint _shakeFrame;
+	uint32 _shakeNextTick;
+	uint32 _shakeTickCounter;
 	double _shakeTimerRate;
 	double _timerFrequency;
 
 	void setShake(int mode);
 
-	int _drawObjectQueNr = 0;
+	int _drawObjectQueNr;
 	byte _drawObjectQue[200];
 
 	/* For each of the 410 screen strips, gfxUsageBits contains a
@@ -1602,45 +1606,45 @@ protected:
 
 public:
 	byte _roomPalette[256];
-	byte *_shadowPalette = nullptr;
-	bool _skipDrawObject = 0;
-	int _voiceMode = 0;
-	int _soundEnabled = 0;
+	byte *_shadowPalette;
+	bool _skipDrawObject;
+	int _voiceMode;
+	int _soundEnabled;
 
 	// HE specific
 	byte _HEV7ActorPalette[256];
-	uint8 *_hePalettes = nullptr;
-	uint16 _hePaletteSlot = 0;
-	uint16 *_16BitPalette = nullptr;
+	uint8 *_hePalettes;
+	uint16 _hePaletteSlot;
+	uint16 *_16BitPalette;
 
 	// Indy4 Amiga specific
-	byte *_verbPalette = nullptr;
+	byte *_verbPalette;
 
 	ScummEngine_v0_Delays _V0Delay;
 
 protected:
-	int _shadowPaletteSize = 0;
+	int _shadowPaletteSize;
 	byte _currentPalette[3 * 256];
 	byte _darkenPalette[3 * 256];
-	int _paletteChangedCounter = 1;
+	int _paletteChangedCounter;
 
-	int _palDirtyMin = 0, _palDirtyMax = 0;
+	int _palDirtyMin, _palDirtyMax;
 
-	byte _palManipStart = 0, _palManipEnd = 0;
-	uint16 _palManipCounter = 0;
-	byte *_palManipPalette = nullptr;
-	byte *_palManipIntermediatePal = nullptr;
+	byte _palManipStart, _palManipEnd;
+	uint16 _palManipCounter;
+	byte *_palManipPalette;
+	byte *_palManipIntermediatePal;
 
-	bool _haveActorSpeechMsg = false;
-	bool _useTalkAnims = false;
-	uint16 _defaultTextSpeed = 0;
-	int _saveSound = 0;
-	bool _native_mt32 = false;
-	bool _copyProtection = false;
-	bool _shadowPalRemap = false;
+	bool _haveActorSpeechMsg;
+	bool _useTalkAnims;
+	uint16 _defaultTextSpeed;
+	int _saveSound;
+	bool _native_mt32;
+	bool _copyProtection;
+	bool _shadowPalRemap;
 
 	// Indy4 Amiga specific
-	uint16 _amigaFirstUsedColor = 0;
+	uint16 _amigaFirstUsedColor;
 	byte _amigaPalette[3 * 64];
 	void amigaPaletteFindFirstUsedColor();
 	void mapRoomPalette(int idx);
@@ -1693,7 +1697,7 @@ protected:
 
 	/* String class */
 public:
-	CharsetRenderer *_charset = nullptr;
+	CharsetRenderer *_charset;
 	byte _charsetColorMap[16];
 
 	/**
@@ -1701,29 +1705,29 @@ public:
 	 * drawStripToScreen() composits it over the game graphics.
 	 */
 	Graphics::Surface _textSurface;
-	int _textSurfaceMultiplier = 0;
+	int _textSurfaceMultiplier;
 
-	bool _isModernMacVersion = false;
-	bool _useGammaCorrection = true;
+	bool _isModernMacVersion;
+	bool _useGammaCorrection;
 
-	Graphics::Surface *_macScreen = nullptr;
-	MacGui *_macGui = nullptr;
-	bool _useMacGraphicsSmoothing = true;
+	Graphics::Surface *_macScreen;
+	MacGui *_macGui;
+	bool _useMacGraphicsSmoothing;
 	byte _completeScreenBuffer[320 * 200];
 
 protected:
-	byte _charsetColor = 0;
+	byte _charsetColor;
 	byte _charsetData[23][16];
 
-	int _charsetBufPos = 0;
+	int _charsetBufPos;
 	byte _charsetBuffer[512];
 
-	bool _keepText = false;
-	byte _msgCount = 0;
+	bool _keepText;
+	byte _msgCount;
 
-	int _nextLeft = 0, _nextTop = 0;
+	int _nextLeft, _nextTop;
 
-	Localizer *_localizer = nullptr;
+	Localizer *_localizer;
 
 #ifdef USE_TTS
 	bool _voiceNextString = false;
@@ -1777,23 +1781,23 @@ public:
 	Common::CodePage getDialogCodePage() const;
 
 	// Somewhat hackish stuff for 2 byte support (Chinese/Japanese/Korean)
-	bool _useCJKMode = false;
-	bool _useMultiFont = false;
-	int _numLoadedFont = 0;
-	int _2byteShadow = 0;
-	bool _force2ByteCharHeight = false;
+	bool _useCJKMode;
+	bool _useMultiFont;
+	int _numLoadedFont;
+	int _2byteShadow;
+	bool _force2ByteCharHeight;
 
-	int _2byteHeight = 0;
-	int _2byteWidth = 0;
-	int _krStrPost = 0;
-	byte _newLineCharacter = 0;
+	int _2byteHeight;
+	int _2byteWidth;
+	int _krStrPost;
+	byte _newLineCharacter;
 	byte *get2byteCharPtr(int idx);
 
 	bool isScummvmKorTarget();
 	bool hasLocalizer();
 
 //protected:
-	byte *_2byteFontPtr = nullptr;
+	byte *_2byteFontPtr;
 	byte *_2byteMultiFontPtr[20];
 	int _2byteMultiHeight[20];
 	int _2byteMultiWidth[20];
@@ -1817,12 +1821,12 @@ private:
 		Common::HashMap<uint32, TranslationRange> scriptRanges;
 	};
 
-	bool _existLanguageFile = false;
-	bool _isRTL = false;
-	byte *_languageBuffer = nullptr;
-	int _numTranslatedLines = 0;
-	TranslatedLine *_translatedLines = nullptr;
-	uint16 *_languageLineIndex = nullptr;
+	bool _existLanguageFile;
+	bool _isRTL;
+	byte *_languageBuffer;
+	int _numTranslatedLines;
+	TranslatedLine *_translatedLines;
+	uint16 *_languageLineIndex;
 	Common::HashMap<byte, TranslationRoom> _roomIndex;
 
 	const byte *searchTranslatedLine(const byte *text, const TranslationRange &range, bool useIndex);
@@ -1832,177 +1836,177 @@ private:
 public:
 
 	/* Scumm Vars */
-	byte VAR_KEYPRESS = 0xFF;
-	byte VAR_SYNC = 0xFF;
-	byte VAR_EGO = 0xFF;
-	byte VAR_CAMERA_POS_X = 0xFF;
-	byte VAR_HAVE_MSG = 0xFF;
-	byte VAR_ROOM = 0xFF;
-	byte VAR_OVERRIDE = 0xFF;
-	byte VAR_MACHINE_SPEED = 0xFF;
-	byte VAR_ME = 0xFF;
-	byte VAR_NUM_ACTOR = 0xFF;
-	byte VAR_CURRENT_LIGHTS = 0xFF;
-	byte VAR_CURRENTDRIVE = 0xFF; // How about merging this with VAR_CURRENTDISK?
-	byte VAR_CURRENTDISK = 0xFF;
-	byte VAR_TMR_1 = 0xFF;
-	byte VAR_TMR_2 = 0xFF;
-	byte VAR_TMR_3 = 0xFF;
-	byte VAR_MUSIC_TIMER = 0xFF;
-	byte VAR_ACTOR_RANGE_MIN = 0xFF;
-	byte VAR_ACTOR_RANGE_MAX = 0xFF;
-	byte VAR_CAMERA_MIN_X = 0xFF;
-	byte VAR_CAMERA_MAX_X = 0xFF;
-	byte VAR_TIMER_NEXT = 0xFF;
-	byte VAR_VIRT_MOUSE_X = 0xFF;
-	byte VAR_VIRT_MOUSE_Y = 0xFF;
-	byte VAR_ROOM_RESOURCE = 0xFF;
-	byte VAR_LAST_SOUND = 0xFF;
-	byte VAR_CUTSCENEEXIT_KEY = 0xFF;
-	byte VAR_OPTIONS_KEY = 0xFF;
-	byte VAR_TALK_ACTOR = 0xFF;
-	byte VAR_CAMERA_FAST_X = 0xFF;
-	byte VAR_SCROLL_SCRIPT = 0xFF;
-	byte VAR_ENTRY_SCRIPT = 0xFF;
-	byte VAR_ENTRY_SCRIPT2 = 0xFF;
-	byte VAR_EXIT_SCRIPT = 0xFF;
-	byte VAR_EXIT_SCRIPT2 = 0xFF;
-	byte VAR_VERB_SCRIPT = 0xFF;
-	byte VAR_SENTENCE_SCRIPT = 0xFF;
-	byte VAR_INVENTORY_SCRIPT = 0xFF;
-	byte VAR_CUTSCENE_START_SCRIPT = 0xFF;
-	byte VAR_CUTSCENE_END_SCRIPT = 0xFF;
-	byte VAR_CHARINC = 0xFF;
-	byte VAR_WALKTO_OBJ = 0xFF;
-	byte VAR_DEBUGMODE = 0xFF;
-	byte VAR_HEAPSPACE = 0xFF;
-	byte VAR_RESTART_KEY = 0xFF;
-	byte VAR_PAUSE_KEY = 0xFF;
-	byte VAR_MOUSE_X = 0xFF;
-	byte VAR_MOUSE_Y = 0xFF;
-	byte VAR_TIMER = 0xFF;
-	byte VAR_TIMER_TOTAL = 0xFF;
-	byte VAR_SOUNDCARD = 0xFF;
-	byte VAR_VIDEOMODE = 0xFF;
-	byte VAR_MAINMENU_KEY = 0xFF;
-	byte VAR_FIXEDDISK = 0xFF;
-	byte VAR_CURSORSTATE = 0xFF;
-	byte VAR_USERPUT = 0xFF;
-	byte VAR_SOUNDRESULT = 0xFF;
-	byte VAR_TALKSTOP_KEY = 0xFF;
-	byte VAR_FADE_DELAY = 0xFF;
-	byte VAR_NOSUBTITLES = 0xFF;
+	byte VAR_KEYPRESS;
+	byte VAR_SYNC;
+	byte VAR_EGO;
+	byte VAR_CAMERA_POS_X;
+	byte VAR_HAVE_MSG;
+	byte VAR_ROOM;
+	byte VAR_OVERRIDE;
+	byte VAR_MACHINE_SPEED;
+	byte VAR_ME;
+	byte VAR_NUM_ACTOR;
+	byte VAR_CURRENT_LIGHTS;
+	byte VAR_CURRENTDRIVE; // How about merging this with VAR_CURRENTDISK?
+	byte VAR_CURRENTDISK;
+	byte VAR_TMR_1;
+	byte VAR_TMR_2;
+	byte VAR_TMR_3;
+	byte VAR_MUSIC_TIMER;
+	byte VAR_ACTOR_RANGE_MIN;
+	byte VAR_ACTOR_RANGE_MAX;
+	byte VAR_CAMERA_MIN_X;
+	byte VAR_CAMERA_MAX_X;
+	byte VAR_TIMER_NEXT;
+	byte VAR_VIRT_MOUSE_X;
+	byte VAR_VIRT_MOUSE_Y;
+	byte VAR_ROOM_RESOURCE;
+	byte VAR_LAST_SOUND;
+	byte VAR_CUTSCENEEXIT_KEY;
+	byte VAR_OPTIONS_KEY;
+	byte VAR_TALK_ACTOR;
+	byte VAR_CAMERA_FAST_X;
+	byte VAR_SCROLL_SCRIPT;
+	byte VAR_ENTRY_SCRIPT;
+	byte VAR_ENTRY_SCRIPT2;
+	byte VAR_EXIT_SCRIPT;
+	byte VAR_EXIT_SCRIPT2;
+	byte VAR_VERB_SCRIPT;
+	byte VAR_SENTENCE_SCRIPT;
+	byte VAR_INVENTORY_SCRIPT;
+	byte VAR_CUTSCENE_START_SCRIPT;
+	byte VAR_CUTSCENE_END_SCRIPT;
+	byte VAR_CHARINC;
+	byte VAR_WALKTO_OBJ;
+	byte VAR_DEBUGMODE;
+	byte VAR_HEAPSPACE;
+	byte VAR_RESTART_KEY;
+	byte VAR_PAUSE_KEY;
+	byte VAR_MOUSE_X;
+	byte VAR_MOUSE_Y;
+	byte VAR_TIMER;
+	byte VAR_TIMER_TOTAL;
+	byte VAR_SOUNDCARD;
+	byte VAR_VIDEOMODE;
+	byte VAR_MAINMENU_KEY;
+	byte VAR_FIXEDDISK;
+	byte VAR_CURSORSTATE;
+	byte VAR_USERPUT;
+	byte VAR_SOUNDRESULT;
+	byte VAR_TALKSTOP_KEY;
+	byte VAR_FADE_DELAY;
+	byte VAR_NOSUBTITLES;
 
 	// V5+
-	byte VAR_SOUNDPARAM = 0xFF;
-	byte VAR_SOUNDPARAM2 = 0xFF;
-	byte VAR_SOUNDPARAM3 = 0xFF;
-	byte VAR_INPUTMODE = 0xFF;
-	byte VAR_MEMORY_PERFORMANCE = 0xFF;
-	byte VAR_VIDEO_PERFORMANCE = 0xFF;
-	byte VAR_ROOM_FLAG = 0xFF;
-	byte VAR_GAME_LOADED = 0xFF;
-	byte VAR_NEW_ROOM = 0xFF;
+	byte VAR_SOUNDPARAM;
+	byte VAR_SOUNDPARAM2;
+	byte VAR_SOUNDPARAM3;
+	byte VAR_INPUTMODE;
+	byte VAR_MEMORY_PERFORMANCE;
+	byte VAR_VIDEO_PERFORMANCE;
+	byte VAR_ROOM_FLAG;
+	byte VAR_GAME_LOADED;
+	byte VAR_NEW_ROOM;
 
 	// V4/V5
-	byte VAR_V5_TALK_STRING_Y = 0xFF;
+	byte VAR_V5_TALK_STRING_Y;
 
 	// V6+
-	byte VAR_ROOM_WIDTH = 0xFF;
-	byte VAR_ROOM_HEIGHT = 0xFF;
-	byte VAR_SUBTITLES = 0xFF;
-	byte VAR_V6_EMSSPACE = 0xFF;
+	byte VAR_ROOM_WIDTH;
+	byte VAR_ROOM_HEIGHT;
+	byte VAR_SUBTITLES;
+	byte VAR_V6_EMSSPACE;
 
 	// V7/V8 specific variables
-	byte VAR_CAMERA_POS_Y = 0xFF;
-	byte VAR_CAMERA_MIN_Y = 0xFF;
-	byte VAR_CAMERA_MAX_Y = 0xFF;
-	byte VAR_CAMERA_THRESHOLD_X = 0xFF;
-	byte VAR_CAMERA_THRESHOLD_Y = 0xFF;
-	byte VAR_CAMERA_SPEED_X = 0xFF;
-	byte VAR_CAMERA_SPEED_Y = 0xFF;
-	byte VAR_CAMERA_ACCEL_X = 0xFF;
-	byte VAR_CAMERA_ACCEL_Y = 0xFF;
-	byte VAR_CAMERA_DEST_X = 0xFF;
-	byte VAR_CAMERA_DEST_Y = 0xFF;
-	byte VAR_CAMERA_FOLLOWED_ACTOR = 0xFF;
+	byte VAR_CAMERA_POS_Y;
+	byte VAR_CAMERA_MIN_Y;
+	byte VAR_CAMERA_MAX_Y;
+	byte VAR_CAMERA_THRESHOLD_X;
+	byte VAR_CAMERA_THRESHOLD_Y;
+	byte VAR_CAMERA_SPEED_X;
+	byte VAR_CAMERA_SPEED_Y;
+	byte VAR_CAMERA_ACCEL_X;
+	byte VAR_CAMERA_ACCEL_Y;
+	byte VAR_CAMERA_DEST_X;
+	byte VAR_CAMERA_DEST_Y;
+	byte VAR_CAMERA_FOLLOWED_ACTOR;
 
 	// V7/V8 specific variables
-	byte VAR_VERSION_KEY = 0xFF;
-	byte VAR_DEFAULT_TALK_DELAY = 0xFF;
-	byte VAR_CUSTOMSCALETABLE = 0xFF;
-	byte VAR_BLAST_ABOVE_TEXT = 0xFF;
-	byte VAR_VOICE_MODE = 0xFF;
-	byte VAR_MUSIC_BUNDLE_LOADED = 0xFF;
-	byte VAR_VOICE_BUNDLE_LOADED = 0xFF;
+	byte VAR_VERSION_KEY;
+	byte VAR_DEFAULT_TALK_DELAY;
+	byte VAR_CUSTOMSCALETABLE;
+	byte VAR_BLAST_ABOVE_TEXT;
+	byte VAR_VOICE_MODE;
+	byte VAR_MUSIC_BUNDLE_LOADED;
+	byte VAR_VOICE_BUNDLE_LOADED;
 
-	byte VAR_LEFTBTN_DOWN = 0xFF;	// V7/V8
-	byte VAR_RIGHTBTN_DOWN = 0xFF;	// V7/V8
-	byte VAR_LEFTBTN_HOLD = 0xFF;	// V6/V72HE/V7/V8
-	byte VAR_RIGHTBTN_HOLD = 0xFF;	// V6/V72HE/V7/V8
-	byte VAR_PRE_SAVELOAD_SCRIPT = 0xFF;	// V6/V7 (not HE)
-	byte VAR_POST_SAVELOAD_SCRIPT = 0xFF;	// V6/V7 (not HE)
-	byte VAR_SAVELOAD_PAGE = 0xFF;		// V8
-	byte VAR_OBJECT_LABEL_FLAG = 0xFF;	// V8
+	byte VAR_LEFTBTN_DOWN;	// V7/V8
+	byte VAR_RIGHTBTN_DOWN;	// V7/V8
+	byte VAR_LEFTBTN_HOLD;	// V6/V72HE/V7/V8
+	byte VAR_RIGHTBTN_HOLD;	// V6/V72HE/V7/V8
+	byte VAR_PRE_SAVELOAD_SCRIPT;	// V6/V7 (not HE)
+	byte VAR_POST_SAVELOAD_SCRIPT;	// V6/V7 (not HE)
+	byte VAR_SAVELOAD_PAGE;		// V8
+	byte VAR_OBJECT_LABEL_FLAG;	// V8
 
 	// V6/V7 specific variables (FT & Sam & Max specific)
-	byte VAR_CHARSET_MASK = 0xFF;
+	byte VAR_CHARSET_MASK;
 
 	// V6 specific variables
-	byte VAR_V6_SOUNDMODE = 0xFF;
+	byte VAR_V6_SOUNDMODE;
 
 	// V1/V2 specific variables
-	byte VAR_CHARCOUNT = 0xFF;
-	byte VAR_VERB_ALLOWED = 0xFF;
-	byte VAR_ACTIVE_VERB = 0xFF;
-	byte VAR_ACTIVE_OBJECT1 = 0xFF;
-	byte VAR_ACTIVE_OBJECT2 = 0xFF;
+	byte VAR_CHARCOUNT;
+	byte VAR_VERB_ALLOWED;
+	byte VAR_ACTIVE_VERB;
+	byte VAR_ACTIVE_OBJECT1;
+	byte VAR_ACTIVE_OBJECT2;
 
 	// HE specific variables
-	byte VAR_ALWAYS_REDRAW_ACTORS = 0xFF;		// Used in setActorRedrawFlags()
-	byte VAR_SKIP_RESET_TALK_ACTOR = 0xFF;	// Used in setActorCostume()
+	byte VAR_ALWAYS_REDRAW_ACTORS;		// Used in setActorRedrawFlags()
+	byte VAR_SKIP_RESET_TALK_ACTOR;	// Used in setActorCostume()
 
-	byte VAR_SOUND_CHANNEL = 0xFF;				// Used in o_startSound()
-	byte VAR_TALK_CHANNEL = 0xFF;				// Used in playVoice()
-	byte VAR_SOUND_TOKEN_OFFSET = 0xFF;			// Used in handleSoundFrame()
-	byte VAR_START_DYN_SOUND_CHANNELS = 0xFF;	// Used in getNextDynamicChannel()
-	byte VAR_SOUND_CALLBACK_SCRIPT = 0xFF;
+	byte VAR_SOUND_CHANNEL;				// Used in o_startSound()
+	byte VAR_TALK_CHANNEL;				// Used in playVoice()
+	byte VAR_SOUND_TOKEN_OFFSET;			// Used in handleSoundFrame()
+	byte VAR_START_DYN_SOUND_CHANNELS;	// Used in getNextDynamicChannel()
+	byte VAR_SOUND_CALLBACK_SCRIPT;
 
-	byte VAR_EARLY_TALKIE_CALLBACK = 0xFF;
-	byte VAR_EARLY_CHAN_0_CALLBACK = 0xFF;
-	byte VAR_EARLY_CHAN_1_CALLBACK = 0xFF;
-	byte VAR_EARLY_CHAN_2_CALLBACK = 0xFF;
-	byte VAR_EARLY_CHAN_3_CALLBACK = 0xFF;
+	byte VAR_EARLY_TALKIE_CALLBACK;
+	byte VAR_EARLY_CHAN_0_CALLBACK;
+	byte VAR_EARLY_CHAN_1_CALLBACK;
+	byte VAR_EARLY_CHAN_2_CALLBACK;
+	byte VAR_EARLY_CHAN_3_CALLBACK;
 
-	byte VAR_MAIN_SCRIPT = 0xFF; // Used in scummLoop()
+	byte VAR_MAIN_SCRIPT; // Used in scummLoop()
 
-	byte VAR_DEFAULT_SCRIPT_PRIORITY = 0xFF; // Used in runScript()/runObjectScript()
-	byte VAR_LAST_SCRIPT_PRIORITY = 0xFF;    // Used in runAllScripts()
+	byte VAR_DEFAULT_SCRIPT_PRIORITY; // Used in runScript()/runObjectScript()
+	byte VAR_LAST_SCRIPT_PRIORITY;    // Used in runAllScripts()
 
-	byte VAR_QUIT_SCRIPT = 0xFF; // Used in confirmExitDialog()
-	byte VAR_ERROR_FLAG = 0xFF; // HE70-90
-	byte VAR_OPERATION_FAILURE = 0xFF; // HE99+
+	byte VAR_QUIT_SCRIPT; // Used in confirmExitDialog()
+	byte VAR_ERROR_FLAG; // HE70-90
+	byte VAR_OPERATION_FAILURE; // HE99+
 
-	byte VAR_COLOR_BLACK = 0xFF;
+	byte VAR_COLOR_BLACK;
 
 	// Exists both in V7 and in V72HE:
-	byte VAR_NUM_GLOBAL_OBJS = 0xFF;
+	byte VAR_NUM_GLOBAL_OBJS;
 
-	byte VAR_LAST_FRAME_BURN_TIME = 0xFF;  // HE90+
-	byte VAR_LAST_FRAME_SCUMM_TIME = 0xFF; // HE90+
+	byte VAR_LAST_FRAME_BURN_TIME;  // HE90+
+	byte VAR_LAST_FRAME_SCUMM_TIME; // HE90+
 
-	byte VAR_WINDEX_RUNNING = 0xFF;
+	byte VAR_WINDEX_RUNNING;
 
 #ifdef USE_RGB_COLOR
 	// FM-Towns / PC-Engine specific
-	Graphics::FontSJIS *_cjkFont = nullptr;
+	Graphics::FontSJIS *_cjkFont;
 #endif
 
 	// FM-Towns specific
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
 public:
 	bool towns_isRectInStringBox(int x1, int y1, int x2, int y2);
-	byte _townsPaletteFlags = 0;
+	byte _townsPaletteFlags;
 	byte _townsCharsetColorMap[16];
 
 protected:
@@ -2027,28 +2031,28 @@ protected:
 	void towns_updateGfx();
 
 	Common::Rect _cyclRects[10];
-	int _numCyclRects = 0;
-	int _scrollRequest = 0;
-	int _scrollDeltaAdjust = 0;
-	bool _scrollNeedDeltaAdjust = 0;
+	int _numCyclRects;
+	int _scrollRequest;
+	int _scrollDeltaAdjust;
+	bool _scrollNeedDeltaAdjust;
 	int _refreshDuration[20];
-	int _refreshArrayPos = 0;
-	bool _refreshNeedCatchUp = false;
-	bool _enableSmoothScrolling = false;
-	bool _forceFMTownsHiResMode = false;
-	uint32 _scrollTimer = 0;
-	uint32 _scrollDestOffset = 0;
+	int _refreshArrayPos;
+	bool _refreshNeedCatchUp;
+	bool _enableSmoothScrolling;
+	bool _forceFMTownsHiResMode;
+	uint32 _scrollTimer;
+	uint32 _scrollDestOffset;
 	uint16 _scrollFeedStrips[3];
 
 	Common::Rect _curStringRect;
 
-	byte _townsOverrideShadowColor = 0;
+	byte _townsOverrideShadowColor;
 	byte _textPalette[48];
-	byte _townsClearLayerFlag = 1;
-	byte _townsActiveLayerFlags = 3;
+	byte _townsClearLayerFlag;
+	byte _townsActiveLayerFlags;
 	static const uint8 _townsLayer2Mask[];
 
-	TownsScreen *_townsScreen = nullptr;
+	TownsScreen *_townsScreen;
 #else
 	void scrollLeft() { redrawBGStrip(_gdi->_numStrips - 1, 1); }
 	void scrollRight() { redrawBGStrip(0, 1); }

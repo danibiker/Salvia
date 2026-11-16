@@ -487,8 +487,8 @@ It remove(It first, It last, const T& val) {
  *
  * This function is the equivalent of std::lower_bound for random access iterators.
  */
-template<typename RandomIt, typename V, typename Comp = Less<V> >
-RandomIt lowerBound(RandomIt first, RandomIt last, const V &val, Comp comp = {}) {
+template<typename RandomIt, typename V, typename Comp>
+RandomIt lowerBound(RandomIt first, RandomIt last, const V &val, Comp comp) {
 	while (first < last) {
 		const RandomIt mid = first + distance(first, last) / 2;
 		if (comp(*mid, val))
@@ -509,8 +509,8 @@ RandomIt lowerBound(RandomIt first, RandomIt last, const V &val, Comp comp = {})
  *
  * This function is the equivalent of std::upper_bound for random access iterators.
  */
-template<typename RandomIt, typename V, typename Comp = Less<V> >
-RandomIt upperBound(RandomIt first, RandomIt last, const V &val, Comp comp = {}) {
+template<typename RandomIt, typename V, typename Comp>
+RandomIt upperBound(RandomIt first, RandomIt last, const V &val, Comp comp) {
 	while (first < last) {
 		const RandomIt mid = first + distance(first, last) / 2;
 		if (!comp(val, *mid))
@@ -519,6 +519,20 @@ RandomIt upperBound(RandomIt first, RandomIt last, const V &val, Comp comp = {})
 			last = mid;
 	}
 	return first;
+}
+
+/**
+ * lowerBound/upperBound using the default comparator (Less<V>).
+ * (Separate overloads: MSVC 2010 has no default template arguments for function templates.)
+ */
+template<typename RandomIt, typename V>
+RandomIt lowerBound(RandomIt first, RandomIt last, const V &val) {
+	return lowerBound(first, last, val, Less<V>());
+}
+
+template<typename RandomIt, typename V>
+RandomIt upperBound(RandomIt first, RandomIt last, const V &val) {
+	return upperBound(first, last, val, Less<V>());
 }
 
 /** @} */

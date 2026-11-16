@@ -40,7 +40,7 @@ class Anim;
 class InventoryWindow : public Window {
 public:
 	InventoryWindow(Gfx::Driver *gfx, Cursor *cursor, ActionMenu *actionMenu);
-	~InventoryWindow() override {}
+	~InventoryWindow() {}
 
 	void open();
 	void close();

@@ -38,7 +38,7 @@ public:
 	static const int MAX_FONTS = 5;
 
 	SmushMultiFont(ScummEngine *vm, SmushPlayer *player, bool useOriginalColors);
-	~SmushMultiFont() override;
+	~SmushMultiFont();
 
 	void drawString(const char *str, byte *buffer, Common::Rect &clipRect, int x, int y, int16 col, TextStyleFlags flags);
 	void drawString(const char *str, byte *buffer, Common::Rect &clipRect, int x, int y, int pitch, int16 col, TextStyleFlags flags);

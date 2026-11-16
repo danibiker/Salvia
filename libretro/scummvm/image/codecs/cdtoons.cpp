@@ -109,8 +109,8 @@ CDToonsDecoder::~CDToonsDecoder() {
 	_backingSurface->free();
 	delete _backingSurface;
 
-	for (auto &block : _blocks)
-		delete[] block._value.data;
+	for (auto rfIt112 = _blocks.begin(), rfEnd112 = _blocks.end(); rfIt112 != rfEnd112; ++rfIt112)
+		{ auto &block = *rfIt112; delete[] block._value.data; }
 }
 
 Graphics::Surface *CDToonsDecoder::decodeFrame(Common::SeekableReadStream &stream) {
@@ -510,8 +510,8 @@ Graphics::Surface *CDToonsDecoder::decodeFrame(Common::SeekableReadStream &strea
 		// Clear dirty background regions unless this frame asks to retain the previous pixels through those transparent runs.
 		if (!(flags & kCDToonsFrameFlagPreservePreviousPixels)) {
 			if (!backgroundRects.empty()) {
-				for (const Common::Rect &rect : backgroundRects)
-					_backingSurface->fillRect(rect, backgroundColor);
+				for (auto rfIt513 = backgroundRects.begin(), rfEnd513 = backgroundRects.end(); rfIt513 != rfEnd513; ++rfIt513)
+					{ const Common::Rect &rect = *rfIt513; _backingSurface->fillRect(rect, backgroundColor); }
 			} else {
 				_backingSurface->fillRect(xFrmRect, backgroundColor);
 			}
@@ -534,8 +534,8 @@ Graphics::Surface *CDToonsDecoder::decodeFrame(Common::SeekableReadStream &strea
 		}
 	} else if (!(flags & kCDToonsFrameFlagPreservePreviousPixels)) {
 		if (!foregroundRects.empty()) {
-			for (const Common::Rect &rect : foregroundRects)
-				_surface->fillRect(rect, backgroundColor);
+			for (auto rfIt537 = foregroundRects.begin(), rfEnd537 = foregroundRects.end(); rfIt537 != rfEnd537; ++rfIt537)
+				{ const Common::Rect &rect = *rfIt537; _surface->fillRect(rect, backgroundColor); }
 		} else {
 			_surface->fillRect(dirtyRect, backgroundColor);
 		}

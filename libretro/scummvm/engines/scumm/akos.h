@@ -43,10 +43,10 @@ struct AkosOffset;
 
 class AkosCostumeLoader : public BaseCostumeLoader {
 protected:
-	const byte *_akos = nullptr;
+	const byte *_akos;
 
 public:
-	AkosCostumeLoader(ScummEngine *vm) : BaseCostumeLoader(vm) {}
+	AkosCostumeLoader(ScummEngine *vm) : BaseCostumeLoader(vm), _akos(nullptr) {}
 
 	void loadCostume(int id) override;
 	bool increaseAnims(Actor *a) override;
@@ -64,7 +64,7 @@ protected:
 
 class AkosRenderer : public BaseCostumeRenderer {
 protected:
-	uint16 _codec = 0;
+	uint16 _codec;
 
 	bool _useBompPalette;
 
@@ -95,7 +95,7 @@ protected:
 
 
 public:
-	AkosRenderer(ScummEngine *scumm) : BaseCostumeRenderer(scumm, true) {
+	AkosRenderer(ScummEngine *scumm) : BaseCostumeRenderer(scumm, true), _codec(0), _actorHitMode(false), _actorHitX(0), _actorHitY(0), _actorHitResult(false) {
 		_useBompPalette = false;
 		_akhd = nullptr;
 		_akpl = nullptr;
@@ -108,9 +108,9 @@ public:
 		_xmap = nullptr;
 	}
 
-	bool _actorHitMode = false;
-	int16 _actorHitX = 0, _actorHitY = 0;
-	bool _actorHitResult = false;
+	bool _actorHitMode;
+	int16 _actorHitX, _actorHitY;
+	bool _actorHitResult;
 
 	void setPalette(uint16 *_palette) override;
 	void setFacing(const Actor *a) override;

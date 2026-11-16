@@ -55,41 +55,47 @@ static const byte kEmbeddedStream[16] = {0xe2, 0x65, 0xfb, 0x3a, 0xEF, 0x47, 0xF
 static const byte kEmbeddedAudio[16] = {0x9d, 0x8c, 0x17, 0x31, 0xE1, 0x03, 0x28, 0x45, 0xb5, 0x82, 0x3d, 0xf9, 0xdb, 0x22, 0xf5, 0x03};
 
 struct ASFDemuxer::Context {
+	Context() : input(nullptr), current(nullptr), minPacketSize(0), maxPacketSize(0), flags(0), dataStart(0), dataEnd(0), duration(0), sendDuration(0), preroll(0), usesStdECC(0), streamID(0), timestampIsPTS(false), eof(false) {}
+
 	struct Payload {
 		byte type;
 		uint16 size;
 	};
 	struct StreamState {
-		int index = -1;
+	StreamState() : index(-1), fragOffset(0), objectSize(0), clean(false), discardZeroMPEG2(false), paletteChanged(false), dsSpan(0), dsPacketSize(0), dsChunkSize(0), frameTime(0) {}
+
+		int index;
 		Object object;
-		uint32 fragOffset = 0;
-		uint32 objectSize = 0;
-		bool clean = false;
-		bool discardZeroMPEG2 = false, paletteChanged = false;
+		uint32 fragOffset;
+		uint32 objectSize;
+		bool clean;
+		bool discardZeroMPEG2, paletteChanged;
 		Common::Array<uint32> palette;
-		uint8 dsSpan = 0;
-		uint16 dsPacketSize = 0, dsChunkSize = 0;
-		uint64 frameTime = 0;
+		uint8 dsSpan;
+		uint16 dsPacketSize, dsChunkSize;
+		uint64 frameTime;
 		Common::Array<Payload> payloads;
 	};
 	struct PacketState {
-		int sizeLeft = 0, flags = 0, property = 0, timestamp = 0;
-		int segSizeType = 0, segments = 0, seq = 0, replicaSize = 0;
-		int keyFrame = 0, padding = 0, multiSize = 0, timeDelta = 0;
-		uint32 fragOffset = 0, fragSize = 0;
-		int64 fragTimestamp = 0, timeStart = 0, position = 0;
+	PacketState() : sizeLeft(0), flags(0), property(0), timestamp(0), segSizeType(0), segments(0), seq(0), replicaSize(0), keyFrame(0), padding(0), multiSize(0), timeDelta(0), fragOffset(0), fragSize(0), fragTimestamp(0), timeStart(0), position(0) {}
+
+		int sizeLeft, flags, property, timestamp;
+		int segSizeType, segments, seq, replicaSize;
+		int keyFrame, padding, multiSize, timeDelta;
+		uint32 fragOffset, fragSize;
+		int64 fragTimestamp, timeStart, position;
 	};
 
-	Common::SeekableReadStream *input = nullptr;
+	Common::SeekableReadStream *input;
 	Common::Array<Stream> streams;
 	StreamState states[128];
-	StreamState *current = nullptr;
+	StreamState *current;
 	PacketState packet;
-	uint32 minPacketSize = 0, maxPacketSize = 0, flags = 0;
-	uint64 dataStart = 0, dataEnd = 0, duration = 0, sendDuration = 0;
-	uint32 preroll = 0;
-	int usesStdECC = 0, streamID = 0;
-	bool timestampIsPTS = false, eof = false;
+	uint32 minPacketSize, maxPacketSize, flags;
+	uint64 dataStart, dataEnd, duration, sendDuration;
+	uint32 preroll;
+	int usesStdECC, streamID;
+	bool timestampIsPTS, eof;
 
 	bool readHeader();
 	bool readStream(uint64 end);
@@ -404,7 +410,8 @@ bool ASFDemuxer::Context::readFrameHeader() {
 			return false;
 		}
 		packet.fragTimestamp = input->readUint32LE();
-		for (const auto &payload : state.payloads) {
+		for (auto rfIt407 = state.payloads.begin(), rfEnd407 = state.payloads.end(); rfIt407 != rfEnd407; ++rfIt407) {
+			const auto &payload = *rfIt407;
 			int length = payload.size;
 			if (length == 0xffff)
 				length = input->readUint16LE();
@@ -619,7 +626,8 @@ bool ASFDemuxer::rewind() {
 	_ctx->packet = Context::PacketState();
 	_ctx->current = nullptr;
 	_ctx->eof = false;
-	for (auto &state : _ctx->states) {
+	for (auto rfIt622 = &_ctx->states[0], rfEnd622 = &_ctx->states[0] + sizeof(_ctx->states) / sizeof(_ctx->states[0]); rfIt622 != rfEnd622; ++rfIt622) {
+		auto &state = *rfIt622;
 		state.object = Object();
 		state.objectSize = state.fragOffset = 0;
 	}
@@ -691,7 +699,7 @@ class ASFAudioStream : public Audio::SeekableAudioStream {
 public:
 	ASFAudioStream(Common::SeekableReadStream *stream, DisposeAfterUse::Flag dispose)
 		: _input(stream), _dispose(dispose), _current(nullptr), _id(0), _ended(false) {}
-	~ASFAudioStream() override {
+	~ASFAudioStream() {
 		delete _current;
 		if (_dispose == DisposeAfterUse::YES)
 			delete _input;
@@ -699,12 +707,13 @@ public:
 	bool open() {
 		if (!_demux.open(_input))
 			return false;
-		for (const auto &stream : _demux.getStreams()) {
+		{ auto &rfRange702 = _demux.getStreams(); for (auto rfIt702 = rfRange702.begin(), rfEnd702 = rfRange702.end(); rfIt702 != rfEnd702; ++rfIt702) {
+			const auto &stream = *rfIt702;
 			if (stream.type == ASFDemuxer::kAudio) {
 				_id = stream.id;
 				return _codec.open(stream) && !_demux.endOfData();
 			}
-		}
+		} }
 		return false;
 	}
 	int readBuffer(int16 *buffer, int count) override {

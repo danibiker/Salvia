@@ -153,11 +153,19 @@ void MessageDialog::reflowLayout() {
 }
 
 MessageDialog::MessageDialog(const Common::U32String &message)
-	: MessageDialog(message, _("OK")) {
+	: Dialog(30, 20, 260, 124) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	init(message, (_("OK")),
+		 (Common :: U32String ( )).empty() ? Common::U32StringArray() : Common::U32StringArray(1, (Common :: U32String ( ))),
+		 (Graphics :: kTextAlignCenter), nullptr, (Common :: U32String ( )));
 }
 
 MessageDialog::MessageDialog(const Common::String &message)
-	: MessageDialog(Common::U32String(message), _("OK")) {
+	: Dialog(30, 20, 260, 124) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	init((Common::U32String(message)), (_("OK")),
+		 (Common :: U32String ( )).empty() ? Common::U32StringArray() : Common::U32StringArray(1, (Common :: U32String ( ))),
+		 (Graphics :: kTextAlignCenter), nullptr, (Common :: U32String ( )));
 }
 
 MessageDialog::MessageDialog(const Common::U32String &message,
@@ -228,7 +236,14 @@ void TimedMessageDialog::handleTickle() {
 
 CountdownMessageDialog::CountdownMessageDialog(const Common::U32String &message,
 				  uint32 duration)
-	: CountdownMessageDialog(message, duration, _("OK")) {
+	: MessageDialog(message, (_("OK")), (Common :: U32String ( )), (Graphics :: kTextAlignCenter), nullptr, (Common :: U32String ( "" ))) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_startTime = g_system->getMillis();
+	_timer = _startTime + duration;
+
+	_countdownMessage = (Common :: U32String ( "" ));
+
+	updateCountdown();
 }
 
 CountdownMessageDialog::CountdownMessageDialog(const Common::U32String &message,
@@ -267,11 +282,13 @@ void CountdownMessageDialog::updateCountdown() {
 }
 
 MessageDialogWithURL::MessageDialogWithURL(const Common::U32String &message, const char *url)
-	: MessageDialogWithURL(message, url, _("OK")) {
+	: MessageDialog(message, (_("OK")), _("Open URL"), (Graphics :: kTextAlignCenter), url) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
 }
 
 MessageDialogWithURL::MessageDialogWithURL(const Common::String &message, const char *url)
-	: MessageDialogWithURL(Common::U32String(message), url, _("OK")) {
+	: MessageDialog((Common::U32String(message)), (_("OK")), _("Open URL"), (Graphics :: kTextAlignCenter), url) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
 }
 
 MessageDialogWithURL::MessageDialogWithURL(const Common::U32String &message, const char *url, const Common::U32String &defaultButton, Graphics::TextAlign alignment)

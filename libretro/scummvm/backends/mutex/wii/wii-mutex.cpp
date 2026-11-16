@@ -35,7 +35,7 @@
 class WiiMutexInternal final : public Common::MutexInternal {
 public:
 	WiiMutexInternal();
-	~WiiMutexInternal() override;
+	~WiiMutexInternal();
 
 	bool lock() override;
 	bool unlock() override;

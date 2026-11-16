@@ -169,7 +169,7 @@ void FMVMenuScreen::changePage(uint page) {
 
 FMVWidget::FMVWidget(Gfx::Driver *gfx, uint fmvIndex) :
 		_filename(StarkDiary->getFMVFilename(fmvIndex)),
-		_title(gfx) {
+		_title(gfx), _textColorHovered(Gfx::Color(0x1E, 0x1E, 0x96)), _textColorDefault(Gfx::Color(0x00, 0x00, 0x00)) {
 	_title.setText(StarkDiary->getFMVTitle(fmvIndex));
 	_title.setColor(_textColorDefault);
 	_title.setFont(FontProvider::kCustomFont, 3);

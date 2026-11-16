@@ -51,14 +51,14 @@ enum frameTypes {
 };
 
 PacoDecoder::PacoDecoder()
-	: _fileStream(nullptr), _videoStream(nullptr), _audioStream(nullptr), _videoTrack(nullptr), _audioTrack(nullptr) {
+	: _fileStream(nullptr), _videoStream(nullptr), _audioStream(nullptr), _videoTrack(nullptr), _audioTrack(nullptr), _curFrame(0) {
 }
 
 PacoDecoder::~PacoDecoder() {
 	close();
 }
 
-void PacoDecoder::PacoDecoder::close() {
+void PacoDecoder::close() {
 	Video::VideoDecoder::close();
 
 	delete _videoStream;
@@ -124,7 +124,8 @@ int PacoDecoder::getAudioSamplingRate() {
 	 * SamplingRate is found inside the audio packets
 	 * Search for the first audio packet and use it.
 	 */
-	const Common::Array<int> samplingRates = {5563, 7418, 11127, 22254};
+	static const int kSamplingRates[] = {5563, 7418, 11127, 22254};
+	const Common::Array<int> samplingRates(kSamplingRates, ARRAYSIZE(kSamplingRates));
 	int index = 0;
 
 	int64 startPos = _audioStream->pos();
@@ -612,7 +613,8 @@ void PacoDecoder::PacoVideoTrack::handleFrame(Common::SeekableReadStream *fileSt
 }
 
 void PacoDecoder::PacoVideoTrack::copyDirtyRectsToBuffer(uint8 *dst, uint pitch) {
-	for (const auto &dirtyRect : _dirtyRects) {
+	for (auto rfIt615 = _dirtyRects.begin(), rfEnd615 = _dirtyRects.end(); rfIt615 != rfEnd615; ++rfIt615) {
+		const auto &dirtyRect = *rfIt615;
 		for (int y = dirtyRect.top; y < dirtyRect.bottom; ++y) {
 			const int x = dirtyRect.left;
 			memcpy(dst + y * pitch + x, (byte *)_surface->getBasePtr(x, y), dirtyRect.right - x);
@@ -633,7 +635,8 @@ PacoDecoder::PacoAudioTrack::~PacoAudioTrack() {
 }
 
 void PacoDecoder::PacoAudioTrack::queueSound(Common::SeekableReadStream *fileStream, uint32 chunkSize) {
-	const Common::Array<int> samplingRates = {5563, 7418, 11127, 22254};
+	static const int kSamplingRates[] = {5563, 7418, 11127, 22254};
+	const Common::Array<int> samplingRates(kSamplingRates, ARRAYSIZE(kSamplingRates));
 	uint16 header = fileStream->readUint16BE();
 	fileStream->readUint16BE();
 	int index = (header >> 10) & 7;

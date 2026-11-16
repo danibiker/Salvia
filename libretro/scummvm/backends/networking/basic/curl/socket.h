@@ -40,7 +40,7 @@ namespace Networking {
 class CurlSocket : public Socket {
 public:
 	CurlSocket(CURL *easy, curl_socket_t socket);
-	~CurlSocket() override;
+	~CurlSocket();
 
 	int ready() override;
 

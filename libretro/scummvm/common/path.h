@@ -164,6 +164,12 @@ private:
 	 */
 	bool compareComponents(bool (*comparator)(const String &x, const String &y), const Path &other) const;
 
+	// Reducers used with reduceComponents (plain functions instead of lambdas:
+	// MSVC 2010 cannot convert lambdas to function pointers)
+	static Path &punycodeDecodeReducer(Path &path, const String &in, bool last);
+	static Path &punycodeEncodeReducer(Path &path, const String &in, bool last);
+	static Path &fromConfigReducer(Path &path, const String &in, bool last);
+
 	/**
 	 * Determines if the path is escaped
 	 */

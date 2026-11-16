@@ -35,7 +35,7 @@ namespace OpenGL {
 class RenderbufferTarget : public Framebuffer {
 public:
 	RenderbufferTarget(GLuint renderbufferID);
-	~RenderbufferTarget() override;
+	~RenderbufferTarget();
 
 	/**
 	 * Set size of the render target.

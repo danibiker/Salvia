@@ -42,7 +42,7 @@ namespace Scumm {
 // drawing area (about and pause). It can not be dragged.
 // ---------------------------------------------------------------------------
 
-MacGuiImpl::MacDialogWindow::MacDialogWindow(MacGuiImpl *gui, OSystem *system, Graphics::Surface *from, Common::Rect bounds, MacDialogWindowStyle windowStyle, MacDialogMenuStyle menuStyle) : _gui(gui), _system(system), _from(from), _bounds(bounds) {
+MacGuiImpl::MacDialogWindow::MacDialogWindow(MacGuiImpl *gui, OSystem *system, Graphics::Surface *from, Common::Rect bounds, MacDialogWindowStyle windowStyle, MacDialogMenuStyle menuStyle) : _gui(gui), _system(system), _from(from), _bounds(bounds), _visible(false), _lastClickTime(0), _beamCursor(nullptr), _cursorWasVisible(false), _beamCursorVisible(false), _beamCursorHotspotX(3), _beamCursorHotspotY(4), _backup(nullptr), _defaultWidget(nullptr), _focusedWidget(nullptr), _dirtyPalette(false) {
 	// Only apply menu style if the menu is open.
 	Graphics::MacMenu *menu = _gui->_windowManager->getMenu();
 

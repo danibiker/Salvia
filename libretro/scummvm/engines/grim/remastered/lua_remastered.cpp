@@ -176,7 +176,8 @@ void Lua_Remastered::QueryActiveHotspots() {
 	Math::Vector2d pos(g_grim->_cursorX*scaleX, g_grim->_cursorY*scaleY);
 	lua_Object result = lua_createtable();
 	int count = 0;
-	for (Hotspot *h : Hotspot::getPool()) {
+	{ auto &rfRange179 = Hotspot::getPool(); for (auto rfIt179 = rfRange179.begin(), rfEnd179 = rfRange179.end(); rfIt179 != rfEnd179; ++rfIt179) {
+		Hotspot *h = *rfIt179;
 		if (!h->_rect.containsPoint(pos)) {
 			continue;
 		}
@@ -206,7 +207,7 @@ void Lua_Remastered::QueryActiveHotspots() {
 		lua_pushnumber(count++);
 		lua_pushobject(inner);
 		lua_settable();
-	}
+	} }
 
 	lua_pushobject(result);
 }

@@ -149,7 +149,7 @@ public:
 	SaveFileRewriteStream(const Common::String &fileName,
 	                      Common::SeekableReadStream *inFile,
 	                      kFileOpenMode mode, bool compress);
-	~SaveFileRewriteStream() override;
+	~SaveFileRewriteStream();
 
 	uint32 write(const void *dataPtr, uint32 dataSize) override { _changed = true; return MemoryDynamicRWStream::write(dataPtr, dataSize); }
 

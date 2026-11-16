@@ -52,7 +52,7 @@ static void activateMenuCallback(void *ref) {
 // loading, etc.
 // ===========================================================================
 
-MacGuiImpl::MacGuiImpl(ScummEngine *vm, const Common::Path &resourceFile) : _vm(vm), _system(_vm->_system), _surface(_vm->_macScreen), _resourceFile(resourceFile) {
+MacGuiImpl::MacGuiImpl(ScummEngine *vm, const Common::Path &resourceFile) : _vm(vm), _system(_vm->_system), _surface(_vm->_macScreen), _resourceFile(resourceFile), _bannerWindow(nullptr), _paletteDirty(false), _suspendPaletteUpdates(false), _menuIsActive(false), _cursorWasVisible(false), _gameFontId(-1), _windowManager(nullptr) {
 	_fonts.clear();
 	_strsStrings.clear();
 
@@ -881,7 +881,8 @@ MacGuiImpl::MacDialogWindow *MacGuiImpl::createDialog(int dialogId, Common::Rect
 		Graphics::Palette palette(256);
 		setMacGuiColors(palette);
 
-		for (auto &k : paletteMap) {
+		for (auto rfIt884 = paletteMap.begin(), rfEnd884 = paletteMap.end(); rfIt884 != rfEnd884; ++rfIt884) {
+			auto &k = *rfIt884;
 			int r = (k._key >> 16) & 0xFF;
 			int g = (k._key >> 8) & 0xFF;
 			int b = k._key & 0xFF;

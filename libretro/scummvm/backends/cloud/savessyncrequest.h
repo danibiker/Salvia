@@ -62,7 +62,7 @@ class SavesSyncRequest: public Networking::Request {
 
 public:
 	SavesSyncRequest(Storage *storage, Storage::BoolCallback callback, Networking::ErrorCallback ecb);
-	~SavesSyncRequest() override;
+	~SavesSyncRequest();
 
 	void handle() override;
 	void restart() override;

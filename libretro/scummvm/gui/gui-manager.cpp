@@ -54,7 +54,7 @@ enum {
 
 // Constructor
 GuiManager::GuiManager() : CommandSender(nullptr), _redrawStatus(kRedrawDisabled), _stateIsSaved(false),
-	_cursorAnimateCounter(0), _cursorAnimateTimer(0), _tooltip(nullptr), _lastMouseMoveTime(0), _globalMousePosition(-1, -1) {
+	_cursorAnimateCounter(0), _cursorAnimateTimer(0), _tooltip(nullptr), _lastMouseMoveTime(0), _globalMousePosition(-1, -1), _wm(nullptr) {
 	_theme = nullptr;
 	_useStdCursor = false;
 

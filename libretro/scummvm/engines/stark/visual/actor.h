@@ -52,7 +52,7 @@ public:
 	static const VisualType TYPE = Visual::kActor;
 
 	VisualActor();
-	~VisualActor() override;
+	~VisualActor();
 
 	void setModel(Model *model);
 	void setTexture(Gfx::TextureSet *texture);

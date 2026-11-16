@@ -29,7 +29,7 @@ namespace Audio {
 class YM2149Atari : public YM2149::YM2149, public Audio::RealChip {
 public:
 	YM2149Atari();
-	~YM2149Atari() override;
+	~YM2149Atari();
 
 	bool init() override;
 

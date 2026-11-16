@@ -512,7 +512,7 @@ void MortimerCastle::drawOverlay(Graphics::Surface &screen, const Common::Point 
 		_goggles[0].draw(screen, 0, 0);
 		const uint gauge = _damage >= 13 ? 9 + _frame % 2 : _damage >= 10 ? _damage - 4 : 1 + _damage / 2;
 		_goggles[gauge].draw(screen, 0, 0);
-		const Common::Point origins[] = {{355, 85}, {413, 86}, {470, 87}, {527, 88}, {584, 90}};
+		const Common::Point origins[] = {Common::Point(355, 85), Common::Point(413, 86), Common::Point(470, 87), Common::Point(527, 88), Common::Point(584, 90)};
 		const byte *puzzle = kCastlePuzzles[_riddleDifficulty][_puzzle];
 		for (uint i = 0; i < MIN(_step, 5U); ++i) {
 			const uint code = puzzle[i ? i * 2 : 1];
@@ -531,7 +531,7 @@ void MortimerCastle::drawOverlay(Graphics::Surface &screen, const Common::Point 
 				const char *name = _programmer && !code ? "Programmer" : mortimerRegion(code / 10).names[code % 10];
 				drawText(screen, name, side ? 26 : 416, 35, 208, 5);
 			}
-			const Common::Point flames[] = {{43, 131}, {101, 68}, {258, 68}, {325, 131}};
+			const Common::Point flames[] = {Common::Point(43, 131), Common::Point(101, 68), Common::Point(258, 68), Common::Point(325, 131)};
 			for (uint i = 0; i < 4; ++i)
 				if (_step || (i != 0 && i != 3))
 					_flames[i][_frame % 5].draw(screen, origin.x + flames[i].x * 2, origin.y + flames[i].y * 2, false, &clip, 2);

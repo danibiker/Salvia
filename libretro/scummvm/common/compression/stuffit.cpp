@@ -41,7 +41,7 @@ struct SIT14Data;
 class StuffItArchive : public Common::MemcachingCaseInsensitiveArchive {
 public:
 	StuffItArchive();
-	~StuffItArchive() override;
+	~StuffItArchive();
 
 	bool open(const Common::Path &filename, bool flattenTree);
 	bool open(Common::SeekableReadStream *stream, bool flattenTree);
@@ -285,8 +285,8 @@ bool StuffItArchive::hasFile(const Common::Path &path) const {
 }
 
 int StuffItArchive::listMembers(Common::ArchiveMemberList &list) const {
-	for (const auto &file : _map)
-		list.push_back(getMember(file._key));
+	for (auto rfIt288 = _map.begin(), rfEnd288 = _map.end(); rfIt288 != rfEnd288; ++rfIt288)
+		{ const auto &file = *rfIt288; list.push_back(getMember(file._key)); }
 
 	return _map.size();
 }

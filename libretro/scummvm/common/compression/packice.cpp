@@ -108,7 +108,7 @@ private:
 
 class MSBBitReader {
 public:
-	MSBBitReader(BackwardInputStream &inputStream) : _inputStream(inputStream) {
+	MSBBitReader(BackwardInputStream &inputStream) : _inputStream(inputStream), _bitBuffer(0), _bitsLeft(0) {
 	}
 
 	void reset(uint32 value, uint8 bitCount) {
@@ -158,8 +158,8 @@ public:
 
 private:
 	BackwardInputStream &_inputStream;
-	uint32 _bitBuffer = 0;
-	uint8 _bitsLeft = 0;
+	uint32 _bitBuffer;
+	uint8 _bitsLeft;
 };
 
 class BitReaderProxy {

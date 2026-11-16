@@ -296,7 +296,7 @@ private:
  */
 class CompositeHardwareInputSet : public HardwareInputSet {
 public:
-	~CompositeHardwareInputSet() override;
+	~CompositeHardwareInputSet();
 
 	// HardwareInputSet API
 	HardwareInput findHardwareInput(const String &id) const override;

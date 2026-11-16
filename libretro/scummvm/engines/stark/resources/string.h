@@ -45,7 +45,7 @@ public:
 	static const Type::ResourceType TYPE = Type::kString;
 
 	String(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~String() override;
+	~String();
 
 protected:
 	void printData() override;

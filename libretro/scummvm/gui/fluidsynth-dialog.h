@@ -36,7 +36,7 @@ class PopUpWidget;
 class FluidSynthSettingsDialog : public Dialog {
 public:
 	FluidSynthSettingsDialog();
-	~FluidSynthSettingsDialog() override;
+	~FluidSynthSettingsDialog();
 
 	void open() override;
 	void close() override;

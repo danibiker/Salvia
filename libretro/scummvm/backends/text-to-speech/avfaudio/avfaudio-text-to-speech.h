@@ -33,7 +33,7 @@
 class AVFAudioTextToSpeechManager : public Common::TextToSpeechManager {
 public:
 	AVFAudioTextToSpeechManager();
-	~AVFAudioTextToSpeechManager() override;
+	~AVFAudioTextToSpeechManager();
 
 	bool say(const Common::U32String &str, Action action) override;
 

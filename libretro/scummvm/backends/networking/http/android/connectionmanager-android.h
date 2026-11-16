@@ -36,7 +36,7 @@ private:
 
 public:
 	ConnectionManagerAndroid();
-	~ConnectionManagerAndroid() override;
+	~ConnectionManagerAndroid();
 
 	void registerRequest(JNIEnv *env, jobject request) const;
 };

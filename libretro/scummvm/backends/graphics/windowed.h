@@ -341,7 +341,8 @@ protected:
 	 * @return The safe area insets
 	 */
 	virtual Insets getSafeAreaInsets() const {
-		return {0, 0, 0, 0};
+		Insets insets = {0, 0, 0, 0};
+		return insets;
 	}
 
 	/**
@@ -368,7 +369,8 @@ protected:
 		// Compute a safe area rectangle out of the insets
 		Insets insets;
 		if (_ignoreGameSafeArea) {
-			insets = {0, 0, 0, 0};
+			Insets zeroInsets = {0, 0, 0, 0};
+			insets = zeroInsets;
 		} else {
 			insets = getSafeAreaInsets();
 		}

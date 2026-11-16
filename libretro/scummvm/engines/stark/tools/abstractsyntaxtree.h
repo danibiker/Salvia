@@ -84,7 +84,7 @@ struct ASTCommand : public ASTNode, public Command {
  */
 struct ASTBlock : public ASTNode {
 	ASTBlock(ASTNode *parent);
-	~ASTBlock() override;
+	~ASTBlock();
 
 	// ASTNode API
 	void print(uint depth, DefinitionRegistry *definitions) override;
@@ -106,7 +106,7 @@ private:
  */
 struct ASTCondition : public ASTNode {
 	ASTCondition(ASTNode *parent);
-	~ASTCondition() override;
+	~ASTCondition();
 
 	// ASTNode API
 	void print(uint depth, DefinitionRegistry *definitions) override;
@@ -127,7 +127,7 @@ struct ASTCondition : public ASTNode {
  */
 struct ASTLoop : public ASTNode {
 	ASTLoop(ASTNode *parent);
-	~ASTLoop() override;
+	~ASTLoop();
 
 	// ASTNode API
 	void print(uint depth, DefinitionRegistry *definitions) override;

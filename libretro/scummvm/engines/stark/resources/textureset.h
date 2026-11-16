@@ -54,7 +54,7 @@ public:
 	};
 
 	TextureSet(Object *parent, byte subType, uint16 index, const Common::String &name);
-	~TextureSet() override;
+	~TextureSet();
 
 	// Resource API
 	void readData(Formats::XRCReadStream *stream) override;

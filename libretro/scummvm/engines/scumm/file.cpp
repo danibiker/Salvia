@@ -83,7 +83,7 @@ static uint16 write_word(Common::WriteStream *out, uint16 val) {
 
 ScummDiskImage::ScummDiskImage(const char *disk1, const char *disk2, GameSettings game)
 	: _stream(nullptr), _buf(nullptr), _game(game),
-	_disk1(disk1), _disk2(disk2), _openedDisk(0) {
+	_disk1(disk1), _disk2(disk2), _openedDisk(0), _roomDisks(), _roomTracks(), _roomSectors(), _numGlobalObjects(0), _numRooms(0), _numCostumes(0), _numScripts(0), _numSounds(0) {
 
 	if (_game.id == GID_MANIAC) {
 		_numGlobalObjects = 256;

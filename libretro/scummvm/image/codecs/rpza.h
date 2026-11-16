@@ -36,7 +36,7 @@ namespace Image {
 class RPZADecoder : public Codec {
 public:
 	RPZADecoder(uint16 width, uint16 height);
-	~RPZADecoder() override;
+	~RPZADecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _format; }

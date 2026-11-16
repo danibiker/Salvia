@@ -71,7 +71,7 @@ public:
 		kRecordDialogPlayback
 	};
 	RecorderDialog();
-	~RecorderDialog() override;
+	~RecorderDialog();
 
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 	void reflowLayout() override;

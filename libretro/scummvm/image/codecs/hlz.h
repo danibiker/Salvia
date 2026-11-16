@@ -34,7 +34,7 @@ namespace Image {
 class HLZDecoder : public Codec {
 public:
 	HLZDecoder(int width, int height);
-	~HLZDecoder() override;
+	~HLZDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override;

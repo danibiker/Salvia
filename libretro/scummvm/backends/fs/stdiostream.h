@@ -49,13 +49,19 @@ public:
 	 * StdioStream instance.
 	 */
 	static StdioStream *makeFromPath(const Common::String &path, WriteMode writeMode) {
-		return makeFromPathHelper(path, writeMode, [](void *handle) {
-			return new StdioStream(handle);
-		});
+		// (static function instead of a lambda: MSVC 2010 cannot convert lambdas to function pointers)
+		return makeFromPathHelper(path, writeMode, createFromHandle);
 	}
 
+private:
+	static StdioStream *createFromHandle(void *handle) {
+		return new StdioStream(handle);
+	}
+
+public:
+
 	StdioStream(void *handle);
-	~StdioStream() override;
+	~StdioStream();
 
 	bool err() const override;
 	void clearErr() override;

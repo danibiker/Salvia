@@ -43,7 +43,7 @@ namespace Image {
 class SVQ1Decoder : public Codec {
 public:
 	SVQ1Decoder(uint16 width, uint16 height);
-	~SVQ1Decoder() override;
+	~SVQ1Decoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	Graphics::PixelFormat getPixelFormat() const override { return _pixelFormat; }

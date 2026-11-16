@@ -31,7 +31,7 @@
 namespace Grim {
 
 Overlay::Overlay(const Common::String &filename, Common::SeekableReadStream *data) :
-		_x(0), _y(0) {
+		_x(0), _y(0), _layer(0) {
 	_material = g_resourceloader->loadMaterial(filename, nullptr, true);
 }
 

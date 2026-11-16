@@ -45,7 +45,7 @@ class PostRequest : public Networking::Request {
 
 public:
 	PostRequest(const Common::String &url, Networking::JSONValueCallback cb, Networking::ErrorCallback ecb);
-	~PostRequest() override;
+	~PostRequest();
 
 	void start();
 

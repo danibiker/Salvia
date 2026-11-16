@@ -54,7 +54,7 @@ namespace Video {
 // QuickTimeDecoder
 ////////////////////////////////////////////
 
-QuickTimeDecoder::QuickTimeDecoder() {
+QuickTimeDecoder::QuickTimeDecoder() : _currentSample(-1), _isMouseButtonDown(false), _isKeyDown(false), _currentQTVRCursor(-1), _dataBundle(nullptr), _cursorCache(nullptr), _isVR(false), _warpMode(2), _quality(0.0f), _transitionMode(kTransitionModeNormal), _transitionSpeed(1.0f), _updateMode(kUpdateModeNormal), _panAngle(0.0f), _tiltAngle(0.0f), _fov(56.0f), _hfov(56.0f), _zoomState(kZoomNone), _rolloverHotspot(nullptr), _rolloverHotspotID(0), _clickedHotspot(nullptr), _clickedHotspotID(0), _renderHotspots(false) {
 	_scaledSurface = nullptr;
 	_width = _height = 0;
 	_enableEditListBoundsCheckQuirk = false;

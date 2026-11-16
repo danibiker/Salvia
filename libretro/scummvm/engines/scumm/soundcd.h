@@ -44,20 +44,20 @@ private:
 	SoundSE *_soundSE;
 
 	Audio::SoundHandle *_fileBasedCDAudioHandle;
-	bool _hasFileBasedCDAudio = false;
+	bool _hasFileBasedCDAudio;
 	AudioCDManager::Status _fileBasedCDStatus;
 
-	int _musicTimer = 0;
+	int _musicTimer;
 
-	bool _useReplacementAudioTracks = false;
-	int _loomOvertureTransition = 0;
-	uint32 _replacementTrackStartTime = 0;
+	bool _useReplacementAudioTracks;
+	int _loomOvertureTransition;
+	uint32 _replacementTrackStartTime;
 
 public:
-	int16 _currentCDSound = 0;
-	uint32 _cdMusicTimerMod = 0;
-	uint32 _cdMusicTimer = 0;
-	bool _soundsPaused = false;
+	int16 _currentCDSound;
+	uint32 _cdMusicTimerMod;
+	uint32 _cdMusicTimer;
+	bool _soundsPaused;
 
 	SoundCD(ScummEngine *parent, Audio::Mixer *mixer, SoundSE *soundSE, bool useReplacementAudioTracks);
 	~SoundCD();

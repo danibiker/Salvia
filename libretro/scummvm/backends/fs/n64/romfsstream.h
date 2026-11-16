@@ -40,7 +40,7 @@ public:
 	static RomfsStream *makeFromPath(const Common::String &path, bool writeMode);
 
 	RomfsStream(void *handle);
-	~RomfsStream() override;
+	~RomfsStream();
 
 	bool err() const override;
 	void clearErr() override;

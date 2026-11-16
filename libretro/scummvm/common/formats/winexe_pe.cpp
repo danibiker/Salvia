@@ -171,8 +171,8 @@ const Array<WinResourceID> PEResources::getTypeList() const {
 	if (!_exe)
 		return array;
 
-	for (const auto &resource : _resources)
-		array.push_back(resource._key);
+	for (auto rfIt174 = _resources.begin(), rfEnd174 = _resources.end(); rfIt174 != rfEnd174; ++rfIt174)
+		{ const auto &resource = *rfIt174; array.push_back(resource._key); }
 
 	return array;
 }
@@ -185,8 +185,8 @@ const Array<WinResourceID> PEResources::getIDList(const WinResourceID &type) con
 
 	const IDMap &idMap = _resources[type];
 
-	for (const auto &id : idMap)
-		array.push_back(id._key);
+	for (auto rfIt188 = idMap.begin(), rfEnd188 = idMap.end(); rfIt188 != rfEnd188; ++rfIt188)
+		{ const auto &id = *rfIt188; array.push_back(id._key); }
 
 	return array;
 }
@@ -204,8 +204,8 @@ const Array<WinResourceID> PEResources::getLangList(const WinResourceID &type, c
 
 	const LangMap &langMap = idMap[id];
 
-	for (const auto &lang : langMap)
-		array.push_back(lang._key);
+	for (auto rfIt207 = langMap.begin(), rfEnd207 = langMap.end(); rfIt207 != rfEnd207; ++rfIt207)
+		{ const auto &lang = *rfIt207; array.push_back(lang._key); }
 
 	return array;
 }
@@ -297,7 +297,7 @@ WinResources::VersionInfo *PEResources::parseVersionInfo(SeekableReadStream *res
 
 			info->hash.setVal(key.encode(), value);
 		} else {
-			if (key == U"VS_VERSION_INFO") {
+			if (key == Common::U32String("VS_VERSION_INFO")) {
 				if (!info->readVSVersionInfo(res))
 					return info;
 			}

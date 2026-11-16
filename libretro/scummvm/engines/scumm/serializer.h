@@ -35,7 +35,7 @@ public:
 	Serializer(Common::SeekableReadStream *stream, Common::SeekableWriteStream *writeStream)
 		: Common::Serializer(stream, writeStream), _seekableSaveStr(writeStream) {
 	}
-	~Serializer() override {
+	~Serializer() {
 	}
 	int64 pos() const {
 		return _loadStream ? _loadStream->pos() : (_saveStream ? _saveStream->pos() : 0);

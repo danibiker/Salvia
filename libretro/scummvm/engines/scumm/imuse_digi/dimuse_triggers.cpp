@@ -24,7 +24,7 @@
 
 namespace Scumm {
 
-IMuseDigiTriggersHandler::IMuseDigiTriggersHandler(IMuseDigital *engine, Common::Mutex *mutex) {
+IMuseDigiTriggersHandler::IMuseDigiTriggersHandler(IMuseDigital *engine, Common::Mutex *mutex) : _trigs(), _defers(), _defersOn(0), _midProcessing(0), _textBuffer(), _emptyMarker() {
 	_engine = engine;
 	_mutex = mutex;
 	_emptyMarker[0] = '\0';

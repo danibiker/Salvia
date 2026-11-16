@@ -116,16 +116,16 @@ public:
 	SourceScaler(const Graphics::PixelFormat &format);
 	virtual ~SourceScaler();
 
-	virtual void setSource(const byte *src, uint pitch, int width, int height, int padding) final;
+	virtual void setSource(const byte *src, uint pitch, int width, int height, int padding);
 
-	virtual void enableSource(bool enable) final { _enable = enable; }
+	virtual void enableSource(bool enable) { _enable = enable; }
 
-	virtual uint setFactor(uint factor) final;
+	virtual uint setFactor(uint factor);
 
 protected:
 
 	virtual void scaleIntern(const uint8 *srcPtr, uint32 srcPitch, uint8 *dstPtr,
-	                         uint32 dstPitch, int width, int height, int x, int y) final;
+	                         uint32 dstPitch, int width, int height, int x, int y);
 
 	/**
 	 * Scalers must implement this function. It will be called by oldSrcScale.
@@ -158,7 +158,8 @@ public:
 
 	bool hasFactor(uint factor) const {
 		const Common::Array<uint> &factors = getFactors();
-		for (const auto &curFactor : factors) {
+		for (auto rfIt161 = factors.begin(), rfEnd161 = factors.end(); rfIt161 != rfEnd161; ++rfIt161) {
+			const auto &curFactor = *rfIt161;
 			if (curFactor == factor)
 				return true;
 		}

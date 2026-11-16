@@ -47,7 +47,7 @@ public:
 		_sustain = MIN<uint32>(sustain, 0x1000) * 0x10000 / 0x1000;
 	}
 
-	~RA2PSXADSRStream() override { delete _stream; }
+	~RA2PSXADSRStream() { delete _stream; }
 
 	int readBuffer(int16 *buffer, const int numSamples) override {
 		const int count = _stream->readBuffer(buffer, numSamples);
@@ -111,7 +111,7 @@ typedef Common::SharedPtr<RA2PSXPitch> RA2PSXPitchRef;
 class RA2PSXLoopStream : public Audio::RewindableAudioStream {
 public:
 	explicit RA2PSXLoopStream(Audio::RewindableAudioStream *stream) : _stream(stream) {}
-	~RA2PSXLoopStream() override { delete _stream; }
+	~RA2PSXLoopStream() { delete _stream; }
 
 	int readBuffer(int16 *buffer, const int numSamples) override {
 		int produced = 0;
@@ -147,7 +147,7 @@ public:
 			_previous[i] = _current[i] = 0;
 	}
 
-	~RA2PSXPitchStream() override { delete _stream; }
+	~RA2PSXPitchStream() { delete _stream; }
 
 	int readBuffer(int16 *buffer, const int numSamples) override {
 		int produced = 0;

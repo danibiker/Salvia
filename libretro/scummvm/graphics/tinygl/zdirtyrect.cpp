@@ -111,11 +111,13 @@ void GLContext::disposeResources() {
 }
 
 void GLContext::disposeDrawCallLists() {
-	for (const auto &drawCall : _previousFrameDrawCallsQueue) {
+	for (auto rfIt114 = _previousFrameDrawCallsQueue.begin(), rfEnd114 = _previousFrameDrawCallsQueue.end(); rfIt114 != rfEnd114; ++rfIt114) {
+		const auto &drawCall = *rfIt114;
 		delete drawCall;
 	}
 	_previousFrameDrawCallsQueue.clear();
-	for (auto &drawCall : _drawCallsQueue) {
+	for (auto rfIt118 = _drawCallsQueue.begin(), rfEnd118 = _drawCallsQueue.end(); rfIt118 != rfEnd118; ++rfIt118) {
+		auto &drawCall = *rfIt118;
 		delete drawCall;
 	}
 	_drawCallsQueue.clear();
@@ -159,7 +161,8 @@ void GLContext::presentBufferDirtyRects(Common::List<Common::Rect> &dirtyAreas) 
 	}
 
 	// This loop increases outer rectangle coordinates to favor merging of adjacent rectangles.
-	for (auto &rect : rectangles) {
+	for (auto rfIt162 = rectangles.begin(), rfEnd162 = rectangles.end(); rfIt162 != rfEnd162; ++rfIt162) {
+		auto &rect = *rfIt162;
 		rect.rectangle.right++;
 		rect.rectangle.bottom++;
 	}
@@ -197,19 +200,23 @@ void GLContext::presentBufferDirtyRects(Common::List<Common::Rect> &dirtyAreas) 
 		}
 	}
 
-	for (auto &rect : rectangles) {
+	for (auto rfIt200 = rectangles.begin(), rfEnd200 = rectangles.end(); rfIt200 != rfEnd200; ++rfIt200) {
+		auto &rect = *rfIt200;
 		rect.rectangle.clip(renderRect);
 	}
 
 	if (!rectangles.empty()) {
-		for (auto &rect : rectangles) {
+		for (auto rfIt205 = rectangles.begin(), rfEnd205 = rectangles.end(); rfIt205 != rfEnd205; ++rfIt205) {
+			auto &rect = *rfIt205;
 			dirtyAreas.push_back(rect.rectangle);
 		}
 
 		// Execute draw calls.
-		for (auto &drawCall : _drawCallsQueue) {
+		for (auto rfIt210 = _drawCallsQueue.begin(), rfEnd210 = _drawCallsQueue.end(); rfIt210 != rfEnd210; ++rfIt210) {
+			auto &drawCall = *rfIt210;
 			Common::Rect drawCallRegion = drawCall->getDirtyRegion();
-			for (auto &rect : rectangles) {
+			for (auto rfIt212 = rectangles.begin(), rfEnd212 = rectangles.end(); rfIt212 != rfEnd212; ++rfIt212) {
+				auto &rect = *rfIt212;
 				Common::Rect dirtyRegion = rect.rectangle;
 				if (dirtyRegion.intersects(drawCallRegion)) {
 					drawCall->execute(true, &dirtyRegion);
@@ -226,7 +233,8 @@ void GLContext::presentBufferDirtyRects(Common::List<Common::Rect> &dirtyAreas) 
 			fb->enableBlending(false);
 			fb->enableAlphaTest(false);
 
-			for (auto &rect : rectangles) {
+			for (auto rfIt229 = rectangles.begin(), rfEnd229 = rectangles.end(); rfIt229 != rfEnd229; ++rfIt229) {
+				auto &rect = *rfIt229;
 				debugDrawRectangle(rect.rectangle, rect.r, rect.g, rect.b);
 			}
 
@@ -236,7 +244,8 @@ void GLContext::presentBufferDirtyRects(Common::List<Common::Rect> &dirtyAreas) 
 	}
 
 	// Dispose not necessary draw calls.
-	for (auto &p : _previousFrameDrawCallsQueue) {
+	for (auto rfIt239 = _previousFrameDrawCallsQueue.begin(), rfEnd239 = _previousFrameDrawCallsQueue.end(); rfIt239 != rfEnd239; ++rfIt239) {
+		auto &p = *rfIt239;
 		delete p;
 	}
 
@@ -252,7 +261,8 @@ void GLContext::presentBufferDirtyRects(Common::List<Common::Rect> &dirtyAreas) 
 void GLContext::presentBufferSimple(Common::List<Common::Rect> &dirtyAreas) {
 	dirtyAreas.push_back(Common::Rect(fb->getPixelBufferWidth(), fb->getPixelBufferHeight()));
 
-	for (const auto &drawCall : _drawCallsQueue) {
+	for (auto rfIt255 = _drawCallsQueue.begin(), rfEnd255 = _drawCallsQueue.end(); rfIt255 != rfEnd255; ++rfIt255) {
+		const auto &drawCall = *rfIt255;
 		drawCall->execute(true);
 		delete drawCall;
 	}

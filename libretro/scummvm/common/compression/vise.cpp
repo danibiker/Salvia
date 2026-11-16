@@ -184,8 +184,8 @@ Common::SeekableReadStream *MacVISEArchive::ArchiveMember::createReadStreamForDa
 	}
 
 	// Undo obfuscation
-	for (byte &b : compressedData)
-		b = vl3DeobfuscationTable[b];
+	for (auto rfIt187 = compressedData.begin(), rfEnd187 = compressedData.end(); rfIt187 != rfEnd187; ++rfIt187)
+		{ byte &b = *rfIt187; b = vl3DeobfuscationTable[b]; }
 
 	byte *decompressedData = static_cast<byte *>(malloc(uncompressedSize));
 	if (!decompressedData)
@@ -330,7 +330,8 @@ bool MacVISEArchive::loadCatalog() {
 	}
 
 	// Generate full paths
-	for (DirectoryDesc &dirDesc : _directoryDescs) {
+	for (auto rfIt333 = _directoryDescs.begin(), rfEnd333 = _directoryDescs.end(); rfIt333 != rfEnd333; ++rfIt333) {
+		DirectoryDesc &dirDesc = *rfIt333;
 		if (dirDesc.containingDirectory == 0)
 			dirDesc.fullPath = dirDesc.name;
 		else {
@@ -341,7 +342,8 @@ bool MacVISEArchive::loadCatalog() {
 		}
 	}
 
-	for (FileDesc &fileDesc : _fileDescs) {
+	for (auto rfIt344 = _fileDescs.begin(), rfEnd344 = _fileDescs.end(); rfIt344 != rfEnd344; ++rfIt344) {
+		FileDesc &fileDesc = *rfIt344;
 		if (fileDesc.containingDirectory == 0)
 			fileDesc.fullPath = fileDesc.name;
 		else {
@@ -356,7 +358,8 @@ bool MacVISEArchive::loadCatalog() {
 }
 
 const MacVISEArchive::FileDesc *MacVISEArchive::getFileDesc(const Common::Path &path) const {
-	for (const FileDesc &desc : _fileDescs) {
+	for (auto rfIt359 = _fileDescs.begin(), rfEnd359 = _fileDescs.end(); rfIt359 != rfEnd359; ++rfIt359) {
+		const FileDesc &desc = *rfIt359;
 		if (desc.fullPath == path)
 			return &desc;
 	}

@@ -104,9 +104,9 @@ namespace Sci {
 //  See also: script patch laurabow2CDPatchFixMuseumActorLoops
 static const byte lauraBow2CdView828[] = {
 	SKIP(0x02),
-	REPLACE(0x05), // view header: 5 loops instead of 9
+	kReplaceBytes, _PACKINT32(1),0x05, // view header: 5 loops instead of 9
 	SKIP(0x51),
-	REPLACE(0x08), // loop 4: 8 cels instead of 1
+	kReplaceBytes, _PACKINT32(1),0x08, // loop 4: 8 cels instead of 1
 	SKIP(0x09),
 	REPLACE_NUMBER(uint32, 0x01c2), // loop 4: offset to loop 8 cel data
 	END
@@ -122,9 +122,9 @@ static const byte lauraBow2CdView828[] = {
 //  Sound 205 is the engine noise that plays when summoning a taxi.
 static const byte lsl1RussianSound205[] = {
 	SKIP(0x31),
-	REPLACE(0xFF),
+	kReplaceBytes, _PACKINT32(1),0xFF,
 	SKIP(0x29),
-	REPLACE(0xFF),
+	kReplaceBytes, _PACKINT32(1),0xFF,
 	END
 };
 
@@ -151,7 +151,7 @@ static const byte phant1View64001Palette[] = {
 static const byte pq4EnhancedAudioToggleView[] = {
 	INSERT_NUMBER(uint16,  16), // header size
 	INSERT_NUMBER(uint8,    1), // loop count
-	INSERT(0x00, 0x01),         // unused
+	kInsertBytes, _PACKINT32(2),0x00, 0x01,         // unused
 	INSERT_NUMBER(uint8,    0), // resolution flag
 	INSERT_NUMBER(uint16,   0), // unused
 	INSERT_NUMBER(uint32,  70), // palette offset
@@ -193,7 +193,7 @@ static const byte pq4EnhancedAudioToggleView[] = {
 	INSERT_NUMBER(uint8,    1), // used
 	INSERT_NUMBER(uint8,    0), // shared used
 	INSERT_NUMBER(uint32,   0), // version
-	INSERT(                     // color data
+	kInsertBytes, _PACKINT32(152),                     // color data
 	0x01, 0x00, 0x00, 0x00, 0x01, 0x1B, 0x1B, 0x1B, 0x01, 0x2B,
 	0x2F, 0x2B, 0x01, 0x33, 0x33, 0x33, 0x01, 0x37, 0x3B, 0x37,
 	0x01, 0x47, 0x47, 0x47, 0x01, 0x4B, 0x4B, 0x4B, 0x01, 0x53,
@@ -210,11 +210,11 @@ static const byte pq4EnhancedAudioToggleView[] = {
 	0x3F, 0x33, 0x01, 0xCB, 0x4F, 0x33, 0x01, 0x07, 0x07, 0xCB,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFF,
 	0xFF, 0xFF
-	),
+	,
 	INSERT_FILL(0x00, 872),     // unused color entries
 
 	// pixel data
-	INSERT(
+	kInsertBytes, _PACKINT32(1955),
 	0x07, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a,
 	0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a,
 	0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a,
@@ -411,7 +411,7 @@ static const byte pq4EnhancedAudioToggleView[] = {
 	0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
 	0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
 	0x04, 0x04, 0x04, 0x04, 0x04
-	),
+	,
 	END
 };
 
@@ -733,7 +733,8 @@ ResourcePatcher::PatchSizes ResourcePatcher::calculatePatchSizes(const byte *pat
 		}
 	}
 
-	return { dataSize, deltaSize };
+	PatchSizes sizes = { dataSize, deltaSize };
+	return sizes;
 }
 
 int32 ResourcePatcher::readBlockSize(const byte * &patchData) const {

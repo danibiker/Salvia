@@ -76,8 +76,25 @@ public:
 	 * Adds a rectangle to the list of modified areas of the screen during the
 	 * current frame
 	 */
+#ifndef SCUMMVM_CXX03_COMPAT
 	template<class... TArgs>
 	void emplace_back(TArgs &&...args) { _dirtyRects.emplace_back(Common::forward<TArgs>(args)...); }
+#else
+	
+	void emplace_back() { _dirtyRects.emplace_back(); }
+	template<class A1>
+	void emplace_back(A1 &&a1) { _dirtyRects.emplace_back(Common::forward<A1>(a1)); }
+	template<class A1, class A2>
+	void emplace_back(A1 &&a1, A2 &&a2) { _dirtyRects.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2)); }
+	template<class A1, class A2, class A3>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3) { _dirtyRects.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3)); }
+	template<class A1, class A2, class A3, class A4>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4) { _dirtyRects.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4)); }
+	template<class A1, class A2, class A3, class A4, class A5>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5) { _dirtyRects.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5)); }
+	template<class A1, class A2, class A3, class A4, class A5, class A6>
+	void emplace_back(A1 &&a1, A2 &&a2, A3 &&a3, A4 &&a4, A5 &&a5, A6 &&a6) { _dirtyRects.emplace_back(Common::forward<A1>(a1), Common::forward<A2>(a2), Common::forward<A3>(a3), Common::forward<A4>(a4), Common::forward<A5>(a5), Common::forward<A6>(a6)); }
+#endif
 
 	/**
 	 * Adds a rectangle to the list of modified areas of the screen during the

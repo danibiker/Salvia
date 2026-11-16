@@ -595,7 +595,7 @@ protected:
 	int scaleMV(int mv, int mvScale);
 public:
 	IndeoDecoderBase(uint16 width, uint16 height, uint bitsPerPixel);
-	~IndeoDecoderBase() override;
+	~IndeoDecoderBase();
 };
 
 } // End of namespace Indeo

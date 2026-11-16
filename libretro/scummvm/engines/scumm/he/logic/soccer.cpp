@@ -36,7 +36,7 @@ private:
 
 public:
 	LogicHEsoccer(ScummEngine_v90he *vm);
-	~LogicHEsoccer() override;
+	~LogicHEsoccer();
 
 	int versionID() override;
 	int32 dispatch(int op, int numArgs, int32 *args) override;
@@ -61,14 +61,14 @@ private:
 
 	// op_1007 allocates some arrays
 	// they're then filled by op_1019
-	byte _collisionObjIds[4096] = {}, _collisionNodeEnabled[585] = {};
+	byte _collisionObjIds[4096], _collisionNodeEnabled[585];
 
 	// op_1011 has a subfunction
 	void calculateDistances(int32 worldPosArray, int32 a2, int32 closestActorArray, int32 maxDistance);
 
 	// array containing collision detection tree
-	bool _collisionTreeAllocated = false;
-	uint32 *_collisionTree = nullptr;
+	bool _collisionTreeAllocated;
+	uint32 *_collisionTree;
 	int addCollisionTreeChild(int depth, int index, int parent);
 
 	// op_1014 has several subops
@@ -85,18 +85,18 @@ private:
 
 	// op_1014 sets an array optionally based upon
 	// setCollisionOutputData; it is then used by op_1008
-	int _internalCollisionOutData[10] = {};
+	int _internalCollisionOutData[10];
 	Common::List<byte> _collisionObjs;
 
 	// op_1021 can (optionally) set two variables for use in op_1008
-	uint32 _var1021[2] = {};
+	uint32 _var1021[2];
 };
 
 int LogicHEsoccer::versionID() {
 	return 1;
 }
 
-LogicHEsoccer::LogicHEsoccer(ScummEngine_v90he *vm) : LogicHE(vm) {
+LogicHEsoccer::LogicHEsoccer(ScummEngine_v90he *vm) : LogicHE(vm), _collisionObjIds(), _collisionNodeEnabled(), _collisionTreeAllocated(false), _collisionTree(nullptr), _internalCollisionOutData(), _var1021() {
 	_userDataD = (double *)calloc(1732, sizeof(double));
 	_collisionTree = 0;
 	_collisionTreeAllocated = false;

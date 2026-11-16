@@ -279,7 +279,7 @@ protected:
 	bool _paused;
 	uint32 _pauseStartTime;
 	uint32 _pauseTime;
-	int16 _curVideoFlags = 0;
+	int16 _curVideoFlags;
 	int _scrollX;
 	int _scrollY;
 

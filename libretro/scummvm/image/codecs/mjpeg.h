@@ -43,7 +43,7 @@ namespace Image {
 class MJPEGDecoder : public Codec {
 public:
 	MJPEGDecoder();
-	~MJPEGDecoder() override;
+	~MJPEGDecoder();
 
 	const Graphics::Surface *decodeFrame(Common::SeekableReadStream &stream) override;
 	void setCodecAccuracy(CodecAccuracy accuracy) override;

@@ -97,7 +97,7 @@ friend class TownsChannel;
 friend class TownsMidiPart;
 public:
 	MidiDriver_FMTowns(Audio::Mixer *mixer, SciVersion version);
-	~MidiDriver_FMTowns() override;
+	~MidiDriver_FMTowns();
 
 	int open() override;
 	void loadInstruments(const SciSpan<const uint8> &data);
@@ -146,7 +146,7 @@ private:
 class MidiPlayer_FMTowns : public MidiPlayer {
 public:
 	MidiPlayer_FMTowns(SciVersion version);
-	~MidiPlayer_FMTowns() override;
+	~MidiPlayer_FMTowns();
 
 	int open(ResourceManager *resMan) override;
 

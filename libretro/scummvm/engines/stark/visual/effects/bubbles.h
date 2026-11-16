@@ -42,7 +42,7 @@ public:
 	static const VisualType TYPE = Visual::kEffectBubbles;
 
 	explicit VisualEffectBubbles(Gfx::Driver *gfx, const Common::Point &size);
-	~VisualEffectBubbles() override;
+	~VisualEffectBubbles();
 
 	/** Set the effect's parameters using the string based data format found in the game data files */
 	void setParams(const Common::String &params);

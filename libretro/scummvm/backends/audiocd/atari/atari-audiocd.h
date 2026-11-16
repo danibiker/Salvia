@@ -36,7 +36,7 @@
 class AtariAudioCDManager final : public DefaultAudioCDManager {
 public:
 	AtariAudioCDManager();
-	~AtariAudioCDManager() override;
+	~AtariAudioCDManager();
 
 	bool open() override;
 	void close() override;

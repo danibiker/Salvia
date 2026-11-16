@@ -41,10 +41,10 @@
 
 namespace Scumm {
 
-constexpr int kRebel2LoadBufferSize = 400000;
-constexpr int kRebel2GameplaySurfaceWidth = 0x1a8;
-constexpr int kRebel2GameplaySurfaceHeight = 0x104;
-constexpr int kRebel2MusicTrackSize = 800000;
+const int kRebel2LoadBufferSize = 400000;
+const int kRebel2GameplaySurfaceWidth = 0x1a8;
+const int kRebel2GameplaySurfaceHeight = 0x104;
+const int kRebel2MusicTrackSize = 800000;
 
 bool isRebel2FullFrameDeltaCodec(int codec) {
 	return codec == SMUSH_CODEC_DELTA_BLOCKS || codec == SMUSH_CODEC_DELTA_GLYPHS;
@@ -526,7 +526,7 @@ public:
 		}
 	}
 
-	~StringResourceRA2() override {
+	~StringResourceRA2() {
 		for (int i = 0; i < _ra2NbStrings; i++)
 			delete[] _ra2Strings[i].string;
 	}

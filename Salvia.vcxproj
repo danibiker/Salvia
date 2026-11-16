@@ -2510,7 +2510,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);scummvm.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\scummvm\backends\platform\xbox360\scummvm\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\scummvm\backends\platform\xbox360\scummvm\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -3865,7 +3865,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);scummvm.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\scummvm\backends\platform\xbox360\scummvm\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\scummvm\backends\platform\xbox360\scummvm\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -5389,7 +5389,7 @@
       <FloatingPointExceptions>false</FloatingPointExceptions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\scummvm\backends\platform\xbox360\scummvm\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\scummvm\backends\platform\xbox360\scummvm\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);scummvm.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -6625,7 +6625,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\scummvm\backends\platform\xbox360\scummvm\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\scummvm\backends\platform\xbox360\scummvm\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);scummvm.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>

@@ -82,10 +82,10 @@ protected:
 
 public:
 	/** Construct a new empty string. */
-	constexpr BaseString() : _size(0), _str(_storage), _storage{0} {}
+	BaseString() : _size(0), _str(_storage), _storage() {}
 
 	/** Construct a string consisting of the given character. */
-	explicit constexpr BaseString(value_type c) : _size((c == 0) ? 0 : 1), _str(_storage), _storage{c, 0} {}
+	explicit BaseString(value_type c) : _size((c == 0) ? 0 : 1), _str(_storage), _storage() { _storage[0] = c; }
 
 	/** Construct a string consisting of n copies of the given character. */
 	BaseString(size_t n, value_type c);

@@ -57,11 +57,11 @@ struct OctreeNode {
 
 class Octree {
 private:
-	uint _leafLevel = kOctreeDepth - 1;
+	uint _leafLevel;
 
-	OctreeNode *_root = nullptr;
-	uint _numLeaves = 0;
-	uint _maxLeaves = 0;
+	OctreeNode *_root;
+	uint _numLeaves;
+	uint _maxLeaves;
 
 	OctreeNode *_reduceList[kOctreeDepth - 1];
 	Common::Stack<OctreeNode *> _nodePool;
@@ -222,7 +222,7 @@ private:
 	}
 
 public:
-	Octree(int maxLeaves) : _maxLeaves(maxLeaves) {
+	Octree(int maxLeaves) : _maxLeaves(maxLeaves), _leafLevel(kOctreeDepth - 1), _root(nullptr), _numLeaves(0) {
 		for (uint i = 0; i < kOctreeDepth - 1; i++)
 			_reduceList[i] = nullptr;
 	}
@@ -247,7 +247,7 @@ public:
 	}
 };
 
-ColorQuantizer::ColorQuantizer(int maxColors) {
+ColorQuantizer::ColorQuantizer(int maxColors) : _octree(nullptr) {
 	_octree = new Octree(maxColors);
 }
 

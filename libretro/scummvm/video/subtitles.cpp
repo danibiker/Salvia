@@ -43,8 +43,8 @@ SRTParser::~SRTParser() {
 }
 
 void SRTParser::cleanup() {
-	for (const auto *item : _entries)
-		delete item;
+	for (auto rfIt46 = _entries.begin(), rfEnd46 = _entries.end(); rfIt46 != rfEnd46; ++rfIt46)
+		{ const auto *item = *rfIt46; delete item; }
 
 	_entries.clear();
 }
@@ -286,7 +286,7 @@ bool SRTParser::isSfx() const {
 #define SHADOW 1
 
 Subtitles::Subtitles() : _loaded(false), _hPad(0), _vPad(0), _overlayHasAlpha(true),
-	_lastOverlayWidth(-1), _lastOverlayHeight(-1) {
+	_lastOverlayWidth(-1), _lastOverlayHeight(-1), _parts(nullptr), _splitPartCount(0), _srtParser(nullptr) {
 	_subtitleDev = ConfMan.getBool("subtitle_dev");
 }
 
@@ -294,7 +294,8 @@ Subtitles::~Subtitles() {
 	close();
 	_surface.free();
 
-	for (const auto &font : _fonts) {
+	for (auto rfIt297 = _fonts.begin(), rfEnd297 = _fonts.end(); rfIt297 != rfEnd297; ++rfIt297) {
+		const auto &font = *rfIt297;
 		FontMan.mayDeleteFont(font._value);
 	}
 }
@@ -455,7 +456,8 @@ bool Subtitles::drawSubtitle(uint32 timestamp, bool force, bool showSFX) const {
 		if (debugLevelSet(1)) {
 			Common::String subtitle;
 			if (parts) {
-				for (const auto &part : *parts) {
+				for (auto rfIt458 = (*parts).begin(), rfEnd458 = (*parts).end(); rfIt458 != rfEnd458; ++rfIt458) {
+					const auto &part = *rfIt458;
 					subtitle += part.text;
 				}
 			}
@@ -530,7 +532,8 @@ void Subtitles::renderSubtitle() const {
 	// First, calculate all positions as if we were left aligned
 	bool newLine = true;
 	int currentX = 0;
-	for (const auto &part : *_parts) {
+	for (auto rfIt533 = (*_parts).begin(), rfEnd533 = (*_parts).end(); rfIt533 != rfEnd533; ++rfIt533) {
+		const auto &part = *rfIt533;
 		const Graphics::Font *font = _fonts[part.tag == "i" ? kFontStyleItalic : kFontStyleRegular];
 		if (!font) font = _fonts[kFontStyleRegular];
 
@@ -546,12 +549,12 @@ void Subtitles::renderSubtitle() const {
 		int width = 0;
 		for (auto line = lines.begin(); line != lines.end() - 1; line++) {
 			width = font->getStringWidth(*line);
-			splitParts.emplace_back(SubtitleRenderingPart{*line, font, newLine, currentX, currentX + width});
+			{ SubtitleRenderingPart part = {*line, font, newLine, currentX, currentX + width}; splitParts.push_back(part); }
 			newLine = true;
 			currentX = 0;
 		}
 		width = font->getStringWidth(lines.back());
-		splitParts.emplace_back(SubtitleRenderingPart{lines.back(), font, newLine, currentX, currentX + width});
+		{ SubtitleRenderingPart part = {lines.back(), font, newLine, currentX, currentX + width}; splitParts.push_back(part); }
 		newLine = false;
 		currentX += width;
 
@@ -600,7 +603,8 @@ void Subtitles::renderSubtitle() const {
 	// Finally, render every part on the surface
 	int currentY = _vPad;
 	int lineHeight = 0;
-	for (const auto &part : splitParts) {
+	for (auto rfIt603 = splitParts.begin(), rfEnd603 = splitParts.end(); rfIt603 != rfEnd603; ++rfIt603) {
+		const auto &part = *rfIt603;
 		const Graphics::Font *font = part.font;
 		int partWidth = part.right - part.left;
 

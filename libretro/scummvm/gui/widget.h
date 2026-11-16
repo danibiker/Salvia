@@ -120,7 +120,7 @@ public:
 	Widget(GuiObject *boss, int x, int y, int w, int h, bool scale, const Common::U32String &tooltip = Common::U32String());
 	Widget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip = Common::U32String());
 	Widget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip = Common::U32String());
-	~Widget() override;
+	~Widget();
 
 	void init();
 
@@ -316,7 +316,7 @@ public:
 	PicButtonWidget(GuiObject *boss, int x, int y, int w, int h, bool scale, const Common::U32String &tooltip = Common::U32String(), uint32 cmd = 0, uint8 hotkey = 0);
 	PicButtonWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip = Common::U32String(), uint32 cmd = 0, uint8 hotkey = 0);
 	PicButtonWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip = Common::U32String(), uint32 cmd = 0, uint8 hotkey = 0);
-	~PicButtonWidget() override;
+	~PicButtonWidget();
 
 	void setGfx(Common::SharedPtr<Graphics::ManagedSurface> &gfx, int statenum = kPicButtonStateEnabled);
 	void setGfx(const Graphics::Surface *gfx, int statenum = kPicButtonStateEnabled, bool scale = true);
@@ -364,7 +364,7 @@ class RadiobuttonWidget;
 class RadiobuttonGroup : public CommandSender {
 public:
 	RadiobuttonGroup(GuiObject *boss, uint32 cmd = 0);
-	~RadiobuttonGroup() override {}
+	~RadiobuttonGroup() {}
 
 	void addButton(RadiobuttonWidget *button) { _buttons.push_back(button); }
 	Common::Array<RadiobuttonWidget *> getButtonList() const { return _buttons; }
@@ -455,7 +455,7 @@ public:
 	GraphicsWidget(GuiObject *boss, int x, int y, int w, int h, bool scale, const Common::U32String &tooltip = Common::U32String());
 	GraphicsWidget(GuiObject *boss, int x, int y, int w, int h, const Common::U32String &tooltip = Common::U32String());
 	GraphicsWidget(GuiObject *boss, const Common::String &name, const Common::U32String &tooltip = Common::U32String());
-	~GraphicsWidget() override;
+	~GraphicsWidget();
 
 	void setGfx(Common::SharedPtr<Graphics::ManagedSurface> &gfx);
 	void setGfx(const Graphics::Surface *gfx, bool scale = false);
@@ -525,7 +525,7 @@ class ContainerWidget : public Widget {
 public:
 	ContainerWidget(GuiObject *boss, int x, int y, int w, int h, bool scale = false);
 	ContainerWidget(GuiObject *boss, const Common::String &name);
-	~ContainerWidget() override;
+	~ContainerWidget();
 
 	bool containsWidget(Widget *) const override;
 	Widget *findWidget(int x, int y) override;
@@ -550,7 +550,7 @@ public:
 	 */
 	OptionsContainerWidget(GuiObject *boss, const Common::String &name, const Common::String &dialogLayout,
 	                       const Common::String &domain);
-	~OptionsContainerWidget() override;
+	~OptionsContainerWidget();
 
 	/** Implementing classes should (re)initialize their widgets with state from the configuration domain */
 	virtual void load() = 0;

@@ -89,7 +89,7 @@ protected:
 public:
 	BaseStorage();
 	BaseStorage(const Common::String &token, const Common::String &refreshToken, bool enabled = false);
-	~BaseStorage() override;
+	~BaseStorage();
 
 	/**
 	 * Gets new access_token. Pass a callback, so you could

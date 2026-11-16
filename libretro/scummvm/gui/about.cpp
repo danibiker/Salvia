@@ -191,14 +191,16 @@ void AboutDialog::buildLines() {
 			break;
 		}
 		const PluginList &plugins = EngineMan.getPlugins(PLUGIN_TYPE_ENGINE);
-		for (const auto &plugin : plugins) {
+		for (auto rfIt194 = plugins.begin(), rfEnd194 = plugins.end(); rfIt194 != rfEnd194; ++rfIt194) {
+			const auto &plugin = *rfIt194;
 			enginesDetected.push_back(plugin->getName());
 		}
 	} while (!_inGame && PluginMan.loadNextPlugin());
 
 	if (!_inGame) PluginMan.loadDetectionPlugin();
 
-	for (auto &engine : enginesDetected) {
+	for (auto rfIt201 = enginesDetected.begin(), rfEnd201 = enginesDetected.end(); rfIt201 != rfEnd201; ++rfIt201) {
+		auto &engine = *rfIt201;
 		Common::String str;
 
 		const Plugin *p = EngineMan.findDetectionPlugin(engine);
@@ -248,7 +250,8 @@ void AboutDialog::addLine(const Common::U32String &str) {
 		// Leave some margin inside the rectangle
 		g_gui.getFont().wordWrapText(renderStr, _textRect.width() - 2 * _xOff, wrappedLines);
 
-		for (const auto &line : wrappedLines) {
+		for (auto rfIt251 = wrappedLines.begin(), rfEnd251 = wrappedLines.end(); rfIt251 != rfEnd251; ++rfIt251) {
+			const auto &line = *rfIt251;
 			_lines.push_back(format + line);
 		}
 	}
@@ -564,7 +567,7 @@ enum {
 	kSpLast
 };
 
-class EEWidget final : public Widget, public CommandSender, public Graphics::ManagedSurface {
+class EEWidget : public Widget, public CommandSender, public Graphics::ManagedSurface {
 public:
 	EEWidget(GuiObject *boss, const Common::String &name);
 	~EEWidget();

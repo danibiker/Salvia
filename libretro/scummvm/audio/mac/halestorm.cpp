@@ -41,7 +41,7 @@ class HSLowLevelDriver;
 class HSAudioStream : public Audio::AudioStream {
 public:
 	HSAudioStream(HSLowLevelDriver *drv, uint32 scummVMOutputrate, uint32 deviceRate, uint32 feedBufferSize, bool output16Bit);
-	~HSAudioStream() override;
+	~HSAudioStream();
 
 	typedef Common::Functor0Mem<void, HSSoundSystem> CallbackProc;
 	void setVblCallback(CallbackProc *proc);
@@ -90,13 +90,16 @@ static int DEBUG_BUFFERS_COUNT = 0;
 class ShStBuffer {
 public:
 	ShStBuffer(const ShStBuffer &buff) : ptr(buff.ptr), len(buff.len), lifes(buff.lifes) { if (lifes) (*lifes)++; }
-	ShStBuffer(ShStBuffer &&buff) noexcept : ptr(buff.ptr), len(buff.len), lifes(buff.lifes) { buff.lifes = nullptr; }
+	ShStBuffer(ShStBuffer &&buff) : ptr(buff.ptr), len(buff.len), lifes(buff.lifes) { buff.lifes = nullptr; }
 	ShStBuffer(const void *p, uint32 cb, bool allocate = false) : ptr((const uint8*)p), len(cb), lifes(nullptr) { if (allocate) memcpy(crtbuf(), p, cb); }
-	ShStBuffer() : ShStBuffer(nullptr, 0) {}
+	ShStBuffer() : ptr((const uint8*)nullptr), len(0), lifes(nullptr) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	if (false) memcpy(crtbuf(), nullptr, 0);
+}
 	ShStBuffer(Common::SeekableReadStream *s) : len(s ? s->size() : 0), lifes(nullptr), ptr(nullptr) { if (s) s->read(crtbuf(), len); }
 	~ShStBuffer() { dcrlif(); }
 	ShStBuffer &operator=(Common::SeekableReadStream *s) { return operator=(ShStBuffer(s)); }
-	ShStBuffer &operator=(ShStBuffer &&buff) noexcept {
+	ShStBuffer &operator=(ShStBuffer &&buff) {
 		trans(buff);
 		buff.lifes = nullptr;
 		return *this;
@@ -147,7 +150,7 @@ public:
 class HSVolumeScaler : public HSEffectFilter {
 public:
 	HSVolumeScaler() {}
-	~HSVolumeScaler() override {}
+	~HSVolumeScaler() {}
 
 	bool process(const ShStBuffer &src, uint8 *dst, uint16 para1, uint16 para2) override;
 };
@@ -155,7 +158,7 @@ public:
 class HSLowPassFilter : public HSEffectFilter {
 public:
 	HSLowPassFilter() {}
-	~HSLowPassFilter() override {}
+	~HSLowPassFilter() {}
 
 	bool process(const ShStBuffer &src, uint8 *dst, uint16 para1, uint16 para2) override;
 };
@@ -163,7 +166,7 @@ public:
 class HSSquareOMatic : public HSEffectFilter {
 public:
 	HSSquareOMatic() {}
-	~HSSquareOMatic() override {}
+	~HSSquareOMatic() {}
 
 	bool process(const ShStBuffer &src, uint8 *dst, uint16 para1, uint16) override;
 };
@@ -171,7 +174,7 @@ public:
 class HSTriangulizer : public HSEffectFilter {
 public:
 	HSTriangulizer() {}
-	~HSTriangulizer() override {}
+	~HSTriangulizer() {}
 
 	bool process(const ShStBuffer &src, uint8 *dst, uint16, uint16) override;
 };

@@ -218,7 +218,7 @@ class ScummEngine_v90he;
 class Sprite : public Common::Serializable {
 public:
 	Sprite(ScummEngine_v90he *vm);
-	~Sprite() override;
+	~Sprite();
 
 	SpriteInfo *_spriteTable;
 	SpriteGroup *_groupTable;
@@ -226,11 +226,11 @@ public:
 	SpriteImageList *_imageLists;
 	int16 *_imageListStack;
 
-	int32 _imageListStackIndex = 0;
-	int32 _activeSpriteCount = 0;
-	int32 _maxSpriteGroups = 0;
-	int32 _maxSprites = 0;
-	int32 _maxImageLists = 0;
+	int32 _imageListStackIndex;
+	int32 _activeSpriteCount;
+	int32 _maxSpriteGroups;
+	int32 _maxSprites;
+	int32 _maxImageLists;
 
 	void saveLoadWithSerializer(Common::Serializer &s) override;
 	void eraseSprites();

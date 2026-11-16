@@ -58,7 +58,7 @@ protected:
 
 public:
 	HttpRequest(DataCallback cb, ErrorCallback ecb, const Common::String &url);
-	~HttpRequest() override;
+	~HttpRequest();
 
 	void handle() override;
 	void restart() override;

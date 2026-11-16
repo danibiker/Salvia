@@ -243,7 +243,7 @@ public:
 	static const char SAF_ADD_FAKE_PATH[];
 
 	AddSAFFakeNode(bool fromPath) : _proxied(nullptr), _fromPath(fromPath) { }
-	~AddSAFFakeNode() override;
+	~AddSAFFakeNode();
 
 	bool exists() const override;
 

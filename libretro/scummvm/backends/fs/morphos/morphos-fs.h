@@ -99,7 +99,7 @@ public:
 	/**
 	 * Destructor.
 	 */
-	~MorphOSFilesystemNode() override;
+	~MorphOSFilesystemNode();
 
 	bool exists() const override;
 	Common::U32String getDisplayName() const override { return _sDisplayName; }

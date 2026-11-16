@@ -57,7 +57,7 @@ typedef _PropVertex PropVertex;
 class TinyGLPropRenderer : public VisualProp {
 public:
 	explicit TinyGLPropRenderer(TinyGLDriver *gfx);
-	~TinyGLPropRenderer() override;
+	~TinyGLPropRenderer();
 
 	void render(const Math::Vector3d &position, float direction, const LightEntryArray &lights) override;
 

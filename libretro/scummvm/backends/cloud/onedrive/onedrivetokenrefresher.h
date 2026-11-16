@@ -41,7 +41,7 @@ class OneDriveTokenRefresher: public Networking::HttpJsonRequest {
 
 public:
 	OneDriveTokenRefresher(OneDriveStorage *parent, Networking::JsonCallback callback, Networking::ErrorCallback ecb, const char *url);
-	~OneDriveTokenRefresher() override;
+	~OneDriveTokenRefresher();
 };
 
 } // End of namespace OneDrive

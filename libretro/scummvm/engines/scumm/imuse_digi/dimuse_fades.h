@@ -33,8 +33,8 @@ class IMuseDigiFadesHandler {
 private:
 	IMuseDigital *_engine;
 	Common::Mutex *_mutex;
-	IMuseDigiFade _fades[DIMUSE_MAX_FADES] = {};
-	int _fadesOn = 0;
+	IMuseDigiFade _fades[DIMUSE_MAX_FADES];
+	int _fadesOn;
 
 	void clearAllFades();
 public:

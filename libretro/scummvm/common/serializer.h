@@ -289,8 +289,16 @@ public:
 		}
 	}
 
+	// T is only deduced from arr (the serializer parameter is a non deduced
+	// context), so a function template like Serializer::Byte can be passed
+	// directly: MSVC 2010 can not deduce T from both parameters.
 	template <typename T>
-	void syncArray(T *arr, size_t entries, void (*serializer)(Serializer &, T &), Version minVersion = 0, Version maxVersion = kLastVersion) {
+	struct SyncArrayIdentity {
+		typedef T type;
+	};
+
+	template <typename T>
+	void syncArray(T *arr, size_t entries, void (*serializer)(Serializer &, typename SyncArrayIdentity<T>::type &), Version minVersion = 0, Version maxVersion = kLastVersion) {
 		if (_version < minVersion || _version > maxVersion)
 			return;
 
@@ -299,6 +307,7 @@ public:
 		}
 	}
 
+#ifndef SCUMMVM_CXX03_COMPAT
 	/**
 	 * Synchronizes multiple values in the serializer using a specified data format.
 	 */
@@ -341,6 +350,50 @@ public:
 	inline void syncMultipleBE(T &...values) {
 		this->syncMultiple<EndianStorageFormat, T...>(EndianStorageFormat::Big, values...);
 	}
+#else
+	/**
+	 * Synchronizes multiple values in the serializer using a specified data format.
+	 */
+	template<class TDataFormat, class T>
+	void syncMultiple(const TDataFormat &dataFormat, T &values) {
+		const TDataFormat dataFormatCopy = dataFormat;	// Copy to help compiler alias analysis, parameter is const ref to ensure TDataFormat is a concrete type
+
+		byte buffer[DataMultipleIO<TDataFormat, T>::kMaxSize];
+		const uint actualSize = DataMultipleIO<TDataFormat, T>::computeSize(dataFormatCopy);
+
+		if (isLoading()) {
+			syncBytes(buffer, actualSize);
+			DataMultipleIO<TDataFormat, T>::decode(dataFormatCopy, buffer, values);
+		} else {
+			DataMultipleIO<TDataFormat, T>::encode(dataFormatCopy, buffer, values);
+			syncBytes(buffer, actualSize);
+		}
+	}
+
+	/**
+	 * Synchronizes multiple values from the serializer using a specified endianness.
+	 */
+	template<class T>
+	inline void syncMultipleEndian(bool isLittle, T &values) {
+		this->syncMultiple<EndianStorageFormat, T>(isLittle ? EndianStorageFormat::Little : EndianStorageFormat::Big, values);
+	}
+
+	/**
+	 * Synchronizes multiple values to the serializer in little endian format.
+	 */
+	template<class T>
+	inline void syncMultipleLE(T &values) {
+		this->syncMultiple<EndianStorageFormat, T>(EndianStorageFormat::Little, values);
+	}
+
+	/**
+	 * Synchronizes multiple values to the serializer in big endian format.
+	 */
+	template<class T>
+	inline void syncMultipleBE(T &values) {
+		this->syncMultiple<EndianStorageFormat, T>(EndianStorageFormat::Big, values);
+	}
+#endif
 };
 
 #undef SYNC_PRIMITIVE

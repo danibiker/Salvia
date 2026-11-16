@@ -58,7 +58,7 @@ public:
 	};
 
 	MidiPlayer_Fb01(SciVersion version);
-	~MidiPlayer_Fb01() override;
+	~MidiPlayer_Fb01();
 
 	int open(ResourceManager *resMan) override;
 	void close() override;

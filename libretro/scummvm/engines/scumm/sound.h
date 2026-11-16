@@ -89,8 +89,8 @@ protected:
 	SoundMode _soundMode;
 	MP3OffsetTable *_offsetTable;	// For compressed audio
 	int _numSoundEffects;		// For compressed audio
-	int64 _cachedSfxLocationInPak = -1;	// For sfx files in pak files
-	int32 _cachedSfxLengthInPak = 0;    // For sfx files in pak files
+	int64 _cachedSfxLocationInPak;	// For sfx files in pak files
+	int32 _cachedSfxLengthInPak;    // For sfx files in pak files
 
 	uint32 _queuedSfxOffset, _queuedTalkieOffset, _queuedSfxLen, _queuedTalkieLen;
 	byte _queuedSoundMode, _queuedSfxChannel;
@@ -101,10 +101,10 @@ protected:
 
 	int16 _currentMusic;	// used by HE games
 
-	SoundCD *_soundCD = nullptr;
-	SoundSE *_soundSE = nullptr;
-	bool _useRemasteredAudio = false;
-	bool _enableAmbienceSounds = false;
+	SoundCD *_soundCD;
+	SoundSE *_soundSE;
+	bool _useRemasteredAudio;
+	bool _enableAmbienceSounds;
 
 public:
 	Audio::SoundHandle *_talkChannelHandle;	// Handle of mixer channel actor is talking on
@@ -118,7 +118,7 @@ public:
 
 public:
 	Sound(ScummEngine *parent, Audio::Mixer *mixer, bool useReplacementAudioTracks);
-	~Sound() override;
+	~Sound();
 	virtual void startSound(int sound, int heOffset = 0, int heChannel = 0, int heFlags = 0, int heFreq = 0, int hePan = 0, int heVol = 0);
 	virtual void addSoundToQueue(int sound, int heOffset = 0, int heChannel = 0, int heFlags = 0, int heFreq = 0, int hePan = 0, int heVol = 0);
 	void processSound();

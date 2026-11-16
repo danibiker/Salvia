@@ -34,7 +34,7 @@ class Instrument;
 
 class InstrumentInternal : public Common::Serializable {
 public:
-	~InstrumentInternal() override {}
+	~InstrumentInternal() {}
 	virtual void send(MidiChannel *mc) = 0;
 	virtual void copy_to(Instrument *dest) = 0;
 	virtual bool is_valid() = 0;
@@ -56,7 +56,7 @@ public:
 	};
 
 	Instrument() : _type(0), _instrument(0), _nativeMT32Device(false) { }
-	~Instrument() override { delete _instrument; }
+	~Instrument() { delete _instrument; }
 	void setNativeMT32Mode(bool isNativeMT32) { _nativeMT32Device = isNativeMT32; }
 	static const byte _gmRhythmMap[35];
 

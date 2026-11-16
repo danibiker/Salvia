@@ -172,7 +172,7 @@ struct DetectedGame {
 	/**
 	 * A game was detected and is selected in the Mass Add list.
 	 */
-	bool isSelected = false;
+	bool isSelected;
 
 	/**
 	 * An optional list of the files that were used to match the game with the engine's detection tables
@@ -189,7 +189,7 @@ struct DetectedGame {
 	/**
 	 * The game is an add-on that cannot be run independently.
 	 */
-	bool isAddOn = false;
+	bool isAddOn;
 
 	Common::String gameId;
 	Common::String preferredTarget;

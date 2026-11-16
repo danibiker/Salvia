@@ -298,6 +298,91 @@ static byte fpMul(byte a, byte b) {
 	return (byte)((r + (r >> 8) + 127) >> 8);
 }
 
+// Combine argument of the texture environment (a plain function instead of a lambda
+// returning a local struct: that crashes the MSVC 2010 compiler, C1001)
+struct TexEnvCombineArg {
+	byte a, r, g, b;
+};
+
+static TexEnvCombineArg getCombineArg(const GLTextureEnvArgument &mode, const GLTextureEnv *env,
+		uint previousA, uint previousR, uint previousG, uint previousB,
+		byte texA, byte texR, byte texG, byte texB) {
+
+	TexEnvCombineArg op = {0, 0, 0, 0};
+	TexEnvCombineArg opColor = {0, 0, 0, 0};
+
+	// Source values
+	switch (mode.sourceRGB) {
+	case TGL_TEXTURE:
+		opColor.a = texA;
+		opColor.r = texR;
+		opColor.g = texG;
+		opColor.b = texB;
+		break;
+	case TGL_PRIMARY_COLOR:
+		opColor.a = sat16_to_8(previousA);
+		opColor.r = sat16_to_8(previousR);
+		opColor.g = sat16_to_8(previousG);
+		opColor.b = sat16_to_8(previousB);
+		break;
+	case TGL_CONSTANT:
+		opColor.a = env->constA;
+		opColor.r = env->constR;
+		opColor.g = env->constG;
+		opColor.b = env->constB;
+		break;
+	default:
+		assert(false && "Invalid texture environment arg color source");
+		break;
+	}
+	switch (mode.sourceAlpha) {
+	case TGL_TEXTURE:
+		op.a = texA;
+		break;
+	case TGL_PRIMARY_COLOR:
+		op.a = sat16_to_8(previousA);
+		break;
+	case TGL_CONSTANT:
+		op.a = env->constA;
+		break;
+	default:
+		assert(false && "Invalid texture environment arg alpha source");
+		break;
+	}
+
+	// Operands
+	switch (mode.operandRGB) {
+	case TGL_SRC_COLOR:
+		op.r = opColor.r; // intermediate values were necessary for operandRGB == TGL_SRC_ALPHA 
+		op.g = opColor.g;
+		op.b = opColor.b;
+		break;
+	case TGL_ONE_MINUS_SRC_COLOR:
+		op.r = 255 - opColor.r;
+		op.g = 255 - opColor.g;
+		op.b = 255 - opColor.b;
+		break;
+	case TGL_SRC_ALPHA:
+		op.r = op.g = op.b = opColor.a;
+		break;
+	default:
+		assert(false && "Invalid texture environment arg color operand");
+		break;
+	}
+	switch (mode.operandAlpha) {
+	case TGL_SRC_ALPHA:
+		break;
+	case TGL_ONE_MINUS_SRC_ALPHA:
+		op.a = 255 - op.a;
+		break;
+	default:
+		assert(false && "Invalid texture environment arg alpha operand");
+		break;
+	}
+
+	return op;
+	}
+
 void FrameBuffer::applyTextureEnvironment(
 	int internalformat,
 	uint previousA, uint previousR, uint previousG, uint previousB,
@@ -308,83 +393,6 @@ void FrameBuffer::applyTextureEnvironment(
 	// texARGB is both input and output
 	// GL_RGB/GL_RGBA might be identical as TexelBuffer returns As=1
 
-	struct Arg {
-		byte a, r, g, b;
-	};
-	const auto getCombineArg = [&](const GLTextureEnvArgument &mode) -> Arg {
-		Arg op = {}, opColor = {};
-
-		// Source values
-		switch (mode.sourceRGB) {
-		case TGL_TEXTURE:
-			opColor.a = texA;
-			opColor.r = texR;
-			opColor.g = texG;
-			opColor.b = texB;
-			break;
-		case TGL_PRIMARY_COLOR:
-			opColor.a = sat16_to_8(previousA);
-			opColor.r = sat16_to_8(previousR);
-			opColor.g = sat16_to_8(previousG);
-			opColor.b = sat16_to_8(previousB);
-			break;
-		case TGL_CONSTANT:
-			opColor.a = _textureEnv->constA;
-			opColor.r = _textureEnv->constR;
-			opColor.g = _textureEnv->constG;
-			opColor.b = _textureEnv->constB;
-			break;
-		default:
-			assert(false && "Invalid texture environment arg color source");
-			break;
-		}
-		switch (mode.sourceAlpha) {
-		case TGL_TEXTURE:
-			op.a = texA;
-			break;
-		case TGL_PRIMARY_COLOR:
-			op.a = sat16_to_8(previousA);
-			break;
-		case TGL_CONSTANT:
-			op.a = _textureEnv->constA;
-			break;
-		default:
-			assert(false && "Invalid texture environment arg alpha source");
-			break;
-		}
-
-		// Operands
-		switch (mode.operandRGB) {
-		case TGL_SRC_COLOR:
-			op.r = opColor.r; // intermediate values were necessary for operandRGB == TGL_SRC_ALPHA 
-			op.g = opColor.g;
-			op.b = opColor.b;
-			break;
-		case TGL_ONE_MINUS_SRC_COLOR:
-			op.r = 255 - opColor.r;
-			op.g = 255 - opColor.g;
-			op.b = 255 - opColor.b;
-			break;
-		case TGL_SRC_ALPHA:
-			op.r = op.g = op.b = opColor.a;
-			break;
-		default:
-			assert(false && "Invalid texture environment arg color operand");
-			break;
-		}
-		switch (mode.operandAlpha) {
-		case TGL_SRC_ALPHA:
-			break;
-		case TGL_ONE_MINUS_SRC_ALPHA:
-			op.a = 255 - op.a;
-			break;
-		default:
-			assert(false && "Invalid texture environment arg alpha operand");
-			break;
-		}
-
-		return op;
-	};
 
 	switch (_textureEnv->envMode) {
 	case TGL_REPLACE:
@@ -431,8 +439,8 @@ void FrameBuffer::applyTextureEnvironment(
 	}
 	case TGL_COMBINE:
 	{
-		Arg arg0 = getCombineArg(_textureEnv->arg0);
-		Arg arg1 = getCombineArg(_textureEnv->arg1);
+		TexEnvCombineArg arg0 = getCombineArg(_textureEnv->arg0, _textureEnv, previousA, previousR, previousG, previousB, texA, texR, texG, texB);
+		TexEnvCombineArg arg1 = getCombineArg(_textureEnv->arg1, _textureEnv, previousA, previousR, previousG, previousB, texA, texR, texG, texB);
 		switch (_textureEnv->combineRGB) {
 		case TGL_REPLACE:
 			texR = arg0.r;

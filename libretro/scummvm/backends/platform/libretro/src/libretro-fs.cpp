@@ -168,14 +168,14 @@ static int libretroFsWhenceToVfs(int whence) {
 	}
 }
 
-class LibRetroFileReadStream final : public Common::SeekableReadStream {
+class LibRetroFileReadStream : public Common::SeekableReadStream {
 public:
 	explicit LibRetroFileReadStream(RFILE *file)
 		: _file(file), _size(file ? filestream_get_size(file) : -1),
 		  _eos(false), _err(false) {
 	}
 
-	~LibRetroFileReadStream() override {
+	~LibRetroFileReadStream() {
 		close();
 	}
 
@@ -263,12 +263,12 @@ private:
 	bool _err;
 };
 
-class LibRetroFileWriteStream final : public Common::SeekableWriteStream {
+class LibRetroFileWriteStream : public Common::SeekableWriteStream {
 public:
 	explicit LibRetroFileWriteStream(RFILE *file) : _file(file), _err(false) {
 	}
 
-	~LibRetroFileWriteStream() override {
+	~LibRetroFileWriteStream() {
 		close();
 	}
 
@@ -412,12 +412,13 @@ LibRetroFilesystemNode::LibRetroFilesystemNode(const Common::String &p) {
 	} else
 		_path = p;
 
-	char portable_path[_path.size() + 1];
-	strcpy(portable_path, _path.c_str());
-	pathname_make_slashes_portable(portable_path);
+	// (no variable length arrays in MSVC)
+	Common::Array<char> portable_path(_path.size() + 1);
+	strcpy(&portable_path[0], _path.c_str());
+	pathname_make_slashes_portable(&portable_path[0]);
 
 	// Normalize the path (that is, remove unneeded slashes etc.)
-	_path = Common::normalizePath(Common::String(portable_path), '/');
+	_path = Common::normalizePath(Common::String(&portable_path[0]), '/');
 	_displayName = Common::lastPathComponent(_path, '/');
 	setFlags();
 }
@@ -674,7 +675,9 @@ Common::String LibRetroFilesystemNode::getHomeDir(void) {
 	Common::String path;
 	const char *home = nullptr;
 
-#ifdef _WIN32
+#if defined(_XBOX)
+	/* No environment on Xbox 360. */
+#elif defined(_WIN32)
 	const char *drv = getenv("HOMEDRIVE");
 	const char *pth = getenv("HOMEPATH");
 	if (drv && *drv && pth && *pth) {

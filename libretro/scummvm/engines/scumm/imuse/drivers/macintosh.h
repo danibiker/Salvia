@@ -37,11 +37,11 @@ struct ChanControlNode;
 
 namespace Scumm {
 
-class IMuseDriver_Macintosh final : public MidiDriver {
+class IMuseDriver_Macintosh : public MidiDriver {
 	friend class IMSMacintosh::IMuseChannel_Macintosh;
 public:
 	IMuseDriver_Macintosh(ScummEngine *vm, Audio::Mixer *mixer, byte gameID);
-	virtual ~IMuseDriver_Macintosh() override;
+	virtual ~IMuseDriver_Macintosh();
 
 	int open() override;
 	void close() override;

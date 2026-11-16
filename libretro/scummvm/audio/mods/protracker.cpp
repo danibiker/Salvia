@@ -62,8 +62,28 @@ ProtrackerStream::ProtrackerStream(int rate, bool stereo) : Paula(stereo, rate, 
 	ARRAYCLEAR(_track);
 }
 
-ProtrackerStream::ProtrackerStream(Common::SeekableReadStream *stream, int offs, int rate, bool stereo) :
-		ProtrackerStream(rate, stereo) {
+ProtrackerStream::ProtrackerStream(Common::SeekableReadStream *stream, int offs, int rate, bool stereo) : Paula(stereo, rate, rate / 50) {
+	// (inlined from the delegated constructor: MSVC 2010 has no C++11 delegating constructors)
+	_module = nullptr;
+
+	_tick = _row = _pos = 0;
+
+	_speed = 6;
+	_bpm = 125;
+
+	_hasJumpToPattern = false;
+	_jumpToPattern = 0;
+
+	_hasPatternBreak = false;
+	_skipRow = 0;
+
+	_hasPatternLoop = false;
+	_patternLoopCount = 0;
+	_patternLoopRow = 0;
+
+	_patternDelay = 0;
+
+	ARRAYCLEAR(_track);
 	_module = new Module();
 	bool result = _module->load(*stream, offs);
 	assert(result);

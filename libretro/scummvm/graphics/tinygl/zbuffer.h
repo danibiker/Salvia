@@ -366,7 +366,7 @@ private:
 	                       uint &fog, int fog_r, int fog_g, int fog_b, int &dfdx,
 						   bool kStippleEnabled);
 
-	enum class ColorMode {
+	enum ColorMode {
 		NoInterpolation,
 		Default, // GL_TEXTURE_ENV_MODE == GL_MODULATE
 		CustomTexEnv

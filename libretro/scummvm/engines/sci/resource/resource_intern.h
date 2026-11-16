@@ -197,7 +197,7 @@ public:
 class MacResourceForkResourceSource : public ResourceSource {
 public:
 	MacResourceForkResourceSource(const Common::Path &name, int volNum);
-	~MacResourceForkResourceSource() override;
+	~MacResourceForkResourceSource();
 
 	void scanSource(ResourceManager *resMan) override;
 

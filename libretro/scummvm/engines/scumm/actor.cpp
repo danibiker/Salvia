@@ -105,11 +105,11 @@ static const byte v0WalkboxSlantedModifier[0x16] = {
 };
 
 Actor::Actor(ScummEngine *scumm, int id) :
-	_vm(scumm), _number(id) {
+	_vm(scumm), _number(id), _top(0), _bottom(0), _width(0), _costume(0), _room(0), _talkColor(0), _talkFrequency(0), _talkPan(0), _talkVolume(0), _boxscale(0), _scalex(0), _scaley(0), _charset(0), _moving(0), _ignoreBoxes(false), _forceClip(0), _lastValidX(0), _lastValidY(0), _initFrame(0), _walkFrame(0), _standFrame(0), _talkStartFrame(0), _talkStopFrame(0), _needRedraw(false), _needBgReset(false), _visible(false), _shadowMode(0), _flip(false), _frame(0), _walkbox(0), _talkPosX(0), _talkPosY(0), _talkScript(0), _walkScript(0), _ignoreTurns(false), _drawToBackBuf(false), _layer(0), _sound(), _heOffsX(0), _heOffsY(0), _heSkipLimbs(false), _heCondMask(0), _hePaletteNum(0), _heShadow(0), _palette(), _elevation(0), _facing(0), _targetFacing(0), _speedx(0), _speedy(0), _animProgress(0), _animSpeed(0), _costumeNeedsInit(false), _animVariable() {
 	assert(_vm != nullptr);
 }
 
-ActorHE::ActorHE(ScummEngine *scumm, int id) : Actor(scumm,id) {
+ActorHE::ActorHE(ScummEngine *scumm, int id) : Actor(scumm,id), _heNoTalkAnimation(false), _heTalking(false), _generalFlags(0), _auxActor(0), _auxEraseX1(0), _auxEraseY1(0), _auxEraseX2(0), _auxEraseY2(0), _screenUpdateTableMin(), _screenUpdateTableMax(), _heTalkQueue() {
 	for (int i = 0; i < ARRAYSIZE(_screenUpdateTableMin); i++) {
 		_screenUpdateTableMin[i] = 0;
 	}

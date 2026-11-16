@@ -34,7 +34,7 @@ class ButtonWidget;
 class EditTextWidget;
 
 class CloudConnectionWizard : public Dialog {
-	enum class Step {
+	enum Step {
 		NONE,
 		MODE_SELECT,
 		QUICK_MODE_STEP_1,
@@ -130,7 +130,7 @@ class CloudConnectionWizard : public Dialog {
 
 public:
 	CloudConnectionWizard();
-	~CloudConnectionWizard() override;
+	~CloudConnectionWizard();
 
 	int runStorageModal(uint32 selectedStorageIndex);
 	void open() override;
