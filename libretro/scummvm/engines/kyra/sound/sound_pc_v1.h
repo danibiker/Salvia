@@ -49,7 +49,7 @@ class PCSoundDriver;
 class SoundPC_v1 : public Sound {
 public:
 	SoundPC_v1(KyraEngine_v1 *vm, Audio::Mixer *mixer, kType type);
-	~SoundPC_v1() override;
+	~SoundPC_v1();
 
 	kType getMusicType() const override { return _type; }
 

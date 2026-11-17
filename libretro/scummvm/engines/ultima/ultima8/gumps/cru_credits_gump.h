@@ -40,7 +40,7 @@ public:
 	CruCreditsGump();
 	CruCreditsGump(Common::SeekableReadStream *txtrs, Common::SeekableReadStream *bmprs,
 	            uint32 flags = FLAG_PREVENT_SAVE, int32 layer = LAYER_MODAL);
-	~CruCreditsGump() override;
+	~CruCreditsGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

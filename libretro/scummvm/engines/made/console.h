@@ -31,7 +31,7 @@ class MadeEngine;
 class MadeConsole : public GUI::Debugger {
 public:
 	MadeConsole(MadeEngine *vm);
-	~MadeConsole(void) override;
+	~MadeConsole(void);
 
 private:
 	MadeEngine *_vm;

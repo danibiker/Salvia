@@ -202,7 +202,6 @@ class Joystick{
 		t_joy_state inputs;
 		//Devolvemos un objeto evento en el caso de peticion de salida de SDL
 		tEvento evento;
-		bool hotkeyEnablerHidePress;
 		//Se guardan las hotkeys en una clase aparte
 		Hotkeys* hotkeys;
 		//Se guardan los botones para mostrar informacion al usuario

@@ -186,7 +186,7 @@ protected:
 class NeverhoodAudioStream : public Audio::AudioStream {
 public:
 	NeverhoodAudioStream(int rate, byte shiftValue, bool isLooping, DisposeAfterUse::Flag disposeStream, Common::SeekableReadStream *stream);
-	~NeverhoodAudioStream() override;
+	~NeverhoodAudioStream();
 	int readBuffer(int16 *buffer, const int numSamples) override;
 	bool isStereo() const override  { return _isStereo; }
 	bool endOfData() const override { return _endOfData; }

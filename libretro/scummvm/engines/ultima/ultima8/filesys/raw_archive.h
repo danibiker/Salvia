@@ -35,7 +35,7 @@ public:
 	RawArchive() : Archive() { }
 	explicit RawArchive(Common::SeekableReadStream *rs) : Archive(rs) { }
 
-	~RawArchive() override;
+	~RawArchive();
 
 	void cache(uint32 index) override;
 	void uncache(uint32 index) override;

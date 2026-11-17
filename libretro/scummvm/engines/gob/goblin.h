@@ -277,7 +277,7 @@ public:
 			int16 nextAct, int16 framesCount) override;
 
 	Goblin_v1(GobEngine *vm);
-	~Goblin_v1() override {}
+	~Goblin_v1() {}
 
 protected:
 	bool isMovement(int8 state) override { return false; }
@@ -297,7 +297,7 @@ public:
 			int16 nextAct, int16 framesCount) override;
 
 	Goblin_v2(GobEngine *vm);
-	~Goblin_v2() override {}
+	~Goblin_v2() {}
 
 protected:
 	bool isMovement(int8 state) override;
@@ -312,7 +312,7 @@ public:
 			int16 index, int16 x, int16 y, int16 state) override;
 
 	Goblin_v3(GobEngine *vm);
-	~Goblin_v3() override {}
+	~Goblin_v3() {}
 
 protected:
 	bool isMovement(int8 state) override;
@@ -327,7 +327,7 @@ public:
 			int16 nextAct, int16 framesCount) override;
 
 	Goblin_v4(GobEngine *vm);
-	~Goblin_v4() override {}
+	~Goblin_v4() {}
 
 private:
 	int16 turnState(int16 state, uint16 dir);
@@ -336,7 +336,7 @@ private:
 class Goblin_v7 : public Goblin_v4 {
 public:
 	Goblin_v7(GobEngine *vm);
-	~Goblin_v7() override {}
+	~Goblin_v7() {}
 
 	void initiateMove(Mult::Mult_Object *obj) override;
 	void setGoblinState(Mult::Mult_Object *obj, int16 animState) override;

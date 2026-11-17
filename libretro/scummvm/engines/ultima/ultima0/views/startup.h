@@ -35,7 +35,7 @@ private:
 	}
 public:
 	Startup() : View("Startup") {}
-	~Startup() override {}
+	~Startup() {}
 
 	void draw() override;
 

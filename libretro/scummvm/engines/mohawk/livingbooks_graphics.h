@@ -31,7 +31,7 @@ class MohawkEngine_LivingBooks;
 class LBGraphics : public GraphicsManager {
 public:
 	LBGraphics(MohawkEngine_LivingBooks *vm, uint16 width, uint16 height);
-	~LBGraphics() override;
+	~LBGraphics();
 
 	void setPalette(uint16 id) override;
 	void copyOffsetAnimImageToScreen(uint16 image, int left = 0, int top = 0);

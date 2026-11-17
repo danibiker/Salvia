@@ -47,7 +47,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~U1TextCursor() override {}
+	~U1TextCursor() {}
 
 	/**
 	 * Update the cursor

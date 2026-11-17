@@ -38,7 +38,7 @@ public:
 	MiniStatsGump();
 	MiniStatsGump(int x, int y, uint32 flags = FLAG_DRAGGABLE,
 	              int32 layer = LAYER_NORMAL);
-	~MiniStatsGump() override;
+	~MiniStatsGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

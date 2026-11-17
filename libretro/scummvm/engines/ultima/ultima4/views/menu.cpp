@@ -34,8 +34,8 @@ Menu::Menu() :
 }
 
 Menu::~Menu() {
-	for (auto *i : _items)
-		delete i;
+	for (auto rfIt37 = _items.begin(), rfEnd37 = _items.end(); rfIt37 != rfEnd37; ++rfIt37)
+		{ auto *i = *rfIt37; delete i; }
 }
 
 void Menu::removeAll() {
@@ -55,7 +55,8 @@ MenuItem *Menu::add(int id, MenuItem *item) {
 }
 
 void Menu::addShortcutKey(int id, int shortcutKey) {
-	for (auto *i : _items) {
+	for (auto rfIt58 = _items.begin(), rfEnd58 = _items.end(); rfIt58 != rfEnd58; ++rfIt58) {
+		auto *i = *rfIt58;
 		if (i->getId() == id) {
 			i->addShortcutKey(shortcutKey);
 			break;
@@ -64,7 +65,8 @@ void Menu::addShortcutKey(int id, int shortcutKey) {
 }
 
 void Menu::setClosesMenu(int id) {
-	for (auto *i : _items) {
+	for (auto rfIt67 = _items.begin(), rfEnd67 = _items.end(); rfIt67 != rfEnd67; ++rfIt67) {
+		auto *i = *rfIt67;
 		if (i->getId() == id) {
 			i->setClosesMenu(true);
 			break;
@@ -93,7 +95,8 @@ void Menu::show(TextView *view) {
 	if (_title.size() > 0)
 		view->textAt(_titleX, _titleY, "%s", _title.c_str());
 
-	for (auto *mi : _items) {
+	for (auto rfIt96 = _items.begin(), rfEnd96 = _items.end(); rfIt96 != rfEnd96; ++rfIt96) {
+		auto *mi = *rfIt96;
 		if (mi->isVisible()) {
 			Common::String text(mi->getText());
 
@@ -117,7 +120,8 @@ void Menu::show(TextView *view) {
 bool Menu::isVisible() {
 	bool visible = false;
 
-	for (const auto *mi : _items) {
+	for (auto rfIt120 = _items.begin(), rfEnd120 = _items.end(); rfIt120 != rfEnd120; ++rfIt120) {
+		const auto *mi = *rfIt120;
 		if (mi->isVisible())
 			visible = true;
 	}
@@ -157,7 +161,8 @@ void Menu::prev() {
 
 void Menu::highlight(MenuItem *item) {
 	// unhighlight all menu items first
-	for (auto *mi : _items) {
+	for (auto rfIt160 = _items.begin(), rfEnd160 = _items.end(); rfIt160 != rfEnd160; ++rfIt160) {
+		auto *mi = *rfIt160;
 		mi->setHighlighted(false);
 	}
 	if (item)
@@ -191,7 +196,8 @@ void Menu::reset(bool highlightFirst) {
 	_selected = begin_visible();
 
 	/* un-highlight and deselect each menu item */
-	for (auto *mi : _items) {
+	for (auto rfIt194 = _items.begin(), rfEnd194 = _items.end(); rfIt194 != rfEnd194; ++rfIt194) {
+		auto *mi = *rfIt194;
 		mi->setHighlighted(false);
 		mi->setSelected(false);
 	}
@@ -259,7 +265,8 @@ void Menu::activateItem(int id, MenuEvent::Type action) {
 }
 
 bool Menu::activateItemByShortcut(int key, MenuEvent::Type action) {
-	for (auto *i : _items) {
+	for (auto rfIt262 = _items.begin(), rfEnd262 = _items.end(); rfIt262 != rfEnd262; ++rfIt262) {
+		auto *i = *rfIt262;
 		if (i->hasShortcutKey(key)) {
 			activateItem(i->getId(), action);
 			// if the selection doesn't close the menu, highlight the selection

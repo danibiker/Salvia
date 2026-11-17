@@ -39,7 +39,7 @@ class Mouth : public ANIObject {
 public:
 	Mouth(const ANIFile &ani, const CMPFile &cmp,
 	      uint16 mouthAnim, uint16 mouthSprite, uint16 floorSprite);
-	~Mouth() override;
+	~Mouth();
 
 	/** Advance the animation to the next frame. */
 	void advance() override;

@@ -52,7 +52,7 @@ public:
 	};
 
 	Oko(const ANIFile &ani, Sound &sound, SoundDesc &breathe);
-	~Oko() override;
+	~Oko();
 
 	/** Advance the animation to the next frame. */
 	void advance() override;

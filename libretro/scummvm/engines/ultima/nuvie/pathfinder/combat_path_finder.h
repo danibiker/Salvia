@@ -45,7 +45,7 @@ protected:
 public:
 	CombatPathFinder(Actor *a);
 	CombatPathFinder(Actor *a, Actor *t);
-	~CombatPathFinder() override;
+	~CombatPathFinder();
 	bool set_flee_mode(Actor *actor);
 	bool set_chase_mode(Actor *actor);
 	bool set_mode(CombatPathFinderMode mode, Actor *actor);

@@ -30,7 +30,7 @@ namespace Ultima8 {
 class U8Game: public Game {
 public:
 	U8Game();
-	~U8Game() override;
+	~U8Game();
 
 	//! load/init game's data files
 	bool loadFiles() override;

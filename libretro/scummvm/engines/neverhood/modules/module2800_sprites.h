@@ -137,7 +137,7 @@ protected:
 class AsScene2804BeamCoil : public AnimatedSprite {
 public:
 	AsScene2804BeamCoil(NeverhoodEngine *vm, Scene *parentScene, SsScene2804BeamCoilBody *ssBeamCoilBody);
-	~AsScene2804BeamCoil() override;
+	~AsScene2804BeamCoil();
 protected:
 	Scene *_parentScene;
 	SsScene2804BeamCoilBody *_ssBeamCoilBody;
@@ -240,7 +240,7 @@ protected:
 class AsScene2812Winch : public AnimatedSprite {
 public:
 	AsScene2812Winch(NeverhoodEngine *vm);
-	~AsScene2812Winch() override;
+	~AsScene2812Winch();
 protected:
 	uint32 handleMessage(int messageNum, const MessageParam &param, Entity *sender);
 };

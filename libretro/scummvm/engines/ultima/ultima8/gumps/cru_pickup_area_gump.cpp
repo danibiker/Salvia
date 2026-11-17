@@ -59,7 +59,8 @@ void CruPickupAreaGump::addPickup(const Item *item, bool showCount) {
 	// or an existing gump to recycle if we have one already
 	// for that shape
 	int32 maxy = PICKUP_GUMP_GAP;
-	for (auto *i : _children) {
+	for (auto rfIt62 = _children.begin(), rfEnd62 = _children.end(); rfIt62 != rfEnd62; ++rfIt62) {
+		auto *i = *rfIt62;
 		CruPickupGump *pug = dynamic_cast<CruPickupGump *>(i);
 		if (!pug)
 			continue;

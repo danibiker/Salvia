@@ -690,7 +690,8 @@ void DreamWebEngine::loadPosition(unsigned int slot) {
 	Common::sort(flist.begin(), flist.end(), Common::Less<FrameExtent>());
 	uint16 curEnd = 0;
 
-	for (auto &frame : flist) {
+	for (auto rfIt693 = flist.begin(), rfEnd693 = flist.end(); rfIt693 != rfEnd693; ++rfIt693) {
+		auto &frame = *rfIt693;
 		if (frame.start < curEnd)
 			error("exFrames data corruption in savegame");
 		curEnd = frame.start + frame.length;

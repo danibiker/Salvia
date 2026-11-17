@@ -39,7 +39,7 @@ public:
 
 	ComputerGump();
 	ComputerGump(const Common::String &msg);
-	~ComputerGump() override;
+	~ComputerGump();
 
 	// Close on mouse click on key press
 	Gump *onMouseDown(int button, int32 mx, int32 my) override;

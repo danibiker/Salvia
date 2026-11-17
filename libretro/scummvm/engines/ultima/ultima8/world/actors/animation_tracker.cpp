@@ -277,7 +277,8 @@ bool AnimationTracker::step() {
 		cm->sweepTest(start, end, dims, a->getShapeInfo()->_flags, _actor,
 		              false, &collisions);
 
-		for (const auto &collision : collisions) {
+		for (auto rfIt280 = collisions.begin(), rfEnd280 = collisions.end(); rfIt280 != rfEnd280; ++rfIt280) {
+			const auto &collision = *rfIt280;
 			// hit something, can't move
 			if (!collision._touching && collision._blocking) {
 #ifdef WATCHACTOR

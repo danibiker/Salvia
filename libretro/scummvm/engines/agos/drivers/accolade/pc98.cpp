@@ -37,7 +37,7 @@ public:
 	};
 public:
 	PC98CommonDriver();
-	~PC98CommonDriver() override {};
+	~PC98CommonDriver() {};
 
 	bool isOpen() const override { return _isOpen; }
 	void send(uint32 b) override;
@@ -98,7 +98,7 @@ private:
 class PC98FMDriver : public PC98CommonDriver, private PC98AudioPluginDriver {
 public:
 	PC98FMDriver();
-	~PC98FMDriver() override;
+	~PC98FMDriver();
 
 	int open() override;
 	void close() override;
@@ -137,7 +137,7 @@ private:
 class PC98MidiDriver : public PC98CommonDriver {
 public:
 	PC98MidiDriver(DeviceHandle dev);
-	~PC98MidiDriver() override;
+	~PC98MidiDriver();
 
 	int open() override;
 	void close() override;

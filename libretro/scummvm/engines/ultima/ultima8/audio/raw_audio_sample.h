@@ -31,7 +31,7 @@ class RawAudioSample : public AudioSample {
 public:
 	RawAudioSample(const uint8 *buffer, uint32 size,
 	               uint32 rate, bool signeddata, bool stereo);
-	~RawAudioSample() override;
+	~RawAudioSample();
 
 	Audio::SeekableAudioStream *makeStream() const override;
 

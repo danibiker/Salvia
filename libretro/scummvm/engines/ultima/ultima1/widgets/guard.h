@@ -64,7 +64,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Guard() override {}
+	~Guard() {}
 };
 
 } // End of namespace Widgets

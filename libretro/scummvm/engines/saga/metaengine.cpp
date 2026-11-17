@@ -156,7 +156,8 @@ SaveStateList SagaMetaEngine::listSaves(const char *target) const {
 
 	SaveStateList saveList;
 	int slotNum = 0;
-	for (const auto &file : filenames) {
+	for (auto rfIt159 = filenames.begin(), rfEnd159 = filenames.end(); rfIt159 != rfEnd159; ++rfIt159) {
+		const auto &file = *rfIt159;
 		// Obtain the last 2 digits of the filename, since they correspond to the save slot
 		slotNum = atoi(file.c_str() + file.size() - 2);
 

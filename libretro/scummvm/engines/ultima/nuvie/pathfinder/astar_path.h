@@ -54,7 +54,7 @@ protected:
 	                       sint32 &nnode_to_neighbor);
 public:
 	AStarPath();
-	~AStarPath() override { }
+	~AStarPath() { }
 	bool path_search(const MapCoord &start, const MapCoord &goal) override;
 	uint32 path_cost_est(const MapCoord &s, const MapCoord &g) override  {
 		return Path::path_cost_est(s, g);

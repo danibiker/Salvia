@@ -59,7 +59,8 @@ Kernel::~Kernel() {
 void Kernel::reset() {
 	debug(1, "Resetting Kernel...");
 
-	for (auto *p : _processes) {
+	for (auto rfIt62 = _processes.begin(), rfEnd62 = _processes.end(); rfIt62 != rfEnd62; ++rfIt62) {
+		auto *p = *rfIt62;
 		if (p->_flags & Process::PROC_TERM_DISPOSE && p != _runningProcess) {
 			delete p;
 		} else {
@@ -253,7 +254,8 @@ void Kernel::setNextProcess(Process *proc) {
 }
 
 Process *Kernel::getProcess(ProcId pid) {
-	for (auto *p : _processes) {
+	for (auto rfIt256 = _processes.begin(), rfEnd256 = _processes.end(); rfIt256 != rfEnd256; ++rfIt256) {
+		auto *p = *rfIt256;
 		if (p->_pid == pid)
 			return p;
 	}
@@ -268,10 +270,12 @@ void Kernel::kernelStats() {
 void Kernel::processTypes() {
 	g_debugger->debugPrintf("Current process types:\n");
 	Common::HashMap<Common::String, unsigned int> processtypes;
-	for (const auto *p : _processes) {
+	for (auto rfIt271 = _processes.begin(), rfEnd271 = _processes.end(); rfIt271 != rfEnd271; ++rfIt271) {
+		const auto *p = *rfIt271;
 		processtypes[p->GetClassType()._className]++;
 	}
-	for (const auto &i : processtypes) {
+	for (auto rfIt274 = processtypes.begin(), rfEnd274 = processtypes.end(); rfIt274 != rfEnd274; ++rfIt274) {
+		const auto &i = *rfIt274;
 		g_debugger->debugPrintf("%s: %u\n", i._key.c_str(), i._value);
 	}
 }
@@ -279,7 +283,8 @@ void Kernel::processTypes() {
 uint32 Kernel::getNumProcesses(ObjId objid, uint16 processtype) {
 	uint32 count = 0;
 
-	for (const auto *p : _processes) {
+	for (auto rfIt282 = _processes.begin(), rfEnd282 = _processes.end(); rfIt282 != rfEnd282; ++rfIt282) {
+		const auto *p = *rfIt282;
 		// Don't count us, we are not really here
 		if (p->is_terminated()) continue;
 
@@ -292,7 +297,8 @@ uint32 Kernel::getNumProcesses(ObjId objid, uint16 processtype) {
 }
 
 Process *Kernel::findProcess(ObjId objid, uint16 processtype) {
-	for (auto *p : _processes) {
+	for (auto rfIt295 = _processes.begin(), rfEnd295 = _processes.end(); rfIt295 != rfEnd295; ++rfIt295) {
+		auto *p = *rfIt295;
 		// Don't count us, we are not really here
 		if (p->is_terminated()) continue;
 
@@ -307,7 +313,8 @@ Process *Kernel::findProcess(ObjId objid, uint16 processtype) {
 
 
 void Kernel::killProcesses(ObjId objid, uint16 processtype, bool fail) {
-	for (auto *p : _processes) {
+	for (auto rfIt310 = _processes.begin(), rfEnd310 = _processes.end(); rfIt310 != rfEnd310; ++rfIt310) {
+		auto *p = *rfIt310;
 		if (p->_itemNum != 0 && (objid == 0 || objid == p->_itemNum) &&
 		        (processtype == PROC_TYPE_ALL || processtype == p->_type) &&
 		        !(p->_flags & Process::PROC_TERMINATED) &&
@@ -321,7 +328,8 @@ void Kernel::killProcesses(ObjId objid, uint16 processtype, bool fail) {
 }
 
 void Kernel::killProcessesNotOfType(ObjId objid, uint16 processtype, bool fail) {
-	for (auto *p : _processes) {
+	for (auto rfIt324 = _processes.begin(), rfEnd324 = _processes.end(); rfIt324 != rfEnd324; ++rfIt324) {
+		auto *p = *rfIt324;
 		// * If objid is 0, terminate procs for all objects.
 		// * Never terminate procs with objid 0
 		if (p->_itemNum != 0 && (objid == 0 || objid == p->_itemNum) &&
@@ -356,7 +364,8 @@ void Kernel::killAllProcessesNotOfTypeExcludeCurrent(uint16 processtype, bool fa
 		}
 	}
 
-	for (auto *p : _processes) {
+	for (auto rfIt359 = _processes.begin(), rfEnd359 = _processes.end(); rfIt359 != rfEnd359; ++rfIt359) {
+		auto *p = *rfIt359;
 		// Don't kill the running process
 		if (procsToSave.contains(p->_pid))
 			continue;
@@ -373,7 +382,8 @@ void Kernel::killAllProcessesNotOfTypeExcludeCurrent(uint16 processtype, bool fa
 }
 
 bool Kernel::canSave() {
-	for (const auto *p : _processes) {
+	for (auto rfIt376 = _processes.begin(), rfEnd376 = _processes.end(); rfIt376 != rfEnd376; ++rfIt376) {
+		const auto *p = *rfIt376;
 		if (!p->is_terminated() && p->_flags & Process::PROC_PREVENT_SAVE) {
 			return false;
 		}
@@ -386,7 +396,8 @@ void Kernel::save(Common::WriteStream *ws) {
 	ws->writeUint32LE(_tickNum);
 	_pIDs->save(ws);
 	ws->writeUint32LE(_processes.size());
-	for (auto *p : _processes) {
+	for (auto rfIt389 = _processes.begin(), rfEnd389 = _processes.end(); rfIt389 != rfEnd389; ++rfIt389) {
+		auto *p = *rfIt389;
 		const Common::String & classname = p->GetClassType()._className; // virtual
 		assert(classname.size());
 
@@ -417,7 +428,8 @@ bool Kernel::load(Common::ReadStream *rs, uint32 version) {
 
 	// Integrity check for processes
 	Set<ProcId> procs;
-	for (const auto *p : _processes) {
+	for (auto rfIt420 = _processes.begin(), rfEnd420 = _processes.end(); rfIt420 != rfEnd420; ++rfIt420) {
+		const auto *p = *rfIt420;
 		if (!_pIDs->isIDUsed(p->getPid())) {
 			warning("Process id %d exists but not marked used.  Corrupt save?", p->getPid());
 			return false;

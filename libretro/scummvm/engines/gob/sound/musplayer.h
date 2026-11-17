@@ -46,7 +46,7 @@ namespace Gob {
 class MUSPlayer : public AdLib {
 public:
 	MUSPlayer();
-	~MUSPlayer() override;
+	~MUSPlayer();
 
 	/** Load the instruments (.SND or .TBR) */
 	bool loadSND(Common::SeekableReadStream &snd);

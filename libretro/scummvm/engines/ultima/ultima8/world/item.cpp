@@ -753,7 +753,8 @@ int Item::getRangeIfVisible(const Item &item2) const {
 
 	map->sweepTest(start, end, dims, getShapeInfo()->_flags, _objId, true, &hitItems);
 
-	for (const auto &hit : hitItems) {
+	for (auto rfIt756 = hitItems.begin(), rfEnd756 = hitItems.end(); rfIt756 != rfEnd756; ++rfIt756) {
+		const auto &hit = *rfIt756;
 		int objId = hit._item;
 		if (hit._blocking && objId != _objId && objId != item2.getObjId()) {
 			//int out[3];
@@ -1079,7 +1080,8 @@ int32 Item::collideMove(int32 dx, int32 dy, int32 dz, bool teleport, bool force,
 	if (teleport || _parent) {
 		// If teleporting and not force, work out if we can reach the end
 		if (!force) {
-			for (const auto &collision : collisions) {
+			for (auto rfIt1082 = collisions.begin(), rfEnd1082 = collisions.end(); rfIt1082 != rfEnd1082; ++rfIt1082) {
+				const auto &collision = *rfIt1082;
 				// Uh oh, we hit something, can't move
 				if (collision._endTime == 0x4000 && !collision._touching && collision._blocking) {
 					if (hititem)
@@ -1093,7 +1095,8 @@ int32 Item::collideMove(int32 dx, int32 dy, int32 dz, bool teleport, bool force,
 
 		// Trigger all the required events
 		bool we_were_released = false;
-		for (const auto &collision : collisions) {
+		for (auto rfIt1096 = collisions.begin(), rfEnd1096 = collisions.end(); rfIt1096 != rfEnd1096; ++rfIt1096) {
+			const auto &collision = *rfIt1096;
 			Item *item = getItem(collision._item);
 			if (!item)
 				continue; // shouldn't happen..
@@ -1161,7 +1164,8 @@ int32 Item::collideMove(int32 dx, int32 dy, int32 dz, bool teleport, bool force,
 
 		// Trigger all the required events
 		bool we_were_released = false;
-		for (const auto &collision : collisions) {
+		for (auto rfIt1164 = collisions.begin(), rfEnd1164 = collisions.end(); rfIt1164 != rfEnd1164; ++rfIt1164) {
+			const auto &collision = *rfIt1164;
 			Item *item = getItem(collision._item);
 			if (!item) continue;
 
@@ -1457,7 +1461,8 @@ uint16 Item::fireDistance(const Item *other, Direction dir, int16 xoff, int16 yo
 			Common::List<CurrentMap::SweepItem> collisions;
 			cm->sweepTest(start, end, dims, ShapeInfo::SI_SOLID,
 						   _objId, true, &collisions);
-			for (const auto &collision : collisions) {
+			for (auto rfIt1460 = collisions.begin(), rfEnd1460 = collisions.end(); rfIt1460 != rfEnd1460; ++rfIt1460) {
+				const auto &collision = *rfIt1460;
 				if (collision._item == getObjId())
 					continue;
 				if (collision._touching)
@@ -2413,7 +2418,8 @@ static bool checkLineOfSightCollisions(
 	bool usingAlternatePos, ObjId item, ObjId other) {
 	int32 other_hit_time = 0x4000;
 	int32 blocked_time = 0x4000;
-	for (const auto &collision : collisions) {
+	for (auto rfIt2416 = collisions.begin(), rfEnd2416 = collisions.end(); rfIt2416 != rfEnd2416; ++rfIt2416) {
+		const auto &collision = *rfIt2416;
 		// ignore self and other
 		if (collision._item == item)
 			continue;
@@ -3633,7 +3639,8 @@ uint32 Item::I_legalMoveToPoint(const uint8 *args, unsigned int argsize) {
 	CurrentMap *map = World::get_instance()->getCurrentMap();
 	map->sweepTest(start, end, dims, item->getShapeInfo()->_flags,
 				   item->getObjId(), true, &collisions);
-	for (const auto &collision : collisions) {
+	for (auto rfIt3636 = collisions.begin(), rfEnd3636 = collisions.end(); rfIt3636 != rfEnd3636; ++rfIt3636) {
+		const auto &collision = *rfIt3636;
 		if (collision._blocking && !collision._touching && collision._endTime > 0) {
 			if (abort_if_blocked)
 				return 0;

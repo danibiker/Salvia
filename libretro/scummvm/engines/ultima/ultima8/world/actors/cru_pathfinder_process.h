@@ -43,7 +43,7 @@ public:
 	CruPathfinderProcess();
 	CruPathfinderProcess(Actor *actor, Item *item, int maxsteps, int stopdistance, bool turnatend);
 	CruPathfinderProcess(Actor *actor, const Point3 &target, int maxsteps, int stopdistance, bool turnatend);
-	~CruPathfinderProcess() override;
+	~CruPathfinderProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

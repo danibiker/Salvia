@@ -40,7 +40,7 @@ public:
 	PaperdollGump();
 	PaperdollGump(const Shape *shape, uint32 frameNum, uint16 owner,
 	              uint32 flags = FLAG_DRAGGABLE, int32 layer = LAYER_NORMAL);
-	~PaperdollGump() override;
+	~PaperdollGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

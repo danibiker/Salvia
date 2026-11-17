@@ -132,7 +132,7 @@ protected:
 
 public:
 	NuvieAnim();
-	~NuvieAnim() override;
+	~NuvieAnim();
 
 	void pause() {
 		paused = true;
@@ -207,7 +207,7 @@ protected:
 
 public:
 	TileAnim();
-	~TileAnim() override;
+	~TileAnim();
 
 	MapCoord get_location() override {
 		return MapCoord(_tx, _ty, 0);
@@ -244,7 +244,7 @@ public:
 	TimedAnim()  {
 		timer = nullptr;
 	}
-	~TimedAnim() override {
+	~TimedAnim() {
 		stop_timer();
 	}
 	void start_timer(uint32 delay) {
@@ -300,7 +300,7 @@ protected:
 public:
 	TossAnim(const Tile *tile, const MapCoord &start, const MapCoord &stop, uint16 pixels_per_sec, uint8 stop_flags = 0);
 	TossAnim(Obj *obj, uint16 degrees, const MapCoord &start, const MapCoord &stop, uint16 pixels_per_sec, uint8 stop_flags = 0);
-	~TossAnim() override;
+	~TossAnim();
 
 	void init(const Tile *tile, uint16 degrees, const MapCoord &start, const MapCoord &stop, uint16 pixels_per_sec, uint8 stop_flags);
 	void start() override;
@@ -341,7 +341,7 @@ class ExplosiveAnim : public TimedAnim {
 
 public:
 	ExplosiveAnim(const MapCoord &start, uint32 size);
-	~ExplosiveAnim() override;
+	~ExplosiveAnim();
 	void start() override;
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 	bool update() override;
@@ -375,7 +375,7 @@ class ProjectileAnim : public TileAnim {
 	bool leaveTrailFlag;
 public:
 	ProjectileAnim(uint16 tileNum, MapCoord *start, Common::Array<MapCoord> target, uint8 animSpeed, bool leaveTrailFlag = false, uint16 initialTileRotation = 0, uint16 rotationAmount = 0, uint8 src_y_offset = 0);
-	~ProjectileAnim() override;
+	~ProjectileAnim();
 	void start() override;
 
 	bool update() override;
@@ -398,7 +398,7 @@ class WingAnim : public TileAnim {
 
 public:
 	WingAnim(const MapCoord &target);
-	~WingAnim() override;
+	~WingAnim();
 	void start() override;
 	bool update() override;
 
@@ -422,7 +422,7 @@ class HailstormAnim : public TileAnim {
 
 public:
 	HailstormAnim(const MapCoord &t);
-	~HailstormAnim() override;
+	~HailstormAnim();
 	void start() override;
 	bool update() override;
 
@@ -455,7 +455,7 @@ class TextAnim : public TimedAnim {
 
 public:
 	TextAnim(Common::String text, MapCoord loc, uint32 dur);
-	~TextAnim() override;
+	~TextAnim();
 	uint16 callback(uint16 msg, CallBack *caller, void *msg_data) override;
 	void start() override                    {
 		start_timer(duration);
@@ -476,7 +476,7 @@ public:
 	TileFadeAnim();
 	TileFadeAnim(const MapCoord &loc, Tile *from, Tile *to, uint16 speed);
 	TileFadeAnim(const MapCoord &loc, Tile *from, uint8 color_from, uint8 color_to, bool reverse, uint16 speed);
-	~TileFadeAnim() override;
+	~TileFadeAnim();
 
 	bool update() override;
 protected:

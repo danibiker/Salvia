@@ -71,7 +71,7 @@ protected:
 public:
 
 	U6Actor(Map *m, ObjManager *om, GameClock *c);
-	~U6Actor() override;
+	~U6Actor();
 
 	bool init(uint8 obj_status = NO_OBJ_STATUS) override;
 	uint16 get_downward_facing_tile_num() const override;
@@ -139,9 +139,9 @@ public:
 				OBJ_U6_WINGED_GARGOYLE, OBJ_U6_DAEMON, OBJ_U6_DRAKE,
 				OBJ_U6_MONGBAT, OBJ_U6_DRAGON, OBJ_U6_INFLATED_BALLOON };
 
-		for (const auto flyingObj : flyingObjs)
-			if (obj_n == flyingObj)
-				return true;
+		for (auto rfIt142 = &flyingObjs[0], rfEnd142 = &flyingObjs[0] + sizeof(flyingObjs) / sizeof(flyingObjs[0]); rfIt142 != rfEnd142; ++rfIt142)
+			{ const auto flyingObj = *rfIt142; if (obj_n == flyingObj)
+				return true; }
 		return false;
 	}
 	bool isNonBlocking() const override {
@@ -150,9 +150,9 @@ public:
 				OBJ_U6_INSECTS, OBJ_U6_MOUSE, OBJ_U6_BIRD, OBJ_U6_CORPSER,
 				OBJ_U6_RABBIT };
 
-		for (const auto nonBlockingObj : u6NonBlockingObjs)
-			if (obj_n == nonBlockingObj)
-				return true;
+		for (auto rfIt153 = &u6NonBlockingObjs[0], rfEnd153 = &u6NonBlockingObjs[0] + sizeof(u6NonBlockingObjs) / sizeof(u6NonBlockingObjs[0]); rfIt153 != rfEnd153; ++rfIt153)
+			{ const auto nonBlockingObj = *rfIt153; if (obj_n == nonBlockingObj)
+				return true; }
 		return false;
 	}
 

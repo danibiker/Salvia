@@ -243,7 +243,7 @@ class KyraRpgEngine : public KyraEngine_v1 {
 friend class TextDisplayer_rpg;
 public:
 	KyraRpgEngine(OSystem *system, const GameFlags &flags);
-	~KyraRpgEngine() override;
+	~KyraRpgEngine();
 
 	Screen *screen() override = 0;
 	GUI *gui() const override = 0;

@@ -35,7 +35,7 @@ namespace Kyra {
 class KyraAudioStream : public Audio::SeekableAudioStream {
 public:
 	KyraAudioStream(Audio::SeekableAudioStream *impl) : _impl(impl), _rate(impl->getRate()), _fadeSamples(0), _fadeCount(0), _fading(0), _endOfData(false) {}
-	~KyraAudioStream() override { delete _impl; _impl = nullptr; }
+	~KyraAudioStream() { delete _impl; _impl = nullptr; }
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 	bool isStereo() const override { return _impl->isStereo(); }

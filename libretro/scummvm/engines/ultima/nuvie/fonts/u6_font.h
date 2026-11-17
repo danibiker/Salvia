@@ -40,7 +40,7 @@ private:
 public:
 
 	U6Font();
-	~U6Font() override;
+	~U6Font();
 
 	bool init(unsigned char *data, uint16 num_chars, uint16 char_offset);
 

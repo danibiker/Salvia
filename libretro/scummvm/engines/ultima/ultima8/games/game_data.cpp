@@ -370,7 +370,8 @@ void GameData::setupJPOverrides() {
 	KeyMap jpkeyvals;
 
 	jpkeyvals = config->listKeyValues("language", "jpfonts");
-	for (const auto &i : jpkeyvals) {
+	for (auto rfIt373 = jpkeyvals.begin(), rfEnd373 = jpkeyvals.end(); rfIt373 != rfEnd373; ++rfIt373) {
+		const auto &i = *rfIt373;
 		int fontnum = atoi(i._key.c_str());
 		const Common::String &fontdesc = i._value;
 
@@ -401,7 +402,8 @@ void GameData::setupTTFOverrides(const char *category, bool SJIS) {
 	if (!overridefonts) return;
 
 	ttfkeyvals = config->listKeyValues(category, "fontoverride");
-	for (const auto &i : ttfkeyvals) {
+	for (auto rfIt404 = ttfkeyvals.begin(), rfEnd404 = ttfkeyvals.end(); rfIt404 != rfEnd404; ++rfIt404) {
+		const auto &i = *rfIt404;
 		int fontnum = atoi(i._key.c_str());
 		const Common::String &fontdesc = i._value;
 
@@ -461,7 +463,8 @@ const NPCDat *GameData::getNPCData(uint16 entry) const {
 }
 
 const NPCDat *GameData::getNPCDataForShape(uint16 shapeno) const {
-	for (const auto *npcdat : _npcTable) {
+	for (auto rfIt464 = _npcTable.begin(), rfEnd464 = _npcTable.end(); rfIt464 != rfEnd464; ++rfIt464) {
+		const auto *npcdat = *rfIt464;
 		if (npcdat->getShapeNo() == shapeno)
 			return npcdat;
 	}

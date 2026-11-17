@@ -31,7 +31,7 @@ namespace Sky {
 class GmMusic : public MusicBase {
 public:
 	GmMusic(MidiDriver *pMidiDrv, Audio::Mixer *pMixer, Disk *pDisk);
-	~GmMusic() override;
+	~GmMusic();
 	void setVolume(uint16 param) override;
 private:
 	static void passTimerFunc(void *param);

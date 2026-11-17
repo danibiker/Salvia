@@ -95,7 +95,8 @@ void Screen::init() {
 
 	/* find the tile animations for our tileset */
 	_tileAnims = nullptr;
-	for (auto *set : _tileAnimSets) {
+	for (auto rfIt98 = _tileAnimSets.begin(), rfEnd98 = _tileAnimSets.end(); rfIt98 != rfEnd98; ++rfIt98) {
+		auto *set = *rfIt98;
 		if (set->_name == settings._videoType)
 			_tileAnims = set;
 	}
@@ -130,8 +131,8 @@ void Screen::clear() {
 	// Clear any pending updates for the current screen
 	update();
 
-	for (auto *layout : _layouts)
-		delete layout;
+	for (auto rfIt133 = _layouts.begin(), rfEnd133 = _layouts.end(); rfIt133 != rfEnd133; ++rfIt133)
+		{ auto *layout = *rfIt133; delete layout; }
 	_layouts.clear();
 
 	ImageMgr::destroy();
@@ -345,7 +346,8 @@ void Screen::screenLoadGraphicsFromConf() {
 	const Config *config = Config::getInstance();
 
 	Common::Array<ConfigElement> graphicsConf = config->getElement("graphics").getChildren();
-	for (const auto &conf : graphicsConf) {
+	for (auto rfIt348 = graphicsConf.begin(), rfEnd348 = graphicsConf.end(); rfIt348 != rfEnd348; ++rfIt348) {
+const auto &conf = *rfIt348;
 
 		if (conf.getName() == "layout")
 			_layouts.push_back(screenLoadLayoutFromConf(conf));
@@ -354,7 +356,8 @@ void Screen::screenLoadGraphicsFromConf() {
 	}
 
 	_gemLayoutNames.clear();
-	for (const auto *layout : _layouts) {
+	for (auto rfIt357 = _layouts.begin(), rfEnd357 = _layouts.end(); rfIt357 != rfEnd357; ++rfIt357) {
+		const auto *layout = *rfIt357;
 		if (layout->_type == LAYOUT_GEM) {
 			_gemLayoutNames.push_back(layout->_name);
 		}
@@ -363,7 +366,8 @@ void Screen::screenLoadGraphicsFromConf() {
 	/*
 	 * Find gem layout to use.
 	 */
-	for (auto *layout : _layouts) {
+	for (auto rfIt366 = _layouts.begin(), rfEnd366 = _layouts.end(); rfIt366 != rfEnd366; ++rfIt366) {
+		auto *layout = *rfIt366;
 		if (layout->_type == LAYOUT_GEM && layout->_name == settings._gemLayout) {
 			_gemLayout = layout;
 			break;
@@ -382,7 +386,8 @@ Layout *Screen::screenLoadLayoutFromConf(const ConfigElement &conf) {
 	layout->_type = static_cast<LayoutType>(conf.getEnum("type", typeEnumStrings));
 
 	Common::Array<ConfigElement> children = conf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt385 = children.begin(), rfEnd385 = children.end(); rfIt385 != rfEnd385; ++rfIt385) {
+		const auto &i = *rfIt385;
 		if (i.getName() == "tileshape") {
 			layout->_tileShape.x = i.getInt("width");
 			layout->_tileShape.y = i.getInt("height");
@@ -1187,7 +1192,8 @@ void Screen::screenShowGemTile(Layout *layout, Map *map, MapTile &t, bool focus,
 
 Layout *Screen::screenGetGemLayout(const Map *map) {
 	if (map->_type == Map::DUNGEON) {
-		for (auto *layout : _layouts) {
+		for (auto rfIt1190 = _layouts.begin(), rfEnd1190 = _layouts.end(); rfIt1190 != rfEnd1190; ++rfIt1190) {
+			auto *layout = *rfIt1190;
 			if (layout->_type == LAYOUT_DUNGEONGEM)
 				return layout;
 		}

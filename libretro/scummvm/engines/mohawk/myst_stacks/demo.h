@@ -37,7 +37,7 @@ namespace MystStacks {
 class Demo : public Intro {
 public:
 	explicit Demo(MohawkEngine_Myst *vm);
-	~Demo() override;
+	~Demo();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

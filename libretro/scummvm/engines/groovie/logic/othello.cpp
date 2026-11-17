@@ -556,23 +556,21 @@ void OthelloGame::op5(byte *vars) {
 	vars[4] = 1;
 }
 
-OthelloGame::OthelloGame(bool easierAi)
-	: _random("OthelloGame"),
-	  _depths {
+static const int kDepths[60] = {
 		1, 4, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 4, 7, 6, 5, 4, 3, 2, 1, 1
-	  },
-	  _lookupPlayer { 21, 40, 31 },
-	  _scores {
+	  };
+static const int8 kLookupPlayer[3] = { 21, 40, 31 };
+static const int8 kScores[3][4] = {
 		  { 30, 0, 0, 0 },
 		  {  4, 0, 0, 0 },
 		  {  5, 0, 0, 0 }
-	  },
-	  _edgesScores{
+	  };
+static const int8 kEdgesScores[112] = {
 		  0,   3,   6,   9,   3,  15,  12,  18,
 		  6,   0,  45,   6,   0,   3,  27,  12,
 		 60,  15,   9,  18,  36,  21,  24,  27,
@@ -587,8 +585,8 @@ OthelloGame::OthelloGame(bool easierAi)
 		 87,  99,  96, 102,  90,  84,  87,  90,
 		 84,  87,  48,  96, 102,  99,  93, 102,
 		 57,   0,   0,   0,   0,   0,   0,   0
-	  },
-	  _cornersScores{
+	  };
+static const int kCornersScores[105] = {
 		  0,   0,   0,   0,   0,
 		  0,   0,   0,   0,   0,
 		-20,   0,   0,   0,  20,
@@ -610,9 +608,17 @@ OthelloGame::OthelloGame(bool easierAi)
 		-40, -40, -40, -40, -40,
 		-40, -40, -40, -20, -40,
 		-40, -40, -40, -40, -20
-	  },
-	_movesLateGame(52)
+	  };
+
+OthelloGame::OthelloGame(bool easierAi)
+	: _random("OthelloGame"),
+	  _movesLateGame(52)
 {
+	memcpy(_depths, kDepths, sizeof(_depths));
+	memcpy(_lookupPlayer, kLookupPlayer, sizeof(_lookupPlayer));
+	memcpy(_scores, kScores, sizeof(_scores));
+	memcpy(_edgesScores, kEdgesScores, sizeof(_edgesScores));
+	memcpy(_cornersScores, kCornersScores, sizeof(_cornersScores));
 	_isLateGame = false;
 	_counter = 0;
 	_isAiTurn = 0;
@@ -656,13 +662,14 @@ void OthelloGame::run(byte *vars) {
 void OthelloGame::test() {
 	warning("OthelloGame::test() starting");
 	// pairs of x, y, 3 moves per line
-	testMatch({
+	static const int kTestMoves1[] = {
 	//  x1,y1,x2,y2,x3,y3
 		5, 4, 5, 2, 3, 2,
 		6, 6, 1, 2, 1, 0
-	}, true);
+	};
+	testMatch(Common::Array<int>(kTestMoves1, ARRAYSIZE(kTestMoves1)), true);
 
-	testMatch({
+	static const int kTestMoves2[] = {
 	//  x1,y1,x2,y2,x3,y3
 		5, 4, 6, 2, 4, 2,
 		5, 1, 5, 5, 3, 5,
@@ -676,7 +683,8 @@ void OthelloGame::test() {
 		3, 1, 3, 0, 0, 2,
 		2, 7
 	//  x1,y1,x2,y2,x3,y3
-	}, false);
+	};
+	testMatch(Common::Array<int>(kTestMoves2, ARRAYSIZE(kTestMoves2)), false);
 
 	warning("OthelloGame::test() finished");
 }

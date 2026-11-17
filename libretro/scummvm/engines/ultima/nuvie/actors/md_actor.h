@@ -31,7 +31,7 @@ class MDActor: public WOUActor {
 public:
 
 	MDActor(Map *m, ObjManager *om, GameClock *c);
-	~MDActor() override;
+	~MDActor();
 
 	bool init(uint8 unused = 0) override;
 	bool will_not_talk() const override;

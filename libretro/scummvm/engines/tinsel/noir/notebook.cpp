@@ -33,7 +33,7 @@
 
 namespace Tinsel {
 
-Notebook::Notebook() {
+Notebook::Notebook() : _polygons(nullptr), _numPages(1), _prevPage(-1), _currentPage(1), _pages(), _anim(), _object(nullptr), _pageAnim(), _pageObject(nullptr), _state(BOOKSTATE::CLOSED) {
 	_polygons = instantiateNoteBookPolygons();
 }
 

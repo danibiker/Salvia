@@ -37,7 +37,7 @@ class ConvFont : public Font {
 public:
 
 	ConvFont();
-	~ConvFont() override;
+	~ConvFont();
 
 	bool init(unsigned char *data, uint8 *width_data, uint16 num_chars, uint16 char_offset);
 

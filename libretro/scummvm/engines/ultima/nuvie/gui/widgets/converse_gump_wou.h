@@ -48,7 +48,7 @@ class ConverseGumpWOU: public MsgScroll {
 public:
 
 	ConverseGumpWOU(const Configuration *cfg, Font *f, Screen *s);
-	~ConverseGumpWOU() override;
+	~ConverseGumpWOU();
 
 	void set_talking(bool state, Actor *actor = nullptr) override;
 	void set_font(uint8 font_type) override {}

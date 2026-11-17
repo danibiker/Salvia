@@ -47,6 +47,8 @@
 
 namespace Sword1 {
 
+const uint8 Control::_psxPauseStrings[3][7] = { "Paused", "Pause", "Pausa" };
+
 enum LangStrings {
 	STR_PAUSED = 0,
 	STR_INSERT_CD_A,
@@ -176,7 +178,7 @@ const Button Control::volumeButtons[25] = {
 
 };
 
-Control::Control(SwordEngine *vm, Common::SaveFileManager *saveFileMan, ResMan *pResMan, ObjectMan *pObjMan, OSystem *system, Mouse *pMouse, Sound *pSound, Screen *pScreen, Logic *pLogic) {
+Control::Control(SwordEngine *vm, Common::SaveFileManager *saveFileMan, ResMan *pResMan, ObjectMan *pObjMan, OSystem *system, Mouse *pMouse, Sound *pSound, Screen *pScreen, Logic *pLogic) : _oldSnrStatus(SNR_BLANK), _newPal(false), _scrollIndex(), _speedFlag(0), _currentButton(0), _buttonPressed(0), _buttonHold(0), _slabSelected(0), _firstDescription(0), _editingDescription(0), _gamesSaved(0), _scroll(0), _scrollCount(0), _restoreBuf(nullptr), _selectedSavegame(0), _numButtons(0), _selectedButton(0), _panelShown(false) {
 	_vm = vm;
 	_saveFileMan = saveFileMan;
 	_resMan = pResMan;
@@ -1412,7 +1414,8 @@ int16 Control::readFileDescriptions() {
 
 	int16 totalFiles = 0;
 	int slotNum = 0;
-	for (const auto &filename : filenames) {
+	for (auto rfIt1415 = filenames.begin(), rfEnd1415 = filenames.end(); rfIt1415 != rfEnd1415; ++rfIt1415) {
+		const auto &filename = *rfIt1415;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		slotNum = atoi(filename.c_str() + filename.size() - 3);
 

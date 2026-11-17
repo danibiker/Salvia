@@ -516,7 +516,8 @@ void CruAvatarMoverProcess::step(Animation::Sequence action, Direction direction
 			avatar->setLocation(origpt);
 			currentmap->sweepTest(origpt, end, dims, avatar->getShapeInfo()->_flags,
 								  avatar->getObjId(), true, &collisions);
-			for (const auto &collision : collisions) {
+			for (auto rfIt519 = collisions.begin(), rfEnd519 = collisions.end(); rfIt519 != rfEnd519; ++rfIt519) {
+				const auto &collision = *rfIt519;
 				if (!collision._touching && collision._blocking) {
 					startvalid = false;
 					break;

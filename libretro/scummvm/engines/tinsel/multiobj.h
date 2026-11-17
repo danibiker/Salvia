@@ -25,6 +25,7 @@
 
 #include "tinsel/dw.h"
 #include "tinsel/object.h"
+#include "tinsel/noir/sysreel.h"
 
 namespace Tinsel {
 
@@ -137,7 +138,6 @@ void MultiForceRedraw(
 struct FREEL;
 OBJECT *InsertReelObj(const FREEL *reels);
 struct FILM;
-enum class SysReel;
 const FILM *GetSystemReelFilm(SysReel reelIndex);
 OBJECT *InsertSystemReelObj(SysReel reelIndex);
 

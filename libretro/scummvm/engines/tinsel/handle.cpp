@@ -709,10 +709,10 @@ int Handle::CdNumber(SCNHANDLE offset) {
   * @param fileName Name of the resource to search for
   */
 SCNHANDLE Handle::FindLanguageSceneHandle(const char *fileName) {
-	Common::String nameString{fileName};
+	Common::String nameString(fileName);
 
 	for (uint i = 0; i < _numHandles; ++i) {
-		if (nameString == Common::String{_handleTable[i].szName}) {
+		if (nameString == Common::String(_handleTable[i].szName)) {
 			return i << SCNHANDLE_SHIFT;
 		}
 	}

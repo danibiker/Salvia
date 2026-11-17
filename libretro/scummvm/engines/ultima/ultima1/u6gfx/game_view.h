@@ -91,7 +91,7 @@ private:
 public:
 	CLASSDEF;
 	GameView(Shared::TreeItem *parent = nullptr);
-	~GameView() override;
+	~GameView();
 
 	/**
 	 * Draw the game screen

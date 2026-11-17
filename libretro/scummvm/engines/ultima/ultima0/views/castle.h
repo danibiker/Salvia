@@ -45,7 +45,7 @@ private:
 
 public:
 	Castle() : View("Castle") {}
-	~Castle() override {}
+	~Castle() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

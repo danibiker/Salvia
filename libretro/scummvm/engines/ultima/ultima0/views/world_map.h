@@ -42,7 +42,7 @@ private:
 
 public:
 	WorldMap();
-	~WorldMap() override {}
+	~WorldMap() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

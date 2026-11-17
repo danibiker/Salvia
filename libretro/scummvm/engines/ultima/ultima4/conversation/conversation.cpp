@@ -65,7 +65,8 @@ const Common::Array<ResponsePart> &Response::getParts() const {
 
 Response::operator Common::String() const {
 	Common::String result;
-	for (const auto &i : _parts) {
+	for (auto rfIt68 = _parts.begin(), rfEnd68 = _parts.end(); rfIt68 != rfEnd68; ++rfIt68) {
+		const auto &i = *rfIt68;
 		result += i;
 	}
 	return result;
@@ -178,7 +179,8 @@ Dialogue::Dialogue()
 }
 
 Dialogue::~Dialogue() {
-	for (auto &i : _keywords) {
+	for (auto rfIt181 = _keywords.begin(), rfEnd181 = _keywords.end(); rfIt181 != rfEnd181; ++rfIt181) {
+		auto &i = *rfIt181;
 		delete i._value;
 	}
 }
@@ -224,7 +226,8 @@ Common::String Dialogue::dump(const Common::String &arg) {
 	Common::String result;
 	if (arg == "") {
 		result = "keywords:\n";
-		for (const auto &i : _keywords) {
+		for (auto rfIt227 = _keywords.begin(), rfEnd227 = _keywords.end(); rfIt227 != rfEnd227; ++rfIt227) {
+			const auto &i = *rfIt227;
 			result += i._key + "\n";
 		}
 	} else {

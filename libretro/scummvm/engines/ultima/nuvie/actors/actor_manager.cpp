@@ -1108,7 +1108,8 @@ void ActorManager::loadAvatarTiles(const Common::Path &datadir) {
 
 	Common::Array<Common::String> files = getCustomTileFilenames(datadir, "avatar_###_####.bmp");
 
-	for (const Common::String &filename : files) {
+	for (auto rfIt1111 = files.begin(), rfEnd1111 = files.end(); rfIt1111 != rfEnd1111; ++rfIt1111) {
+		const Common::String &filename = *rfIt1111;
 		if (filename.size() != 19) { // avatar_nnn_nnnn.bmp
 			continue;
 		}
@@ -1136,7 +1137,8 @@ void ActorManager::loadNPCTiles(const Common::Path &datadir) {
 
 	Common::Array<Common::String> files = getCustomTileFilenames(datadir, "actor_###_####.bmp");
 
-	for (const Common::String &filename : files) {
+	for (auto rfIt1139 = files.begin(), rfEnd1139 = files.end(); rfIt1139 != rfEnd1139; ++rfIt1139) {
+		const Common::String &filename = *rfIt1139;
 		if (filename.size() != 18) { // actor_nnn_nnnn.bmp
 			continue;
 		}
@@ -1174,10 +1176,12 @@ Common::Array<Common::String> ActorManager::getCustomTileFilenames(const Common:
 
 	Common::EqualTo<Common::String> comparitor;
 	Common::Array<Common::String> filenames;
-	for (const auto &desc : files) {
+	for (auto rfIt1177 = files.begin(), rfEnd1177 = files.end(); rfIt1177 != rfEnd1177; ++rfIt1177) {
+		const auto &desc = *rfIt1177;
 		filenames.push_back(desc.filename);
 	}
-	for (const auto &desc : dataFiles) {
+	for (auto rfIt1180 = dataFiles.begin(), rfEnd1180 = dataFiles.end(); rfIt1180 != rfEnd1180; ++rfIt1180) {
+		const auto &desc = *rfIt1180;
 		filenames.push_back(desc.filename);
 	}
 	Common::sort(filenames.begin(), filenames.end(), comparitor);

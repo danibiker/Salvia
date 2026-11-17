@@ -42,7 +42,7 @@ public:
 	                 const ConvertShapeFormat *format = 0)
 		: ShapeArchive(rs, id, pal, format), _typeFlags(0), _animDat(0) { }
 
-	~MainShapeArchive() override;
+	~MainShapeArchive();
 
 	void loadTypeFlags(Common::SeekableReadStream *rs);
 	void loadDamageDat(Common::SeekableReadStream *rs);

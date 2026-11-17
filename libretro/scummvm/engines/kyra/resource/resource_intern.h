@@ -64,7 +64,7 @@ private:
 class TlkArchive : public Common::Archive {
 public:
 	TlkArchive(Common::ArchiveMemberPtr file, uint16 entryCount, const uint32 *fileEntries);
-	~TlkArchive() override;
+	~TlkArchive();
 
 	bool hasFile(const Common::Path &path) const override;
 	int listMembers(Common::ArchiveMemberList &list) const override;
@@ -91,7 +91,7 @@ public:
 	typedef Common::List<InputEntry> FileInputList;
 
 	CachedArchive(const FileInputList &files);
-	~CachedArchive() override;
+	~CachedArchive();
 
 	bool hasFile(const Common::Path &path) const override;
 	int listMembers(Common::ArchiveMemberList &list) const override;

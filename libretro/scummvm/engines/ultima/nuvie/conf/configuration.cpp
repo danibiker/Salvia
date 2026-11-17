@@ -41,7 +41,8 @@ Configuration::Configuration() : _configChanged(false) {
 }
 
 Configuration::~Configuration() {
-	for (Shared::XMLTree *t : _trees) {
+	for (auto rfIt44 = _trees.begin(), rfEnd44 = _trees.end(); rfIt44 != rfEnd44; ++rfIt44) {
+		Shared::XMLTree *t = *rfIt44;
 		delete(t);
 	}
 
@@ -64,14 +65,16 @@ bool Configuration::readConfigFile(const Common::String &fname, const Common::St
 }
 
 void Configuration::write() {
-	for (Shared::XMLTree *t : _trees) {
+	for (auto rfIt67 = _trees.begin(), rfEnd67 = _trees.end(); rfIt67 != rfEnd67; ++rfIt67) {
+		Shared::XMLTree *t = *rfIt67;
 		if (!t->isReadonly())
 			t->write();
 	}
 }
 
 void Configuration::clear() {
-	for (Shared::XMLTree *t : _trees) {
+	for (auto rfIt74 = _trees.begin(), rfEnd74 = _trees.end(); rfIt74 != rfEnd74; ++rfIt74) {
+		Shared::XMLTree *t = *rfIt74;
 		delete(t);
 	}
 	_trees.clear();
@@ -265,13 +268,16 @@ ConfigNode *Configuration::getNode(const Common::String &key) {
 }
 
 void Configuration::getSubkeys(KeyTypeList &ktl, const Common::String &basekey) {
-	for (Shared::XMLTree *tree : _trees) {
+	for (auto rfIt268 = _trees.begin(), rfEnd268 = _trees.end(); rfIt268 != rfEnd268; ++rfIt268) {
+		Shared::XMLTree *tree = *rfIt268;
 		Shared::XMLTree::KeyTypeList l;
 		tree->getSubkeys(l, basekey);
 
-		for (const auto &i : l) {
+		for (auto rfIt272 = l.begin(), rfEnd272 = l.end(); rfIt272 != rfEnd272; ++rfIt272) {
+			const auto &i = *rfIt272;
 			bool found = false;
-			for (auto &j : ktl) {
+			for (auto rfIt274 = ktl.begin(), rfEnd274 = ktl.end(); rfIt274 != rfEnd274; ++rfIt274) {
+				auto &j = *rfIt274;
 				if (j.first == i.first) {
 					// already have this subkey, so just replace the value
 					j.second = i.second;

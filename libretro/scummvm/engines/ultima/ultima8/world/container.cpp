@@ -47,7 +47,8 @@ Container::~Container() {
 
 	// if we don't have an _objId, we _must_ delete children
 	if (_objId == 0xFFFF) {
-		for (auto *item : _contents) {
+		for (auto rfIt50 = _contents.begin(), rfEnd50 = _contents.end(); rfIt50 != rfEnd50; ++rfIt50) {
+			auto *item = *rfIt50;
 			delete item;
 		}
 	}
@@ -57,7 +58,8 @@ Container::~Container() {
 ObjId Container::assignObjId() {
 	ObjId id = Item::assignObjId();
 
-	for (auto *item : _contents) {
+	for (auto rfIt60 = _contents.begin(), rfEnd60 = _contents.end(); rfIt60 != rfEnd60; ++rfIt60) {
+		auto *item = *rfIt60;
 		item->assignObjId();
 		item->setParent(id);
 	}
@@ -68,7 +70,8 @@ ObjId Container::assignObjId() {
 void Container::clearObjId() {
 	Item::clearObjId();
 
-	for (auto *item : _contents) {
+	for (auto rfIt71 = _contents.begin(), rfEnd71 = _contents.end(); rfIt71 != rfEnd71; ++rfIt71) {
+		auto *item = *rfIt71;
 		// make sure we don't clear the ObjId of an Actor
 		assert(item->getObjId() >= 256);
 
@@ -200,7 +203,8 @@ void Container::destroyContents() {
 void Container::setFlagRecursively(uint32 mask) {
 	setFlag(mask);
 
-	for (auto *item : _contents) {
+	for (auto rfIt203 = _contents.begin(), rfEnd203 = _contents.end(); rfIt203 != rfEnd203; ++rfIt203) {
+		auto *item = *rfIt203;
 		item->setFlag(mask);
 		Container *cont = dynamic_cast<Container *>(item);
 		if (cont) cont->setFlagRecursively(mask);
@@ -231,7 +235,8 @@ uint32 Container::getTotalWeight() const {
 		weight = 300;
 	}
 
-	for (const auto *item : _contents) {
+	for (auto rfIt234 = _contents.begin(), rfEnd234 = _contents.end(); rfIt234 != rfEnd234; ++rfIt234) {
+		const auto *item = *rfIt234;
 		weight += item->getTotalWeight();
 	}
 
@@ -247,7 +252,8 @@ uint32 Container::getCapacity() const {
 uint32 Container::getContentVolume() const {
 	uint32 volume = 0;
 
-	for (const auto *item : _contents) {
+	for (auto rfIt250 = _contents.begin(), rfEnd250 = _contents.end(); rfIt250 != rfEnd250; ++rfIt250) {
+		const auto *item = *rfIt250;
 		volume += item->getVolume();
 	}
 
@@ -256,7 +262,8 @@ uint32 Container::getContentVolume() const {
 
 void Container::containerSearch(UCList *itemlist, const uint8 *loopscript,
 								uint32 scriptsize, bool recurse) const {
-	for (auto *item : _contents) {
+	for (auto rfIt259 = _contents.begin(), rfEnd259 = _contents.end(); rfIt259 != rfEnd259; ++rfIt259) {
+		auto *item = *rfIt259;
 		// check item against loopscript
 		if (item->checkLoopScript(loopscript, scriptsize)) {
 			assert(itemlist->getElementSize() == 2);
@@ -275,7 +282,8 @@ void Container::containerSearch(UCList *itemlist, const uint8 *loopscript,
 }
 
 Item *Container::getFirstItemWithShape(uint16 shapeno, bool recurse) {
-	for (auto *item : _contents) {
+	for (auto rfIt278 = _contents.begin(), rfEnd278 = _contents.end(); rfIt278 != rfEnd278; ++rfIt278) {
+		auto *item = *rfIt278;
 		if (item->getShape() == shapeno)
 			return item;
 
@@ -294,7 +302,8 @@ Item *Container::getFirstItemWithShape(uint16 shapeno, bool recurse) {
 }
 
 void Container::getItemsWithShapeFamily(Common::Array<Item *> &itemlist, uint16 family, bool recurse) {
-	for (auto *item : _contents) {
+	for (auto rfIt297 = _contents.begin(), rfEnd297 = _contents.end(); rfIt297 != rfEnd297; ++rfIt297) {
+		auto *item = *rfIt297;
 		if (item->getShapeInfo()->_family == family)
 			itemlist.push_back(item);
 
@@ -318,7 +327,8 @@ Common::String Container::dumpInfo() const {
 void Container::saveData(Common::WriteStream *ws) {
 	Item::saveData(ws);
 	ws->writeUint32LE(static_cast<uint32>(_contents.size()));
-	for (auto *item : _contents) {
+	for (auto rfIt321 = _contents.begin(), rfEnd321 = _contents.end(); rfIt321 != rfEnd321; ++rfIt321) {
+		auto *item = *rfIt321;
 		ObjectManager::get_instance()->saveObject(ws, item);
 	}
 }

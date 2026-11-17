@@ -36,7 +36,7 @@ private:
 public:
 
 	U6Bmp();
-	~U6Bmp() override;
+	~U6Bmp();
 
 	bool load(const Common::Path &filename) override;
 

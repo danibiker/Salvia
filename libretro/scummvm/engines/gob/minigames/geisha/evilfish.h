@@ -45,7 +45,7 @@ public:
 	EvilFish(const ANIFile &ani, uint16 screenWidth,
 	         uint16 animSwimLeft, uint16 animSwimRight,
 	         uint16 animTurnLeft, uint16 animTurnRight, uint16 animDie);
-	~EvilFish() override;
+	~EvilFish();
 
 	/** Enter from this direction / screen edge. */
 	void enter(Direction from, int16 y);

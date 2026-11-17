@@ -33,7 +33,7 @@ class GlobEgg : public Item {
 	friend class ItemFactory;
 public:
 	GlobEgg();
-	~GlobEgg() override;
+	~GlobEgg();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

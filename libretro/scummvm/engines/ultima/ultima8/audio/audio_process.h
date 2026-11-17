@@ -69,7 +69,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	AudioProcess(void);
-	~AudioProcess(void) override;
+	~AudioProcess(void);
 
 	//! Get the current instance of the Audio Processes
 	static AudioProcess *get_instance() {

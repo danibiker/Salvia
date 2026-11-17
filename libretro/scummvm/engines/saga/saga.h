@@ -505,7 +505,7 @@ public:
 	void pauseEngineIntern(bool pause) override;
 
 	SagaEngine(OSystem *syst, const SAGAGameDescription *gameDesc);
-	~SagaEngine() override;
+	~SagaEngine();
 
 	void save(const char *fileName, const char *saveName);
 	void load(const char *fileName);

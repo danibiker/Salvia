@@ -57,7 +57,7 @@ protected:
 
 public:
 	MohawkEngine(OSystem *syst, const MohawkGameDescription *gamedesc);
-	~MohawkEngine() override;
+	~MohawkEngine();
 
 	// Detection related functions
 	const MohawkGameDescription *_gameDescription;

@@ -31,7 +31,7 @@ class TinselEngine;
 class Console: public GUI::Debugger {
 public:
 	Console();
-	~Console() override;
+	~Console();
 
 private:
 	bool cmd_add_clue(int argc, const char **argv);

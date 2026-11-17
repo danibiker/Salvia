@@ -37,7 +37,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	KeypadGump(int targetValue, uint16 ucnotifypid);
-	~KeypadGump() override;
+	~KeypadGump();
 
 	void Close(bool no_del=false) override;
 

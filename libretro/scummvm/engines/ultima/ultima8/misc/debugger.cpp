@@ -299,7 +299,8 @@ bool Debugger::cmdListSFX(int argc, const char **argv) {
 		debugPrintf("Error: No AudioProcess\n");
 
 	} else {
-		for (const auto &si : ap->_sampleInfo) {
+		for (auto rfIt302 = ap->_sampleInfo.begin(), rfEnd302 = ap->_sampleInfo.end(); rfIt302 != rfEnd302; ++rfIt302) {
+			const auto &si = *rfIt302;
 			debugPrintf("Sample: num %d, obj %d, loop %d, prio %d",
 				si._sfxNum, si._objId, si._loops, si._priority);
 			if (!si._barked.empty()) {
@@ -921,7 +922,8 @@ bool Debugger::cmdListProcesses(int argc, const char **argv) {
 		} else {
 			debugPrintf("Processes:\n");
 		}
-		for (const auto *p : kern->_processes) {
+		for (auto rfIt924 = kern->_processes.begin(), rfEnd924 = kern->_processes.end(); rfIt924 != rfEnd924; ++rfIt924) {
+			const auto *p = *rfIt924;
 			if (argc == 1 || p->_itemNum == item) {
 				debugPrintf("%s\n", p->dumpInfo().c_str());
 			}
@@ -1078,14 +1080,16 @@ bool Debugger::cmdRecall(int argc, const char **argv) {
 bool Debugger::cmdListMarks(int argc, const char **argv) {
 	const Common::ConfigManager::Domain *domain = ConfMan.getActiveDomain();
 	Common::StringArray marks;
-	for (const auto & dit : *domain) {
+	for (auto rfIt1081 = (*domain).begin(), rfEnd1081 = (*domain).end(); rfIt1081 != rfEnd1081; ++rfIt1081) {
+		const auto & dit = *rfIt1081;
 		if (dit._key.hasPrefix("mark_")) {
 			marks.push_back(dit._key.substr(5));
 		}
 	}
 
 	Common::sort(marks.begin(), marks.end());
-	for (const auto &m : marks) {
+	for (auto rfIt1088 = marks.begin(), rfEnd1088 = marks.end(); rfIt1088 != rfEnd1088; ++rfIt1088) {
+		const auto &m = *rfIt1088;
 		debugPrintf("%s\n", m.c_str());
 	}
 

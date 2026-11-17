@@ -39,7 +39,7 @@ public:
 
 	CruAmmoGump();
 	CruAmmoGump(Shape *shape, int x);
-	~CruAmmoGump() override;
+	~CruAmmoGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

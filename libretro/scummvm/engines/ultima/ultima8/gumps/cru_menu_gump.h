@@ -36,7 +36,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	CruMenuGump();
-	~CruMenuGump() override;
+	~CruMenuGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

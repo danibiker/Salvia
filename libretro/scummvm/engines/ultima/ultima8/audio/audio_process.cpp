@@ -155,7 +155,8 @@ void AudioProcess::saveData(Common::WriteStream *ws) {
 
 	ws->writeByte(static_cast<uint8>(_sampleInfo.size()));
 
-	for (const auto &si : _sampleInfo) {
+	for (auto rfIt158 = _sampleInfo.begin(), rfEnd158 = _sampleInfo.end(); rfIt158 != rfEnd158; ++rfIt158) {
+		const auto &si = *rfIt158;
 		ws->writeUint16LE(si._sfxNum);
 		ws->writeUint16LE(si._priority);
 		ws->writeUint16LE(si._objId);
@@ -283,7 +284,8 @@ void AudioProcess::stopSFX(int sfxNum, ObjId objId) {
 
 bool AudioProcess::isSFXPlaying(int sfxNum) {
 	AudioMixer *mixer = AudioMixer::get_instance();
-	for (const auto &si : _sampleInfo) {
+	for (auto rfIt286 = _sampleInfo.begin(), rfEnd286 = _sampleInfo.end(); rfIt286 != rfEnd286; ++rfIt286) {
+		const auto &si = *rfIt286;
 		if (si._sfxNum == sfxNum && mixer->isPlaying(si._channel))
 			return true;
 	}
@@ -293,7 +295,8 @@ bool AudioProcess::isSFXPlaying(int sfxNum) {
 
 bool AudioProcess::isSFXPlayingForObject(int sfxNum, ObjId objId) {
 	AudioMixer *mixer = AudioMixer::get_instance();
-	for (const auto &si : _sampleInfo) {
+	for (auto rfIt296 = _sampleInfo.begin(), rfEnd296 = _sampleInfo.end(); rfIt296 != rfEnd296; ++rfIt296) {
+		const auto &si = *rfIt296;
 		if ((si._sfxNum == sfxNum || sfxNum == -1) && (objId == si._objId) && mixer->isPlaying(si._channel))
 			return true;
 	}
@@ -303,7 +306,8 @@ bool AudioProcess::isSFXPlayingForObject(int sfxNum, ObjId objId) {
 
 void AudioProcess::setVolumeSFX(int sfxNum, uint8 volume) {
 	AudioMixer *mixer = AudioMixer::get_instance();
-	for (auto &si : _sampleInfo) {
+	for (auto rfIt306 = _sampleInfo.begin(), rfEnd306 = _sampleInfo.end(); rfIt306 != rfEnd306; ++rfIt306) {
+		auto &si = *rfIt306;
 		if (si._sfxNum == sfxNum && si._sfxNum != -1) {
 			si._volume = volume;
 
@@ -315,7 +319,8 @@ void AudioProcess::setVolumeSFX(int sfxNum, uint8 volume) {
 
 void AudioProcess::setVolumeForObjectSFX(ObjId objId, int sfxNum, uint8 volume) {
 	AudioMixer *mixer = AudioMixer::get_instance();
-	for (auto &si : _sampleInfo) {
+	for (auto rfIt318 = _sampleInfo.begin(), rfEnd318 = _sampleInfo.end(); rfIt318 != rfEnd318; ++rfIt318) {
+		auto &si = *rfIt318;
 		if (si._sfxNum == sfxNum && si._sfxNum != -1 && objId == si._objId) {
 			si._volume = volume;
 
@@ -396,7 +401,8 @@ void AudioProcess::stopSpeech(const Common::String &barked, int shapenum, ObjId 
 }
 
 bool AudioProcess::isSpeechPlaying(const Common::String &barked, int shapeNum) {
-	for (auto &si : _sampleInfo) {
+	for (auto rfIt399 = _sampleInfo.begin(), rfEnd399 = _sampleInfo.end(); rfIt399 != rfEnd399; ++rfIt399) {
+		auto &si = *rfIt399;
 		if (si._sfxNum == -1 && si._priority == shapeNum &&
 		        si._barked == barked) {
 			return true;

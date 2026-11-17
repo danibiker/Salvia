@@ -73,7 +73,7 @@ struct ToneChan {
 class SoundGenPCJr : public SoundGen, public Audio::AudioStream {
 public:
 	SoundGenPCJr(AgiBase *vm, Audio::Mixer *pMixer);
-	~SoundGenPCJr() override;
+	~SoundGenPCJr();
 
 	void play(int resnum) override;
 	void stop() override;

@@ -37,7 +37,7 @@ namespace OnceUpon {
 class BabaYaga : public OnceUpon {
 public:
 	BabaYaga(GobEngine *vm);
-	~BabaYaga() override;
+	~BabaYaga();
 
 	void run() override;
 

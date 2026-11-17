@@ -123,7 +123,8 @@ bool AskGump::loadData(Common::ReadStream *rs, uint32 version) {
 
 		ButtonWidget *child = nullptr;
 
-		for (auto *g : _children) {
+		for (auto rfIt126 = _children.begin(), rfEnd126 = _children.end(); rfIt126 != rfEnd126; ++rfIt126) {
+			auto *g = *rfIt126;
 			if (g->GetIndex() != (int)i)
 				continue;
 			child = dynamic_cast<ButtonWidget *>(g);

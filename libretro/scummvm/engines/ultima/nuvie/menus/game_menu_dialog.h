@@ -44,7 +44,7 @@ protected:
 	GUI_Button *button_index[9]; // add to here when you add a button. Keep buttons in order by height
 public:
 	GameMenuDialog(CallBack *callback);
-	~GameMenuDialog() override;
+	~GameMenuDialog();
 	bool init();
 
 	GUI_status close_dialog();

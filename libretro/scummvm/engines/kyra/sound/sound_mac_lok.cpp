@@ -284,7 +284,7 @@ void SoundMac::setQuality(bool hi) {
 	_driver->registerSamples(resIDs[_talkieFlag], true);
 }
 
-const uint16 SoundMac::_resIDMusicIntro[4] {
+const uint16 SoundMac::_resIDMusicIntro[4] = {
 	0x00c8, 0x00c9, 0x00ca, 0x00cb
 };
 

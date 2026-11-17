@@ -37,7 +37,7 @@ namespace Tinsel {
 class PsxArchive : public Common::Archive {
 public:
 	PsxArchive();
-	~PsxArchive() override;
+	~PsxArchive();
 
 	bool open(const Common::Path &indexFilePath, const Common::Path &dataFilePath, uint16 tinselVersion);
 	void close();

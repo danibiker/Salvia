@@ -43,7 +43,7 @@ public:
 	EditWidget(int x, int y, Common::String txt, bool gamefont, int fontnum,
 	           int width, int height, unsigned int maxlength = 0,
 	           bool multiline = false);
-	~EditWidget() override;
+	~EditWidget();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 

@@ -89,7 +89,8 @@ uint16 Actor::assignObjId() {
 	if (_objId == 0xFFFF)
 		_objId = ObjectManager::get_instance()->assignActorObjId(this);
 
-	for (auto *i : _contents) {
+	for (auto rfIt92 = _contents.begin(), rfEnd92 = _contents.end(); rfIt92 != rfEnd92; ++rfIt92) {
+		auto *i = *rfIt92;
 		i->assignObjId();
 		i->setParent(_objId);
 	}
@@ -402,7 +403,8 @@ bool Actor::setEquip(Item *item, bool checkwghtvol) {
 
 	// now check 'equipment slots'
 	// we can have one item of each equipment type, plus one backpack
-	for (const auto *i : _contents) {
+	for (auto rfIt405 = _contents.begin(), rfEnd405 = _contents.end(); rfIt405 != rfEnd405; ++rfIt405) {
+		const auto *i = *rfIt405;
 		if (i->getObjId() == item->getObjId()) continue;
 
 		uint32 cet = i->getShapeInfo()->_equipType;
@@ -421,7 +423,8 @@ bool Actor::setEquip(Item *item, bool checkwghtvol) {
 }
 
 uint16 Actor::getEquip(uint32 type) const {
-	for (const auto *i : _contents) {
+	for (auto rfIt424 = _contents.begin(), rfEnd424 = _contents.end(); rfIt424 != rfEnd424; ++rfIt424) {
+		const auto *i = *rfIt424;
 		uint32 cet = i->getShapeInfo()->_equipType;
 		bool cbackpack = (i->getShape() == BACKPACK_SHAPE);
 
@@ -1325,7 +1328,8 @@ ProcId Actor::dieU8(uint16 damageType) {
 	// Kill blue potion use process if running
 	if (_objId == kMainActorId) {
 		auto processes = Kernel::get_instance()->getProcesses();
-		for (auto process : processes) {
+		for (auto rfIt1328 = processes.begin(), rfEnd1328 = processes.end(); rfIt1328 != rfEnd1328; ++rfIt1328) {
+			auto process = *rfIt1328;
 			auto p = dynamic_cast<UCProcess *>(process);
 			if (!p)
 				continue;
@@ -1607,7 +1611,8 @@ ProcId Actor::dieCru(uint16 damageType, uint16 damagePts, Direction srcDir) {
 void Actor::killAllButCombatProcesses() {
 	// loop over all processes, keeping only the relevant ones
 	auto processes = Kernel::get_instance()->getProcesses();
-	for (auto p : processes) {
+	for (auto rfIt1610 = processes.begin(), rfEnd1610 = processes.end(); rfIt1610 != rfEnd1610; ++rfIt1610) {
+		auto p = *rfIt1610;
 		if (!p)
 			continue;
 		if (p->getItemNum() != _objId)
@@ -1639,7 +1644,8 @@ ProcId Actor::killAllButFallAnims(bool death) {
 
 	// loop over all animation processes, keeping only the relevant ones
 	auto processes = Kernel::get_instance()->getProcesses();
-	for (auto process : processes) {
+	for (auto rfIt1642 = processes.begin(), rfEnd1642 = processes.end(); rfIt1642 != rfEnd1642; ++rfIt1642) {
+		auto process = *rfIt1642;
 		auto p = dynamic_cast<ActorAnimProcess *>(process);
 		if (!p)
 			continue;

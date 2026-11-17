@@ -31,7 +31,7 @@ namespace Neverhood {
 class SmackerScene : public Scene {
 public:
 	SmackerScene(NeverhoodEngine *vm, Module *parentModule, bool doubleSurface, bool canSkip, bool canAbort);
-	~SmackerScene() override;
+	~SmackerScene();
 	void setFileHash(uint32 fileHash);
 	void setFileHashList(const uint32 *fileHashList);
 	void nextVideo();

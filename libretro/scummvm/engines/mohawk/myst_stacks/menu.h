@@ -41,7 +41,7 @@ namespace MystStacks {
 class Menu : public MystScriptParser {
 public:
 	explicit Menu(MohawkEngine_Myst *vm);
-	~Menu() override;
+	~Menu();
 
 	void setInGame(bool inGame) {
 		_inGame = inGame;

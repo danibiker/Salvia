@@ -38,10 +38,10 @@ namespace Kyra {
 
 class KyraEngine_v1;
 
-class SoundMacRes final : public Audio::HalestormLoader {
+class SoundMacRes : public Audio::HalestormLoader {
 public:
 	SoundMacRes(KyraEngine_v1 *vm);
-	~SoundMacRes() override;
+	~SoundMacRes();
 	bool init();
 	bool setQuality(bool hi);
 	Common::SeekableReadStream *getResource(uint16 id, uint32 type) override;

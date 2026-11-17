@@ -49,7 +49,8 @@ void Process::terminate() {
 	Kernel *kernel = Kernel::get_instance();
 
 	// wake up waiting processes
-	for (const auto &pid : _waiting) {
+	for (auto rfIt52 = _waiting.begin(), rfEnd52 = _waiting.end(); rfIt52 != rfEnd52; ++rfIt52) {
+		const auto &pid = *rfIt52;
 		Process *p = kernel->getProcess(pid);
 		if (p)
 			p->wakeUp(_result);
@@ -159,7 +160,8 @@ bool Process::loadData(Common::ReadStream *rs, uint32 version) {
 }
 
 bool Process::validateWaiters() const {
-	for (const auto &pid : _waiting) {
+	for (auto rfIt162 = _waiting.begin(), rfEnd162 = _waiting.end(); rfIt162 != rfEnd162; ++rfIt162) {
+		const auto &pid = *rfIt162;
 		const Process *p = Kernel::get_instance()->getProcess(pid);
 		if (!p) {
 			// This can happen if a waiting process gets forcibly terminated.

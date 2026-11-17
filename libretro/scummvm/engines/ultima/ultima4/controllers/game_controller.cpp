@@ -784,7 +784,8 @@ bool GameController::createBalloon(Map *map) {
 	ObjectDeque::iterator i;
 
 	/* see if the balloon has already been created (and not destroyed) */
-	for (auto *obj : map->_objects) {
+	for (auto rfIt787 = map->_objects.begin(), rfEnd787 = map->_objects.end(); rfIt787 != rfEnd787; ++rfIt787) {
+		auto *obj = *rfIt787;
 		if (obj->getTile().getTileType()->isBalloon())
 			return false;
 	}
@@ -813,7 +814,8 @@ void GameController::attack(Direction dir) {
 	Common::Array<Coords> path = gameGetDirectionalActionPath(
 		MASK_DIR(dir), MASK_DIR_ALL, g_context->_location->_coords,
 		1, 1, nullptr, true);
-	for (const auto &coords : path) {
+	for (auto rfIt816 = path.begin(), rfEnd816 = path.end(); rfIt816 != rfEnd816; ++rfIt816) {
+		const auto &coords = *rfIt816;
 		if (attackAt(coords))
 			return;
 	}

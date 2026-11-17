@@ -39,7 +39,7 @@ class LBPage;
 class LBSoundItem : public LBItem {
 public:
 	LBSoundItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBSoundItem() override;
+	~LBSoundItem();
 
 	void update() override;
 	bool togglePlaying(bool playing, bool restart) override;
@@ -89,7 +89,7 @@ protected:
 class LBPaletteItem : public LBItem {
 public:
 	LBPaletteItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBPaletteItem() override;
+	~LBPaletteItem();
 
 	void readData(uint16 type, uint16 size, Common::MemoryReadStreamEndian *stream) override;
 
@@ -166,7 +166,7 @@ protected:
 class LBMovieItem : public LBItem {
 public:
 	LBMovieItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBMovieItem() override;
+	~LBMovieItem();
 
 	void update() override;
 	bool togglePlaying(bool playing, bool restart) override;
@@ -178,7 +178,7 @@ protected:
 class LBMiniGameItem : public LBItem {
 public:
 	LBMiniGameItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBMiniGameItem() override;
+	~LBMiniGameItem();
 
 	bool togglePlaying(bool playing, bool restart) override;
 
@@ -189,7 +189,7 @@ protected:
 class LBProxyItem : public LBItem {
 public:
 	LBProxyItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBProxyItem() override;
+	~LBProxyItem();
 
 	void load() override;
 	void unload() override;

@@ -60,7 +60,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Sprites() override {}
+	~Sprites() {}
 
 	/**
 	 * Return a specific sprite

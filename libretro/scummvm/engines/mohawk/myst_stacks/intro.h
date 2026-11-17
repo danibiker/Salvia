@@ -38,7 +38,7 @@ namespace MystStacks {
 class Intro : public MystScriptParser {
 public:
 	explicit Intro(MohawkEngine_Myst *vm, MystStack stackId = kIntroStack);
-	~Intro() override;
+	~Intro();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

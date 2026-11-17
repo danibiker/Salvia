@@ -31,7 +31,7 @@ class TeleportEgg : public Egg {
 	friend class ItemFactory;
 public:
 	TeleportEgg();
-	~TeleportEgg() override;
+	~TeleportEgg();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

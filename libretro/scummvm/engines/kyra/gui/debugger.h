@@ -22,7 +22,7 @@
 #ifndef KYRA_DEBUGGER_H
 #define KYRA_DEBUGGER_H
 
-#include "gui/debugger.h"
+#include <gui/debugger.h> // angle: MSVC would find kyra/gui/debugger.h itself from engines/kyra/*.cpp
 
 namespace Kyra {
 
@@ -68,7 +68,7 @@ protected:
 class Debugger_v2 : public Debugger {
 public:
 	Debugger_v2(KyraEngine_v2 *vm);
-	~Debugger_v2() override {}
+	~Debugger_v2() {}
 
 	void initialize() override;
 protected:

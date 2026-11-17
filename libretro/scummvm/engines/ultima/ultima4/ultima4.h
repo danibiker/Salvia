@@ -95,7 +95,7 @@ public:
 	Common::Array<Common::String> _hawkwindText;
 public:
 	Ultima4Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
-	~Ultima4Engine() override;
+	~Ultima4Engine();
 
 	/**
 	 * Returns supported engine features

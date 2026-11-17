@@ -43,7 +43,7 @@ namespace Groovie {
 CakeGame::CakeGame(bool easierAi) : _random("CakeGame") {
 	restart();
 
-	_map = {};
+	memset(&_map, 0, sizeof(_map));
 	int numLines = 0;
 
 	// map all the lines with slope of (1, 0)
@@ -137,8 +137,8 @@ void CakeGame::run(byte *scriptVariables) {
 }
 
 void CakeGame::restart() {
-	_playerProgress = {};
-	_staufProgress = {};
+	memset(&_playerProgress, 0, sizeof(_playerProgress));
+	memset(&_staufProgress, 0, sizeof(_staufProgress));
 	memset(_boardState, 0, sizeof(_boardState));
 	memset(_columnHeights, 0, sizeof(_columnHeights));
 	_moveCount = 0;

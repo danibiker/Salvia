@@ -42,7 +42,7 @@ public:
 	                     GUI_Font *font, ButtonTextAlign alignment,
 	                     GUI_CallBack *callback, int flat = 0);
 
-	~GUI_TextToggleButton() override;
+	~GUI_TextToggleButton();
 
 	virtual int GetSelection() const;
 

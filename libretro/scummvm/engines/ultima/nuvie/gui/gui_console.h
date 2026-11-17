@@ -42,7 +42,7 @@ class GUI_Console : public GUI_Widget {
 
 public:
 	GUI_Console(uint16 x, uint16 y, uint16 w, uint16 h);
-	~GUI_Console() override;
+	~GUI_Console();
 
 	/* Map the color to the display */
 	void SetDisplay(Screen *s) override;

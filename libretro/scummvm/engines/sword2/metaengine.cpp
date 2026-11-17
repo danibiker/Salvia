@@ -98,7 +98,8 @@ SaveStateList Sword2MetaEngine::listSaves(const char *target) const {
 	filenames = saveFileMan->listSavefiles(pattern);
 
 	SaveStateList saveList;
-	for (const auto &filename : filenames) {
+	for (auto rfIt101 = filenames.begin(), rfEnd101 = filenames.end(); rfIt101 != rfEnd101; ++rfIt101) {
+		const auto &filename = *rfIt101;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		int slotNum = atoi(filename.c_str() + filename.size() - 3);
 

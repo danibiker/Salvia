@@ -49,7 +49,7 @@ class GUI_Dialog : public GUI_Widget {
 public:
 	/* Passed the area, color and shape */
 	GUI_Dialog(int x, int y, int w, int h, uint8 r, uint8 g, uint8 b, bool is_moveable);
-	~GUI_Dialog() override;
+	~GUI_Dialog();
 	/* Map the color to the display */
 	void SetDisplay(Screen *s) override;
 

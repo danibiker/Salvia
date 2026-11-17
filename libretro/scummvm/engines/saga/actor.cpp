@@ -311,7 +311,8 @@ void Actor::loadFrameList(int frameListResourceId, ActorFrameSequences &frames) 
 
 	ByteArrayReadStreamEndian readS(resourceData, _actorContext->isBigEndian());
 
-	for (auto &frame : frames) {
+	for (auto rfIt314 = frames.begin(), rfEnd314 = frames.end(); rfIt314 != rfEnd314; ++rfIt314) {
+		auto &frame = *rfIt314;
 		for (int orient = 0; orient < ACTOR_DIRECTIONS_COUNT; orient++) {
 			// Load all four orientations
 			frame.directions[orient].frameIndex = readS.readUint16();
@@ -456,7 +457,8 @@ void Actor::loadActorList(int protagonistIdx, int actorCount, int actorsResource
 
 	_actors[protagonistIdx]._flags |= kProtagonist | kExtended;
 
-	for (auto &actor : _actors) {
+	for (auto rfIt459 = _actors.begin(), rfEnd459 = _actors.end(); rfIt459 != rfEnd459; ++rfIt459) {
+		auto &actor = *rfIt459;
 		//if (actor->_flags & kProtagonist) {
 			loadActorResources(&actor);
 			//break;
@@ -990,7 +992,8 @@ void Actor::createDrawOrderList() {
 	}
 
 	_drawOrderList.clear();
-	for (auto &actor : _actors) {
+	for (auto rfIt993 = _actors.begin(), rfEnd993 = _actors.end(); rfIt993 != rfEnd993; ++rfIt993) {
+auto &actor = *rfIt993;
 
 		if (!actor._inScene)
 			continue;
@@ -1000,7 +1003,8 @@ void Actor::createDrawOrderList() {
 		}
 	}
 
-	for (auto &obj : _objs) {
+	for (auto rfIt1003 = _objs.begin(), rfEnd1003 = _objs.end(); rfIt1003 != rfEnd1003; ++rfIt1003) {
+		auto &obj = *rfIt1003;
 		if (obj._sceneNumber != _vm->_scene->currentSceneNumber())
 			 continue;
 
@@ -1247,11 +1251,13 @@ void Actor::saveState(Common::OutSaveFile *out) {
 
 	out->writeSint16LE(getProtagState());
 
-	for (auto &actor : _actors) {
+	for (auto rfIt1250 = _actors.begin(), rfEnd1250 = _actors.end(); rfIt1250 != rfEnd1250; ++rfIt1250) {
+		auto &actor = *rfIt1250;
 		actor.saveState(out);
 	}
 
-	for (auto &obj : _objs) {
+	for (auto rfIt1254 = _objs.begin(), rfEnd1254 = _objs.end(); rfIt1254 != rfEnd1254; ++rfIt1254) {
+		auto &obj = *rfIt1254;
 		obj.saveState(out);
 	}
 }
@@ -1263,11 +1269,13 @@ void Actor::loadState(Common::InSaveFile *in) {
 		setProtagState(protagState);
 	}
 
-	for (auto &actor : _actors) {
+	for (auto rfIt1266 = _actors.begin(), rfEnd1266 = _actors.end(); rfIt1266 != rfEnd1266; ++rfIt1266) {
+		auto &actor = *rfIt1266;
 		actor.loadState(_vm->getCurrentLoadVersion(), in);
 	}
 
-	for (auto &obj : _objs) {
+	for (auto rfIt1270 = _objs.begin(), rfEnd1270 = _objs.end(); rfIt1270 != rfEnd1270; ++rfIt1270) {
+		auto &obj = *rfIt1270;
 		obj.loadState(in);
 	}
 }

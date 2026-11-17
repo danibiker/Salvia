@@ -34,7 +34,7 @@ class InverterProcess : public Process {
 public:
 	InverterProcess();
 	InverterProcess(unsigned int targetstate);
-	~InverterProcess() override;
+	~InverterProcess();
 
 	// p_dynamic_class stuff
 	ENABLE_RUNTIME_CLASSTYPE()

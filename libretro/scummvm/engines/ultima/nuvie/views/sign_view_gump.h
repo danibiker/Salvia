@@ -41,7 +41,7 @@ class SignViewGump : public DraggableView {
 
 public:
 	SignViewGump(const Configuration *cfg);
-	~SignViewGump() override;
+	~SignViewGump();
 
 	bool init(Screen *tmp_screen, void *view_manager, Font *f, Party *p, TileManager *tm, ObjManager *om, const char *text_string, uint16 length);
 

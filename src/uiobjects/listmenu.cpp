@@ -506,6 +506,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_msx2;
 		case 114:
 			return cart_pce_cd;
+		case 123: 
+			return cart_scummvm;
 		case 130:
 			return cart_cd32;
 		case 135:

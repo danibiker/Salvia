@@ -38,7 +38,7 @@ public:
 
 	GumpNotifyProcess();
 	GumpNotifyProcess(uint16 it);
-	~GumpNotifyProcess() override;
+	~GumpNotifyProcess();
 
 	void setGump(Gump *g);
 	uint16 getGump() const {

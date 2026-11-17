@@ -2749,7 +2749,9 @@ SaveLoad_v7::SaveLoad_v7(GobEngine *vm, const char *targetName) :
 																								  Common::String::format("statev%02d", i));
 	}
 
-	for (const char* fileType : {"res", "dip"}) {
+	static const char *const kFileTypes[] = {"res", "dip"};
+	for (uint ft = 0; ft < ARRAYSIZE(kFileTypes); ft++) {
+		const char *fileType = kFileTypes[ft];
 		for (uint32 i = 0; i < kAdi4NbrOfApplications; i++) {
 			for (uint32 j = 0; j < kAdi4NbrOfSchoolYears; j++) {
 				for (uint32 k = 0; k < kChildrenCount; k++) {
@@ -2894,7 +2896,8 @@ SaveLoad::SaveMode SaveLoad_v7::getSaveMode(const char *fileName) const {
 Common::List<Common::Path> SaveLoad_v7::getFilesMatchingPattern(const Common::Path &pattern) const {
 	Common::List<Common::Path> files;
 
-	for (const SaveFile &saveFile : _saveFiles) {
+	for (auto rfIt2897 = &_saveFiles[0], rfEnd2897 = &_saveFiles[0] + sizeof(_saveFiles) / sizeof(_saveFiles[0]); rfIt2897 != rfEnd2897; ++rfIt2897) {
+		const SaveFile &saveFile = *rfIt2897;
 		// Full path match only
 		if (Common::matchString(saveFile.sourceName, pattern.toString().c_str(), true))
 			files.push_back(saveFile.sourceName);

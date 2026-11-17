@@ -135,7 +135,8 @@ void Inter_Adibou1::oAdibou1_getAppliNameFromId(OpGobParams &params) {
 	Common::ArchiveMemberList files;
 	SearchMan.listMatchingMembers(files, "*.BOU");
 	bool firstFile = true;
-	for (Common::ArchiveMemberPtr &file : files) {
+	for (auto rfIt138 = files.begin(), rfEnd138 = files.end(); rfIt138 != rfEnd138; ++rfIt138) {
+		Common::ArchiveMemberPtr &file = *rfIt138;
 		Common::SeekableReadStream *stream = file->createReadStream();
 		char appliName[4];
 		stream->read(appliName, 3); // Application name, e.g. "C51"
@@ -171,7 +172,8 @@ void Inter_Adibou1::oAdibou1_listApplications(OpGobParams &params) {
 	// Look for installed applications .BOU files (C51.BOU, L51.BOU...)
 	Common::ArchiveMemberList files;
 	SearchMan.listMatchingMembers(files, "*.BOU");
-	for (Common::ArchiveMemberPtr &file : files) {
+	for (auto rfIt174 = files.begin(), rfEnd174 = files.end(); rfIt174 != rfEnd174; ++rfIt174) {
+		Common::ArchiveMemberPtr &file = *rfIt174;
 		Common::SeekableReadStream *stream = file->createReadStream();
 		char appliName[4];
 		stream->read(appliName, 3); // Application name, e.g. "C51"

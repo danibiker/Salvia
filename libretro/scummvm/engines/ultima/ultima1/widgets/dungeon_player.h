@@ -45,7 +45,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~DungeonPlayer() override {}
+	~DungeonPlayer() {}
 
 	/**
 	 * The player's viewpoint has no intrinsic drawing

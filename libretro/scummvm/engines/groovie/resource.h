@@ -60,7 +60,7 @@ protected:
 class ResMan_t7g : public ResMan {
 public:
 	ResMan_t7g(Common::MacResManager *macResFork = 0);
-	~ResMan_t7g() override {}
+	~ResMan_t7g() {}
 
 	uint32 getRef(Common::String name) override;
 	bool getResInfo(uint32 fileRef, ResInfo &resInfo) override;
@@ -72,7 +72,7 @@ private:
 class ResMan_v2 : public ResMan {
 public:
 	ResMan_v2();
-	~ResMan_v2() override {}
+	~ResMan_v2() {}
 
 	uint32 getRef(Common::String name) override;
 	bool getResInfo(uint32 fileRef, ResInfo &resInfo) override;

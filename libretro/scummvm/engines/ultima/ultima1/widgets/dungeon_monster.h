@@ -71,7 +71,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~DungeonMonster() override {}
+	~DungeonMonster() {}
 
 	/**
 	 * Returns the monster's type

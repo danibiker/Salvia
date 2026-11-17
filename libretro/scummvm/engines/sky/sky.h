@@ -100,7 +100,7 @@ protected:
 
 public:
 	SkyEngine(OSystem *syst);
-	~SkyEngine() override;
+	~SkyEngine();
 
 	void syncSoundSettings() override;
 

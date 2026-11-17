@@ -56,7 +56,8 @@ void GCTFile::load(Common::SeekableReadStream &gct) {
 	const uint16 itemCount = gct.readUint16LE();
 	_items.resize(itemCount);
 
-	for (auto &item : _items) {
+	for (auto rfIt59 = _items.begin(), rfEnd59 = _items.end(); rfIt59 != rfEnd59; ++rfIt59) {
+		auto &item = *rfIt59;
 		const uint16 selector  = gct.readUint16LE();
 		const uint16 lineCount = gct.readUint16LE();
 
@@ -65,8 +66,10 @@ void GCTFile::load(Common::SeekableReadStream &gct) {
 	}
 
 	// Read all item lines
-	for (auto &item : _items) {
-		for (auto &line : item.lines) {
+	for (auto rfIt68 = _items.begin(), rfEnd68 = _items.end(); rfIt68 != rfEnd68; ++rfIt68) {
+		auto &item = *rfIt68;
+		for (auto rfIt69 = item.lines.begin(), rfEnd69 = item.lines.end(); rfIt69 != rfEnd69; ++rfIt69) {
+			auto &line = *rfIt69;
 			const uint16 lineSize = gct.readUint16LE();
 
 			readLine(gct, line, lineSize);
@@ -177,7 +180,8 @@ Common::String GCTFile::getLineText(const Line &line) const {
 	Common::String text;
 
 	// Go over all chunks in this line
-	for (const auto &chunk : line.chunks) {
+	for (auto rfIt180 = line.chunks.begin(), rfEnd180 = line.chunks.end(); rfIt180 != rfEnd180; ++rfIt180) {
+		const auto &chunk = *rfIt180;
 		// A chunk is either a direct string, or a reference to another item
 
 		if (chunk.type == kChunkTypeItem) {

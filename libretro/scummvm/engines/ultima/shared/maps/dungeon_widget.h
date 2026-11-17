@@ -52,7 +52,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~DungeonWidget() override {}
+	~DungeonWidget() {}
 
 	/**
 	 * Draws an item

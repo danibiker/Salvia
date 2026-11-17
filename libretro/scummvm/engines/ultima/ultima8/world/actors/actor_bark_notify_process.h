@@ -33,7 +33,7 @@ public:
 
 	ActorBarkNotifyProcess();
 	ActorBarkNotifyProcess(uint16 it);
-	~ActorBarkNotifyProcess(void) override;
+	~ActorBarkNotifyProcess(void);
 
 	void run() override;
 

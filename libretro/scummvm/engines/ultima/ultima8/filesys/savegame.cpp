@@ -44,7 +44,7 @@ private:
 
 public:
 	FileEntryArchive(Common::SeekableReadStream *rs);
-	~FileEntryArchive() override;
+	~FileEntryArchive();
 
 	// Common::Archive API implementation
 	bool hasFile(const Common::Path &path) const override;
@@ -80,8 +80,8 @@ bool FileEntryArchive::hasFile(const Common::Path &path) const {
 
 int FileEntryArchive::listMembers(Common::ArchiveMemberList &list) const {
 	list.clear();
-	for (const auto &member : _index)
-		list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(member._key, *this)));
+	for (auto rfIt83 = _index.begin(), rfEnd83 = _index.end(); rfIt83 != rfEnd83; ++rfIt83)
+		{ const auto &member = *rfIt83; list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(member._key, *this))); }
 
 	return list.size();
 }

@@ -44,7 +44,7 @@ protected:
 public:
 	TextCursor() : _visible(false) {
 	}
-	~TextCursor() override {
+	~TextCursor() {
 	}
 
 	/**

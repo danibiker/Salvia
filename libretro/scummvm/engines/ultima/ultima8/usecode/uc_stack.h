@@ -167,7 +167,7 @@ public:
 class DynamicUCStack : public BaseUCStack {
 public:
 	DynamicUCStack(uint32 len = 0x1000) : BaseUCStack(len, new uint8[len]) { }
-	~DynamicUCStack() override {
+	~DynamicUCStack() {
 		delete [] _buf;
 	}
 
@@ -183,7 +183,7 @@ class UCStack : public BaseUCStack {
 	uint8   _bufArray[0x1000];
 public:
 	UCStack() : BaseUCStack(0x1000, _bufArray) { }
-	~UCStack() override { }
+	~UCStack() { }
 
 	void save(Common::WriteStream *ws);
 	bool load(Common::ReadStream *rs, uint32 version);

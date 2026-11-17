@@ -408,7 +408,8 @@ bool ItemSorter::PaintSortItem(RenderSurface *surf, SortItem *si, bool showFootp
 	si->_order = -2;
 
 	// Iterate through our dependancies, and paint them, if possible
-	for (auto *d : si->_depends) {
+	for (auto rfIt411 = si->_depends.begin(), rfEnd411 = si->_depends.end(); rfIt411 != rfEnd411; ++rfIt411) {
+		auto *d = *rfIt411;
 		if (d->_order == -2) {
 			if (!_sortLimit) {
 				debugC(kDebugObject, "Cycle in paint dependency graph %d -> %d -> ... -> %d",

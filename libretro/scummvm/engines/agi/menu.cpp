@@ -58,12 +58,12 @@ GfxMenu::GfxMenu(AgiEngine *vm, GfxMgr *gfx, PictureMgr *picture, TextMgr *text)
 }
 
 GfxMenu::~GfxMenu() {
-	for (auto *menu : _array)
-		delete menu;
+	for (auto rfIt61 = _array.begin(), rfEnd61 = _array.end(); rfIt61 != rfEnd61; ++rfIt61)
+		{ auto *menu = *rfIt61; delete menu; }
 	_array.clear();
 
-	for (auto *menuItem : _itemArray)
-		delete menuItem;
+	for (auto rfIt65 = _itemArray.begin(), rfEnd65 = _itemArray.end(); rfIt65 != rfEnd65; ++rfIt65)
+		{ auto *menuItem = *rfIt65; delete menuItem; }
 	_itemArray.clear();
 }
 
@@ -170,9 +170,9 @@ void GfxMenu::submit() {
 	// WORKAROUND: For Apple II gs we add a Speed menu
 	if (_vm->getPlatform() == Common::kPlatformApple2GS && ConfMan.getBool("apple2gs_speedmenu")) {
 		uint16 maxControllerSlot = 0;
-		for (auto &menuItem : _itemArray)
-			if (menuItem->controllerSlot > maxControllerSlot)
-				maxControllerSlot = menuItem->controllerSlot;
+		for (auto rfIt173 = _itemArray.begin(), rfEnd173 = _itemArray.end(); rfIt173 != rfEnd173; ++rfIt173)
+			{ auto &menuItem = *rfIt173; if (menuItem->controllerSlot > maxControllerSlot)
+				maxControllerSlot = menuItem->controllerSlot; }
 		for (uint16 curMapping = 0; curMapping < MAX_CONTROLLER_KEYMAPPINGS; curMapping++)
 			if (_vm->_game.controllerKeyMapping[curMapping].controllerSlot > maxControllerSlot)
 				maxControllerSlot = _vm->_game.controllerKeyMapping[curMapping].controllerSlot;
@@ -279,7 +279,8 @@ void GfxMenu::itemDisable(uint16 controllerSlot) {
 }
 
 void GfxMenu::itemEnableDisable(uint16 controllerSlot, bool enabled) {
-	for (auto &menuItem : _itemArray) {
+	for (auto rfIt282 = _itemArray.begin(), rfEnd282 = _itemArray.end(); rfIt282 != rfEnd282; ++rfIt282) {
+		auto &menuItem = *rfIt282;
 		if (menuItem->controllerSlot == controllerSlot) {
 			menuItem->enabled = enabled;
 		}
@@ -287,7 +288,8 @@ void GfxMenu::itemEnableDisable(uint16 controllerSlot, bool enabled) {
 }
 
 void GfxMenu::itemEnableAll() {
-	for (auto &menuItem : _itemArray) {
+	for (auto rfIt290 = _itemArray.begin(), rfEnd290 = _itemArray.end(); rfIt290 != rfEnd290; ++rfIt290) {
+		auto &menuItem = *rfIt290;
 		menuItem->enabled = true;
 	}
 }

@@ -831,6 +831,9 @@ struct t_joy_state {
 
 	//Enables or disables the axis as pad only for the frontend
 	bool frontAxisAsPad;
+	//Don't send the hotkey button to the core until released
+	bool hotkeyEnablerHidePress;
+
 
 	/* 'names' es el nombre del PERFIL asignado a cada puerto: arranca siendo el del
 	 * mando, pero loadButtonsRetro lo sobrescribe con el name= que venga del fichero.
@@ -860,6 +863,7 @@ struct t_joy_state {
 		memset(rapidFire, 0, sizeof(rapidFire));
 		rapidFireRateIdx = 1;
 		frontAxisAsPad = false;
+		hotkeyEnablerHidePress = true;
 		turboPhaseOn = true;
 		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
 		memset(mouse_buttons, 0, sizeof(mouse_buttons));

@@ -59,10 +59,10 @@ Common::Array<dbaseMultipeIndex::FieldReference> dbaseMultipeIndex::parseKeyDefi
 			if (secondCommaPos != token.npos)
 				length = atoi(token.substr(firstCommaPos + 1, secondCommaPos - firstCommaPos - 1).c_str());
 
-			fieldReferences.push_back({fieldName, length});
+			fieldReferences.push_back(FieldReference(fieldName, length));
 		} else {
 			// Field name only
-			fieldReferences.push_back({token, 0});
+			fieldReferences.push_back(FieldReference(token, 0));
 		}
 	}
 
@@ -377,7 +377,11 @@ void dBase::setQuery(const Common::String &query) {
 			const Common::String &fieldName = fieldReference.getFieldName();
 			for (size_t i = 0; i < _fields.size(); ++i) {
 				if (_fields[i].name == fieldName) {
-					_currentFieldFilter.push_back({i, fieldReference.getMaxLength(), token});
+					FieldPattern fieldPattern;
+					fieldPattern.fieldIndex = i;
+					fieldPattern.maxLength = fieldReference.getMaxLength();
+					fieldPattern.pattern = token;
+					_currentFieldFilter.push_back(fieldPattern);
 					break;
 				}
 
@@ -410,7 +414,8 @@ void dBase::findNextMatchingRecord() {
 		const Record &record = _records[_currentRecordIndex];
 
 		bool match = true;
-		for (const FieldPattern &pattern : _currentFieldFilter) {
+		for (auto rfIt413 = _currentFieldFilter.begin(), rfEnd413 = _currentFieldFilter.end(); rfIt413 != rfEnd413; ++rfIt413) {
+			const FieldPattern &pattern = *rfIt413;
 			if (pattern.fieldIndex >= _fields.size()) {
 				match = false;
 				break;
@@ -446,7 +451,8 @@ Common::String dBase::getFieldOfMatchingRecord(Common::String fieldName) {
 
 	const Record &record = _records[_currentRecordIndex];
 	size_t fieldIndex = 0;
-	for (const Field &field : _fields) {
+	for (auto rfIt449 = _fields.begin(), rfEnd449 = _fields.end(); rfIt449 != rfEnd449; ++rfIt449) {
+		const Field &field = *rfIt449;
 		if (field.name == fieldName) {
 			return getString(record, fieldIndex);
 		}

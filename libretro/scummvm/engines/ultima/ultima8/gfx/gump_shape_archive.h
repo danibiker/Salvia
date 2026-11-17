@@ -37,7 +37,7 @@ public:
 	                 const ConvertShapeFormat *format = 0)
 		: ShapeArchive(rs, id, pal, format) { }
 
-	~GumpShapeArchive() override;
+	~GumpShapeArchive();
 
 	void loadGumpage(Common::SeekableReadStream *rs);
 	Common::Rect32 *getGumpItemArea(uint32 shapenum);

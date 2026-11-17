@@ -835,9 +835,9 @@ void ResetVarsTinsel() {
 
 	CountOut = 1;
 
-	g_NextScene = {0, 0, 0};
-	g_HookScene = {0, 0, 0};
-	g_DelayedScene = {0, 0, 0};
+	memset(&g_NextScene, 0, sizeof(g_NextScene));
+	memset(&g_HookScene, 0, sizeof(g_HookScene));
+	memset(&g_DelayedScene, 0, sizeof(g_DelayedScene));
 
 	g_pMouseProcess = nullptr;
 	g_pKeyboardProcess = nullptr;
@@ -914,7 +914,7 @@ const char *const TinselEngine::_sceneFiles[] = {
 TinselEngine::TinselEngine(OSystem *syst, const TinselGameDescription *gameDesc) :
 		Engine(syst), _gameDescription(gameDesc), _random("tinsel"),
 		_sound(0), _midiMusic(0), _pcmMusic(0), _bmv(0),
-		_memoryManagerInitialized(false) {
+		_memoryManagerInitialized(false), _notebook(nullptr), _systemReel(nullptr), _spriter(nullptr) {
 	_vm = this;
 
 	_gameId = 0;
@@ -1051,7 +1051,7 @@ Common::Error TinselEngine::run() {
 
 #if defined(USE_TINYGL)
 		// TODO: Find minimal viable drawcall memory
-		constexpr uint32 drawCallMemory = 1024 * 1024;
+		const uint32 drawCallMemory = 1024 * 1024;
 		TinyGL::createContext(width, 432, noirFormat, 256, false, false, drawCallMemory);
 		TinyGL::getSurfaceRef(_screenSurface);
 

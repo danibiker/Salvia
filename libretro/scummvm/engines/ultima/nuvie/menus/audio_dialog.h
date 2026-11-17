@@ -45,7 +45,7 @@ protected:
 
 public:
 	AudioDialog(GUI_CallBack *callback);
-	~AudioDialog() override;
+	~AudioDialog();
 	bool init();
 
 	GUI_status close_dialog();

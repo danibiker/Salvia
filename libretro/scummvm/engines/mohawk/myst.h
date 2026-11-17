@@ -132,7 +132,7 @@ protected:
 
 public:
 	MohawkEngine_Myst(OSystem *syst, const MohawkGameDescription *gamedesc);
-	~MohawkEngine_Myst() override;
+	~MohawkEngine_Myst();
 
 	Common::SeekableReadStream *getResource(uint32 tag, uint16 id) override;
 	Common::Array<uint16> getResourceIDList(uint32 type) const;

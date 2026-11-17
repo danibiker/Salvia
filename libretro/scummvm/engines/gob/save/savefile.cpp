@@ -730,7 +730,8 @@ bool SaveContainer::read(Common::ReadStream &stream) {
 	_header.setSize(calcSize());
 
 	// Iterate over all parts
-	for (auto &part : _parts) {
+	for (auto rfIt733 = _parts.begin(), rfEnd733 = _parts.end(); rfIt733 != rfEnd733; ++rfIt733) {
+		auto &part = *rfIt733;
 		// Read the part
 		if (stream.read(part->data, part->size) != part->size) {
 			clear();
@@ -750,7 +751,8 @@ bool SaveContainer::write(Common::WriteStream &stream) const {
 	stream.writeUint32LE(_partCount);
 
 	// Iterate over all parts
-	for (auto &part : _parts) {
+	for (auto rfIt753 = _parts.begin(), rfEnd753 = _parts.end(); rfIt753 != rfEnd753; ++rfIt753) {
+		auto &part = *rfIt753;
 		// Part doesn't actually exist => error
 		if (!part)
 			return false;
@@ -763,7 +765,8 @@ bool SaveContainer::write(Common::WriteStream &stream) const {
 		return false;
 
 	// Iterate over all parts
-	for (auto &part : _parts) {
+	for (auto rfIt766 = _parts.begin(), rfEnd766 = _parts.end(); rfIt766 != rfEnd766; ++rfIt766) {
+		auto &part = *rfIt766;
 		// Write the part
 		if (stream.write(part->data, part->size) != part->size)
 			return false;

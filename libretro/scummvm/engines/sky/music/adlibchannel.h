@@ -63,7 +63,7 @@ typedef struct {
 class AdLibChannel : public ChannelBase {
 public:
 	AdLibChannel (OPL::OPL *opl, uint8 *pMusicData, uint16 startOfData);
-	~AdLibChannel() override;
+	~AdLibChannel();
 	uint8 process(uint16 aktTime) override;
 	void updateVolume(uint16 pVolume) override;
 	bool isActive() override;

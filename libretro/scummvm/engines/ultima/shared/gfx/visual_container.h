@@ -53,7 +53,7 @@ public:
 		VisualItem(name, parent), _mouseFocusItem(nullptr) {}
 	VisualContainer(const Common::String &name, const Rect &r, TreeItem *parent = nullptr) :
 		VisualItem(name, r, parent), _mouseFocusItem(nullptr) {}
-	~VisualContainer() override {}
+	~VisualContainer() {}
 
 	/**
 	 * Draws the container by iterating through each child and letting it draw

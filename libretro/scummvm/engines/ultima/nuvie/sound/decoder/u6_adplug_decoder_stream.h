@@ -43,7 +43,7 @@ public:
 	}
 
 	U6AdPlugDecoderStream(CEmuopl *o, const Common::Path &filename, uint16 song_num);
-	~U6AdPlugDecoderStream() override;
+	~U6AdPlugDecoderStream();
 
 	int readBuffer(sint16 *buffer, const int numSamples) override;
 

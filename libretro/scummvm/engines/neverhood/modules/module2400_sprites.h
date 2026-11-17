@@ -40,7 +40,7 @@ protected:
 class AsScene2401FlowingWater : public AnimatedSprite {
 public:
 	AsScene2401FlowingWater(NeverhoodEngine *vm);
-	~AsScene2401FlowingWater() override;
+	~AsScene2401FlowingWater();
 protected:
 	bool _isWaterFlowing;
 	uint32 handleMessage(int messageNum, const MessageParam &param, Entity *sender);
@@ -82,7 +82,7 @@ protected:
 class AsScene2402TV : public AnimatedSprite {
 public:
 	AsScene2402TV(NeverhoodEngine *vm, Klaymen *klaymen);
-	~AsScene2402TV() override;
+	~AsScene2402TV();
 protected:
 	Klaymen *_klaymen;
 	int _countdown1;

@@ -46,7 +46,7 @@ class PartyView : public View {
 
 public:
 	PartyView(const Configuration *cfg);
-	~PartyView() override;
+	~PartyView();
 
 	bool init(void *vm, uint16 x, uint16 y, Font *f, Party *p, Player *pl, TileManager *tm, ObjManager *om);
 	GUI_status MouseUp(int x, int y, Events::MouseButton button) override;

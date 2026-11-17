@@ -32,7 +32,7 @@ public:
 	Common::String _tilesText;
 public:
 	XMLMap() : City() {}
-	~XMLMap() override {};
+	~XMLMap() {};
 };
 
 } // End of namespace Ultima4

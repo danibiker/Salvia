@@ -74,7 +74,7 @@ protected:
 
 public:
 	MadeEngine(OSystem *syst, const MadeGameDescription *gameDesc);
-	~MadeEngine() override;
+	~MadeEngine();
 
 	bool hasFeature(EngineFeature f) const override;
 	void syncSoundSettings() override;

@@ -90,7 +90,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Game() override;
+	~Game();
 
 	/**
 	 * Play a sound effect

@@ -41,7 +41,7 @@ class SmackerPlayer;
 class Scene : public Entity {
 public:
 	Scene(NeverhoodEngine *vm, Module *parentModule);
-	~Scene() override;
+	~Scene();
 	void draw() override;
 	void addEntity(Entity *entity);
 	bool removeEntity(Entity *entity);

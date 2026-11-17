@@ -34,7 +34,7 @@ protected:
 
 public:
 	MidiDriver_Accolade_AdLib(OPL::Config::OplType oplType, bool newVersion, int timerFrequency);
-	~MidiDriver_Accolade_AdLib() override;
+	~MidiDriver_Accolade_AdLib();
 
 	int open() override;
 	using MidiDriver_ADLIB_Multisource::send;

@@ -72,7 +72,7 @@ class NSArchive : public Common::Archive {
 
 public:
 	NSArchive(Common::SeekableReadStream *stream, Common::Platform platform, uint32 features);
-	~NSArchive() override;
+	~NSArchive();
 
 	Common::SeekableReadStream *createReadStreamForMember(const Common::Path &path) const override;
 	bool hasFile(const Common::Path &path) const override;

@@ -35,7 +35,7 @@ namespace Mohawk {
 class InstallerArchive : public Common::Archive {
 public:
 	InstallerArchive();
-	~InstallerArchive() override;
+	~InstallerArchive();
 
 	bool open(const Common::Path &filename);
 	void close();

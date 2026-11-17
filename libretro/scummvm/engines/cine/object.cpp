@@ -33,7 +33,8 @@ namespace Cine {
 
 /** Resets all elements in the object table. */
 void resetObjectTable() {
-	for (auto &obj : g_cine->_objectTable) {
+	for (auto rfIt36 = g_cine->_objectTable.begin(), rfEnd36 = g_cine->_objectTable.end(); rfIt36 != rfEnd36; ++rfIt36) {
+		auto &obj = *rfIt36;
 		obj.clear();
 	}
 }

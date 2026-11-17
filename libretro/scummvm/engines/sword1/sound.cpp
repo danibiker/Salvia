@@ -44,7 +44,7 @@ namespace Sword1 {
 #define SPEECH_FLAGS (Audio::FLAG_16BITS | Audio::FLAG_LITTLE_ENDIAN)
 
 Sound::Sound(Audio::Mixer *mixer, SwordEngine *vm, ResMan *pResMan)
-	: _rnd("sword1sound") {
+	: _rnd("sword1sound"), _volFX(), _volSpeech(), _volMusic(), _fxCount(0), _fxFadingFlag(0), _fxFadingRate(0), _fxFadeVolume(), _musicFadeVolume(), _fxSampleBusy(), _speechSample(nullptr), _crossFadeIncrement(false), _speechLipsyncCounter(0), _speechSize(0), _speechSampleBusy(false), _musicStreamPlaying(), _streamLoopingFlag(), _musicStreamFading(), _musicOutputStream(), _compressedMusicStream(), _fxSampleId(), _speechPaused(false), _fxPaused(), _musicPaused() {
 	_vm = vm;
 	_mixer = mixer;
 	_resMan = pResMan;
@@ -53,6 +53,9 @@ Sound::Sound(Audio::Mixer *mixer, SwordEngine *vm, ResMan *pResMan)
 	_cowMode = CowWave;
 	_endOfQueue = 0;
 	_currentCowFile = 0;
+
+	for (int i = 0; i < MAX_MUSIC; i++)
+		_musicStreamFormat[i] = MusWav;
 
 	_musicOutputStream[0] = Audio::makeQueuingAudioStream(DEFAULT_SAMPLE_RATE, false);
 	_musicOutputStream[1] = Audio::makeQueuingAudioStream(DEFAULT_SAMPLE_RATE, false);

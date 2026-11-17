@@ -38,7 +38,7 @@ public:
 	                 const ConvertShapeFormat *format = 0)
 		: ShapeArchive(rs, id, pal, format) { }
 
-	~FontShapeArchive() override { }
+	~FontShapeArchive() { }
 
 	//! load HVLeads from u8.ini
 	void setHVLeads();

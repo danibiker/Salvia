@@ -31,7 +31,7 @@ namespace Neverhood {
 class AsCommonCar : public AnimatedSprite {
 public:
 	AsCommonCar(NeverhoodEngine *vm, Scene *parentScene, int16 x, int16 y);
-	~AsCommonCar() override;
+	~AsCommonCar();
 	void setPathPoints(NPointArray *pathPoints);
 protected:
 	Scene *_parentScene;

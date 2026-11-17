@@ -95,7 +95,7 @@ class GUI_LoK : public GUI_v1 {
 	friend class KyraEngine_LoK;
 public:
 	GUI_LoK(KyraEngine_LoK *vm, Screen_LoK *screen);
-	~GUI_LoK() override;
+	~GUI_LoK();
 
 	void processButton(Button *button) override;
 	int processButtonList(Button *buttonList, uint16 inputFlags, int8 mouseWheel) override;

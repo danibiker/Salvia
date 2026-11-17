@@ -72,12 +72,18 @@ int16 SfxParser_Accolade::SfxSlot::readScript(bool opCode) {
 	return data;
 }
 
+// MSVC already emits in-class initialized constants: a definition here would be duplicated (LNK2005)
+#ifndef _MSC_VER
 const byte SfxParser_Accolade::INSTRUMENT_SIZE_MT32;
 const uint16 SfxParser_Accolade::SCRIPT_TIMER_FREQUENCY;
 const uint16 SfxParser_Accolade::SCRIPT_TIMER_RATE;
+#endif
 
 SfxParser_Accolade::SfxParser_Accolade() : _driver(nullptr), _timerRate(0), _sfxData(),
-	_numSfx(0), _sourceAllocations { -1, -1, -1, -1 }, _paused(false) { }
+	_numSfx(0), _paused(false) {
+	for (int i = 0; i < ARRAYSIZE(_sourceAllocations); i++)
+		_sourceAllocations[i] = -1;
+}
 
 SfxParser_Accolade::~SfxParser_Accolade() {
 	stopAll();

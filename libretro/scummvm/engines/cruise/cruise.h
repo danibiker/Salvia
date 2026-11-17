@@ -96,7 +96,7 @@ protected:
 
 public:
 	CruiseEngine(OSystem * syst, const CRUISEGameDescription *gameDesc);
-	~ CruiseEngine() override;
+	~ CruiseEngine();
 	bool hasFeature(EngineFeature f) const override;
 
 	int getGameType() const;

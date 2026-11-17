@@ -671,7 +671,8 @@ void gameDestroyAllCreatures(void) {
 		for (i = 0; i < AREA_CREATURES; i++) {
 			CombatMap *cm = getCombatMap();
 			CreatureVector creatures = cm->getCreatures();
-			for (const auto *obj : creatures) {
+			for (auto rfIt674 = creatures.begin(), rfEnd674 = creatures.end(); rfIt674 != rfEnd674; ++rfIt674) {
+				const auto *obj = *rfIt674;
 				if (obj->getId() != LORDBRITISH_ID)
 					cm->removeObject(obj);
 			}

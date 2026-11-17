@@ -147,7 +147,7 @@ protected:
 
 public:
 	Sword2Engine(OSystem *syst, const ADGameDescription *gameDesc);
-	~Sword2Engine() override;
+	~Sword2Engine();
 
 	int getFramesPerSecond();
 

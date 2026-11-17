@@ -59,17 +59,28 @@ public:
 private:
 	// OptionsContainerWidget API
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
-	Common::StringArray _availableLangCodes = {"en", "de", "fr", "it", "es", "pt", "cs"};
-	Common::StringArray _availableLangs = {_("English"), _("German"), _("French"), _("Italian"), _("Spanish"), _("Brazilian Portuguese"), _("Czech")};
-	uint32 _numAvailableLangs = 0;
-	bool _atLeastOneAdditionalOpt = false;
+	Common::StringArray _availableLangCodes;
+	Common::StringArray _availableLangs;
+	uint32 _numAvailableLangs;
+	bool _atLeastOneAdditionalOpt;
 
 	GUI::PopUpWidget *_langPopUp;
 	GUI::CheckboxWidget *_windowsAudioMode;
 };
 
 Sword1OptionsWidget::Sword1OptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain) :
-	OptionsContainerWidget(boss, name, "Sword1GameOptionsDialog", domain) {
+	OptionsContainerWidget(boss, name, "Sword1GameOptionsDialog", domain), _numAvailableLangs(0), _atLeastOneAdditionalOpt(false) {
+	static const char *const langCodes[] = {"en", "de", "fr", "it", "es", "pt", "cs"};
+	for (int i = 0; i < ARRAYSIZE(langCodes); i++)
+		_availableLangCodes.push_back(langCodes[i]);
+	_availableLangs.push_back(_("English"));
+	_availableLangs.push_back(_("German"));
+	_availableLangs.push_back(_("French"));
+	_availableLangs.push_back(_("Italian"));
+	_availableLangs.push_back(_("Spanish"));
+	_availableLangs.push_back(_("Brazilian Portuguese"));
+	_availableLangs.push_back(_("Czech"));
+
 
 	if (Common::checkGameGUIOption(GAMEOPTION_MULTILANGUAGE, ConfMan.get("guioptions", domain))) {
 		_numAvailableLangs = 5;
@@ -319,7 +330,8 @@ SaveStateList SwordMetaEngine::listSaves(const char *target) const {
 	Common::StringArray filenames = saveFileMan->listSavefiles("sword1.###");
 
 	int slotNum = 0;
-	for (const auto &filename : filenames) {
+	for (auto rfIt322 = filenames.begin(), rfEnd322 = filenames.end(); rfIt322 != rfEnd322; ++rfIt322) {
+		const auto &filename = *rfIt322;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		slotNum = atoi(filename.c_str() + filename.size() - 3);
 

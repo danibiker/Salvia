@@ -32,7 +32,7 @@ class MonsterEgg : public Item {
 	friend class ItemFactory;
 public:
 	MonsterEgg();
-	~MonsterEgg() override;
+	~MonsterEgg();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

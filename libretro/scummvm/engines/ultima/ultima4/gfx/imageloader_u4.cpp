@@ -193,7 +193,8 @@ const byte *U4PaletteLoader::loadEgaPalette() {
 		_egaPalette = new byte[16 * 3];
 
 		Common::Array<ConfigElement> paletteConf = config->getElement("egaPalette").getChildren();
-		for (const auto &i : paletteConf) {
+		for (auto rfIt196 = paletteConf.begin(), rfEnd196 = paletteConf.end(); rfIt196 != rfEnd196; ++rfIt196) {
+const auto &i = *rfIt196;
 
 			if (i.getName() != "color")
 				continue;

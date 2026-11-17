@@ -38,7 +38,7 @@ public:
 	// p_dynamic_class stuff
 	ENABLE_RUNTIME_CLASSTYPE()
 	CycleProcess();
-	~CycleProcess() override;
+	~CycleProcess();
 
 	void run() override;
 

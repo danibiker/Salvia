@@ -43,7 +43,7 @@ public:
 			  uint32 flags = FLAG_DONT_SAVE | FLAG_PREVENT_SAVE, int32 layer = LAYER_MODAL,
 			  bool pauseGame = true);
 
-	~ModalGump() override;
+	~ModalGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 

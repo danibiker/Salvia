@@ -42,7 +42,7 @@ class BMPFont : public Font {
 public:
 
 	BMPFont();
-	~BMPFont() override;
+	~BMPFont();
 
 	bool init(const Common::Path &bmp_filename, bool dual_fontmap = false);
 

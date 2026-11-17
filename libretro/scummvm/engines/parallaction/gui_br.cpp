@@ -203,7 +203,7 @@ public:
 		_selection = 0;
 	}
 
-	~MainMenuInputState_BR() override {
+	~MainMenuInputState_BR() {
 		cleanup();
 	}
 
@@ -387,7 +387,7 @@ public:
 		_sfxStatus = _mscStatus = 0;
 	}
 
-	~IngameMenuInputState_BR() override {
+	~IngameMenuInputState_BR() {
 		delete _menuObj;
 		delete _mscMenuObj;
 		delete _sfxMenuObj;
@@ -508,7 +508,7 @@ public:
 		assert(_obj);
 	}
 
-	~QuitDialogInputState_BR() override {
+	~QuitDialogInputState_BR() {
 		delete _obj;
 	}
 

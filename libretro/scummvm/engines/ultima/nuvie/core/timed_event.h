@@ -150,7 +150,7 @@ public:
 	TimedPartyMove(MapCoord *d, MapCoord *t, uint32 step_delay = 500);
 	TimedPartyMove(MapCoord *d, MapCoord *t, Obj *use_obj, uint32 step_delay = 500);
 	TimedPartyMove(uint32 step_delay = 500);
-	~TimedPartyMove() override;
+	~TimedPartyMove();
 	void init(MapCoord *d, MapCoord *t, Obj *use_obj);
 	void timed(uint32 evtime) override;
 
@@ -210,7 +210,7 @@ class TimedCallback : public TimedEvent, public CallBack {
 public:
 	TimedCallback(CallBack *t, void *d, uint32 wait_time,
 	              bool repeat = false);
-	~TimedCallback() override {  }
+	~TimedCallback() {  }
 	void timed(uint32 evtime) override;
 	void clear_target() {
 		set_target(nullptr);
@@ -221,7 +221,7 @@ public:
 class GameTimedCallback : public TimedCallback {
 public:
 	GameTimedCallback(CallBack *t, void *d, uint32 wait_time, bool repeat = false);
-	~GameTimedCallback() override {  }
+	~GameTimedCallback() {  }
 };
 
 
@@ -240,7 +240,7 @@ protected:
 public:
 	TimedAdvance(uint8 hours, uint16 r = 60);
 	TimedAdvance(Common::String timestring, uint16 r = 60); // "HH:MM"
-	~TimedAdvance() override { }
+	~TimedAdvance() { }
 
 	void init(uint16 min, uint16 r); // start time advance
 
@@ -277,7 +277,7 @@ class TimedRest : public TimedAdvance {
 	uint8 number_that_had_food;
 public:
 	TimedRest(uint8 hours, Actor *lookout, Obj *campfire_obj);
-	~TimedRest() override;
+	~TimedRest();
 
 	void timed(uint32 evtime) override;
 	void eat(Actor *actor);

@@ -70,7 +70,7 @@ public:
 	};
 
 	KyraEngine_v2(OSystem *system, const GameFlags &flags, const EngineDesc &desc);
-	~KyraEngine_v2() override;
+	~KyraEngine_v2();
 
 	void pauseEngineIntern(bool pause) override;
 

@@ -25,7 +25,7 @@
 
 namespace Tinsel {
 
-InventoryObject::InventoryObject(Common::MemoryReadStreamEndian &stream) {
+InventoryObject::InventoryObject(Common::MemoryReadStreamEndian &stream) : _attribute(0) {
 	_id = stream.readUint32();
 	_hIconFilm = stream.readUint32();
 	_hScript = stream.readUint32();

@@ -42,7 +42,7 @@ protected:
 
 public:
 	MDSkyStripWidget(const Configuration *cfg, GameClock *c, Player *p);
-	~MDSkyStripWidget() override;
+	~MDSkyStripWidget();
 
 	void init(sint16 x, sint16 y);
 	void Display(bool full_redraw) override;

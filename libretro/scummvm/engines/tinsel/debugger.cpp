@@ -266,7 +266,8 @@ bool Console::cmd_psxdump(int argc, const char **argv) {
 	Common::ArchiveMemberList members;
 	psxArchive.listMembers(members);
 	Common::sort(members.begin(), members.end(), Common::ArchiveMemberListComparator());
-	for (auto &member : members) {
+	for (auto rfIt269 = members.begin(), rfEnd269 = members.end(); rfIt269 != rfEnd269; ++rfIt269) {
+		auto &member = *rfIt269;
 		if (dumpAll || member->getName().equalsIgnoreCase(argv[1])) {
 			Common::Path path = member->getPathInArchive();
 			Common::ScopedPtr<Common::SeekableReadStream> resource(psxArchive.createReadStreamForMember(path));
@@ -297,7 +298,8 @@ bool Console::cmd_add_clue(int argc, const char **argv) {
 
 bool Console::cmd_add_all_clues(int argc, const char **argv) {
 	auto clues = _vm->_dialogs->getAllNotebookClues();
-	for (auto clue : clues) {
+	for (auto rfIt300 = clues.begin(), rfEnd300 = clues.end(); rfIt300 != rfEnd300; ++rfIt300) {
+		auto clue = *rfIt300;
 		_vm->_notebook->addClue(clue);
 	}
 	return false;
@@ -316,7 +318,8 @@ bool Console::cmd_cross_clue(int argc, const char **argv) {
 
 bool Console::cmd_list_clues(int argc, const char **argv) {
 	auto clues = _vm->_dialogs->getAllNotebookClues();
-	for (auto clue : clues) {
+	for (auto rfIt319 = clues.begin(), rfEnd319 = clues.end(); rfIt319 != rfEnd319; ++rfIt319) {
+		auto clue = *rfIt319;
 		debugPrintf("%d\n", clue);
 	}
 	return true;

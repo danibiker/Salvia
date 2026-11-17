@@ -51,7 +51,7 @@ public:
 
 
 	OnceUpon(GobEngine *vm);
-	~OnceUpon() override;
+	~OnceUpon();
 
 
 protected:

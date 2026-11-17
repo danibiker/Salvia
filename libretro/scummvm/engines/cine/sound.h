@@ -66,7 +66,7 @@ class PCSound : public Sound {
 public:
 
 	PCSound(Audio::Mixer *mixer, CineEngine *vm);
-	~PCSound() override;
+	~PCSound();
 
 	void loadMusic(const char *name) override;
 	void playMusic() override;
@@ -90,7 +90,7 @@ class PaulaSound : public Sound {
 public:
 
 	PaulaSound(Audio::Mixer *mixer, CineEngine *vm);
-	~PaulaSound() override;
+	~PaulaSound();
 
 	void loadMusic(const char *name) override;
 	void playMusic() override;

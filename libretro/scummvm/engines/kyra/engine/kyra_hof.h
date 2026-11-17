@@ -47,7 +47,7 @@ friend class TextDisplayer_HoF;
 friend class GUI_HoF;
 public:
 	KyraEngine_HoF(OSystem *system, const GameFlags &flags);
-	~KyraEngine_HoF() override;
+	~KyraEngine_HoF();
 
 	void pauseEngineIntern(bool pause) override;
 

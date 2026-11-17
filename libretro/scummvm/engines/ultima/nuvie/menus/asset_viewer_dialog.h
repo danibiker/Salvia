@@ -52,7 +52,7 @@ protected:
 	Common::Path _screenFile;
 public:
 	AssetViewerDialog(CallBack *callback);
-	~AssetViewerDialog() override;
+	~AssetViewerDialog();
 
 	void Display(bool full_redraw) override;
 	GUI_status close_dialog();

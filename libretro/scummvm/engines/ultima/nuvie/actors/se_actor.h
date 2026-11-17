@@ -32,7 +32,7 @@ class SEActor: public WOUActor {
 public:
 
 	SEActor(Map *m, ObjManager *om, GameClock *c);
-	~SEActor() override;
+	~SEActor();
 
 	bool init(uint8 unused = 0) override;
 	bool will_not_talk() const override;

@@ -1502,7 +1502,8 @@ void ScriptCutscene::print_text(CSImage *image, const char *s, uint16 *x, uint16
 			if (tokens.size() > 1)
 				new_space = floor((width - (len - space_width * (tokens.size() - 1))) / (tokens.size() - 1));
 
-			for (const Common::String &ss : tokens) {
+			for (auto rfIt1505 = tokens.begin(), rfEnd1505 = tokens.end(); rfIt1505 != rfEnd1505; ++rfIt1505) {
+				const Common::String &ss = *rfIt1505;
 				*x = ((WOUFont *)font)->drawStringToShape(image->shp, ss.c_str(), *x, *y, color);
 				*x += new_space;
 			}
@@ -1520,7 +1521,8 @@ void ScriptCutscene::print_text(CSImage *image, const char *s, uint16 *x, uint16
 		found = str.findFirstOf(" ", start);
 	}
 
-	for (const Common::String &ss : tokens) {
+	for (auto rfIt1523 = tokens.begin(), rfEnd1523 = tokens.end(); rfIt1523 != rfEnd1523; ++rfIt1523) {
+		const Common::String &ss = *rfIt1523;
 		*x = ((WOUFont *)font)->drawStringToShape(image->shp, ss.c_str(), *x, *y, color);
 		*x += space_width;
 	}
@@ -1616,7 +1618,8 @@ void ScriptCutscene::set_screen_opacity(uint8 new_opacity) {
 }
 
 void ScriptCutscene::hide_sprites() {
-	for (CSSprite *s : sprite_list) {
+	for (auto rfIt1619 = sprite_list.begin(), rfEnd1619 = sprite_list.end(); rfIt1619 != rfEnd1619; ++rfIt1619) {
+		CSSprite *s = *rfIt1619;
 		if (s->visible)
 			s->visible = false;
 	}
@@ -1665,7 +1668,8 @@ void ScriptCutscene::Display(bool full_redraw) {
 	}
 
 	if (screen_opacity > 0) {
-		for (CSSprite *s : sprite_list) {
+		for (auto rfIt1668 = sprite_list.begin(), rfEnd1668 = sprite_list.end(); rfIt1668 != rfEnd1668; ++rfIt1668) {
+			CSSprite *s = *rfIt1668;
 			if (s->visible) {
 				if (s->image) {
 					uint16 w, h;
@@ -1779,7 +1783,7 @@ int ScriptCutscene::display_wrapped_text_line(Common::String str, uint8 text_col
 	return y;
 }
 
-static constexpr char u4ClassNameTbl[9][9] = {
+static const char u4ClassNameTbl[9][9] = {
 	"Mage",
 	"Bard",
 	"Fighter",

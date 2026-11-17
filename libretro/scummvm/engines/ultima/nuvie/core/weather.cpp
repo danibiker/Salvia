@@ -223,8 +223,8 @@ inline void Weather::set_wind_change_callback() {
 }
 
 inline void Weather::send_wind_change_notification_callback() {
-	for (CallBack *cb : wind_change_notification_list)
-		cb->callback(WEATHER_CB_CHANGE_WIND_DIR, (CallBack *)this, nullptr);
+	for (auto rfIt226 = wind_change_notification_list.begin(), rfEnd226 = wind_change_notification_list.end(); rfIt226 != rfEnd226; ++rfIt226)
+		{ CallBack *cb = *rfIt226; cb->callback(WEATHER_CB_CHANGE_WIND_DIR, (CallBack *)this, nullptr); }
 }
 
 bool Weather::add_wind_change_notification_callback(CallBack *caller) {

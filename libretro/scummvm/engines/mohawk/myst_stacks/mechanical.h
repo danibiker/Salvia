@@ -37,7 +37,7 @@ namespace MystStacks {
 class Mechanical : public MystScriptParser {
 public:
 	explicit Mechanical(MohawkEngine_Myst *vm);
-	~Mechanical() override;
+	~Mechanical();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

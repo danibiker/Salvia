@@ -51,7 +51,7 @@ namespace Sword1 {
 uint32 Logic::_scriptVars[NUM_SCRIPT_VARS];
 
 Logic::Logic(SwordEngine *vm, ObjectMan *pObjMan, ResMan *resMan, Screen *pScreen, Mouse *pMouse, Sound *pSound, Menu *pMenu, OSystem *system, Audio::Mixer *mixer)
-	: _rnd("sword1") {
+	: _rnd("sword1"), _speechClickDelay(0), _psxFudgeRandom(false) {
 
 	_vm = vm;
 	_objMan = pObjMan;

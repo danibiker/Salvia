@@ -49,7 +49,7 @@ protected:
 	Font *font;
 public:
 	CommandBarNewUI(Game *g);
-	~CommandBarNewUI() override;
+	~CommandBarNewUI();
 
 	void Display(bool full_redraw) override;
 	GUI_status KeyDown(const Common::KeyState &key) override;

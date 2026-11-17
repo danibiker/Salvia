@@ -45,12 +45,14 @@ Map::~Map() {
 }
 
 void Map::clear() {
-	for (auto *item : _fixedItems) {
+	for (auto rfIt48 = _fixedItems.begin(), rfEnd48 = _fixedItems.end(); rfIt48 != rfEnd48; ++rfIt48) {
+		auto *item = *rfIt48;
 		delete item;
 	}
 	_fixedItems.clear();
 
-	for (auto *item : _dynamicItems) {
+	for (auto rfIt53 = _dynamicItems.begin(), rfEnd53 = _dynamicItems.end(); rfIt53 != rfEnd53; ++rfIt53) {
+		auto *item = *rfIt53;
 		delete item;
 	}
 	_dynamicItems.clear();
@@ -139,7 +141,8 @@ void Map::loadFixed(Common::SeekableReadStream *rs) {
 
 	if (GAME_IS_U8 && _mapNum == 49) {
 		// Map 49 has some water tiles at the wrong z
-		for (auto *item : _fixedItems) {
+		for (auto rfIt142 = _fixedItems.begin(), rfEnd142 = _fixedItems.end(); rfIt142 != rfEnd142; ++rfIt142) {
+			auto *item = *rfIt142;
 			if (item->getShape() == 347 && item->getZ() == 96) {
 				Point3 pt = item->getLocation();
 				if ((pt.x == 23007 && pt.y == 21343) || (pt.x == 23135 && pt.y == 21471) ||
@@ -153,7 +156,8 @@ void Map::loadFixed(Common::SeekableReadStream *rs) {
 
 	if (GAME_IS_U8 && _mapNum == 21) {
 		// Map 21 has some ground and wall tiles at the wrong z
-		for (auto *item : _fixedItems) {
+		for (auto rfIt156 = _fixedItems.begin(), rfEnd156 = _fixedItems.end(); rfIt156 != rfEnd156; ++rfIt156) {
+			auto *item = *rfIt156;
 			int32 z = item->getZ();
 			uint32 sh = item->getShape();
 			if (z == 8 && (sh == 301 || sh == 31 || sh == 32)) {
@@ -168,7 +172,8 @@ void Map::loadFixed(Common::SeekableReadStream *rs) {
 
 	if (GAME_IS_U8 && _mapNum == 5) {
 		// Map 5 has some ground tiles at the wrong z
-		for (auto *item : _fixedItems) {
+		for (auto rfIt171 = _fixedItems.begin(), rfEnd171 = _fixedItems.end(); rfIt171 != rfEnd171; ++rfIt171) {
+			auto *item = *rfIt171;
 			if (item->getShape() == 71 && item->getFrame() == 8 && item->getZ() == 0) {
 				Point3 pt = item->getLocation();
 				if ((pt.x == 9151 && pt.y == 24127) || (pt.x == 9279 && pt.y == 23999) ||
@@ -185,7 +190,8 @@ void Map::loadFixed(Common::SeekableReadStream *rs) {
 }
 
 void Map::unloadFixed() {
-	for (auto *item : _fixedItems) {
+	for (auto rfIt188 = _fixedItems.begin(), rfEnd188 = _fixedItems.end(); rfIt188 != rfEnd188; ++rfIt188) {
+		auto *item = *rfIt188;
 		delete item;
 	}
 	_fixedItems.clear();
@@ -267,7 +273,8 @@ void Map::loadFixedFormatObjects(Common::List<Item *> &itemlist,
 void Map::save(Common::WriteStream *ws) {
 	ws->writeUint32LE(static_cast<uint32>(_dynamicItems.size()));
 
-	for (auto *item : _dynamicItems) {
+	for (auto rfIt270 = _dynamicItems.begin(), rfEnd270 = _dynamicItems.end(); rfIt270 != rfEnd270; ++rfIt270) {
+		auto *item = *rfIt270;
 		ObjectManager::get_instance()->saveObject(ws, item);
 	}
 }

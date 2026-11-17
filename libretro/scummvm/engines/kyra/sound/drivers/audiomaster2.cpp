@@ -84,7 +84,7 @@ friend class AudioMaster2IOManager;
 private:
 	AudioMaster2Internal(Audio::Mixer *mixer);
 public:
-	~AudioMaster2Internal() override;
+	~AudioMaster2Internal();
 
 	static AudioMaster2Internal *open(Audio::Mixer *mixer);
 	static void close();
@@ -179,7 +179,7 @@ class SoundResource8SVX : public SoundResource {
 public:
 	SoundResource8SVX(AudioMaster2ResourceManager *res);
 private:
-	~SoundResource8SVX() override;
+	~SoundResource8SVX();
 public:
 	void loadHeader(Common::ReadStream *stream, uint32 size);
 	void loadData(Common::ReadStream *stream, uint32 size);
@@ -210,7 +210,7 @@ class SoundResourceINST : public SoundResource {
 public:
 	SoundResourceINST(AudioMaster2ResourceManager *res) : SoundResource(res, 2), _samplesResource(0), _transpose(0), _levelAdjust(0) {}
 private:
-	~SoundResourceINST() override;
+	~SoundResourceINST();
 public:
 	void loadPitchData(Common::ReadStream *stream, uint32 size);
 	void loadSamples(Common::ReadStream *stream, uint32 size);
@@ -241,7 +241,7 @@ class SoundResourceSMUS : public SoundResource {
 public:
 	SoundResourceSMUS(AudioMaster2ResourceManager *res) : SoundResource(res, 1), _tempo(0), _songVolume(0), _playFlags(0) {}
 private:
-	~SoundResourceSMUS() override;
+	~SoundResourceSMUS();
 public:
 	void loadHeader(Common::ReadStream *stream, uint32 size);
 	void loadInstrument(Common::ReadStream *stream, uint32 size);

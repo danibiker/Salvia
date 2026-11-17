@@ -29,7 +29,7 @@ namespace Mohawk {
 class CSTimeCase1 : public CSTimeCase {
 public:
 	CSTimeCase1(MohawkEngine_CSTime *vm);
-	~CSTimeCase1() override;
+	~CSTimeCase1();
 
 	bool checkConvCondition(uint16 conditionId) override;
 	bool checkAmbientCondition(uint16 charId, uint16 ambientId) override;

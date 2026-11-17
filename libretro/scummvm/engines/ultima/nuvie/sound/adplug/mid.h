@@ -34,7 +34,7 @@ public:
 	static CPlayer *factory(Copl *newopl);
 
 	CmidPlayer(Copl *newopl);
-	~CmidPlayer() override;
+	~CmidPlayer();
 
 	bool load(const Common::Path &filename) override;
 	bool load(const Common::Path &filename, int song_index);

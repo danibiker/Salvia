@@ -32,7 +32,7 @@ class SpeechFlex : public SoundFlex {
 
 public:
 	SpeechFlex(Common::SeekableReadStream *rs);
-	~SpeechFlex(void) override;
+	~SpeechFlex(void);
 
 	int getIndexForPhrase(const Common::String &phrase,
 	                      uint32 start, uint32 &end) const;

@@ -72,7 +72,8 @@ void ContainerGump::InitGump(Gump *newparent, bool take_focus) {
 
 	if (!c) return; // Container gone!?
 
-	for (auto *item : c->_contents) {
+	for (auto rfIt75 = c->_contents.begin(), rfEnd75 = c->_contents.end(); rfIt75 != rfEnd75; ++rfIt75) {
+		auto *item = *rfIt75;
 		item->enterFastArea();
 	}
 
@@ -91,7 +92,8 @@ void ContainerGump::run() {
 		return;
 	}
 
-	for (auto *item : c->_contents) {
+	for (auto rfIt94 = c->_contents.begin(), rfEnd94 = c->_contents.end(); rfIt94 != rfEnd94; ++rfIt94) {
+		auto *item = *rfIt94;
 		int32 itemx, itemy;
 		item->getGumpLocation(itemx, itemy);
 
@@ -165,7 +167,8 @@ void ContainerGump::PaintThis(RenderSurface *surf, int32 lerp_factor, bool scale
 	//!! TODO: check these painting commands (flipped? translucent?)
 	bool showEditorItems = Ultima8Engine::get_instance()->isShowEditorItems();
 
-	for (auto *item : c->_contents) {
+	for (auto rfIt168 = c->_contents.begin(), rfEnd168 = c->_contents.end(); rfIt168 != rfEnd168; ++rfIt168) {
+		auto *item = *rfIt168;
 		item->setupLerp(gameframeno);
 
 		if (!showEditorItems && item->getShapeInfo()->is_editor())

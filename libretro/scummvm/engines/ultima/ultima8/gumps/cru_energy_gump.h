@@ -37,7 +37,7 @@ public:
 
 	CruEnergyGump();
 	CruEnergyGump(Shape *shape, int x);
-	~CruEnergyGump() override;
+	~CruEnergyGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

@@ -31,7 +31,7 @@ namespace Neverhood {
 class AsScene1401Pipe : public AnimatedSprite {
 public:
 	AsScene1401Pipe(NeverhoodEngine *vm);
-	~AsScene1401Pipe() override;
+	~AsScene1401Pipe();
 protected:
 	int _countdown1;
 	int _countdown2;
@@ -88,7 +88,7 @@ struct AsCommonProjectorItem {
 class AsCommonProjector : public AnimatedSprite {
 public:
 	AsCommonProjector(NeverhoodEngine *vm, Scene *parentScene, Sprite *klaymen, Sprite *asPipe);
-	~AsCommonProjector() override;
+	~AsCommonProjector();
 protected:
 	Scene *_parentScene;
 	Sprite *_klaymen;

@@ -120,7 +120,7 @@ protected:
 class TileAnimPixelColorTransform : public TileAnimTransform {
 public:
 	TileAnimPixelColorTransform(int xp, int yp, int width, int height);
-	~TileAnimPixelColorTransform() override;
+	~TileAnimPixelColorTransform();
 
 	void draw(Image *dest, Tile *tile, MapTile &mapTile) override;
 	bool drawsTile() const override;

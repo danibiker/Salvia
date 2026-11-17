@@ -43,7 +43,7 @@ protected:
 
 public:
 	CheatsDialog(GUI_CallBack *callback);
-	~CheatsDialog() override;
+	~CheatsDialog();
 	bool init();
 
 	GUI_status close_dialog();

@@ -44,7 +44,7 @@ class Item : public Object {
 
 public:
 	Item();
-	~Item() override;
+	~Item();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

@@ -454,7 +454,8 @@ bool Resource::createContexts() {
 		break;
 	}
 
-	for (auto &context : _contexts) {
+	for (auto rfIt457 = _contexts.begin(), rfEnd457 = _contexts.end(); rfIt457 != rfEnd457; ++rfIt457) {
+		auto &context = *rfIt457;
 		if (!context->load(_vm, this)) {
 			warning("Cannot load context %s", context->_fileName);
 			return false;
@@ -549,7 +550,8 @@ void Resource::loadResource(ResourceContext *context, uint32 resourceId, ByteArr
 }
 
 ResourceContext *Resource::getContext(uint16 fileType, int serial) {
-	for (const auto &context : _contexts) {
+	for (auto rfIt552 = _contexts.begin(), rfEnd552 = _contexts.end(); rfIt552 != rfEnd552; ++rfIt552) {
+		const auto &context = *rfIt552;
 		if ((context->fileType() & fileType) && (context->serial() == serial)) {
 			return context;
 		}

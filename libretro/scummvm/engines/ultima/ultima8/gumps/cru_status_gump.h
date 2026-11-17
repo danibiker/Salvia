@@ -43,7 +43,7 @@ public:
 	// need a parameter to differentiate the non-default constructor..
 	CruStatusGump(bool unused);
 
-	~CruStatusGump() override;
+	~CruStatusGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

@@ -38,7 +38,7 @@ struct EMCState;
 class TextDisplayer_LoL : public TextDisplayer_rpg {
 public:
 	TextDisplayer_LoL(LoLEngine *engine, Screen_LoL *screenLoL);
-	~TextDisplayer_LoL() override;
+	~TextDisplayer_LoL();
 
 	void setupField(bool mode);
 	void expandField();

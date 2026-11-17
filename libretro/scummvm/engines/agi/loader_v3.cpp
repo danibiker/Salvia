@@ -42,7 +42,8 @@ void AgiLoader_v3::init() {
 		return;
 	}
 
-	for (const auto &file : fslist) {
+	for (auto rfIt45 = fslist.begin(), rfEnd45 = fslist.end(); rfIt45 != rfEnd45; ++rfIt45) {
+		const auto &file = *rfIt45;
 		Common::String fileName = file.getName();
 		if (fileName.size() > 3 && fileName.hasSuffixIgnoreCase("dir")) {
 			_name = fileName.substr(0, fileName.size() - 3);

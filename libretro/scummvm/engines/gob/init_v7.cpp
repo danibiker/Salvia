@@ -54,7 +54,8 @@ void Init_v7::initGame() {
 	// We rely on the presence of an "intro_ap.itk" to determinate whether a subdirectory contains an application.
 	Common::FSList subdirs;
 	gameDataDir.getChildren(subdirs, Common::FSNode::kListDirectoriesOnly);
-	for (const Common::FSNode &subdirNode : subdirs) {
+	for (auto rfIt57 = subdirs.begin(), rfEnd57 = subdirs.end(); rfIt57 != rfEnd57; ++rfIt57) {
+		const Common::FSNode &subdirNode = *rfIt57;
 		Common::FSDirectory subdir(subdirNode);
 		if (_vm->getGameType() == kGameTypeAdibou2 && subdir.hasFile("intro_ap.stk")) {
 			debugC(1, kDebugFileIO, "Found Adibou application subdirectory \"%s\", adding it to the search path", subdir.getFSNode().getName().c_str());
@@ -63,7 +64,8 @@ void Init_v7::initGame() {
 			// Look for any "DESC*.ADI" file
 			Common::FSList fileNodes;
 			subdirNode.getChildren(fileNodes, Common::FSNode::kListFilesOnly);
-			for (const Common::FSNode &fileNode : fileNodes) {
+			for (auto rfIt66 = fileNodes.begin(), rfEnd66 = fileNodes.end(); rfIt66 != rfEnd66; ++rfIt66) {
+				const Common::FSNode &fileNode = *rfIt66;
 				if (fileNode.getName().hasPrefixIgnoreCase("DESC") && fileNode.getName().hasSuffixIgnoreCase(".ADI")) {
 					debugC(1, kDebugFileIO, "Found Adi 4 application subdirectory \"%s\", adding it to the search path", subdir.getFSNode().getName().c_str());
 					SearchMan.addSubDirectoryMatching(gameDataDir, subdir.getFSNode().getName(), 0, 4, true);

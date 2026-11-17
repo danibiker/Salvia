@@ -55,7 +55,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~UrbanWidget() override {}
+	~UrbanWidget() {}
 
 	/**
 	 * Get the tile number for the person

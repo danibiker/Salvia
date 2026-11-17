@@ -90,7 +90,8 @@ ShapeViewerGump::ShapeViewerGump(int x, int y, int width, int height,
 }
 
 ShapeViewerGump::~ShapeViewerGump() {
-	for (auto &entry : _archives) {
+	for (auto rfIt93 = _archives.begin(), rfEnd93 = _archives.end(); rfIt93 != rfEnd93; ++rfIt93) {
+		auto &entry = *rfIt93;
 		if (entry._disposeAfterUse == DisposeAfterUse::YES) {
 			delete entry._archive;
 		}

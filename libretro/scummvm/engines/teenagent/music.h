@@ -32,7 +32,7 @@ class TeenAgentEngine;
 class MusicPlayer : public Audio::Paula {
 public:
 	MusicPlayer(TeenAgentEngine *vm);
-	~MusicPlayer() override;
+	~MusicPlayer();
 
 	bool load(int id);
 	int getId() const { return _id; }

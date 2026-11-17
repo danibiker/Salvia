@@ -1346,7 +1346,7 @@ bool Events::pushTo(sint16 rel_x, sint16 rel_y, bool push_from) {
 
 	if (push_actor) {
 		const auto playerActor = player->get_actor();
-		auto strengthCheckFailed = [=]() {
+		auto strengthCheckFailed = [=]() -> bool {
 			// Using adjusted strength here, which takes cursed status into account
 			const uint playerStr = script->call_actor_str_adj(playerActor);
 			const uint pushedActorStr = script->call_actor_str_adj(push_actor);

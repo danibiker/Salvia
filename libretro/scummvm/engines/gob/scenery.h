@@ -164,7 +164,7 @@ public:
 	int16 loadAnim(char search) override;
 
 	Scenery_v1(GobEngine *vm);
-	~Scenery_v1() override {}
+	~Scenery_v1() {}
 };
 
 class Scenery_v2 : public Scenery_v1 {
@@ -172,7 +172,7 @@ public:
 	int16 loadAnim(char search) override;
 
 	Scenery_v2(GobEngine *vm);
-	~Scenery_v2() override {}
+	~Scenery_v2() {}
 };
 
 } // End of namespace Gob

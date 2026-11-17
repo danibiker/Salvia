@@ -47,7 +47,7 @@ protected:
 
 public:
 	GameplayDialog(GUI_CallBack *callback);
-	~GameplayDialog() override;
+	~GameplayDialog();
 	bool init();
 
 	GUI_status close_dialog();

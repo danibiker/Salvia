@@ -102,10 +102,13 @@ public:
 		// To keep the implementation out of the header, the type of the passed lambda/function
 		// is hidden inside a wrapping lambda, which is then passed as a function pointer.
 		// TODO: Use a class for this.
-		auto predicateWrapper = +[](void *wrappedPredicate, const Actor *a) -> bool {
-			return (*(F*)wrappedPredicate)(a);
-		};
-		return findActorAtImpl(x, y, z, predicateWrapper, incDoubleTile, incSurroundingObjs, &predicate);
+		// C++03 (VS2010): lambdas do not convert to function pointers, use a function template
+		return findActorAtImpl(x, y, z, &findActorPredicateWrapper<F>, incDoubleTile, incSurroundingObjs, &predicate);
+	}
+
+	template<typename F>
+	static bool findActorPredicateWrapper(void *wrappedPredicate, const Actor *a) {
+		return (*(F *)wrappedPredicate)(a);
 	}
 
 	Actor *get_avatar();

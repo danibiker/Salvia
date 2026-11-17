@@ -2939,7 +2939,8 @@ void maskBgOverlay(int targetBgIdx, const byte *bgPtr, const byte *maskPtr, int1
 	maskPtr = backup;
 
 	// incrust pass
-	for (auto &incrust : g_cine->_bgIncrustList) {
+	for (auto rfIt2942 = g_cine->_bgIncrustList.begin(), rfEnd2942 = g_cine->_bgIncrustList.end(); rfIt2942 != rfEnd2942; ++rfIt2942) {
+		auto &incrust = *rfIt2942;
 		// HACK: Remove drawing of red corners around doors in rat maze in Operation Stealth
 		// by skipping drawing of possible collision table data to non-collision table page.
 		if (hacksEnabled && incrust.bgIdx == kCollisionPageBgIdxAlias && targetBgIdx != kCollisionPageBgIdxAlias) {

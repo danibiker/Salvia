@@ -67,7 +67,7 @@ public:
 			_currentStream = nullptr;
 	}
 
-	~RandomCollectionAudioStreamImpl() override;
+	~RandomCollectionAudioStreamImpl();
 
 	// Implement the AudioStream API
 	int readBuffer(int16 *buffer, const int numSamples) override;

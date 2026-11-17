@@ -72,8 +72,8 @@ ImageMgr::ImageMgr() : _baseSet(nullptr), _abyssData(nullptr) {
 ImageMgr::~ImageMgr() {
 	settings.deleteObserver(this);
 
-	for (auto &i : _imageSets)
-		delete i._value;
+	for (auto rfIt75 = _imageSets.begin(), rfEnd75 = _imageSets.end(); rfIt75 != rfEnd75; ++rfIt75)
+		{ auto &i = *rfIt75; delete i._value; }
 
 	delete[] _abyssData;
 }
@@ -103,7 +103,8 @@ void ImageMgr::init() {
 	 */
 	const Config *config = Config::getInstance();
 	Common::Array<ConfigElement> graphicsConf = config->getElement("graphics").getChildren();
-	for (const auto &conf : graphicsConf) {
+	for (auto rfIt106 = graphicsConf.begin(), rfEnd106 = graphicsConf.end(); rfIt106 != rfEnd106; ++rfIt106) {
+		const auto &conf = *rfIt106;
 		if (conf.getName() == "imageset") {
 			ImageSet *set = loadImageSetFromConf(conf);
 			_imageSets[set->_name] = set;
@@ -114,8 +115,8 @@ void ImageMgr::init() {
 	}
 
 	_imageSetNames.clear();
-	for (const auto &set : _imageSets)
-		_imageSetNames.push_back(set._key);
+	for (auto rfIt117 = _imageSets.begin(), rfEnd117 = _imageSets.end(); rfIt117 != rfEnd117; ++rfIt117)
+		{ const auto &set = *rfIt117; _imageSetNames.push_back(set._key); }
 
 	update(&settings);
 }
@@ -129,7 +130,8 @@ ImageSet *ImageMgr::loadImageSetFromConf(const ConfigElement &conf) {
 	set->_extends = conf.getString("extends");
 
 	Common::Array<ConfigElement> children = conf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt132 = children.begin(), rfEnd132 = children.end(); rfIt132 != rfEnd132; ++rfIt132) {
+		const auto &i = *rfIt132;
 		if (i.getName() == "image") {
 			ImageInfo *info = loadImageInfoFromConf(i);
 			if (set->_info.contains(info->_name))
@@ -162,7 +164,8 @@ ImageInfo *ImageMgr::loadImageInfoFromConf(const ConfigElement &conf) {
 	info->_image = nullptr;
 
 	Common::Array<ConfigElement> children = conf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt165 = children.begin(), rfEnd165 = children.end(); rfIt165 != rfEnd165; ++rfIt165) {
+		const auto &i = *rfIt165;
 		if (i.getName() == "subimage") {
 			SubImage *subimage = loadSubImageFromConf(info, i);
 			info->_subImages[subimage->_name] = subimage;
@@ -662,7 +665,8 @@ SubImage *ImageMgr::getSubImage(const Common::String &name) {
 	ImageSet *set = _baseSet;
 
 	while (set != nullptr) {
-		for (auto &i : set->_info) {
+		for (auto rfIt665 = set->_info.begin(), rfEnd665 = set->_info.end(); rfIt665 != rfEnd665; ++rfIt665) {
+			auto &i = *rfIt665;
 			ImageInfo *info = (ImageInfo *) i._value;
 			Common::HashMap<Common::String, SubImage *>::iterator j = info->_subImages.find(name);
 			if (j != info->_subImages.end())
@@ -676,9 +680,11 @@ SubImage *ImageMgr::getSubImage(const Common::String &name) {
 }
 
 void ImageMgr::freeIntroBackgrounds() {
-	for (const auto &i : _imageSets) {
+	for (auto rfIt679 = _imageSets.begin(), rfEnd679 = _imageSets.end(); rfIt679 != rfEnd679; ++rfIt679) {
+		const auto &i = *rfIt679;
 		ImageSet *set = i._value;
-		for (auto &j : set->_info) {
+		for (auto rfIt681 = set->_info.begin(), rfEnd681 = set->_info.end(); rfIt681 != rfEnd681; ++rfIt681) {
+			auto &j = *rfIt681;
 			ImageInfo *info = j._value;
 			if (info->_image != nullptr && info->_introOnly) {
 				delete info->_image;
@@ -715,7 +721,8 @@ void ImageMgr::update(Settings *newSettings) {
 }
 
 ImageSet::~ImageSet() {
-	for (const auto &i : _info) {
+	for (auto rfIt718 = _info.begin(), rfEnd718 = _info.end(); rfIt718 != rfEnd718; ++rfIt718) {
+		const auto &i = *rfIt718;
 		ImageInfo *imageInfo = i._value;
 		if (imageInfo->_name != "screen")
 			delete imageInfo;
@@ -723,8 +730,8 @@ ImageSet::~ImageSet() {
 }
 
 ImageInfo::~ImageInfo() {
-	for (auto &i : _subImages)
-		delete i._value;
+	for (auto rfIt726 = _subImages.begin(), rfEnd726 = _subImages.end(); rfIt726 != rfEnd726; ++rfIt726)
+		{ auto &i = *rfIt726; delete i._value; }
 	if (_image != nullptr)
 		delete _image;
 }

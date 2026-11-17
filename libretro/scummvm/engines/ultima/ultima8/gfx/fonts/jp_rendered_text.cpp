@@ -54,7 +54,8 @@ void JPRenderedText::draw(RenderSurface *surface, int x, int y, bool /*destmaske
 
 	uint32 color = TEX32_PACK_RGB(0, 0, 0);
 
-	for (const auto &line : _lines) {
+	for (auto rfIt57 = _lines.begin(), rfEnd57 = _lines.end(); rfIt57 != rfEnd57; ++rfIt57) {
+		const auto &line = *rfIt57;
 		int line_x = x + line._dims.left;
 		int line_y = y + line._dims.top;
 
@@ -97,7 +98,8 @@ void JPRenderedText::drawBlended(RenderSurface *surface, int x, int y,
 	const Palette *savepal = _font->getPalette();
 	_font->setPalette(pal);
 
-	for (const auto &line : _lines) {
+	for (auto rfIt100 = _lines.begin(), rfEnd100 = _lines.end(); rfIt100 != rfEnd100; ++rfIt100) {
+		const auto &line = *rfIt100;
 		int line_x = x + line._dims.left;
 		int line_y = y + line._dims.top;
 

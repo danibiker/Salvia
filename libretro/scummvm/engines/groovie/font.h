@@ -30,7 +30,7 @@ namespace Groovie {
 class T7GFont : public Graphics::Font {
 public:
 	T7GFont();
-	~T7GFont() override;
+	~T7GFont();
 
 	bool load(Common::SeekableReadStream &stream);
 

@@ -33,7 +33,7 @@ class LoLEngine;
 class Screen_LoL : public Screen_v2 {
 public:
 	Screen_LoL(LoLEngine *vm, OSystem *system);
-	~Screen_LoL() override;
+	~Screen_LoL();
 
 	void fprintString(const char *format, int x, int y, uint8 col1, uint8 col2, uint flags, ...) GCC_PRINTF(2, 8);
 	void fprintStringIntro(const char *format, int x, int y, uint8 c1, uint8 c2, uint8 c3, uint flags, ...) GCC_PRINTF(2, 9);

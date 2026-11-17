@@ -122,7 +122,8 @@ void PaperdollGump::Close(bool no_del) {
 	Container *c = getContainer(_owner);
 	if (!c) return; // Container gone!?
 
-	for (auto *item : c->_contents) {
+	for (auto rfIt125 = c->_contents.begin(), rfEnd125 = c->_contents.end(); rfIt125 != rfEnd125; ++rfIt125) {
+		auto *item = *rfIt125;
 		item->leaveFastArea();  // Can destroy the item
 	}
 

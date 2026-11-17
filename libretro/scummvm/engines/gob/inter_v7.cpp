@@ -60,7 +60,7 @@ namespace Gob {
 #define OPCODEFUNC(i, x)  _opcodesFunc[i]._OPCODEFUNC(OPCODEVER, x)
 #define OPCODEGOB(i, x)   _opcodesGob[i]._OPCODEGOB(OPCODEVER, x)
 
-Inter_v7::Inter_v7(GobEngine *vm) : Inter_Playtoons(vm), _inis(vm), _currentHtmlContext(nullptr) {
+Inter_v7::Inter_v7(GobEngine *vm) : Inter_Playtoons(vm), _inis(vm), _currentHtmlContext(nullptr), kAdi4InfChildDataSize(7406), kAdi4InfGeneralChildDataSize(3406), kAdi4InfAppChildDataSize(200), _adi4CurrentAppNbr(0), _adi4CurrentChildNbr(0), _adi4CurrentSectionInGeneralChildData(0), _adi4CurrentSectionInAppChildData(0) {
 }
 
 void Inter_v7::setupOpcodesDraw() {
@@ -556,8 +556,8 @@ void Inter_v7::o7_deleteFile() {
 	if (isPattern) {
 		files = _vm->_saveLoad->getFilesMatchingPattern(file);
 		debugC(2, kDebugFileIO, "Delete file matching pattern \"%s\" (%d matching file(s))", file.toString().c_str(), files.size());
-		for (const Common::Path &matchingFile : files)
-			debugC(5, kDebugFileIO, "Matching file: %s", matchingFile.toString().c_str());
+		for (auto rfIt559 = files.begin(), rfEnd559 = files.end(); rfIt559 != rfEnd559; ++rfIt559)
+			{ const Common::Path &matchingFile = *rfIt559; debugC(5, kDebugFileIO, "Matching file: %s", matchingFile.toString().c_str()); }
 	} else {
 		files.push_back(file);
 		debugC(2, kDebugFileIO, "Delete file \"%s\"", file.toString().c_str());
@@ -578,7 +578,8 @@ void Inter_v7::o7_deleteFile() {
 		}
 	}
 
-	for (const Common::Path &fileToDelete : files) {
+	for (auto rfIt581 = files.begin(), rfEnd581 = files.end(); rfIt581 != rfEnd581; ++rfIt581) {
+		const Common::Path &fileToDelete = *rfIt581;
 		SaveLoad::SaveMode mode = _vm->_saveLoad->getSaveMode(fileToDelete.toString().c_str());
 		if (mode == SaveLoad::kSaveModeSave) {
 			if (!_vm->_saveLoad->deleteFile(fileToDelete.toString().c_str())) {
@@ -903,7 +904,8 @@ void Inter_v7::o7_setActiveCD() {
 	SearchMan.listMatchingMembers(files, Common::Path(str0, '\\'));
 	Common::Path savedCDpath = _currentCDPath;
 
-	for (const auto &file : files) {
+	for (auto rfIt906 = files.begin(), rfEnd906 = files.end(); rfIt906 != rfEnd906; ++rfIt906) {
+		const auto &file = *rfIt906;
 		if (setCurrentCDPath(file.arcName)) {
 			debugC(5, kDebugFileIO, "o7_setActiveCD: %s -> %s", savedCDpath.toString().c_str(),  _currentCDPath.toString().c_str());
 			storeValue(1);
@@ -932,21 +934,25 @@ void Inter_v7::o7_findFile() {
 
 	SearchMan.listMatchingMembers(files, filePattern);
 	Common::List<Common::Path> filePaths;
-	for (Common::ArchiveMemberPtr file : files) {
+	for (auto rfIt935 = files.begin(), rfEnd935 = files.end(); rfIt935 != rfEnd935; ++rfIt935) {
+		Common::ArchiveMemberPtr file = *rfIt935;
 		filePaths.push_back(file->getPathInArchive());
 	}
 
 	Common::List<Common::Path> matchingSaveFiles = _vm->_saveLoad->getFilesMatchingPattern(filePattern.toString().c_str());
-	for (Common::Path &filename : matchingSaveFiles) {
+	for (auto rfIt940 = matchingSaveFiles.begin(), rfEnd940 = matchingSaveFiles.end(); rfIt940 != rfEnd940; ++rfIt940) {
+		Common::Path &filename = *rfIt940;
 		if (_vm->_saveLoad->getSize(filename.toString().c_str()) >= 0) {
 			filePaths.push_back(filename);
 		}
 	}
 
 	Common::List<Common::Path> filenamesWithoutDuplicates;
-	for (Common::Path &filename : filePaths) {
+	for (auto rfIt947 = filePaths.begin(), rfEnd947 = filePaths.end(); rfIt947 != rfEnd947; ++rfIt947) {
+		Common::Path &filename = *rfIt947;
 		bool found = false;
-		for (Common::Path &filename2 : filenamesWithoutDuplicates) {
+		for (auto rfIt949 = filenamesWithoutDuplicates.begin(), rfEnd949 = filenamesWithoutDuplicates.end(); rfIt949 != rfEnd949; ++rfIt949) {
+			Common::Path &filename2 = *rfIt949;
 			if (filename == filename2) {
 				found = true;
 				break;
@@ -1890,7 +1896,8 @@ void Inter_v7::o7_checkData(OpFuncParams &params) {
 			// New appli, find the first directory containing an application still not installed, and set it as "current CD" path.
 			Common::ArchiveMemberDetailsList files;
 			SearchMan.listMatchingMembers(files, Common::Path(file)); // Search for CD.INF files
-			for (Common::ArchiveMemberDetails &cdInfFile : files) {
+			for (auto rfIt1893 = files.begin(), rfEnd1893 = files.end(); rfIt1893 != rfEnd1893; ++rfIt1893) {
+				Common::ArchiveMemberDetails &cdInfFile = *rfIt1893;
 				Common::SeekableReadStream *stream = cdInfFile.arcMember->createReadStream();
 				while (stream->pos() + 4 <= stream->size()) {
 					// CD.INF contains a list of applications, as uint32 LE values
@@ -1909,7 +1916,8 @@ void Inter_v7::o7_checkData(OpFuncParams &params) {
 			Common::Path appliVmdName(Common::String::format("appli_%02d.vmd", applicationNumber));
 			Common::ArchiveMemberDetailsList matchingFiles;
 			SearchMan.listMatchingMembers(matchingFiles, appliVmdName);
-			for (Common::ArchiveMemberDetails &matchingFile : matchingFiles) {
+			for (auto rfIt1912 = matchingFiles.begin(), rfEnd1912 = matchingFiles.end(); rfIt1912 != rfEnd1912; ++rfIt1912) {
+				Common::ArchiveMemberDetails &matchingFile = *rfIt1912;
 				if (setCurrentCDPath(matchingFile.arcName))
 					break;
 			}

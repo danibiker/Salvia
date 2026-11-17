@@ -89,7 +89,7 @@ class UltimaMetaEngineDetection : public AdvancedMetaEngineDetection<Ultima::Ult
 
 public:
 	UltimaMetaEngineDetection();
-	~UltimaMetaEngineDetection() override {}
+	~UltimaMetaEngineDetection() {}
 
 	const char *getName() const override {
 		return "ultima";

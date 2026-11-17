@@ -33,7 +33,7 @@ class Egg;
 class EggHatcherProcess : public Process {
 public:
 	EggHatcherProcess();
-	~EggHatcherProcess() override;
+	~EggHatcherProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

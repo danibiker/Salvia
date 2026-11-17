@@ -94,7 +94,7 @@ protected:
 
 public:
 	MohawkEngine_Riven(OSystem *syst, const MohawkGameDescription *gamedesc);
-	~MohawkEngine_Riven() override;
+	~MohawkEngine_Riven();
 
 	RivenVideoManager *_video;
 	RivenSoundManager *_sound;

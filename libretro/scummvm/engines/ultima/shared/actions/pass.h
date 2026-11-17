@@ -45,7 +45,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Pass() override {}
+	~Pass() {}
 };
 
 } // End of namespace Actions

@@ -44,7 +44,7 @@ class NeverhoodEngine;
 class NeverhoodOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	NeverhoodOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~NeverhoodOptionsWidget() override;
+	~NeverhoodOptionsWidget();
 
 	// OptionsContainerWidget API
 	void load() override;

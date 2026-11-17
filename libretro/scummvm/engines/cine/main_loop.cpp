@@ -271,7 +271,8 @@ void manageEvents(CallSource callSource, EventTarget eventTarget, bool useMaxMou
 					}
 				}
 				mousePos = g_system->getEventManager()->getMousePos();
-				for (auto &r : rects) {
+				for (auto rfIt274 = rects.begin(), rfEnd274 = rects.end(); rfIt274 != rfEnd274; ++rfIt274) {
+					auto &r = *rfIt274;
 					if (r.contains(mousePos)) {
 						foundTarget = true;
 						break;

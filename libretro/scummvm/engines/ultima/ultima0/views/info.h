@@ -57,7 +57,7 @@ protected:
 
 public:
 	Info(const char *viewName = "Info");
-	~Info() override {}
+	~Info() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

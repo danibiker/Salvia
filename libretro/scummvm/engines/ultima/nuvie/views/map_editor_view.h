@@ -41,7 +41,7 @@ private:
 	GUI_Button *down_button;
 public:
 	MapEditorView(const Configuration *config);
-	~MapEditorView() override;
+	~MapEditorView();
 
 	bool init(Screen *tmp_screen, void *view_manager, uint16 x, uint16 y, Font *f, Party *p, TileManager *tm, ObjManager *om);
 	void Display(bool full_redraw) override;

@@ -91,7 +91,7 @@ public:
 	SurfaceToFrames(Graphics::Surface *surf) : _surf(surf) {
 	}
 
-	~SurfaceToFrames() override {
+	~SurfaceToFrames() {
 		_surf->free();
 		delete _surf;
 	}
@@ -148,7 +148,7 @@ public:
 		_data = (byte *)_surf->getBasePtr(0, 0);
 	}
 
-	~Cnv() override {
+	~Cnv() {
 		if (_freeData) {
 			if (_surf) {
 				_surf->free();

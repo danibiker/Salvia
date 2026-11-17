@@ -148,7 +148,7 @@ private:
 class MystBitmap : public MohawkBitmap {
 public:
 	MystBitmap() : MohawkBitmap(), _bitsPerPixel(8) {}
-	~MystBitmap() override {}
+	~MystBitmap() {}
 
 	MohawkSurface *decodeImage(Common::SeekableReadStream *stream) override;
 
@@ -164,7 +164,7 @@ private:
 class LivingBooksBitmap_v1 : public MohawkBitmap {
 public:
 	LivingBooksBitmap_v1() : MohawkBitmap() {}
-	~LivingBooksBitmap_v1() override {}
+	~LivingBooksBitmap_v1() {}
 
 	MohawkSurface *decodeImageLB(Common::SeekableReadStreamEndian *stream);
 
@@ -175,7 +175,7 @@ protected:
 class DOSBitmap : public MohawkBitmap {
 public:
 	DOSBitmap() : MohawkBitmap() {}
-	~DOSBitmap() override {}
+	~DOSBitmap() {}
 
 	MohawkSurface *decodeImage(Common::SeekableReadStream *stream) override;
 

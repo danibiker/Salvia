@@ -42,7 +42,7 @@ private:
 
 public:
 	DraggableView(const Configuration *config);
-	~DraggableView() override;
+	~DraggableView();
 
 	/* events, used for dragging the area. */
 	GUI_status MouseDown(int x, int y, Events::MouseButton button) override;

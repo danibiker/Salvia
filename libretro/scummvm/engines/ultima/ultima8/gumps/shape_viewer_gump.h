@@ -50,7 +50,7 @@ public:
 	ShapeViewerGump(int x, int y, int width, int height,
 					Common::Array<ShapeArchiveEntry> &archives,
 					uint32 flags = FLAG_PREVENT_SAVE, int32 layer = LAYER_MODAL);
-	~ShapeViewerGump() override;
+	~ShapeViewerGump();
 
 	void PaintThis(RenderSurface *, int32 lerp_factor, bool scaled) override;
 

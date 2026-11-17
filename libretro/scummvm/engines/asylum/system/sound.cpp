@@ -266,14 +266,14 @@ void Sound::stop(ResourceId resourceId) {
 }
 
 void Sound::stopAll(ResourceId resourceId) {
-	for (auto &sound : _soundQueue)
-		if (sound.resourceId == resourceId)
-			_mixer->stopHandle(sound.handle);
+	for (auto rfIt269 = _soundQueue.begin(), rfEnd269 = _soundQueue.end(); rfIt269 != rfEnd269; ++rfIt269)
+		{ auto &sound = *rfIt269; if (sound.resourceId == resourceId)
+			_mixer->stopHandle(sound.handle); }
 }
 
 void Sound::stopAll() {
-	for (auto &sound : _soundQueue)
-		_mixer->stopHandle(sound.handle);
+	for (auto rfIt275 = _soundQueue.begin(), rfEnd275 = _soundQueue.end(); rfIt275 != rfEnd275; ++rfIt275)
+		{ auto &sound = *rfIt275; _mixer->stopHandle(sound.handle); }
 }
 
 void Sound::stopMusic() {

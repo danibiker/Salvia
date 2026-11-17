@@ -69,7 +69,7 @@ protected:
 public:
 	CLASSDEF;
 	ViewportDungeon(TreeItem *parent) : Gfx::VisualItem("ViewportDungeon", Rect(8, 8, 312, 152), parent) {}
-	~ViewportDungeon() override {}
+	~ViewportDungeon() {}
 
 	/**
 	 * Draws the dungeon

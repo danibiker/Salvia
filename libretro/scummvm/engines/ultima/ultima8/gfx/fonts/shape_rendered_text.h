@@ -34,7 +34,7 @@ class ShapeRenderedText : public RenderedText {
 public:
 	ShapeRenderedText(const Common::List<PositionedText> &lines,
 	                  int width, int height, int vlead, ShapeFont *font);
-	~ShapeRenderedText() override;
+	~ShapeRenderedText();
 
 	void draw(RenderSurface *surface, int x, int y, bool destmasked = false) override;
 	void drawBlended(RenderSurface *surface, int x, int y, uint32 col, bool destmasked = false) override;

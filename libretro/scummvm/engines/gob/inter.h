@@ -186,7 +186,7 @@ protected:
 class Inter_v1 : public Inter {
 public:
 	Inter_v1(GobEngine *vm);
-	~Inter_v1() override {}
+	~Inter_v1() {}
 
 	int16 loadSound(int16 slot) override;
 	void animPalette() override;
@@ -354,13 +354,13 @@ protected:
 	void manipulateMap(int16 xPos, int16 yPos, int16 item);
 
 private:
-	bool _ignoreSpeakerOff = false;
+	bool _ignoreSpeakerOff;
 };
 
 class Inter_Geisha : public Inter_v1 {
 public:
 	Inter_Geisha(GobEngine *vm);
-	~Inter_Geisha() override;
+	~Inter_Geisha();
 
 protected:
 	void setupOpcodesDraw() override;
@@ -396,7 +396,7 @@ private:
 class Inter_v2 : public Inter_v1 {
 public:
 	Inter_v2(GobEngine *vm);
-	~Inter_v2() override {}
+	~Inter_v2() {}
 
 	int16 loadSound(int16 search) override;
 	void animPalette() override;
@@ -468,7 +468,7 @@ protected:
 class Inter_Bargon : public Inter_v2 {
 public:
 	Inter_Bargon(GobEngine *vm);
-	~Inter_Bargon() override {}
+	~Inter_Bargon() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -490,7 +490,7 @@ protected:
 class Inter_Fascination : public Inter_v2 {
 public:
 	Inter_Fascination(GobEngine *vm);
-	~Inter_Fascination() override {}
+	~Inter_Fascination() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -529,7 +529,7 @@ protected:
 class Inter_LittleRed : public Inter_v2 {
 public:
 	Inter_LittleRed(GobEngine *vm);
-	~Inter_LittleRed() override {}
+	~Inter_LittleRed() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -543,7 +543,7 @@ protected:
 class Inter_Adibou1 : public Inter_v2 {
 public:
 	Inter_Adibou1(GobEngine *vm);
-	~Inter_Adibou1() override {}
+	~Inter_Adibou1() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -560,7 +560,7 @@ protected:
 class Inter_v3 : public Inter_v2 {
 public:
 	Inter_v3(GobEngine *vm);
-	~Inter_v3() override {}
+	~Inter_v3() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -580,7 +580,7 @@ private:
 class Inter_Inca2 : public Inter_v3 {
 public:
 	Inter_Inca2(GobEngine *vm);
-	~Inter_Inca2() override {}
+	~Inter_Inca2() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -594,7 +594,7 @@ protected:
 class Inter_v4 : public Inter_v3 {
 public:
 	Inter_v4(GobEngine *vm);
-	~Inter_v4() override {}
+	~Inter_v4() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -608,7 +608,7 @@ protected:
 class Inter_v5 : public Inter_v4 {
 public:
 	Inter_v5(GobEngine *vm);
-	~Inter_v5() override {}
+	~Inter_v5() {}
 
 protected:
 	byte _gob_97_98_val;
@@ -643,7 +643,7 @@ protected:
 class Inter_v6 : public Inter_v5 {
 public:
 	Inter_v6(GobEngine *vm);
-	~Inter_v6() override {}
+	~Inter_v6() {}
 
 protected:
 	bool _gotFirstPalette;
@@ -668,7 +668,7 @@ protected:
 class Inter_Playtoons : public Inter_v6 {
 public:
 	Inter_Playtoons(GobEngine *vm);
-	~Inter_Playtoons() override {}
+	~Inter_Playtoons() {}
 
 protected:
 	void setupOpcodesDraw() override;
@@ -696,7 +696,7 @@ protected:
 class Inter_v7 : public Inter_Playtoons {
 public:
 	Inter_v7(GobEngine *vm);
-	~Inter_v7() override {};
+	~Inter_v7() {};
 
 protected:
 	void setupOpcodesDraw() override;
@@ -820,14 +820,14 @@ protected:
 	void o7_dummy(OpGobParams &params);
 
 private:
-	const uint32 kAdi4InfChildDataSize = 7406;
-	const uint32 kAdi4InfGeneralChildDataSize = 3406;
-	const uint32 kAdi4InfAppChildDataSize = 200;
+	const uint32 kAdi4InfChildDataSize;
+	const uint32 kAdi4InfGeneralChildDataSize;
+	const uint32 kAdi4InfAppChildDataSize;
 
-	uint32 _adi4CurrentAppNbr = 0;
-	uint32 _adi4CurrentChildNbr = 0;
-	uint32 _adi4CurrentSectionInGeneralChildData = 0;
-	uint32 _adi4CurrentSectionInAppChildData = 0;
+	uint32 _adi4CurrentAppNbr;
+	uint32 _adi4CurrentChildNbr;
+	uint32 _adi4CurrentSectionInGeneralChildData;
+	uint32 _adi4CurrentSectionInAppChildData;
 	Common::Array<byte> _adi4GeneralChildData;
 	Common::Array<byte> _adi4CurrentAppChildData;
 

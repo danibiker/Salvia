@@ -31,7 +31,7 @@ class KyraEngine_LoK;
 class Screen_LoK : public Screen {
 public:
 	Screen_LoK(KyraEngine_LoK *vm, OSystem *system);
-	~Screen_LoK() override;
+	~Screen_LoK();
 
 	bool init() override;
 

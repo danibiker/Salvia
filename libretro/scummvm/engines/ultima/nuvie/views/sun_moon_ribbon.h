@@ -37,7 +37,7 @@ private:
 
 public:
 	SunMoonRibbon(Player *p, Weather *w, TileManager *tm);
-	~SunMoonRibbon() override;
+	~SunMoonRibbon();
 
 	void init(Screen *screen);
 	void Display(bool full_redraw) override;

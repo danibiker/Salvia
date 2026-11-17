@@ -641,7 +641,8 @@ void Events::freeList() {
 void Events::processEventTime(long msec) {
 	uint16 event_count = 0;
 
-	for (auto &eventi : _eventList) {
+	for (auto rfIt644 = _eventList.begin(), rfEnd644 = _eventList.end(); rfIt644 != rfEnd644; ++rfIt644) {
+		auto &eventi = *rfIt644;
 		eventi.front().time -= msec;
 		event_count++;
 

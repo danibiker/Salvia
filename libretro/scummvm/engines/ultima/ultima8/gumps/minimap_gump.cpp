@@ -49,7 +49,8 @@ MiniMapGump::MiniMapGump() : ResizableGump(), _minimaps(), _ax(0), _ay(0) {
 }
 
 MiniMapGump::~MiniMapGump(void) {
-	for (auto &i : _minimaps) {
+	for (auto rfIt52 = _minimaps.begin(), rfEnd52 = _minimaps.end(); rfIt52 != rfEnd52; ++rfIt52) {
+		auto &i = *rfIt52;
 		delete i._value;
 	}
 }
@@ -100,7 +101,8 @@ void MiniMapGump::generate() {
 }
 
 void MiniMapGump::clear() {
-	for (auto &i : _minimaps) {
+	for (auto rfIt103 = _minimaps.begin(), rfEnd103 = _minimaps.end(); rfIt103 != rfEnd103; ++rfIt103) {
+		auto &i = *rfIt103;
 		delete i._value;
 	}
 	_minimaps.clear();
@@ -205,7 +207,8 @@ void MiniMapGump::saveData(Common::WriteStream *ws) {
 	Gump::saveData(ws);
 
 	ws->writeUint32LE(static_cast<uint32>(_minimaps.size()));
-	for (const auto &i : _minimaps) {
+	for (auto rfIt208 = _minimaps.begin(), rfEnd208 = _minimaps.end(); rfIt208 != rfEnd208; ++rfIt208) {
+		const auto &i = *rfIt208;
 		const MiniMap *minimap = i._value;
 		ws->writeUint32LE(i._key);
 		minimap->save(ws);

@@ -29,7 +29,9 @@
 namespace Tinsel {
 
 // attribute values - not a bit bit field to prevent portability problems
-enum class InvObjAttr {
+// C++03: scoped like the original "enum class" (VS2010 accepts InvObjAttr::VALUE)
+struct InvObjAttrScope {
+enum InvObjAttr {
 	IO_ONLYINV1 = 0x01,
 	IO_ONLYINV2 = 0x02,
 	IO_DROPCODE = 0x04,
@@ -46,6 +48,8 @@ enum class InvObjAttr {
 	V3ATTR_X1000 = 0x1000,
 	V3ATTR_X2000 = 0x2000,
 };
+};
+typedef InvObjAttrScope::InvObjAttr InvObjAttr;
 
 class InventoryObject {
 public:
@@ -74,7 +78,7 @@ private:
 	int32 _id;            // inventory objects id
 	SCNHANDLE _hIconFilm; // inventory objects animation film
 	SCNHANDLE _hScript;   // inventory objects event handling script
-	int32 _attribute = 0;
+	int32 _attribute;
 };
 
 class InventoryObjectT3 : public InventoryObject {

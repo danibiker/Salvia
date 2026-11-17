@@ -60,7 +60,7 @@ public:
 	              bool delayed_init = false);
 
 	//! The SpriteProcess destructor
-	~SpriteProcess(void) override;
+	~SpriteProcess(void);
 
 	//! Move the sprite to a new location
 	void move(int x, int y, int z);

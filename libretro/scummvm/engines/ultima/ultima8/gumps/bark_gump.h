@@ -48,7 +48,7 @@ public:
 
 	BarkGump();
 	BarkGump(uint16 owner, const Common::String &msg, uint32 speechShapeNum = 0);
-	~BarkGump() override;
+	~BarkGump();
 
 	// Run the gump (decrement the counter)
 	void        run() override;

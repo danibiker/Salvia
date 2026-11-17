@@ -36,7 +36,7 @@ private:
 
 public:
 	Intro() : View("Intro") {}
-	~Intro() override {}
+	~Intro() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	void draw() override;

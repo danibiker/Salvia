@@ -47,7 +47,7 @@ protected:
 
 public:
 	MidiDriver_Accolade_Cms();
-	~MidiDriver_Accolade_Cms() override;
+	~MidiDriver_Accolade_Cms();
 
 	int open() override;
 	void close() override;

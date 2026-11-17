@@ -50,12 +50,14 @@ void HitZone::load(SagaEngine *vm, Common::MemoryReadStreamEndian *readStream, i
 	_nameIndex = readStream->readUint16();
 	_scriptNumber = readStream->readUint16();
 
-	for (auto &area : _clickAreas) {
+	for (auto rfIt53 = _clickAreas.begin(), rfEnd53 = _clickAreas.end(); rfIt53 != rfEnd53; ++rfIt53) {
+		auto &area = *rfIt53;
 		area.resize(readStream->readUint16LE());
 
 		assert(!area.empty());
 
-		for (auto &point : area) {
+		for (auto rfIt58 = area.begin(), rfEnd58 = area.end(); rfIt58 != rfEnd58; ++rfIt58) {
+			auto &point = *rfIt58;
 			point.x = readStream->readSint16();
 			point.y = readStream->readSint16();
 
@@ -73,7 +75,8 @@ void HitZone::load(SagaEngine *vm, Common::MemoryReadStreamEndian *readStream, i
 }
 
 bool HitZone::getSpecialPoint(Point &specialPoint) const {
-	for (const auto &area : _clickAreas) {
+	for (auto rfIt76 = _clickAreas.begin(), rfEnd76 = _clickAreas.end(); rfIt76 != rfEnd76; ++rfIt76) {
+		const auto &area = *rfIt76;
 		if (area.size() == 1) {
 			specialPoint = area[0];
 			return true;
@@ -87,7 +90,8 @@ bool HitZone::hitTest(const Point &testPoint) {
 	uint pointsCount;
 
 	if (_flags & kHitZoneEnabled) {
-		for (const auto &area : _clickAreas) {
+		for (auto rfIt90 = _clickAreas.begin(), rfEnd90 = _clickAreas.end(); rfIt90 != rfEnd90; ++rfIt90) {
+			const auto &area = *rfIt90;
 			pointsCount = area.size();
 			if (pointsCount < 2) {
 				continue;
@@ -178,7 +182,8 @@ void ObjectMap::load(const ByteArray &resourceData) {
 	_hitZoneList.resize(readS.readUint16());
 
 	int idx = 0;
-	for (auto &hitZone : _hitZoneList) {
+	for (auto rfIt181 = _hitZoneList.begin(), rfEnd181 = _hitZoneList.end(); rfIt181 != rfEnd181; ++rfIt181) {
+		auto &hitZone = *rfIt181;
 		hitZone.load(_vm, &readS, idx++, _vm->_scene->currentSceneNumber());
 	}
 }
@@ -220,7 +225,8 @@ void ObjectMap::draw(const Point& testPoint, int color, int color2) {
 int ObjectMap::hitTest(const Point& testPoint) {
 
 	// Loop through all scene objects
-	for (auto &hitZone : _hitZoneList) {
+	for (auto rfIt223 = _hitZoneList.begin(), rfEnd223 = _hitZoneList.end(); rfIt223 != rfEnd223; ++rfIt223) {
+		auto &hitZone = *rfIt223;
 		if (hitZone.hitTest(testPoint)) {
 			return hitZone.getIndex();
 		}

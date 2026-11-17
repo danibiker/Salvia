@@ -30,7 +30,7 @@ namespace Kyra {
 class PCSpeakerDriver : public PCSoundDriver, public Audio::AudioStream {
 public:
 	PCSpeakerDriver(Audio::Mixer *mixer, bool pcJRMode);
-	~PCSpeakerDriver() override;
+	~PCSpeakerDriver();
 
 	void initDriver() override;
 	void setSoundData(uint8 *data, uint32 size) override;

@@ -145,7 +145,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~ViewCharacterGeneration() override;
+	~ViewCharacterGeneration();
 
 	/**
 	 * Draw the game screen

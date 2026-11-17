@@ -40,7 +40,7 @@ protected:
 public:
 	ResizableGump();
 	ResizableGump(int x, int y, int width, int height);
-	~ResizableGump() override;
+	~ResizableGump();
 
 	void setMinSize(int minWidth, int minHeight) {
 		_minWidth = minWidth;

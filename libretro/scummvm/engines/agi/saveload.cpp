@@ -833,7 +833,8 @@ SavedGameSlotIdArray AgiEngine::getSavegameSlotIds() {
 	filenames = _saveFileMan->listSavefiles(_targetName + ".###");
 
 	// convert to lower-case, just to be sure
-	for (auto &file : filenames) {
+	for (auto rfIt836 = filenames.begin(), rfEnd836 = filenames.end(); rfIt836 != rfEnd836; ++rfIt836) {
+		auto &file = *rfIt836;
 		file.toLowercase();
 	}
 
@@ -841,7 +842,8 @@ SavedGameSlotIdArray AgiEngine::getSavegameSlotIds() {
 	Common::sort(filenames.begin(), filenames.end());
 
 	// now extract slot-Ids
-	for (auto &file : filenames) {
+	for (auto rfIt844 = filenames.begin(), rfEnd844 = filenames.end(); rfIt844 != rfEnd844; ++rfIt844) {
+		auto &file = *rfIt844;
 		slotId = atoi(file.c_str() + numberPos);
 		slotIdArray.push_back(slotId);
 	}

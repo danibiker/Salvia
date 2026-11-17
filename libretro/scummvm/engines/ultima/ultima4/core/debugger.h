@@ -405,7 +405,7 @@ public:
 	bool _disableCombat;
 public:
 	Debugger();
-	~Debugger() override;
+	~Debugger();
 
 	/**
 	 * Gets a chest.

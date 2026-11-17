@@ -69,7 +69,7 @@ class SlotFileIndexed : public SlotFile {
 public:
 	SlotFileIndexed(GobEngine *vm, uint32 slotCount, const Common::String &base,
 			const Common::String &extStub);
-	~SlotFileIndexed() override;
+	~SlotFileIndexed();
 
 	/** Build the save file name. */
 	Common::String build(int slot) const;
@@ -96,7 +96,7 @@ protected:
 class SlotFileStatic : public SlotFile {
 public:
 	SlotFileStatic(GobEngine *vm, const Common::String &base, const Common::String &ext);
-	~SlotFileStatic() override;
+	~SlotFileStatic();
 
 	int getSlot(int32 offset) const override;
 	int getSlotRemainder(int32 offset) const override;
@@ -141,7 +141,7 @@ protected:
 class TempSpriteHandler : public SaveHandler {
 public:
 	TempSpriteHandler(GobEngine *vm);
-	~TempSpriteHandler() override;
+	~TempSpriteHandler();
 
 	int32 getSize() override;
 	bool load(int16 dataVar, int32 index_as_size, int32 offset) override;
@@ -172,7 +172,7 @@ protected:
 class NotesHandler : public SaveHandler {
 public:
 	NotesHandler(uint32 notesSize, GobEngine *vm, const Common::String &target);
-	~NotesHandler() override;
+	~NotesHandler();
 
 	int32 getSize() override;
 	bool load(int16 dataVar, int32 size, int32 offset) override;
@@ -182,7 +182,7 @@ private:
 	class File : public SlotFileStatic {
 	public:
 		File(GobEngine *vm, const Common::String &base);
-		~File() override;
+		~File();
 	};
 
 	uint32 _notesSize;
@@ -194,7 +194,7 @@ private:
 class FakeFileHandler : public SaveHandler {
 public:
 	FakeFileHandler(GobEngine *vm);
-	~FakeFileHandler() override;
+	~FakeFileHandler();
 
 	int32 getSize() override;
 	bool load(int16 dataVar, int32 size, int32 offset) override;

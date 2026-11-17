@@ -41,7 +41,7 @@ class Background: public GUI_Widget {
 public:
 
 	Background(const Configuration *cfg);
-	~Background() override;
+	~Background();
 
 	bool init();
 	uint16 get_border_width() const {

@@ -56,7 +56,7 @@ protected:
 class Init_v1 : public Init {
 public:
 	Init_v1(GobEngine *vm);
-	~Init_v1() override;
+	~Init_v1();
 
 	void initVideo() override;
 };
@@ -64,7 +64,7 @@ public:
 class Init_Geisha : public Init_v1 {
 public:
 	Init_Geisha(GobEngine *vm);
-	~Init_Geisha() override;
+	~Init_Geisha();
 
 	void initVideo() override;
 };
@@ -72,7 +72,7 @@ public:
 class Init_v2 : public Init_v1 {
 public:
 	Init_v2(GobEngine *vm);
-	~Init_v2() override;
+	~Init_v2();
 
 	void initVideo() override;
 	void initGame() override;
@@ -81,7 +81,7 @@ public:
 class Init_v3 : public Init_v2 {
 public:
 	Init_v3(GobEngine *vm);
-	~Init_v3() override;
+	~Init_v3();
 
 	void initVideo() override;
 	void updateConfig() override;
@@ -90,7 +90,7 @@ public:
 class Init_v4 : public Init_v3 {
 public:
 	Init_v4(GobEngine *vm);
-	~Init_v4() override;
+	~Init_v4();
 
 	void updateConfig() override;
 };
@@ -98,7 +98,7 @@ public:
 class Init_v6 : public Init_v3 {
 public:
 	Init_v6(GobEngine *vm);
-	~Init_v6() override;
+	~Init_v6();
 
 	void initGame() override;
 };
@@ -106,7 +106,7 @@ public:
 class Init_Fascination : public Init_v2 {
 public:
 	Init_Fascination(GobEngine *vm);
-	~Init_Fascination() override;
+	~Init_Fascination();
 
 	void updateConfig() override;
 	void initGame() override;
@@ -115,7 +115,7 @@ public:
 class Init_v7 : public Init_v2 {
 public:
 	Init_v7(GobEngine *vm);
-	~Init_v7() override;
+	~Init_v7();
 
 	void initGame() override;
 };

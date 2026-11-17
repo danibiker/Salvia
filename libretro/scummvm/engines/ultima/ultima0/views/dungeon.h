@@ -46,7 +46,7 @@ private:
 
 public:
 	Dungeon();
-	~Dungeon() override {}
+	~Dungeon() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

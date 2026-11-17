@@ -223,7 +223,8 @@ void Scene::getResourceTypes(SAGAResourceTypes *&types, int &typesCount) {
 }
 
 void Scene::drawTextList() {
-	for (auto &entry : _textList) {
+	for (auto rfIt226 = _textList.begin(), rfEnd226 = _textList.end(); rfIt226 != rfEnd226; ++rfIt226) {
+auto &entry = *rfIt226;
 
 		if (entry.display) {
 
@@ -893,7 +894,8 @@ void Scene::loadSceneResourceList(uint32 resourceId, SceneResourceDataArray &res
 		// resource table
 		debug(3, "Loading scene resource list");
 
-		for (auto &resource : resourceList) {
+		for (auto rfIt896 = resourceList.begin(), rfEnd896 = resourceList.end(); rfIt896 != rfEnd896; ++rfIt896) {
+			auto &resource = *rfIt896;
 			resource.resourceId = readS.readUint16();
 			resource.resourceType = readS.readUint16();
 			// demo version may contain invalid resourceId
@@ -913,7 +915,8 @@ void Scene::processSceneResources(SceneResourceDataArray &resourceList, SceneLoa
 	getResourceTypes(types, typesCount);
 
 	// Process the scene resource list
-	for (auto &resource : resourceList) {
+	for (auto rfIt916 = resourceList.begin(), rfEnd916 = resourceList.end(); rfIt916 != rfEnd916; ++rfIt916) {
+		auto &resource = *rfIt916;
 		if (resource.invalid) {
 			continue;
 		}

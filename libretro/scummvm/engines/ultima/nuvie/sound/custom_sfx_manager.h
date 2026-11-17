@@ -35,7 +35,7 @@ namespace Nuvie {
 class CustomSfxManager : public SfxManager {
 public:
 	CustomSfxManager(const Configuration *cfg, Audio::Mixer *m);
-	~CustomSfxManager() override;
+	~CustomSfxManager();
 
 	bool playSfx(SfxIdType sfx_id, uint8 volume) override;
 	bool playSfxLooping(SfxIdType sfx_id, Audio::SoundHandle *handle, uint8 volume) override;

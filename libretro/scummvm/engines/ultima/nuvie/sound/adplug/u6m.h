@@ -37,7 +37,7 @@ public:
 		ARRAYCLEAR(channel_freq);
 	}
 
-	~Cu6mPlayer() override;
+	~Cu6mPlayer();
 
 
 

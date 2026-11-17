@@ -494,7 +494,7 @@ public:
 	typedef void (ToucheEngine::*OpcodeProc)();
 
 	ToucheEngine(OSystem *system, Common::Language language);
-	~ToucheEngine() override;
+	~ToucheEngine();
 
 	// Engine APIs
 	Common::Error run() override;

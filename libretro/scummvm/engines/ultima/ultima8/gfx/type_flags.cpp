@@ -184,7 +184,8 @@ void TypeFlags::loadWeaponInfo() {
 	Common::Array<Common::String> weaponkeys;
 	Common::String category = "weapons";
 	weaponkeys = config->listSections(category);
-	for (const auto &section : weaponkeys) {
+	for (auto rfIt187 = weaponkeys.begin(), rfEnd187 = weaponkeys.end(); rfIt187 != rfEnd187; ++rfIt187) {
+		const auto &section = *rfIt187;
 		WeaponInfo *wi = new WeaponInfo;
 
 		int val = 0;
@@ -304,7 +305,8 @@ void TypeFlags::loadArmourInfo() {
 	Common::Array<Common::String> armourkeys;
 	Common::String category = "armour";
 	armourkeys = config->listSections(category);
-	for (const auto &section : armourkeys) {
+	for (auto rfIt307 = armourkeys.begin(), rfEnd307 = armourkeys.end(); rfIt307 != rfEnd307; ++rfIt307) {
+		const auto &section = *rfIt307;
 		ArmourInfo ai;
 
 		int val;
@@ -360,7 +362,8 @@ void TypeFlags::loadMonsterInfo() {
 	Common::Array<Common::String> monsterkeys;
 	Common::String category = "monsters";
 	monsterkeys = config->listSections(category);
-	for (const auto &section : monsterkeys) {
+	for (auto rfIt363 = monsterkeys.begin(), rfEnd363 = monsterkeys.end(); rfIt363 != rfEnd363; ++rfIt363) {
+		const auto &section = *rfIt363;
 		MonsterInfo *mi = new MonsterInfo;
 
 		int val;

@@ -38,7 +38,7 @@ public:
 	TargetGump();
 	TargetGump(int x, int y);
 
-	~TargetGump() override;
+	~TargetGump();
 
 	bool PointOnGump(int mx, int my) override;
 	void InitGump(Gump *newparent, bool take_focus = true) override;

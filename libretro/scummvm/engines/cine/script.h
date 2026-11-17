@@ -346,7 +346,7 @@ protected:
 	OpFunc opcodeHandler(byte opcode) const override;
 
 public:
-	~OSScriptInfo() override {}
+	~OSScriptInfo() {}
 
 	const char *opcodeInfo(byte opcode) const override;
 	FWScript *create(const RawScript &script, int16 index) const override;

@@ -27,7 +27,8 @@ namespace Ultima {
 namespace Shared {
 
 XMLNode::~XMLNode() {
-	for (auto *node : _nodeList) {
+	for (auto rfIt30 = _nodeList.begin(), rfEnd30 = _nodeList.end(); rfIt30 != rfEnd30; ++rfIt30) {
+		auto *node = *rfIt30;
 		delete node;
 	}
 }
@@ -47,7 +48,8 @@ const Common::String &XMLNode::reference(const Common::String &h, bool &exists) 
 		Common::String k;
 		k = h.substr(h.find('/') + 1);
 		Common::String k2 = k.substr(0, k.find('/'));
-		for (auto *node : _nodeList) {
+		for (auto rfIt50 = _nodeList.begin(), rfEnd50 = _nodeList.end(); rfIt50 != rfEnd50; ++rfIt50) {
+			auto *node = *rfIt50;
 			if (node->_id == k2)
 				return node->reference(k, exists);
 		}
@@ -71,7 +73,8 @@ const XMLNode *XMLNode::subtree(const Common::String &h) const {
 		Common::String k;
 		k = h.substr(h.find('/') + 1);
 		Common::String k2 = k.substr(0, k.find('/'));
-		for (auto *node : _nodeList) {
+		for (auto rfIt74 = _nodeList.begin(), rfEnd74 = _nodeList.end(); rfIt74 != rfEnd74; ++rfIt74) {
+			auto *node = *rfIt74;
 			if (node->_id.equalsIgnoreCase(k2)) {
 				return node->subtree(k);
 			}
@@ -93,7 +96,8 @@ Common::String XMLNode::dump(int depth) {
 	if (_id[_id.size() - 1] != '/') {
 		if (_nodeList.empty() == false)
 			s += "\n";
-		for (auto *node : _nodeList) {
+		for (auto rfIt96 = _nodeList.begin(), rfEnd96 = _nodeList.end(); rfIt96 != rfEnd96; ++rfIt96) {
+			auto *node = *rfIt96;
 			s += node->dump(depth + 1);
 		}
 
@@ -134,7 +138,8 @@ void XMLNode::xmlAssign(const Common::String &key, const Common::String &value) 
 	Common::String k;
 	k = key.substr(key.find('/') + 1);
 	Common::String k2 = k.substr(0, k.find('/'));
-	for (auto *node : _nodeList) {
+	for (auto rfIt137 = _nodeList.begin(), rfEnd137 = _nodeList.end(); rfIt137 != rfEnd137; ++rfIt137) {
+		auto *node = *rfIt137;
 		if (node->_id == k2) {
 			node->xmlAssign(k, value);
 			return;
@@ -155,7 +160,8 @@ void XMLNode::listKeys(const Common::String &key, Common::Array<Common::String> 
 	Common::String s(key);
 	s += "/";
 
-	for (auto *node : _nodeList) {
+	for (auto rfIt158 = _nodeList.begin(), rfEnd158 = _nodeList.end(); rfIt158 != rfEnd158; ++rfIt158) {
+		auto *node = *rfIt158;
 		if (!longformat)
 			vs.push_back(node->_id);
 		else
@@ -166,7 +172,8 @@ void XMLNode::listKeys(const Common::String &key, Common::Array<Common::String> 
 Common::String XMLNode::encodeEntity(const Common::String &s) {
 	Common::String  ret;
 
-	for (const auto &c : s) {
+	for (auto rfIt169 = s.begin(), rfEnd169 = s.end(); rfIt169 != rfEnd169; ++rfIt169) {
+		const auto &c = *rfIt169;
 		switch (c) {
 		case '<':
 			ret += "&lt;";
@@ -463,7 +470,8 @@ bool XMLNode::searchPairs(KeyTypeList &ktl, const Common::String &basekey,
 		/* If we've found it, return every key->value pair under this key,
 		    then return true, since we've found the key we were looking for.*/
 		if (basekey == currkey + _id) {
-			for (auto *node : _nodeList) {
+			for (auto rfIt466 = _nodeList.begin(), rfEnd466 = _nodeList.end(); rfIt466 != rfEnd466; ++rfIt466) {
+				auto *node = *rfIt466;
 				if (node->_id[0] != '!')
 					node->selectPairs(ktl, "");
 			}
@@ -471,7 +479,8 @@ bool XMLNode::searchPairs(KeyTypeList &ktl, const Common::String &basekey,
 		}
 		/* Else, keep searching for the key under it's subnodes */
 		else {
-			for (auto *node : _nodeList) {
+			for (auto rfIt474 = _nodeList.begin(), rfEnd474 = _nodeList.end(); rfIt474 != rfEnd474; ++rfIt474) {
+				auto *node = *rfIt474;
 				if (node->searchPairs(ktl, basekey, currkey + _id + '/', pos))
 					return true;
 			}
@@ -484,7 +493,8 @@ bool XMLNode::searchPairs(KeyTypeList &ktl, const Common::String &basekey,
 void XMLNode::selectPairs(KeyTypeList &ktl, const Common::String &currkey) {
 	ktl.push_back(KeyType(currkey + _id, currkey));
 
-	for (auto *node : _nodeList) {
+	for (auto rfIt487 = _nodeList.begin(), rfEnd487 = _nodeList.end(); rfIt487 != rfEnd487; ++rfIt487) {
+		auto *node = *rfIt487;
 		node->selectPairs(ktl, currkey + _id + '/');
 	}
 }

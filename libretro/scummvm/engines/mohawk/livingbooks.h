@@ -87,7 +87,7 @@ protected:
 
 public:
 	MohawkEngine_LivingBooks(OSystem *syst, const MohawkGameDescription *gamedesc);
-	~MohawkEngine_LivingBooks() override;
+	~MohawkEngine_LivingBooks();
 
 	Common::RandomSource *_rnd;
 

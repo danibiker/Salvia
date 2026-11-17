@@ -385,7 +385,8 @@ bool Console::Cmd_BT(int argc, const char **argv) {
 
 	uint8 p[CMD_BSIZE] = { 0 };
 
-	for (auto &entry : _vm->_game.execStack) {
+	for (auto rfIt388 = _vm->_game.execStack.begin(), rfEnd388 = _vm->_game.execStack.end(); rfIt388 != rfEnd388; ++rfIt388) {
+		auto &entry = *rfIt388;
 		uint8 *code = _vm->_game.logics[entry.script].data;
 		uint8 op = code[entry.curIP];
 		int parameterSize = opCodes[op].parameterSize;

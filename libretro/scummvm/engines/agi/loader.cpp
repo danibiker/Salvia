@@ -42,7 +42,8 @@ void AgiLoader::getPotentialDiskImages(
 	}
 
 	// build array of files with provided disk image extensions
-	for (const Common::FSNode &file : allFiles) {
+	for (auto rfIt45 = allFiles.begin(), rfEnd45 = allFiles.end(); rfIt45 != rfEnd45; ++rfIt45) {
+		const Common::FSNode &file = *rfIt45;
 		for (size_t i = 0; i < imageExtensionCount; i++) {
 			if (file.getName().hasSuffixIgnoreCase(imageExtensions[i])) {
 				Common::Path path = file.getPath();

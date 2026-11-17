@@ -263,7 +263,7 @@ class BalloonManager_ns : public BalloonManager {
 
 public:
 	BalloonManager_ns(Parallaction_ns *vm, Font *font);
-	~BalloonManager_ns() override;
+	~BalloonManager_ns();
 
 	void reset() override;
 	int setLocationBalloon(const Common::String &text, bool endGame) override;
@@ -560,7 +560,7 @@ class BalloonManager_br : public BalloonManager {
 
 public:
 	BalloonManager_br(Parallaction_br *vm, Font *font);
-	~BalloonManager_br() override;
+	~BalloonManager_br();
 
 	void reset() override;
 	int setLocationBalloon(const Common::String &text, bool endGame) override;

@@ -61,7 +61,7 @@ public:
 class SmackerPlayer : public Entity {
 public:
 	SmackerPlayer(NeverhoodEngine *vm, Scene *scene, uint32 fileHash, bool doubleSurface, bool flag, bool paused = false);
-	~SmackerPlayer() override;
+	~SmackerPlayer();
         Common::SharedPtr<BaseSurface> getSurface() { return _smackerSurface; }
 	void open(uint32 fileHash, bool keepLastFrame);
 	void close();

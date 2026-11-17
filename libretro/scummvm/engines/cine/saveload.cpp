@@ -394,14 +394,16 @@ void saveScreenParams(Common::OutSaveFile &out) {
 
 void saveGlobalScripts(Common::OutSaveFile &out) {
 	out.writeUint16BE(g_cine->_globalScripts.size());
-	for (const auto &script : g_cine->_globalScripts) {
+	for (auto rfIt397 = g_cine->_globalScripts.begin(), rfEnd397 = g_cine->_globalScripts.end(); rfIt397 != rfEnd397; ++rfIt397) {
+		const auto &script = *rfIt397;
 		script->save(out);
 	}
 }
 
 void saveObjectScripts(Common::OutSaveFile &out) {
 	out.writeUint16BE(g_cine->_objectScripts.size());
-	for (const auto &script : g_cine->_objectScripts) {
+	for (auto rfIt404 = g_cine->_objectScripts.begin(), rfEnd404 = g_cine->_objectScripts.end(); rfIt404 != rfEnd404; ++rfIt404) {
+		const auto &script = *rfIt404;
 		script->save(out);
 	}
 }
@@ -409,7 +411,8 @@ void saveObjectScripts(Common::OutSaveFile &out) {
 void saveOverlayList(Common::OutSaveFile &out) {
 	out.writeUint16BE(g_cine->_overlayList.size());
 
-	for (const auto &ov : g_cine->_overlayList) {
+	for (auto rfIt412 = g_cine->_overlayList.begin(), rfEnd412 = g_cine->_overlayList.end(); rfIt412 != rfEnd412; ++rfIt412) {
+		const auto &ov = *rfIt412;
 		out.writeUint32BE(0); // next
 		out.writeUint32BE(0); // previous?
 		out.writeUint16BE(ov.objIdx);
@@ -424,7 +427,8 @@ void saveOverlayList(Common::OutSaveFile &out) {
 void saveBgIncrustList(Common::OutSaveFile &out) {
 	out.writeUint16BE(g_cine->_bgIncrustList.size());
 
-	for (const auto &inc : g_cine->_bgIncrustList) {
+	for (auto rfIt427 = g_cine->_bgIncrustList.begin(), rfEnd427 = g_cine->_bgIncrustList.end(); rfIt427 != rfEnd427; ++rfIt427) {
+		const auto &inc = *rfIt427;
 		out.writeUint32BE(0); // next
 		out.writeUint32BE(0); // previous?
 		out.writeUint16BE(inc.objIdx);
@@ -449,7 +453,8 @@ void saveZoneQuery(Common::OutSaveFile &out) {
 void saveSeqList(Common::OutSaveFile &out) {
 	out.writeUint16BE(g_cine->_seqList.size());
 
-	for (const auto &seq : g_cine->_seqList) {
+	for (auto rfIt452 = g_cine->_seqList.begin(), rfEnd452 = g_cine->_seqList.end(); rfIt452 != rfEnd452; ++rfIt452) {
+		const auto &seq = *rfIt452;
 		out.writeSint16BE(seq.var4);
 		out.writeUint16BE(seq.objIdx);
 		out.writeSint16BE(seq.var8);

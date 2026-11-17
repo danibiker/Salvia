@@ -53,7 +53,8 @@ bool NuvieFileList::open(const Common::Path &directory, const char *search, uint
 		return false;
 	};
 
-	for (const auto &child : children) {
+	for (auto rfIt56 = children.begin(), rfEnd56 = children.end(); rfIt56 != rfEnd56; ++rfIt56) {
+		const auto &child = *rfIt56;
 		if (!child->isDirectory())
 			add_filename(child->getFileName());
 	}

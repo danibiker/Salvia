@@ -398,7 +398,8 @@ void WeaselGump::completePurchase() {
 	Item *item = av->getFirstItemWithShape(0x4ed, true);
 	if (item)
 		item->setQuality(_credits);
-	for (const auto &purchase : _purchases) {
+	for (auto rfIt401 = _purchases.begin(), rfEnd401 = _purchases.end(); rfIt401 != rfEnd401; ++rfIt401) {
+		const auto &purchase = *rfIt401;
 		Item *newitem = ItemFactory::createItem(purchase, 0, 0, 0, 0, mapno, 0, true);
 		av->addItemCru(newitem, false);
 	}
@@ -472,7 +473,8 @@ void WeaselGump::abortPurchase() {
 
 int WeaselGump::purchasedCount(uint16 shape) const {
 	int count = 0;
-	for (const auto &purchase : _purchases) {
+	for (auto rfIt475 = _purchases.begin(), rfEnd475 = _purchases.end(); rfIt475 != rfEnd475; ++rfIt475) {
+		 const auto &purchase = *rfIt475;
 		 if (purchase == shape)
 			 count++;
 	}

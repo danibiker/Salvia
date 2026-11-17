@@ -335,7 +335,7 @@ private:
 
 public:
 	Parallaction(OSystem *syst, const PARALLACTIONGameDescription *gameDesc);
-	~Parallaction() override;
+	~Parallaction();
 
 	// Engine APIs
 	virtual Common::Error init();
@@ -475,7 +475,7 @@ class Parallaction_ns : public Parallaction {
 
 public:
 	Parallaction_ns(OSystem* syst, const PARALLACTIONGameDescription *gameDesc);
-	~Parallaction_ns() override;
+	~Parallaction_ns();
 
 	// Engine APIs
 	Common::Error init() override;
@@ -589,7 +589,7 @@ class Parallaction_br : public Parallaction {
 
 public:
 	Parallaction_br(OSystem* syst, const PARALLACTIONGameDescription *gameDesc);
-	~Parallaction_br() override;
+	~Parallaction_br();
 
 	Common::Error init() override;
 	Common::Error go() override;

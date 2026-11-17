@@ -48,7 +48,8 @@ void DesktopGump::PaintThis(RenderSurface *surf, int32 lerp_factor, bool scaled)
 }
 
 void DesktopGump::PaintChildren(RenderSurface *surf, int32 lerp_factor, bool scaled) {
-	for (auto *g : _children) {
+	for (auto rfIt51 = _children.begin(), rfEnd51 = _children.end(); rfIt51 != rfEnd51; ++rfIt51) {
+		auto *g = *rfIt51;
 		// Paint if not closing
 		if (!g->IsClosing()) {
 			// If background blanking on modal is enabled...

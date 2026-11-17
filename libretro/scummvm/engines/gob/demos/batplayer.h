@@ -35,7 +35,7 @@ namespace Gob {
 class BATPlayer : public DemoPlayer {
 public:
 	BATPlayer(GobEngine *vm);
-	~BATPlayer() override;
+	~BATPlayer();
 
 protected:
 	bool playStream(Common::SeekableReadStream &bat) override;

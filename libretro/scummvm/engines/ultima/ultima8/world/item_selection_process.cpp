@@ -130,7 +130,8 @@ bool ItemSelectionProcess::selectNextItem(bool grab) {
 	if (_selectedItem) {
 		// Pick the next item
 		int offset = 0;
-		for (const auto *c : candidates) {
+		for (auto rfIt133 = candidates.begin(), rfEnd133 = candidates.end(); rfIt133 != rfEnd133; ++rfIt133) {
+			const auto *c = *rfIt133;
 			ObjId num = c->getObjId();
 			if (_selectedItem == num) {
 				offset++;

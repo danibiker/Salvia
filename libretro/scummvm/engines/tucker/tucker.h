@@ -450,7 +450,7 @@ public:
 	};
 
 	TuckerEngine(OSystem *system, Common::Language language, uint32 flags);
-	~TuckerEngine() override;
+	~TuckerEngine();
 
 	Common::Error run() override;
 	bool hasFeature(EngineFeature f) const override;

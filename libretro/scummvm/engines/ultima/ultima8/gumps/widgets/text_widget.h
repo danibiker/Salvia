@@ -59,7 +59,7 @@ public:
 	           int width = 0, int height = 0,
 	           Font::TextAlign align = Font::TEXT_LEFT,
 	           bool dopaging = false);
-	~TextWidget() override;
+	~TextWidget();
 
 	// Init the gump, call after construction
 	void            InitGump(Gump *newparent, bool take_focus = true) override;

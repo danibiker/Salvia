@@ -66,7 +66,7 @@ private:
 public:
 	MidiMusic(MidiDriver_Multisource *driver, uint8 soundNum, bool isMus, bool loop,
 		int8 source, uint8 numChannels, void *soundData, uint32 size, uint8 volume);
-	~MidiMusic() override;
+	~MidiMusic();
 	void setVolume(int volume);
 	int getVolume() const { return _volume; }
 
@@ -124,7 +124,7 @@ private:
 
 public:
 	SoundManager();
-	~SoundManager() override;
+	~SoundManager();
 
 	void saveToStream(Common::WriteStream *stream);
 	void loadFromStream(Common::ReadStream *stream);

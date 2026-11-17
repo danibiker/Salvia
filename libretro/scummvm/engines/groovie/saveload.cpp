@@ -60,7 +60,8 @@ SaveStateList SaveLoad::listValidSaves(const Common::String &target) {
 	sort(savefiles.begin(), savefiles.end());
 
 	// Fill the information for the existing savegames
-	for (auto &savefile : savefiles) {
+	for (auto rfIt63 = savefiles.begin(), rfEnd63 = savefiles.end(); rfIt63 != rfEnd63; ++rfIt63) {
+		auto &savefile = *rfIt63;
 		const char *ext = strrchr(savefile.c_str(), '.');
 		if (!ext)
 			continue;

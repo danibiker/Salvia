@@ -72,7 +72,8 @@ bool RNCAArchive::hasFile(const Common::Path &path) const {
 }
 
 int RNCAArchive::listMembers(Common::ArchiveMemberList &list) const {
-	for (const auto &file : _files) {
+	for (auto rfIt75 = _files.begin(), rfEnd75 = _files.end(); rfIt75 != rfEnd75; ++rfIt75) {
+		const auto &file = *rfIt75;
 		list.push_back(Common::ArchiveMemberList::value_type(new Common::GenericArchiveMember(file._key, *this)));
 	}
 

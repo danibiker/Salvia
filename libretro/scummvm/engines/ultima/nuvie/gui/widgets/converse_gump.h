@@ -62,7 +62,7 @@ class ConverseGump: public MsgScroll {
 public:
 
 	ConverseGump(const Configuration *cfg, Font *f, Screen *s);
-	~ConverseGump() override;
+	~ConverseGump();
 
 	void set_actor_portrait(Actor *a);
 	unsigned char *create_framed_portrait(Actor *a);

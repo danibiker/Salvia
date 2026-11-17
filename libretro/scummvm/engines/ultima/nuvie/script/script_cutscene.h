@@ -76,7 +76,7 @@ private:
 	} stars[STAR_FIELD_NUM_STARS];
 public:
 	CSStarFieldImage(U6Shape *shape);
-	~CSStarFieldImage() override {}
+	~CSStarFieldImage() {}
 	void updateEffect() override;
 };
 
@@ -145,7 +145,7 @@ private:
 
 public:
 	ScriptCutscene(GUI *g, Configuration *cfg, SoundManager *sm);
-	~ScriptCutscene() override;
+	~ScriptCutscene();
 
 	Common::Array<Common::String> load_text(const char *filename, uint8 idx);
 

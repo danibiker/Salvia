@@ -40,7 +40,7 @@ typedef Common::Array<SavegameItem> SavegameList;
 class MenuModule : public Module {
 public:
 	MenuModule(NeverhoodEngine *vm, Module *parentModule, int which);
-	~MenuModule() override;
+	~MenuModule();
 	void setLoadgameInfo(uint index);
 	void setLoadgameSlot(int slot);
 	void setSavegameInfo(const Common::String &description, uint index, bool newSavegame);
@@ -86,7 +86,7 @@ protected:
 class CreditsScene : public Scene {
 public:
 	CreditsScene(NeverhoodEngine *vm, Module *parentModule, bool canAbort);
-	~CreditsScene() override;
+	~CreditsScene();
 protected:
 	int _screenIndex;
 	int _countdown;
@@ -145,7 +145,7 @@ class TextEditWidget : public Widget {
 public:
 	TextEditWidget(NeverhoodEngine *vm, int16 x, int16 y, GameStateMenu *parentScene,
 		int maxStringLength, const Common::SharedPtr<FontSurface> &fontSurface, uint32 fileHash, const NRect &rect);
-	~TextEditWidget() override;
+	~TextEditWidget();
 	void onClick() override;
 	void initialize() override;
 	void enterWidget() override;

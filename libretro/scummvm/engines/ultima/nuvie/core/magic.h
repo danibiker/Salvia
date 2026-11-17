@@ -91,7 +91,7 @@ private:
 	 */
 public:
 	Magic();
-	~Magic() override;
+	~Magic();
 	bool init(Events *evt);
 
 	bool read_spell_list();

@@ -38,7 +38,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	MenuGump(bool nameEntryMode = false);
-	~MenuGump() override;
+	~MenuGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

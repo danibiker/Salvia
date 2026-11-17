@@ -112,7 +112,7 @@ protected:
 
 public:
 	DreamWebEngine(OSystem *syst, const DreamWebGameDescription *gameDesc);
-	~DreamWebEngine() override;
+	~DreamWebEngine();
 
 	void waitForVSync();
 

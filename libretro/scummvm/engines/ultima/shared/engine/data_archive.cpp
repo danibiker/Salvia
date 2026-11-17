@@ -40,7 +40,7 @@ public:
 		const Common::Path &subfolder) :
 		_member(member), _publicFolder("data/"), _innerfolder(subfolder) {
 	}
-	~UltimaDataArchiveMember() override {}
+	~UltimaDataArchiveMember() {}
 	Common::SeekableReadStream *createReadStream() const override {
 		return _member->createReadStream();
 	}
@@ -141,7 +141,8 @@ int UltimaDataArchive::listMatchingMembers(Common::ArchiveMemberList &list, cons
 	_zip->listMatchingMembers(innerList, _innerfolder.appendComponent("*"), true);
 
 	// Modify the results to change the filename, then filter with pattern
-	for (const auto &innerMember : innerList) {
+	for (auto rfIt144 = innerList.begin(), rfEnd144 = innerList.end(); rfIt144 != rfEnd144; ++rfIt144) {
+		const auto &innerMember = *rfIt144;
 		Common::ArchiveMemberPtr member = Common::ArchiveMemberPtr(
 			new UltimaDataArchiveMember(innerMember, _innerfolder));
 		if (matchAll || member->getPathInArchive().toString().matchString(pattern.toString(), true, matchPathComponents ? nullptr : "/")) {

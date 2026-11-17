@@ -191,7 +191,8 @@ void Actor::updateActorsScene(int actorsEntrance) {
 	_activeSpeech.playing = false;
 	_protagonist = nullptr;
 
-	for (auto &actor : _actors) {
+	for (auto rfIt194 = _actors.begin(), rfEnd194 = _actors.end(); rfIt194 != rfEnd194; ++rfIt194) {
+		auto &actor = *rfIt194;
 		actor._lastZone = nullptr;
 		actor._inScene = false;
 		actor._spriteList.clear();
@@ -258,7 +259,8 @@ void Actor::updateActorsScene(int actorsEntrance) {
 	followerDirection = _protagonist->_facingDirection + 3;
 	calcScreenPosition(_protagonist);
 
-	for (auto &actor : _actors) {
+	for (auto rfIt261 = _actors.begin(), rfEnd261 = _actors.end(); rfIt261 != rfEnd261; ++rfIt261) {
+		auto &actor = *rfIt261;
 		if (actor._flags & (kFollower)) {
 			actor._facingDirection = actor._actionDirection = _protagonist->_facingDirection;
 			actor._currentAction = kActionWait;
@@ -325,7 +327,8 @@ void Actor::handleActions(int msec, bool setup) {
 	Point hitPoint;
 	Location pickLocation;
 
-	for (auto &actor : _actors) {
+	for (auto rfIt328 = _actors.begin(), rfEnd328 = _actors.end(); rfIt328 != rfEnd328; ++rfIt328) {
+		auto &actor = *rfIt328;
 		if (!actor._inScene)
 			continue;
 
@@ -965,7 +968,8 @@ bool Actor::actorWalkTo(uint16 actorId, const Location &toLocation) {
 				collision.x = ACTOR_COLLISION_WIDTH * actor->_screenScale / (256 * 2);
 				collision.y = ACTOR_COLLISION_HEIGHT * actor->_screenScale / (256 * 2);
 
-				for (auto &anotherActor : _actors) {
+				for (auto rfIt968 = _actors.begin(), rfEnd968 = _actors.end(); rfIt968 != rfEnd968; ++rfIt968) {
+					auto &anotherActor = *rfIt968;
 					if (_barrierCount >= ACTOR_BARRIERS_MAX)
 						break;
 					if (!anotherActor._inScene)

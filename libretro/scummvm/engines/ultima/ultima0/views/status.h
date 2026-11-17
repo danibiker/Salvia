@@ -35,7 +35,7 @@ private:
 
 public:
 	Status(const Common::String &name, UIElement *parent);
-	~Status() override {}
+	~Status() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	void draw() override;

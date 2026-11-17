@@ -68,7 +68,7 @@ class U6UseCode: public UseCode, public CallBack {
 public:
 
 	U6UseCode(Game *g, const Configuration *cfg);
-	~U6UseCode() override;
+	~U6UseCode();
 
 	bool use_obj(Obj *obj, Actor *actor) override;
 	bool look_obj(Obj *obj, Actor *actor) override;

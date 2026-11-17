@@ -55,7 +55,7 @@ class DollWidget : public GUI_Widget {
 
 public:
 	DollWidget(const Configuration *cfg, GUI_CallBack *callback = nullptr);
-	~DollWidget() override;
+	~DollWidget();
 
 	bool init(Actor *a, uint16 x, uint16 y, TileManager *tm, ObjManager *om, bool in_portrat_view = false);
 	void free_doll_shapes();

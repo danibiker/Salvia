@@ -459,9 +459,12 @@ void SoundEffectQueue::queue(Common::SeekableReadStream *soundfile, uint32 loops
 	if (_queue.size() > 20) {
 		stopAll();
 	}
-	_queue.push({soundfile, loops});
+	SoundQueueEntry entry;
+	entry._file = soundfile;
+	entry._loops = loops;
+	_queue.push(entry);
 	for (uint32 i = 1; i < loops; i++) {
-		_queue.push({soundfile, loops});
+		_queue.push(entry);
 	}
 	tick();
 }

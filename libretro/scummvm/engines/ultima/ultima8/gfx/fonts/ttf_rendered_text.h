@@ -35,7 +35,7 @@ class TTFRenderedText : public RenderedText {
 public:
 	TTFRenderedText(Graphics::ManagedSurface *texture, int width, int height, int vlead,
 	                int baseline, bool antiAliased);
-	~TTFRenderedText() override;
+	~TTFRenderedText();
 
 	void draw(RenderSurface *surface, int x, int y,
 	                  bool destmasked = false) override;

@@ -40,7 +40,7 @@ private:
 
 public:
 	Console();
-	~Console() override;
+	~Console();
 };
 
 } // namespace Ultima0

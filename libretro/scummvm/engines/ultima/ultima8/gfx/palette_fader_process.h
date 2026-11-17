@@ -46,7 +46,7 @@ public:
 	PaletteFaderProcess(PalTransforms trans, int priority, int frames);
 	PaletteFaderProcess(uint32 rgba, bool from, int priority, int frames, bool current);
 	PaletteFaderProcess(const int16 from[12], const int16 to[12], int priority, int frames);
-	~PaletteFaderProcess(void) override;
+	~PaletteFaderProcess(void);
 
 	void run() override;
 

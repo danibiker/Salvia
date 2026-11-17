@@ -49,7 +49,7 @@ namespace Kyra {
 class AdLibDriver : public PCSoundDriver {
 public:
 	AdLibDriver(Audio::Mixer *mixer, int version);
-	~AdLibDriver() override;
+	~AdLibDriver();
 
 	void initDriver() override;
 	void setSoundData(uint8 *data, uint32 size) override;

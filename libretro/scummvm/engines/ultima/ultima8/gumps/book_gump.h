@@ -42,7 +42,7 @@ public:
 
 	BookGump();
 	BookGump(ObjId owner, const Common::String &msg);
-	~BookGump() override;
+	~BookGump();
 
 	// Go to the next page on mouse click
 	void onMouseClick(int button, int32 mx, int32 my) override;

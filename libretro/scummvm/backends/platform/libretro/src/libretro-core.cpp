@@ -1424,6 +1424,11 @@ bool retro_load_game(const struct retro_game_info *game) {
 
 			Common::String tmp = target_id;
 			tmp.trim();
+			// Accept an id written between quotes ("lsl1sci" or 'lsl1sci').
+			while (tmp.size() >= 2 && (tmp.firstChar() == '"' || tmp.firstChar() == '\'') && tmp.lastChar() == tmp.firstChar()) {
+				tmp = Common::String(tmp.c_str() + 1, tmp.size() - 2);
+				tmp.trim();
+			}
 			strcpy(target_id, tmp.c_str());
 
 			if (strlen(target_id) == 0) {
@@ -1433,6 +1438,13 @@ bool retro_load_game(const struct retro_game_info *game) {
 
 			if (!test_game_guarded(target_id, false, &test_game_status))
 				return false;
+
+			// Unknown target/game id: fall back to autodetection in the file's directory.
+			if (test_game_status == TEST_GAME_KO_NOT_FOUND && !detect_target.getPath().equals(parent_dir.getPath())) {
+				retro_log_cb(RETRO_LOG_WARN, "[scummvm] '%s' is not a known target or game id, trying autodetect in the game directory\n", target_id);
+				if (!test_game_guarded(parent_dir.getPath().toString().c_str(), true, &test_game_status))
+					return false;
+			}
 		} else {
 			if (detect_target.isDirectory()) {
 				parent_dir = detect_target;

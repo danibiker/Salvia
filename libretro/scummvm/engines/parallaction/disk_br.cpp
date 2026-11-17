@@ -57,7 +57,7 @@ struct Sprites : public Frames {
 		_sprites = new Sprite[_num];
 	}
 
-	~Sprites() override {
+	~Sprites() {
 		delete[] _sprites;
 	}
 

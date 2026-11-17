@@ -44,7 +44,7 @@ protected:
 
 public:
 	MusicProcess();
-	~MusicProcess() override;
+	~MusicProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

@@ -54,7 +54,7 @@ public:
 
 public:
 	Screen_EoB(EoBCoreEngine *vm, OSystem *system);
-	~Screen_EoB() override;
+	~Screen_EoB();
 
 	bool init() override;
 
@@ -233,7 +233,7 @@ private:
 	Common::SharedPtr<Graphics::Big5Font> _big5;
 };
 
-class ChineseTwoByteFontEoB final : public Font {
+class ChineseTwoByteFontEoB : public Font {
 public:
 	ChineseTwoByteFontEoB(Common::SharedPtr<Graphics::Big5Font> big5, Font *singleByte) : _big5(big5), _singleByte(singleByte), _border(false), _colorMap(nullptr) {}
 
@@ -267,7 +267,7 @@ private:
 class OldDOSFont : public Font {
 public:
 	OldDOSFont(Common::RenderMode mode, uint8 shadowColor, bool remapCharacters = true);
-	~OldDOSFont() override;
+	~OldDOSFont();
 
 	bool load(Common::SeekableReadStream &file) override;
 	bool loadPCBIOSTall();
@@ -314,7 +314,7 @@ class Resource;
 class AmigaDOSFont : public Font {
 public:
 	AmigaDOSFont(Resource *res, bool needsLocalizedFont = false);
-	~AmigaDOSFont() override { unload(); }
+	~AmigaDOSFont() { unload(); }
 
 	bool load(Common::SeekableReadStream &file) override;
 	Type getType() const override { return kASCII; }
@@ -385,7 +385,7 @@ private:
 class SJISFontEoB1PC98 : public SJISFont {
 public:
 	SJISFontEoB1PC98(Common::SharedPtr<Graphics::FontSJIS> &font, /*uint8 shadowColor,*/ const uint16 *convTable1, const uint16 *convTable2);
-	~SJISFontEoB1PC98() override {}
+	~SJISFontEoB1PC98() {}
 	int getCharWidth(uint16 c) const override;
 	void drawChar(uint16 c, byte *dst, int pitch, int) const override;
 
@@ -401,7 +401,7 @@ private:
 class SJISFontEoB2PC98 : public SJISFont {
 public:
 	SJISFontEoB2PC98(Common::SharedPtr<Graphics::FontSJIS> &font, /*uint8 shadowColor,*/ const char *convTable1, const char *convTable2);
-	~SJISFontEoB2PC98() override {}
+	~SJISFontEoB2PC98() {}
 	int getCharWidth(uint16 c) const override;
 	void drawChar(uint16 c, byte *dst, int pitch, int) const override;
 
@@ -418,7 +418,7 @@ private:
 class Font12x12PC98 : public OldDOSFont{
 public:
 	Font12x12PC98(uint8 shadowColor, const uint16 *convTable1, const uint16 *convTable2, const uint8 *lookupTable);
-	~Font12x12PC98() override;
+	~Font12x12PC98();
 	bool usesOverlay() const override { return true; }
 	Type getType() const override { return kJIS_X0201; }
 	int getHeight() const override { return _height >> 1; }
@@ -439,7 +439,7 @@ private:
 class PC98Font : public OldDOSFont {
 public:
 	PC98Font(uint8 shadowColor, bool useOverlay, int scaleV, const uint8 *convTable1 = 0, const char *convTable2 = 0, const char *convTable3 = 0);
-	~PC98Font() override {}
+	~PC98Font() {}
 	bool load(Common::SeekableReadStream &file) override;
 	int getHeight() const override { return _outputHeight; }
 	int getWidth() const override { return _outputWidth; }
@@ -464,7 +464,7 @@ private:
 class SJISFontLarge : public SJISFont {
 public:
 	SJISFontLarge(Common::SharedPtr<Graphics::FontSJIS> &font);
-	~SJISFontLarge() override {}
+	~SJISFontLarge() {}
 
 	int getHeight() const override;
 	int getWidth() const override;
@@ -480,7 +480,7 @@ public:
 class SJISFont12x12 : public Font {
 public:
 	SJISFont12x12(const uint16 *searchTable);
-	~SJISFont12x12() override { unload(); }
+	~SJISFont12x12() { unload(); }
 
 	bool load(Common::SeekableReadStream &file) override;
 	Type getType() const override { return kSJIS; }
@@ -504,7 +504,7 @@ private:
 class SegaCDFont : public Font {
 public:
 	SegaCDFont(Common::Language lang, const uint16 *convTable1, const uint16 *convTable2, const uint8 *widthTable1, const uint8 *widthTable2, const uint8 *widthTable3);
-	~SegaCDFont() override;
+	~SegaCDFont();
 
 	bool load(Common::SeekableReadStream &file) override;
 	Type getType() const override { return _forceOneByte ? kASCII : kSJIS; }

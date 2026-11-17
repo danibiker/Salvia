@@ -79,8 +79,8 @@ CurrentMap::~CurrentMap() {
 void CurrentMap::clear() {
 	for (unsigned int i = 0; i < MAP_NUM_CHUNKS; i++) {
 		for (unsigned int j = 0; j < MAP_NUM_CHUNKS; j++) {
-			for (auto *item : _items[i][j])
-				delete item;
+			for (auto rfIt82 = _items[i][j].begin(), rfEnd82 = _items[i][j].end(); rfIt82 != rfEnd82; ++rfIt82)
+				{ auto *item = *rfIt82; delete item; }
 			_items[i][j].clear();
 		}
 		memset(_fast[i], false, sizeof(uint32)*MAP_NUM_CHUNKS / 32);
@@ -118,7 +118,8 @@ void CurrentMap::writeback() {
 
 	for (unsigned int i = 0; i < MAP_NUM_CHUNKS; i++) {
 		for (unsigned int j = 0; j < MAP_NUM_CHUNKS; j++) {
-			for (auto *item : _items[i][j]) {
+			for (auto rfIt121 = _items[i][j].begin(), rfEnd121 = _items[i][j].end(); rfIt121 != rfEnd121; ++rfIt121) {
+				auto *item = *rfIt121;
 				// item is being removed from the CurrentMap item lists
 				item->clearExtFlag(Item::EXT_INCURMAP);
 
@@ -158,7 +159,8 @@ void CurrentMap::writeback() {
 }
 
 void CurrentMap::loadItems(const Common::List<Item *> &itemlist, bool callCacheIn) {
-	for (auto *item : itemlist) {
+	for (auto rfIt161 = itemlist.begin(), rfEnd161 = itemlist.end(); rfIt161 != rfEnd161; ++rfIt161) {
+		auto *item = *rfIt161;
 		item->assignObjId();
 
 		// No fast area for you!
@@ -506,7 +508,8 @@ void CurrentMap::updateFastArea(const Point3 &from, const Point3 &to) {
 void CurrentMap::setChunkFast(int32 cx, int32 cy) {
 	_fast[cy][cx / 32] |= 1 << (cx & 31);
 
-	for (auto *item : _items[cx][cy]) {
+	for (auto rfIt509 = _items[cx][cy].begin(), rfEnd509 = _items[cx][cy].end(); rfIt509 != rfEnd509; ++rfIt509) {
+		auto *item = *rfIt509;
 		item->enterFastArea();
 	}
 }
@@ -579,7 +582,8 @@ void CurrentMap::areaSearch(UCList *itemlist, const uint8 *loopscript,
 	//
 	for (int cy = miny; cy <= maxy; cy++) {
 		for (int cx = minx; cx <= maxx; cx++) {
-			for (const auto *item : _items[cx][cy]) {
+			for (auto rfIt582 = _items[cx][cy].begin(), rfEnd582 = _items[cx][cy].end(); rfIt582 != rfEnd582; ++rfIt582) {
+				const auto *item = *rfIt582;
 				if (item->hasExtFlags(Item::EXT_SPRITE))
 					continue;
 
@@ -621,7 +625,8 @@ void CurrentMap::surfaceSearch(UCList *itemlist, const uint8 *loopscript,
 
 	for (int cy = miny; cy <= maxy; cy++) {
 		for (int cx = minx; cx <= maxx; cx++) {
-			for (const auto *item : _items[cx][cy]) {
+			for (auto rfIt624 = _items[cx][cy].begin(), rfEnd624 = _items[cx][cy].end(); rfIt624 != rfEnd624; ++rfIt624) {
+				const auto *item = *rfIt624;
 				if (item->getObjId() == check->getObjId())
 					continue;
 				if (item->hasExtFlags(Item::EXT_SPRITE))
@@ -662,7 +667,8 @@ void CurrentMap::surfaceSearch(UCList *itemlist, const uint8 *loopscript,
 TeleportEgg *CurrentMap::findDestination(uint16 id) {
 	for (unsigned int i = 0; i < MAP_NUM_CHUNKS; i++) {
 		for (unsigned int j = 0; j < MAP_NUM_CHUNKS; j++) {
-			for (auto *item : _items[i][j]) {
+			for (auto rfIt665 = _items[i][j].begin(), rfEnd665 = _items[i][j].end(); rfIt665 != rfEnd665; ++rfIt665) {
+				auto *item = *rfIt665;
 				TeleportEgg *egg = dynamic_cast<TeleportEgg *>(item);
 				if (egg) {
 					if (!egg->isTeleporter() && egg->getTeleportId() == id)
@@ -713,7 +719,8 @@ PositionInfo CurrentMap::getPositionInfo(const Box &target, const Box &start, ui
 
 	for (int cx = minx; cx <= maxx; cx++) {
 		for (int cy = miny; cy <= maxy; cy++) {
-			for (const auto *item : _items[cx][cy]) {
+			for (auto rfIt716 = _items[cx][cy].begin(), rfEnd716 = _items[cx][cy].end(); rfIt716 != rfEnd716; ++rfIt716) {
+				const auto *item = *rfIt716;
 				if (item->getObjId() == id)
 					continue;
 				if (item->hasExtFlags(Item::EXT_SPRITE))
@@ -824,7 +831,8 @@ bool CurrentMap::scanForValidPosition(int32 x, int32 y, int32 z, const Item *ite
 
 	for (int cx = minx; cx <= maxx; cx++) {
 		for (int cy = miny; cy <= maxy; cy++) {
-			for (const auto *citem : _items[cx][cy]) {
+			for (auto rfIt827 = _items[cx][cy].begin(), rfEnd827 = _items[cx][cy].end(); rfIt827 != rfEnd827; ++rfIt827) {
+				const auto *citem = *rfIt827;
 				if (citem->getObjId() == item->getObjId())
 					continue;
 				if (citem->hasExtFlags(Item::EXT_SPRITE))
@@ -1007,7 +1015,8 @@ bool CurrentMap::sweepTest(const Point3 &start, const Point3 &end,
 
 	for (int cx = minx; cx <= maxx; cx++) {
 		for (int cy = miny; cy <= maxy; cy++) {
-			for (const auto *other_item : _items[cx][cy]) {
+			for (auto rfIt1010 = _items[cx][cy].begin(), rfEnd1010 = _items[cx][cy].end(); rfIt1010 != rfEnd1010; ++rfIt1010) {
+				const auto *other_item = *rfIt1010;
 				if (other_item->getObjId() == item)
 					continue;
 				if (other_item->hasExtFlags(Item::EXT_SPRITE))

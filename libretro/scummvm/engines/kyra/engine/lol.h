@@ -269,7 +269,7 @@ friend class Debugger_LoL;
 friend class HistoryPlayer;
 public:
 	LoLEngine(OSystem *system, const GameFlags &flags);
-	~LoLEngine() override;
+	~LoLEngine();
 
 	static Common::Array<Common::Keymap *> initKeymaps();
 

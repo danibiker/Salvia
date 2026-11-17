@@ -47,7 +47,8 @@ void ShapeRenderedText::draw(RenderSurface *surface, int x, int y, bool /*destma
 	uint32 color = TEX32_PACK_RGB(0, 0, 0);
 	surface->BeginPainting();
 
-	for (const auto &line : _lines) {
+	for (auto rfIt50 = _lines.begin(), rfEnd50 = _lines.end(); rfIt50 != rfEnd50; ++rfIt50) {
+		const auto &line = *rfIt50;
 		int line_x = x + line._dims.left;
 		int line_y = y + line._dims.top;
 
@@ -77,7 +78,8 @@ void ShapeRenderedText::draw(RenderSurface *surface, int x, int y, bool /*destma
 void ShapeRenderedText::drawBlended(RenderSurface *surface, int x, int y,
 									uint32 col, bool /*destmasked*/) {
 	// TODO Support masking here ????
-	for (const auto &line : _lines) {
+	for (auto rfIt80 = _lines.begin(), rfEnd80 = _lines.end(); rfIt80 != rfEnd80; ++rfIt80) {
+		const auto &line = *rfIt80;
 		int line_x = x + line._dims.left;
 		int line_y = y + line._dims.top;
 

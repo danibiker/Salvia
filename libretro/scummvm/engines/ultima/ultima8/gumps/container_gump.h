@@ -41,7 +41,7 @@ public:
 	ContainerGump();
 	ContainerGump(const Shape *shape, uint32 frameNum, uint16 owner,
 	              uint32 flags = FLAG_DRAGGABLE, int32 layer = LAYER_NORMAL);
-	~ContainerGump() override;
+	~ContainerGump();
 
 	void setItemArea(Common::Rect32 *itemArea) {
 		_itemArea = *itemArea;

@@ -71,7 +71,7 @@ public:
 	const Common::String c_empty_string;
 public:
 	NuvieEngine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
-	~NuvieEngine() override;
+	~NuvieEngine();
 
 	/**
 	 * Returns the game type being played

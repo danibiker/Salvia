@@ -328,7 +328,7 @@ private:
 class MixedSoundDriver : public Sound {
 public:
 	MixedSoundDriver(KyraEngine_v1 *vm, Audio::Mixer *mixer, Sound *music, Sound *sfx);
-	~MixedSoundDriver() override;
+	~MixedSoundDriver();
 
 	kType getMusicType() const override;
 	kType getSfxType() const override;

@@ -46,7 +46,7 @@ class SoundDesc;
 class BackgroundAtmosphere : private SoundMixer {
 public:
 	BackgroundAtmosphere(Audio::Mixer &mixer);
-	~BackgroundAtmosphere() override;
+	~BackgroundAtmosphere();
 
 	void playBA();
 	void stopBA();

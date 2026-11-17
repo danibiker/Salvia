@@ -31,7 +31,7 @@ class TuckerEngine;
 class TuckerConsole : public GUI::Debugger {
 public:
 	TuckerConsole(TuckerEngine *vm);
-	~TuckerConsole(void) override;
+	~TuckerConsole(void);
 
 private:
 	TuckerEngine *_vm;

@@ -31,7 +31,7 @@ class KyraEngine_MR;
 class Screen_MR : public Screen_v2 {
 public:
 	Screen_MR(KyraEngine_MR *vm, OSystem *system);
-	~Screen_MR() override;
+	~Screen_MR();
 
 	int getLayer(int x, int y) override;
 

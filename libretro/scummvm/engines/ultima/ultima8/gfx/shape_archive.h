@@ -40,7 +40,7 @@ public:
 	             const ConvertShapeFormat *format = 0)
 		: Archive(rs), _id(id), _format(format), _palette(pal) { }
 
-	~ShapeArchive() override;
+	~ShapeArchive();
 
 	Shape *getShape(uint32 shapenum);
 

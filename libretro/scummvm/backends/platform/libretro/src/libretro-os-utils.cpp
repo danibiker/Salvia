@@ -207,6 +207,34 @@ bool OSystem_libretro::openUrl(const Common::String &url) {
 #endif
 }
 
+// Autodetect failed: log what the detector saw (directory listing, one level of
+// subdirectories) and run it again with the detection debug channel enabled, so
+// the frontend log shows which files were hashed and with what MD5/size.
+static void logDetectionDiagnostics(const Common::FSNode &dir, const Common::FSList &files) {
+	if (!retro_log_cb)
+		return;
+	retro_log_cb(RETRO_LOG_WARN, "[scummvm] Autodetect found nothing in '%s' (%u entries)\n", dir.getPath().toString().c_str(), (unsigned)files.size());
+	uint shown = 0;
+	for (Common::FSList::const_iterator it = files.begin(); it != files.end() && shown < 60; ++it, ++shown) {
+		if (it->isDirectory()) {
+			Common::FSList sub;
+			bool ok = it->getChildren(sub, Common::FSNode::kListAll);
+			retro_log_cb(RETRO_LOG_WARN, "[scummvm]   [D] '%s' (%s, %u entries)\n", it->getName().c_str(), ok ? "listed" : "LIST FAILED", (unsigned)sub.size());
+		} else {
+			retro_log_cb(RETRO_LOG_WARN, "[scummvm]   [F] '%s' %s\n", it->getName().c_str(), it->exists() ? "" : "(does not exist?)");
+		}
+	}
+
+	const int oldLevel = gDebugLevel;
+	const bool wasEnabled = DebugMan.isDebugChannelEnabled(kDebugGlobalDetection);
+	gDebugLevel = 3;
+	DebugMan.enableDebugChannel(kDebugGlobalDetection);
+	EngineMan.detectGames(files);
+	if (!wasEnabled)
+		DebugMan.disableDebugChannel(kDebugGlobalDetection);
+	gDebugLevel = oldLevel;
+}
+
 int OSystem_libretro::testGame(const char *filedata, bool autodetect) {
 	Common::String game_id;
 	Common::String engine_id;
@@ -228,6 +256,9 @@ int OSystem_libretro::testGame(const char *filedata, bool autodetect) {
 		}
 		if (detectionResults.foundUnknownGames())
 			logMessage(LogMessageType::kWarning, detectionResults.generateUnknownGameReport(false, 80).encode().c_str());
+
+		if (res == TEST_GAME_KO_NOT_FOUND)
+			logDetectionDiagnostics(dir, files);
 
 	} else {
 

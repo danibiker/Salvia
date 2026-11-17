@@ -34,7 +34,7 @@ namespace Groovie {
 class VDXPlayer : public VideoPlayer {
 public:
 	VDXPlayer(GroovieEngine *vm);
-	~VDXPlayer() override;
+	~VDXPlayer();
 	void resetFlags() override;
 	void setOrigin(int16 x, int16 y) override;
 

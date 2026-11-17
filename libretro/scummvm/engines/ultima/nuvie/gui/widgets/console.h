@@ -40,7 +40,7 @@ protected:
 
 public:
 	Console(const Configuration *c, Screen *s, GUI *g, uint16 x, uint16 y, uint16 w, uint16 h);
-	~Console() override;
+	~Console();
 
 	void AddLine(const Common::String &line) override;
 };

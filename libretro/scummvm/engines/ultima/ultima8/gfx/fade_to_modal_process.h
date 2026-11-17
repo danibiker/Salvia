@@ -48,7 +48,7 @@ public:
 	// p_dynamic_class stuff
 	ENABLE_RUNTIME_CLASSTYPE()
 	FadeToModalProcess(ModalGump *modal);
-	~FadeToModalProcess(void) override;
+	~FadeToModalProcess(void);
 
 	void onWakeUp() override;
 

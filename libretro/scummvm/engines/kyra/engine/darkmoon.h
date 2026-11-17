@@ -48,7 +48,7 @@ friend class GUI_EoB;
 friend class DarkmoonSequenceHelper;
 public:
 	DarkMoonEngine(OSystem *system, const GameFlags &flags);
-	~DarkMoonEngine() override;
+	~DarkMoonEngine();
 
 private:
 	// Init

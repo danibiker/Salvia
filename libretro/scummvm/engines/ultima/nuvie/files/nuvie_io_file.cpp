@@ -48,7 +48,8 @@ bool NuvieIOFileRead::open(const Common::Path &filename) {
 
 	if (components.size() >= 2) {
 		Common::FSNode node(ConfMan.getPath("path"));
-		for(const auto &c : components) {
+		for(auto rfIt51 = components.begin(), rfEnd51 = components.end(); rfIt51 != rfEnd51; ++rfIt51) {
+			const auto &c = *rfIt51;
 			node = node.getChild(c);
 			if (!node.exists())
 				break;

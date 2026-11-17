@@ -27,7 +27,7 @@ namespace Mohawk {
 class LBXDataFile : public LBXObject {
 public:
 	LBXDataFile(MohawkEngine_LivingBooks *vm);
-	~LBXDataFile() override;
+	~LBXDataFile();
 
 	bool call(uint callId, const Common::Array<LBValue> &params, LBValue &result) override;
 

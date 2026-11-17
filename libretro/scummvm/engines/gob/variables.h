@@ -103,7 +103,7 @@ private:
 class VariablesLE : public Variables {
 public:
 	VariablesLE(uint32 size);
-	~VariablesLE() override;
+	~VariablesLE();
 
 protected:
 	void write8(byte *buf, uint8 data) const override;
@@ -118,7 +118,7 @@ protected:
 class VariablesBE : public Variables {
 public:
 	VariablesBE(uint32 size);
-	~VariablesBE() override;
+	~VariablesBE();
 
 protected:
 	void write8(byte *buf, uint8 data) const override;

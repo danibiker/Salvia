@@ -305,7 +305,8 @@ Actor *ViewManager::doll_view_get_next_party_member() {
 }
 
 DollViewGump *ViewManager::get_doll_view(Actor *actor) {
-	for (DraggableView *draggable : doll_gumps) {
+	for (auto rfIt308 = doll_gumps.begin(), rfEnd308 = doll_gumps.end(); rfIt308 != rfEnd308; ++rfIt308) {
+		DraggableView *draggable = *rfIt308;
 		DollViewGump *view = (DollViewGump *)draggable;
 		if (view->get_actor() == actor) {
 			return view;
@@ -316,7 +317,8 @@ DollViewGump *ViewManager::get_doll_view(Actor *actor) {
 }
 
 ContainerViewGump *ViewManager::get_container_view(Actor *actor, Obj *obj) {
-	for (DraggableView *draggable : container_gumps) {
+	for (auto rfIt319 = container_gumps.begin(), rfEnd319 = container_gumps.end(); rfIt319 != rfEnd319; ++rfIt319) {
+		DraggableView *draggable = *rfIt319;
 		ContainerViewGump *view = (ContainerViewGump *)draggable;
 		if (actor) {
 			if (view->is_actor_container() && view->get_actor() == actor) {

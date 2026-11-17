@@ -91,7 +91,7 @@ uint32 Mouse::_mouseLincObjects[21] = {
 	24829
 };
 
-Mouse::Mouse(OSystem *system, Disk *skyDisk, SkyCompact *skyCompact, Screen *skyScreen) {
+Mouse::Mouse(OSystem *system, Disk *skyDisk, SkyCompact *skyCompact, Screen *skyScreen) : _actionFlash(false), _actionFlashTime(0), _actionFlashIcon(0), _actionFlashX(0), _actionFlashY(0) {
 	_skyDisk = skyDisk;
 	_skyCompact = skyCompact;
 	_system = system;

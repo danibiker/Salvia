@@ -72,7 +72,7 @@ protected:
 class DefaultCursorManager : public CursorManager {
 public:
 	explicit DefaultCursorManager(MohawkEngine *vm, uint32 tag = ID_TCUR) : _vm(vm), _tag(tag) {}
-	~DefaultCursorManager() override {}
+	~DefaultCursorManager() {}
 
 	void setCursor(uint16 id) override;
 	bool hasSource() const override { return true; }
@@ -110,7 +110,7 @@ class MohawkEngine_Myst;
 class MystCursorManager : public CursorManager {
 public:
 	explicit MystCursorManager(MohawkEngine_Myst *vm);
-	~MystCursorManager() override;
+	~MystCursorManager();
 
 	void showCursor() override;
 	void hideCursor() override;
@@ -128,7 +128,7 @@ private:
 class MacCursorManager : public CursorManager {
 public:
 	explicit MacCursorManager(const Common::Path &appName);
-	~MacCursorManager() override;
+	~MacCursorManager();
 
 	void setCursor(uint16 id) override;
 	bool hasSource() const override { return _resFork != nullptr; }
@@ -142,7 +142,7 @@ private:
 class LivingBooksCursorManager_v2 : public CursorManager {
 public:
 	LivingBooksCursorManager_v2();
-	~LivingBooksCursorManager_v2() override;
+	~LivingBooksCursorManager_v2();
 
 	void setCursor(uint16 id) override;
 	void setCursor(const Common::String &name) override;
@@ -155,7 +155,7 @@ private:
 // The cursor manager for Windows EXE's
 class WinCursorManager : public CursorManager {
 public:
-	~WinCursorManager() override;
+	~WinCursorManager();
 
 	void setCursor(uint16 id) override;
 	bool hasSource() const override { return !_cursors.empty(); }

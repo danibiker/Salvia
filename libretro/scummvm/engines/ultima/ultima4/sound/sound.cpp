@@ -56,7 +56,8 @@ SoundManager::SoundManager(Audio::Mixer *mixer) : _mixer(mixer) {
 	_sounds.resize(SOUND_MAX);
 
 	Common::Array<ConfigElement> soundConfs = config->getElement("sound").getChildren();
-	for (const auto &s : soundConfs) {
+	for (auto rfIt59 = soundConfs.begin(), rfEnd59 = soundConfs.end(); rfIt59 != rfEnd59; ++rfIt59) {
+		const auto &s = *rfIt59;
 		if (s.getName() != "track")
 			continue;
 

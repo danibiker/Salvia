@@ -271,7 +271,7 @@ friend class CharacterGenerator;
 friend class TransferPartyWiz;
 public:
 	EoBCoreEngine(OSystem *system, const GameFlags &flags);
-	~EoBCoreEngine() override;
+	~EoBCoreEngine();
 
 	static Common::Array<Common::Keymap *> initKeymaps(const Common::String &ameId);
 

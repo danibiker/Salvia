@@ -53,7 +53,7 @@ namespace Image {
 class BRCDecoder : public ImageDecoder {
 public:
 	BRCDecoder();
-	~BRCDecoder() override;
+	~BRCDecoder();
 
 	// ImageDecoder API
 	void destroy() override;

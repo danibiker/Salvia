@@ -706,7 +706,8 @@ bool U6Actor::weapon_can_hit(const CombatType *weapon, Actor *target, uint16 *hi
 	}
 
 	const Common::List<Obj *> &surrounding_objs = target->get_surrounding_obj_list();
-	for (Obj *obj : surrounding_objs) {
+	for (auto rfIt709 = surrounding_objs.begin(), rfEnd709 = surrounding_objs.end(); rfIt709 != rfEnd709; ++rfIt709) {
+		Obj *obj = *rfIt709;
 		if (Actor::weapon_can_hit(weapon, obj->x, obj->y)) {
 			*hit_x = obj->x;
 			*hit_y = obj->y;
@@ -1017,15 +1018,15 @@ inline bool U6Actor::has_surrounding_objs() {
 }
 
 inline void U6Actor::remove_surrounding_objs_from_map() {
-	for (Obj *obj : surrounding_objects)
-		obj_manager->remove_obj_from_map(obj);
+	for (auto rfIt1020 = surrounding_objects.begin(), rfEnd1020 = surrounding_objects.end(); rfIt1020 != rfEnd1020; ++rfIt1020)
+		{ Obj *obj = *rfIt1020; obj_manager->remove_obj_from_map(obj); }
 
 	return;
 }
 
 inline void U6Actor::add_surrounding_objs_to_map() {
-	for (Obj *obj : surrounding_objects)
-		obj_manager->add_obj(obj, OBJ_ADD_TOP);
+	for (auto rfIt1027 = surrounding_objects.begin(), rfEnd1027 = surrounding_objects.end(); rfIt1027 != rfEnd1027; ++rfIt1027)
+		{ Obj *obj = *rfIt1027; obj_manager->add_obj(obj, OBJ_ADD_TOP); }
 
 	return;
 }
@@ -1034,7 +1035,8 @@ inline void U6Actor::move_surrounding_objs_relative(sint16 rel_x, sint16 rel_y) 
 	if (obj_n == OBJ_U6_SILVER_SERPENT) {
 		move_silver_serpent_objs_relative(rel_x, rel_y);
 	} else {
-		for (Obj *obj : surrounding_objects) {
+		for (auto rfIt1037 = surrounding_objects.begin(), rfEnd1037 = surrounding_objects.end(); rfIt1037 != rfEnd1037; ++rfIt1037) {
+			Obj *obj = *rfIt1037;
 			obj->x = WRAPPED_COORD(obj->x + rel_x, z);
 			obj->y = WRAPPED_COORD(obj->y + rel_y, z);
 		}
@@ -1343,8 +1345,8 @@ inline void U6Actor::set_direction_of_surrounding_dragon_objs(NuvieDir new_direc
 }
 
 inline void U6Actor::twitch_surrounding_objs() {
-	for (Obj *obj : surrounding_objects)
-		twitch_obj(obj);
+	for (auto rfIt1346 = surrounding_objects.begin(), rfEnd1346 = surrounding_objects.end(); rfIt1346 != rfEnd1346; ++rfIt1346)
+		{ Obj *obj = *rfIt1346; twitch_obj(obj); }
 }
 
 inline void U6Actor::twitch_surrounding_dragon_objs() {

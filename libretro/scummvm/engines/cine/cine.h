@@ -146,7 +146,7 @@ protected:
 
 public:
 	CineEngine(OSystem *syst, const CINEGameDescription *gameDesc);
-	~CineEngine() override;
+	~CineEngine();
 
 	void syncSoundSettings() override;
 

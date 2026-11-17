@@ -112,12 +112,13 @@ void EggManager::remove_egg(Obj *egg_obj, bool keep_obj) {
 }
 
 void EggManager::set_egg_visibility(bool show_eggs) {
-	for (Egg *egg : egg_list)
-		egg->obj->set_invisible(!show_eggs);
+	for (auto rfIt115 = egg_list.begin(), rfEnd115 = egg_list.end(); rfIt115 != rfEnd115; ++rfIt115)
+		{ Egg *egg = *rfIt115; egg->obj->set_invisible(!show_eggs); }
 }
 
 void EggManager::spawn_eggs(uint16 x, uint16 y, uint8 z, bool teleport) {
-	for (Egg *egg : egg_list) {
+	for (auto rfIt120 = egg_list.begin(), rfEnd120 = egg_list.end(); rfIt120 != rfEnd120; ++rfIt120) {
+		Egg *egg = *rfIt120;
 		uint8 quality = egg->obj->quality;
 		sint16 dist_x = abs((sint16)egg->obj->x - x);
 		sint16 dist_y = abs((sint16)egg->obj->y - y);

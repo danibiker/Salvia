@@ -61,7 +61,7 @@ enum RivenCreditsImageNumber {
 class RivenGraphics : public GraphicsManager {
 public:
 	explicit RivenGraphics(MohawkEngine_Riven *vm);
-	~RivenGraphics() override;
+	~RivenGraphics();
 
 	// Screen updates
 	void beginScreenUpdate();

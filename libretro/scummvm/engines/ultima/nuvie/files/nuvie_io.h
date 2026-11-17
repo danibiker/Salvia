@@ -111,7 +111,7 @@ protected:
 
 public:
 	NuvieIOBuffer();
-	~NuvieIOBuffer() override;
+	~NuvieIOBuffer();
 
 	bool open(unsigned char *buf, uint32 buf_size, bool copy_buf = NUVIE_BUF_COPY);
 

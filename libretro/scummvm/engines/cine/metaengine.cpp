@@ -158,7 +158,8 @@ SaveStateList CineMetaEngine::listSaves(const char *target) const {
 		pattern += ".#*";
 		Common::StringArray filenames = saveFileMan->listSavefiles(pattern);
 
-		for (const auto &file : filenames) {
+		for (auto rfIt161 = filenames.begin(), rfEnd161 = filenames.end(); rfIt161 != rfEnd161; ++rfIt161) {
+			const auto &file = *rfIt161;
 			// Obtain the extension part of the filename, since it corresponds to the save slot number
 			Common::String ext = Common::lastPathComponent(file, '.');
 			int slotNum = (int)ext.asUint64();

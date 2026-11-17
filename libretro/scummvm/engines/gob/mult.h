@@ -320,7 +320,7 @@ protected:
 class Mult_v1 : public Mult {
 public:
 	Mult_v1(GobEngine *vm);
-	~Mult_v1() override {}
+	~Mult_v1() {}
 
 	void loadMult(int16 resId) override;
 	void freeMultKeys() override;
@@ -340,7 +340,7 @@ protected:
 class Mult_v2 : public Mult_v1 {
 public:
 	Mult_v2(GobEngine *vm);
-	~Mult_v2() override;
+	~Mult_v2();
 
 	void loadMult(int16 resId) override;
 	void freeMultKeys() override;

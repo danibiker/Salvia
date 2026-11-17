@@ -77,7 +77,7 @@ public:
 		return 0;
 	}
 
-	void dumpDetectionEntries() const override final {}
+	void dumpDetectionEntries() const override {}
 
 	int getGameVariantCount() const override {
 		int entries = 0;

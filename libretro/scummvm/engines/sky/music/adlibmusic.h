@@ -37,7 +37,7 @@ namespace Sky {
 class AdLibMusic : public MusicBase {
 public:
 	AdLibMusic(Audio::Mixer *pMixer, Disk *pDisk);
-	~AdLibMusic() override;
+	~AdLibMusic();
 
 	// AudioStream API
 	void setVolume(uint16 param) override;

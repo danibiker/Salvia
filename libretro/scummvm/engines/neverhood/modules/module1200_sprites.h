@@ -77,7 +77,7 @@ protected:
 class AsScene1201TntMan : public AnimatedSprite {
 public:
 	AsScene1201TntMan(NeverhoodEngine *vm, Scene *parentScene, Sprite *asTntManRope, bool isDown);
-	~AsScene1201TntMan() override;
+	~AsScene1201TntMan();
 protected:
 	Scene *_parentScene;
 	Sprite *_asTntManRope;
@@ -94,7 +94,7 @@ protected:
 class AsScene1201TntManFlame : public AnimatedSprite {
 public:
 	AsScene1201TntManFlame(NeverhoodEngine *vm, Sprite *asTntMan);
-	~AsScene1201TntManFlame() override;
+	~AsScene1201TntManFlame();
 protected:
 	Sprite *_asTntMan;
 	void update();

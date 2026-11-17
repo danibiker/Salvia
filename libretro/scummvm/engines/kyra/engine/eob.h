@@ -41,7 +41,7 @@ friend class TextDisplayer_SegaCD;
 friend class SegaSequencePlayer;
 public:
 	EoBEngine(OSystem *system, const GameFlags &flags);
-	~EoBEngine() override;
+	~EoBEngine();
 
 private:
 	// Init

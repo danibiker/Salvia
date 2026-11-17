@@ -85,9 +85,9 @@ private:
 	Menu *_menu;
 	Control *_control;
 	uint32 _newScript; // <= ugly, but I can't avoid it.
-	uint8 _speechClickDelay = 0;
+	uint8 _speechClickDelay;
 	Common::RandomSource _rnd;
-	bool _psxFudgeRandom = false; // Used within fnIdle() and fnRandom() for the PSX version
+	bool _psxFudgeRandom; // Used within fnIdle() and fnRandom() for the PSX version
 
 	int scriptManager(Object *compact, uint32 id);
 	void processLogic(Object *compact, uint32 id);

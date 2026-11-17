@@ -152,30 +152,6 @@ double nextFrameTime;
 bool g_start_from_exception = false;
 static std::string g_excp_emulator_path;
 
-/* [XBOX360] Contexto pasado al watcher thread.
- *
- * Las surfaces SDL/TTF se pre-rendereeron en el MAIN thread antes de
- * lanzar el watcher.  Esto elimina las llamadas no-thread-safe a
- * Fonts::renderUtf8Blended y SDL_CreateRGBSurface desde el watcher.
- *
- * El watcher solo hace operaciones "seguras" sobre surfaces ajenas:
- * SDL_FillRect, SDL_BlitSurface, SDL_Flip.  Estas operan sobre buffers
- * de pixels concretos sin tocar estado global de SDL/TTF.  Combinado
- * con D3DCREATE_MULTITHREADED en el device, SDL_Flip queda thread-safe.
- *
- * `exitRequested` permite al main thread senalizar fin antes de que
- * el watcher salga por su propio bucle (no se usa actualmente porque
- * el watcher se autoextingue tras watchPeriod, pero queda preparado). */
-struct LoadingWatcherCtx {
-	double*       nextFrameTime;
-	SDL_Surface** preRenderedText;
-	int           numColors;
-	SDL_Surface*  rawSurface;
-	Uint32        keyBg;
-	SDL_Rect      drawRect;
-	volatile LONG exitRequested;
-};
-
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
    const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
@@ -2007,7 +1983,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 					if (inputs->rapidFire[port][i] && !inputs->turboPhaseOn) continue;
 					mask |= (int16_t)(1 << i);
 				} else if (inputs->mapperCore.getSdlBtn(port, i) == sdlModifier && (
-					gameMenu->joystick->hotkeySendToCore[port] == 1 || (!gameMenu->joystick->hotkeyEnablerHidePress && inputs->getCoreAny(port, i))) ){
+					gameMenu->joystick->hotkeySendToCore[port] == 1 || (!gameMenu->joystick->inputs.hotkeyEnablerHidePress && inputs->getCoreAny(port, i))) ){
 					//Hemos detectado que el habilitador de hotkeys se ha soltado y no se habia pulsado 
 					//ningun boton con hotkey asignada, gracias a hotkeySendToCore. Asi que enviamos la pulsacion al core
 					//LOG_DEBUG("Hotkey enabler should be processed in the core");
@@ -2027,7 +2003,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 				//y no se habia pulsado ninguna hotkey, segun el valor de hotkeySendToCore
 				return (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier && (
 					gameMenu->joystick->hotkeySendToCore[port] == 1 
-					|| (!gameMenu->joystick->hotkeyEnablerHidePress && inputs->getCoreAny(port, id))) ) ? 1 : 0;
+					|| (!gameMenu->joystick->inputs.hotkeyEnablerHidePress && inputs->getCoreAny(port, id))) ) ? 1 : 0;
 			}
 			return 0;
 		}

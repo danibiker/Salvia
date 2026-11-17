@@ -38,7 +38,7 @@ namespace Toon {
 class CharacterFlux : public Character {
 public:
 	CharacterFlux(ToonEngine *vm);
-	~CharacterFlux() override;
+	~CharacterFlux();
 
 	void setPosition(int16 x, int16 y) override;
 	void playStandingAnim() override;

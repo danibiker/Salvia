@@ -42,6 +42,15 @@ private:
 		bool noDelta;
 	} _loops[16];
 
+	void resetLoops() {
+		for (int i = 0; i < ARRAYSIZE(_loops); ++i) {
+			_loops[i].timer = 0;
+			_loops[i].start = nullptr;
+			_loops[i].end = nullptr;
+			_loops[i].noDelta = false;
+		}
+	}
+
 	// Data for monophonic chords mode.
 	// If this is activated, when multiple notes are played at the same time on
 	// a melodic channel (0-5), only the highest note will be played.
@@ -66,7 +75,7 @@ protected:
 	public:
 	MidiParser_S1D(uint8 source = 0, bool monophonicChords = false) : MidiParser(source),
 			_monophonicChords(monophonicChords), _data(nullptr), _noDelta(false) {
-		Common::fill(_loops, _loops + ARRAYSIZE(_loops), Loop { 0, 0, 0, false });
+		resetLoops();
 		Common::fill(_highestNote, _highestNote + ARRAYSIZE(_highestNote), 0);
 		Common::fill(_lastPlayedNoteTime, _lastPlayedNoteTime + ARRAYSIZE(_lastPlayedNoteTime), 0);
 	}
@@ -285,7 +294,7 @@ void MidiParser_S1D::resetTracking() {
 	MidiParser::resetTracking();
 	// The first event never contains any delta.
 	_noDelta = true;
-	Common::fill(_loops, _loops + ARRAYSIZE(_loops), Loop { 0, 0, 0, false });
+	resetLoops();
 }
 
 MidiParser *MidiParser_createS1D(uint8 source, bool monophonicChords) { return new MidiParser_S1D(source, monophonicChords); }

@@ -45,7 +45,7 @@ namespace Sword1 {
 SystemVars SwordEngine::_systemVars;
 
 SwordEngine::SwordEngine(OSystem *syst, const ADGameDescription *gameDesc)
-	: Engine(syst) {
+	: Engine(syst), _inTimer(-1), _vbl60HzUSecElapsed(0), _vblCount(0), _rate(DEFAULT_FRAME_TIME / 10), _targetFrameTime(DEFAULT_FRAME_TIME), _mainLoopFrameCount(0), _ticker(0) {
 
 	_features = gameDesc->flags;
 	_systemVars.platform = gameDesc->platform;

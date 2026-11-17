@@ -4280,6 +4280,14 @@ struct NoirMapping {
 	int numArgs;
 };
 
+static NoirMapping makeNoirMapping(const char *name, int libCode, int numArgs) {
+	NoirMapping m;
+	m.name = name;
+	m.libCode = libCode;
+	m.numArgs = numArgs;
+	return m;
+}
+
 NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	// This function allows us to both log the called library functions, as well
 	// as to stub the ones we haven't yet implemented. Eventually this might
@@ -4291,63 +4299,63 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 		error("NoFunction isn't a real function");
 		break;
 	case 1:
-		mapping = NoirMapping{"ACTORBRIGHTNESS", ACTORBRIGHTNESS, 2};
+		mapping = makeNoirMapping("ACTORBRIGHTNESS", ACTORBRIGHTNESS, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 2:
-		mapping = NoirMapping{"ACTORDIRECTION", ACTORDIRECTION, 1};
+		mapping = makeNoirMapping("ACTORDIRECTION", ACTORDIRECTION, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 3:
-		mapping = NoirMapping{"ACTORPRIORITY", ACTORPRIORITY, 2};
+		mapping = makeNoirMapping("ACTORPRIORITY", ACTORPRIORITY, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 4:
-		mapping = NoirMapping{"ACTORREF", ACTORREF, 0};
+		mapping = makeNoirMapping("ACTORREF", ACTORREF, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 5:
-		mapping = NoirMapping{"ACTORRGB", ACTORRGB, 2};
+		mapping = makeNoirMapping("ACTORRGB", ACTORRGB, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 6:
-		mapping = NoirMapping{"ACTORXPOS", ACTORXPOS, 1};
+		mapping = makeNoirMapping("ACTORXPOS", ACTORXPOS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 7:
-		mapping = NoirMapping{"ACTORYPOS", ACTORYPOS, 1};
+		mapping = makeNoirMapping("ACTORYPOS", ACTORYPOS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 8:
-		mapping = NoirMapping{"ADDNOTEBOOK", ADDNOTEBOOK, 1};
+		mapping = makeNoirMapping("ADDNOTEBOOK", ADDNOTEBOOK, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 9:
-		mapping = NoirMapping{"ADDCONV", ADDCONV, 1};
+		mapping = makeNoirMapping("ADDCONV", ADDCONV, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 10:
-		mapping = NoirMapping{"ADDHIGHLIGHT", ADDHIGHLIGHT, 2};
+		mapping = makeNoirMapping("ADDHIGHLIGHT", ADDHIGHLIGHT, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 11:
 		error("Unsupported libCode %d ADDINV 8", libCode);
 	case 12:
-		mapping = NoirMapping{"ADDINV1", ADDINV1, 1};
+		mapping = makeNoirMapping("ADDINV1", ADDINV1, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 13:
-		mapping = NoirMapping{"ADDINV2", ADDINV2, 1};
+		mapping = makeNoirMapping("ADDINV2", ADDINV2, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
@@ -4356,17 +4364,17 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	case 15:
 		error("Unsupported libCode %d ADDINV 4", libCode);
 	case 16:
-		mapping = NoirMapping{"ADDINV3", ADDINV3, 1};
+		mapping = makeNoirMapping("ADDINV3", ADDINV3, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X)", mapping.name, pp[0]);
 		break;
 	case 17:
-		mapping = NoirMapping{"ADDTOPIC", ADDTOPIC, 1};
+		mapping = makeNoirMapping("ADDTOPIC", ADDTOPIC, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X)", mapping.name, pp[0]);
 		break;
 	case 18:
-		mapping = NoirMapping{"BACKGROUND", BACKGROUND, 1};
+		mapping = makeNoirMapping("BACKGROUND", BACKGROUND, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
@@ -4375,69 +4383,69 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	case 20: // 3 params, assigns values to three globals
 		error("Unsupported libCode %d", libCode);
 	case 21:
-		mapping = NoirMapping{"CALLACTOR", CALLACTOR, 2};
+		mapping = makeNoirMapping("CALLACTOR", CALLACTOR, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 22:
-		mapping = NoirMapping{"CALLGLOBALPROCESS", CALLGLOBALPROCESS, 2};
+		mapping = makeNoirMapping("CALLGLOBALPROCESS", CALLGLOBALPROCESS, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 23:
-		mapping = NoirMapping{"CALLOBJECT", CALLOBJECT, 2};
+		mapping = makeNoirMapping("CALLOBJECT", CALLOBJECT, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 24:
-		mapping = NoirMapping{"CALLPROCESS", CALLPROCESS, 2};
+		mapping = makeNoirMapping("CALLPROCESS", CALLPROCESS, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 25:
-		mapping = NoirMapping{"CALLSCENE", CALLSCENE, 0};
+		mapping = makeNoirMapping("CALLSCENE", CALLSCENE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 26:
-		mapping = NoirMapping{"CALLTAG", CALLTAG, 2};
+		mapping = makeNoirMapping("CALLTAG", CALLTAG, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 27:
-		mapping = NoirMapping{"CAMERA", CAMERA, 1};
+		mapping = makeNoirMapping("CAMERA", CAMERA, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 28:
-		mapping = NoirMapping{"CDCHANGESCENE", CDCHANGESCENE, 1};
+		mapping = makeNoirMapping("CDCHANGESCENE", CDCHANGESCENE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 29:
-		mapping = NoirMapping{"CDDOCHANGE", CDDOCHANGE, 0};
+		mapping = makeNoirMapping("CDDOCHANGE", CDDOCHANGE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 30:
-		mapping = NoirMapping{"CDENDACTOR", CDENDACTOR, 1};
+		mapping = makeNoirMapping("CDENDACTOR", CDENDACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 31:
-		mapping = NoirMapping{"CDLOAD", CDLOAD, 2};
+		mapping = makeNoirMapping("CDLOAD", CDLOAD, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 32:
-		mapping = NoirMapping{"CDPLAY", CDPLAY, 0};
+		mapping = makeNoirMapping("CDPLAY", CDPLAY, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 33: // Disassembly just returns -1 for this opcode, so map it to ZZZZZZ
-		mapping = NoirMapping{"OP33_NOP", ZZZZZZ, 1};
+		mapping = makeNoirMapping("OP33_NOP", ZZZZZZ, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 34:
-		mapping = NoirMapping{"CLEARHOOKSCENE", CLEARHOOKSCENE, 0};
+		mapping = makeNoirMapping("CLEARHOOKSCENE", CLEARHOOKSCENE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 35: // 0 params, closes open inventory if it is 1 or 2
@@ -4445,65 +4453,65 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	case 36: // 0 params, closes open inventory if it is 3
 		error("Unsupported libCode %d to close inventory", libCode);
 	case 37:
-		mapping = NoirMapping{"CONTROL", CONTROL, 1};
+		mapping = makeNoirMapping("CONTROL", CONTROL, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X)", mapping.name, pp[0]);
 		break;
 	case 38:
-		mapping = NoirMapping{"CONVERSATION", CONVERSATION, 1};
+		mapping = makeNoirMapping("CONVERSATION", CONVERSATION, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X)", mapping.name, pp[0]);
 		break;
 	case 39: // 1 param
-		mapping = NoirMapping{"CROSSCLUE", CROSSCLUE, 1};
+		mapping = makeNoirMapping("CROSSCLUE", CROSSCLUE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 40:
-		mapping = NoirMapping{"CURSOR", CURSOR, 1};
+		mapping = makeNoirMapping("CURSOR", CURSOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X)", mapping.name, pp[0]);
 		break;
 	case 41:
-		mapping = NoirMapping{"CURSORXPOS", CURSORXPOS, 0};
+		mapping = makeNoirMapping("CURSORXPOS", CURSORXPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 42:
-		mapping = NoirMapping{"CURSORYPOS", CURSORYPOS, 0};
+		mapping = makeNoirMapping("CURSORYPOS", CURSORYPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 43:
-		mapping = NoirMapping{"DECINVMAIN", DECINVMAIN, 8};
+		mapping = makeNoirMapping("DECINVMAIN", DECINVMAIN, 8);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
 		break;
 	case 44: // Changed in Noir
-		mapping = NoirMapping{"DECINV2", DECINV2, 8};
+		mapping = makeNoirMapping("DECINV2", DECINV2, 8);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
 		break;
 	case 45:
-		mapping = NoirMapping{"DECLARELANGUAGE", DECLARELANGUAGE, 3};
+		mapping = makeNoirMapping("DECLARELANGUAGE", DECLARELANGUAGE, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 46:
-		mapping = NoirMapping{"DECLEAD", DECLEAD, 1};
+		mapping = makeNoirMapping("DECLEAD", DECLEAD, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 47:
-		mapping = NoirMapping{"DEC3D", DEC3D, 1};
+		mapping = makeNoirMapping("DEC3D", DEC3D, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 48:
-		mapping = NoirMapping{"DECTAGFONT", DECTAGFONT, 1};
+		mapping = makeNoirMapping("DECTAGFONT", DECTAGFONT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 49:
-		mapping = NoirMapping{"DECTALKFONT", DECTALKFONT, 1};
+		mapping = makeNoirMapping("DECTALKFONT", DECTALKFONT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
@@ -4512,202 +4520,202 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	case 51: // 1 parameter
 		error("Unsupported libCode %d DELTOPIC variant", libCode);
 	case 52:
-		mapping = NoirMapping{"DIMMUSIC", DIMMUSIC, 0};
+		mapping = makeNoirMapping("DIMMUSIC", DIMMUSIC, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 53:
-		mapping = NoirMapping{"DROP", DROP, 1};
+		mapping = makeNoirMapping("DROP", DROP, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 54:
-		mapping = NoirMapping{"DROPEVERYTHING", DROPEVERYTHING, 1};
+		mapping = makeNoirMapping("DROPEVERYTHING", DROPEVERYTHING, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 55:
-		mapping = NoirMapping{"DROPOUT", DROPOUT, 1};
+		mapping = makeNoirMapping("DROPOUT", DROPOUT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 56:
-		mapping = NoirMapping{"EFFECTACTOR", EFFECTACTOR, 0};
+		mapping = makeNoirMapping("EFFECTACTOR", EFFECTACTOR, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 57:
-		mapping = NoirMapping{"ENABLEMENU", ENABLEMENU, 0};
+		mapping = makeNoirMapping("ENABLEMENU", ENABLEMENU, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 58:
-		mapping = NoirMapping{"ENDACTOR", ENDACTOR, 1};
+		mapping = makeNoirMapping("ENDACTOR", ENDACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 59:
-		mapping = NoirMapping{"ESCAPEOFF", ESCAPEOFF, 0};
+		mapping = makeNoirMapping("ESCAPEOFF", ESCAPEOFF, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 60:
-		mapping = NoirMapping{"ESCAPEON", ESCAPEON, 0};
+		mapping = makeNoirMapping("ESCAPEON", ESCAPEON, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 61:
-		mapping = NoirMapping{"EVENT", EVENT, 0};
+		mapping = makeNoirMapping("EVENT", EVENT, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 62:
-		mapping = NoirMapping{"FACETAG", FACETAG, 1};
+		mapping = makeNoirMapping("FACETAG", FACETAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 63:
-		mapping = NoirMapping{"FADEIN", FADEIN, 0};
+		mapping = makeNoirMapping("FADEIN", FADEIN, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 64:
-		mapping = NoirMapping{"FADEMUSIC", FADEMUSIC, 2};
+		mapping = makeNoirMapping("FADEMUSIC", FADEMUSIC, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%08X, %d)", mapping.name, pp[0], pp[1]);
 		break;
 	case 65:
-		mapping = NoirMapping{"FADEOUT", FADEOUT, 0};
+		mapping = makeNoirMapping("FADEOUT", FADEOUT, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 66: // Disassembly just returns -1 for this opcode, so map it to ZZZZZZ
-		mapping = NoirMapping{"OP66_NOP", ZZZZZZ, 1};
+		mapping = makeNoirMapping("OP66_NOP", ZZZZZZ, 1);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 67:
-		mapping = NoirMapping{"FREEZECURSOR", FREEZECURSOR, 1};
+		mapping = makeNoirMapping("FREEZECURSOR", FREEZECURSOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 68:
-		mapping = NoirMapping{"GETINVLIMIT", GETINVLIMIT, 0};
+		mapping = makeNoirMapping("GETINVLIMIT", GETINVLIMIT, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 69:
-		mapping = NoirMapping{"GHOST", GHOST, 3};
+		mapping = makeNoirMapping("GHOST", GHOST, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 70:
-		mapping = NoirMapping{"GLOBALVAR", GLOBALVAR, 0};
+		mapping = makeNoirMapping("GLOBALVAR", GLOBALVAR, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 71:
 		error("You'll have to ask John to put this back in!");
 	case 72:
-		mapping = NoirMapping{"HAILSCENE", HAILSCENE, 1};
+		mapping = makeNoirMapping("HAILSCENE", HAILSCENE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 73:
-		mapping = NoirMapping{"HASRESTARTED", HASRESTARTED, 0};
+		mapping = makeNoirMapping("HASRESTARTED", HASRESTARTED, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 74:
-		mapping = NoirMapping{"HAVE", HAVE, 1};
+		mapping = makeNoirMapping("HAVE", HAVE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 75:
-		mapping = NoirMapping{"HELDOBJECTORTOPIC", HELDOBJECTORTOPIC, 0};
+		mapping = makeNoirMapping("HELDOBJECTORTOPIC", HELDOBJECTORTOPIC, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 76: // 0 parameters, returns enum depending on a bitfield value on held object
 		error("Unsupported libCode %d", libCode);
 	case 77:
-		mapping = NoirMapping{"HIDEACTOR", HIDEACTOR, 1};
+		mapping = makeNoirMapping("HIDEACTOR", HIDEACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 78:
-		mapping = NoirMapping{"HIDEBLOCK", HIDEBLOCK, 1};
+		mapping = makeNoirMapping("HIDEBLOCK", HIDEBLOCK, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 79:
-		mapping = NoirMapping{"HIDEEFFECT", HIDEEFFECT, 1};
+		mapping = makeNoirMapping("HIDEEFFECT", HIDEEFFECT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 80:
-		mapping = NoirMapping{"HIDEPATH", HIDEPATH, 1};
+		mapping = makeNoirMapping("HIDEPATH", HIDEPATH, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 81:
-		mapping = NoirMapping{"HIDEREFER", HIDEREFER, 1};
+		mapping = makeNoirMapping("HIDEREFER", HIDEREFER, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 82: // hide poly type 6
 		error("Unsupported libCode %d hide_poly_type_6", libCode);
 	case 83:
-		mapping = NoirMapping{"HIDETAG", HIDETAG, 1};
+		mapping = makeNoirMapping("HIDETAG", HIDETAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 84:
-		mapping = NoirMapping{"HOLD", HOLD, 1};
+		mapping = makeNoirMapping("HOLD", HOLD, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 85:
-		mapping = NoirMapping{"HOOKSCENE", HOOKSCENE, 3};
+		mapping = makeNoirMapping("HOOKSCENE", HOOKSCENE, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 86: // 2 parameters
-		mapping = NoirMapping{"BOOKADDHYPERLINK", BOOKADDHYPERLINK, 2};
+		mapping = makeNoirMapping("BOOKADDHYPERLINK", BOOKADDHYPERLINK, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 		break;
 	case 87:
-		mapping = NoirMapping{"IDLETIME", IDLETIME, 0};
+		mapping = makeNoirMapping("IDLETIME", IDLETIME, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 88:
-		mapping = NoirMapping{"INSTANTSCROLL", INSTANTSCROLL, 1};
+		mapping = makeNoirMapping("INSTANTSCROLL", INSTANTSCROLL, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 89:
-		mapping = NoirMapping{"INVENTORY", INVENTORY, 1};
+		mapping = makeNoirMapping("INVENTORY", INVENTORY, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 90: // 2 parameters, play anim based on item
-		mapping = NoirMapping{"INVPLAY", INVPLAY, 2};
+		mapping = makeNoirMapping("INVPLAY", INVPLAY, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d %d)", mapping.name, pp[0], pp[1]);
 		break;
 	case 91:
-		mapping = NoirMapping{"INWHICHINV", INWHICHINV, 0};
+		mapping = makeNoirMapping("INWHICHINV", INWHICHINV, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 92:
-		mapping = NoirMapping{"KILLACTOR", KILLACTOR, 0};
+		mapping = makeNoirMapping("KILLACTOR", KILLACTOR, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 93:
-		mapping = NoirMapping{"KILLGLOBALPROCESS", KILLGLOBALPROCESS, 1};
+		mapping = makeNoirMapping("KILLGLOBALPROCESS", KILLGLOBALPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 94:
-		mapping = NoirMapping{"KILLPROCESS", KILLPROCESS, 1};
+		mapping = makeNoirMapping("KILLPROCESS", KILLPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 95:
-		mapping = NoirMapping{"LOCALVAR", LOCALVAR, 0};
+		mapping = makeNoirMapping("LOCALVAR", LOCALVAR, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 96:
-		mapping = NoirMapping{"MOVECURSOR", MOVECURSOR, 2};
+		mapping = makeNoirMapping("MOVECURSOR", MOVECURSOR, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, %d)", mapping.name, pp[0], pp[1]);
 		break;
@@ -4716,25 +4724,25 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 	case 98: // MoveTagTo with additional logic
 		error("Unsupported libCode %d MOVETAGTO variant", libCode);
 	case 99:
-		mapping = NoirMapping{"NEWSCENE", NEWSCENE, 3};
+		mapping = makeNoirMapping("NEWSCENE", NEWSCENE, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 100:
-		mapping = NoirMapping{"NOBLOCKING", NOBLOCKING, 0};
+		mapping = makeNoirMapping("NOBLOCKING", NOBLOCKING, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 101:
-		mapping = NoirMapping{"NOPAUSE", NOPAUSE, 0};
+		mapping = makeNoirMapping("NOPAUSE", NOPAUSE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 102:
-		mapping = NoirMapping{"NOSCROLL", NOSCROLL, 4};
+		mapping = makeNoirMapping("NOSCROLL", NOSCROLL, 4);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3]);
 		break;
 	case 103: // 0 parameters
-		mapping = NoirMapping{"OPENNOTEBOOK", OPENNOTEBOOK, 0};
+		mapping = makeNoirMapping("OPENNOTEBOOK", OPENNOTEBOOK, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 104: // 1 parameter
@@ -4743,340 +4751,340 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 		error("Unsupported libCode %d INVENTORY4", libCode);
 	case 106: // 0 parameters
 		warning("TODO: Implement INVENTORY3");
-		mapping = NoirMapping{"INVENTORY3", ZZZZZZ, 0};
+		mapping = makeNoirMapping("INVENTORY3", ZZZZZZ, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 107:
-		mapping = NoirMapping{"OTHEROBJECT", OTHEROBJECT, 0};
+		mapping = makeNoirMapping("OTHEROBJECT", OTHEROBJECT, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 108:
-		mapping = NoirMapping{"PAUSE", PAUSE, 0};
+		mapping = makeNoirMapping("PAUSE", PAUSE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 109:
-		mapping = NoirMapping{"OBJECTHELD", OBJECTHELD, 1};
+		mapping = makeNoirMapping("OBJECTHELD", OBJECTHELD, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 110:
-		mapping = NoirMapping{"PLAY", PLAY, 2};
+		mapping = makeNoirMapping("PLAY", PLAY, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 112:
-		mapping = NoirMapping{"PLAYMUSIC", PLAYMUSIC, 1};
+		mapping = makeNoirMapping("PLAYMUSIC", PLAYMUSIC, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 113:
-		mapping = NoirMapping{"PLAYSAMPLE", PLAYSAMPLE, 4};
+		mapping = makeNoirMapping("PLAYSAMPLE", PLAYSAMPLE, 4);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3]);
 		break;
 	case 114:
-		mapping = NoirMapping{"POINTACTOR", POINTACTOR, 1};
+		mapping = makeNoirMapping("POINTACTOR", POINTACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 115:
-		mapping = NoirMapping{"POINTTAG", POINTTAG, 1};
+		mapping = makeNoirMapping("POINTTAG", POINTTAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 116:
-		mapping = NoirMapping{"POSTACTOR", POSTACTOR, 2};
+		mapping = makeNoirMapping("POSTACTOR", POSTACTOR, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 117:
 		error("Unsupported libCode %d POSTPOLY", libCode);
 	case 118:
-		mapping = NoirMapping{"POSTGLOBALPROCESS", POSTGLOBALPROCESS, 2};
+		mapping = makeNoirMapping("POSTGLOBALPROCESS", POSTGLOBALPROCESS, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 119:
-		mapping = NoirMapping{"POSTOBJECT", POSTOBJECT, 2};
+		mapping = makeNoirMapping("POSTOBJECT", POSTOBJECT, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 120:
-		mapping = NoirMapping{"POSTPROCESS", POSTPROCESS, 2};
+		mapping = makeNoirMapping("POSTPROCESS", POSTPROCESS, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 121:
-		mapping = NoirMapping{"POSTTAG", POSTTAG, 2};
+		mapping = makeNoirMapping("POSTTAG", POSTTAG, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 122: // Something movie-related
 		error("Unsupported libCode %d, movie-related", libCode);
 	case 123:
-		mapping = NoirMapping{"PRINT", PRINT, 5};
+		mapping = makeNoirMapping("PRINT", PRINT, 5);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4]);
 		break;
 	case 124:
-		mapping = NoirMapping{"PRINTCURSOR", PRINTCURSOR, 1};
+		mapping = makeNoirMapping("PRINTCURSOR", PRINTCURSOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 125:
-		mapping = NoirMapping{"PRINTOBJ", PRINTOBJ, 1};
+		mapping = makeNoirMapping("PRINTOBJ", PRINTOBJ, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 126:
-		mapping = NoirMapping{"PRINTTAG", PRINTTAG, 1};
+		mapping = makeNoirMapping("PRINTTAG", PRINTTAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 127:
-		mapping = NoirMapping{"QUITGAME", QUITGAME, 0};
+		mapping = makeNoirMapping("QUITGAME", QUITGAME, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 128:
-		mapping = NoirMapping{"RANDOM", RANDOM, 3};
+		mapping = makeNoirMapping("RANDOM", RANDOM, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, %d, %d)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 129:
-		mapping = NoirMapping{"RESETIDLETIME", RESETIDLETIME, 0};
+		mapping = makeNoirMapping("RESETIDLETIME", RESETIDLETIME, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 130:
-		mapping = NoirMapping{"RESTARTGAME", RESTARTGAME, 0};
+		mapping = makeNoirMapping("RESTARTGAME", RESTARTGAME, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 131:
-		mapping = NoirMapping{"RESTORESCENE", RESTORESCENE, 1};
+		mapping = makeNoirMapping("RESTORESCENE", RESTORESCENE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 132:
-		mapping = NoirMapping{"RESUMELASTGAME", RESUMELASTGAME, 0};
+		mapping = makeNoirMapping("RESUMELASTGAME", RESUMELASTGAME, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 133:
-		mapping = NoirMapping{"RUNMODE", RUNMODE, 0};
+		mapping = makeNoirMapping("RUNMODE", RUNMODE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 134:
-		mapping = NoirMapping{"SAVESCENE", SAVESCENE, 0};
+		mapping = makeNoirMapping("SAVESCENE", SAVESCENE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 135:
 	case 221:
 	case 222:
 	case 223:
-		mapping = NoirMapping{"SAY", SAY, 2};
+		mapping = makeNoirMapping("SAY", SAY, 2);
 		pp -= mapping.numArgs - 2;
 		debug(7, "%s_%2Xh(%d, %d)", mapping.name, libCode, pp[0], pp[1]);
 		break;
 	case 136:
-		mapping = NoirMapping{"SAYAT", SAYAT, 5};
+		mapping = makeNoirMapping("SAYAT", SAYAT, 5);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4]);
 		break;
 	case 137:
-		mapping = NoirMapping{"SCREENXPOS", SCREENXPOS, 0};
+		mapping = makeNoirMapping("SCREENXPOS", SCREENXPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 138:
-		mapping = NoirMapping{"SCREENYPOS", SCREENYPOS, 0};
+		mapping = makeNoirMapping("SCREENYPOS", SCREENYPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 139: // new scroll with 1, 3 or 5 parameters
 		error("Unsupported libCode %d SCROLL variant", libCode);
 	case 140:
-		mapping = NoirMapping{"SCROLLPARAMETERS", SCROLLPARAMETERS, 7};
+		mapping = makeNoirMapping("SCROLLPARAMETERS", SCROLLPARAMETERS, 7);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6]);
 		break;
 	case 141:
-		mapping = NoirMapping{"SENDACTOR", SENDACTOR, 1};
+		mapping = makeNoirMapping("SENDACTOR", SENDACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 142:
-		mapping = NoirMapping{"SENDGLOBALPROCESS", SENDGLOBALPROCESS, 1};
+		mapping = makeNoirMapping("SENDGLOBALPROCESS", SENDGLOBALPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 143:
-		mapping = NoirMapping{"SENDOBJECT", SENDOBJECT, 1};
+		mapping = makeNoirMapping("SENDOBJECT", SENDOBJECT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 144:
-		mapping = NoirMapping{"SENDPROCESS", SENDPROCESS, 1};
+		mapping = makeNoirMapping("SENDPROCESS", SENDPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 145:
-		mapping = NoirMapping{"SENDTAG", SENDTAG, 1};
+		mapping = makeNoirMapping("SENDTAG", SENDTAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 146: //calls function which is a nop
-		mapping = NoirMapping{"OP146_NOP", ZZZZZZ, 3};
+		mapping = makeNoirMapping("OP146_NOP", ZZZZZZ, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 147:
-		mapping = NoirMapping{"SETINVLIMIT", SETINVLIMIT, 2};
+		mapping = makeNoirMapping("SETINVLIMIT", SETINVLIMIT, 2);
 		pp -= mapping.numArgs - 2;
 		debug(7, "%s_%2Xh(%d, %d)", mapping.name, libCode, pp[0], pp[1]);
 		break;
 	case 148:
-		mapping = NoirMapping{"SETINVSIZE", SETINVSIZE, 7};
+		mapping = makeNoirMapping("SETINVSIZE", SETINVSIZE, 7);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6]);
 		break;
 	case 149:
-		mapping = NoirMapping{"SETLANGUAGE", SETLANGUAGE, 1};
+		mapping = makeNoirMapping("SETLANGUAGE", SETLANGUAGE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 150: // 3 parameters, calls function calling GetEscEvents not changing state
-		mapping = NoirMapping{"OP150_NOP", ZZZZZZ, 3};
+		mapping = makeNoirMapping("OP150_NOP", ZZZZZZ, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 151:
-		mapping = NoirMapping{"SETSYSTEMREEL", SETSYSTEMREEL, 2};
+		mapping = makeNoirMapping("SETSYSTEMREEL", SETSYSTEMREEL, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 152:
-		mapping = NoirMapping{"SETSYSTEMSTRING", SETSYSTEMSTRING, 2};
+		mapping = makeNoirMapping("SETSYSTEMSTRING", SETSYSTEMSTRING, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, %08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 153:
-		mapping = NoirMapping{"SETSYSTEMVAR", SETSYSTEMVAR, 2};
+		mapping = makeNoirMapping("SETSYSTEMVAR", SETSYSTEMVAR, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 154:
-		mapping = NoirMapping{"SETVIEW", SETVIEW, 2};
+		mapping = makeNoirMapping("SETVIEW", SETVIEW, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 155:
-		mapping = NoirMapping{"SHELL", SHELL, 0};
+		mapping = makeNoirMapping("SHELL", SHELL, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 156:
-		mapping = NoirMapping{"SHOWACTOR", SHOWACTOR, 1};
+		mapping = makeNoirMapping("SHOWACTOR", SHOWACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 157:
-		mapping = NoirMapping{"SHOWBLOCK", SHOWBLOCK, 1};
+		mapping = makeNoirMapping("SHOWBLOCK", SHOWBLOCK, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 158:
-		mapping = NoirMapping{"SHOWEFFECT", SHOWEFFECT, 1};
+		mapping = makeNoirMapping("SHOWEFFECT", SHOWEFFECT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 159:
-		mapping = NoirMapping{"SHOWMENU", SHOWMENU, 0};
+		mapping = makeNoirMapping("SHOWMENU", SHOWMENU, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 160:
-		mapping = NoirMapping{"SHOWPATH", SHOWPATH, 1};
+		mapping = makeNoirMapping("SHOWPATH", SHOWPATH, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 161:
-		mapping = NoirMapping{"SHOWREFER", SHOWREFER, 1};
+		mapping = makeNoirMapping("SHOWREFER", SHOWREFER, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 162: // show poly type 6
 		error("Unsupported libCode %d show_poly_type_6", libCode);
 	case 163:
-		mapping = NoirMapping{"SHOWTAG", SHOWTAG, 1};
+		mapping = makeNoirMapping("SHOWTAG", SHOWTAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 164:
-		mapping = NoirMapping{"STAND", STAND, 4};
+		mapping = makeNoirMapping("STAND", STAND, 4);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3]);
 		break;
 	case 165:
-		mapping = NoirMapping{"STANDTAG", STANDTAG, 1};
+		mapping = makeNoirMapping("STANDTAG", STANDTAG, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 166:
-		mapping = NoirMapping{"STARTGLOBALPROCESS", STARTGLOBALPROCESS, 1};
+		mapping = makeNoirMapping("STARTGLOBALPROCESS", STARTGLOBALPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 167:
-		mapping = NoirMapping{"STARTPROCESS", STARTPROCESS, 1};
+		mapping = makeNoirMapping("STARTPROCESS", STARTPROCESS, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 168:
-		mapping = NoirMapping{"STARTTIMER", STARTTIMER, 4};
+		mapping = makeNoirMapping("STARTTIMER", STARTTIMER, 4);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3]);
 		break;
 	case 169: // 0 parameters, passes
 		error("Unsupported libCode %d audio-related", libCode);
 	case 170:
-		mapping = NoirMapping{"STOPSAMPLE", STOPSAMPLE, 1};
+		mapping = makeNoirMapping("STOPSAMPLE", STOPSAMPLE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 171:
-		mapping = NoirMapping{"STOPWALK", STOPWALK, 1};
+		mapping = makeNoirMapping("STOPWALK", STOPWALK, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 172:
-		mapping = NoirMapping{"SUBTITLES", SUBTITLES, 1};
+		mapping = makeNoirMapping("SUBTITLES", SUBTITLES, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 173:
-		mapping = NoirMapping{"SWALK", SWALK, 6};
+		mapping = makeNoirMapping("SWALK", SWALK, 6);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5]);
 		break;
 	case 174:
-		mapping = NoirMapping{"SWALKZ", SWALKZ, 7};
+		mapping = makeNoirMapping("SWALKZ", SWALKZ, 7);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6]);
 		break;
 	case 175:
-		mapping = NoirMapping{"SYSTEMVAR", SYSTEMVAR, 0};
+		mapping = makeNoirMapping("SYSTEMVAR", SYSTEMVAR, 0);
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	// These 4 are a fallthrough in the disassembly
 	// Assume they still have the same order for clarity of log output
 	case 176:
-		mapping = NoirMapping{"TAGTAGXPOS", TAGTAGXPOS, 0};
+		mapping = makeNoirMapping("TAGTAGXPOS", TAGTAGXPOS, 0);
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 177:
-		mapping = NoirMapping{"TAGTAGYPOS", TAGTAGYPOS, 0};
+		mapping = makeNoirMapping("TAGTAGYPOS", TAGTAGYPOS, 0);
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 178:
-		mapping = NoirMapping{"TAGWALKXPOS", TAGWALKXPOS, 0};
+		mapping = makeNoirMapping("TAGWALKXPOS", TAGWALKXPOS, 0);
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 179:
-		mapping = NoirMapping{"TAGWALKYPOS", TAGWALKYPOS, 0};
+		mapping = makeNoirMapping("TAGWALKYPOS", TAGWALKYPOS, 0);
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 180: // 2 parameters, talkorsay has been modified vor v3
@@ -5086,170 +5094,170 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 		error("Unsupported libCode %d TALK with unsupported speech type", libCode);
 	case 181: // talkorsay has been modified vor v3
 		warning("TODO: Implement TalkOrSay v3");
-		mapping = NoirMapping{"TALKAT", TALKAT, 5};
+		mapping = makeNoirMapping("TALKAT", TALKAT, 5);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4]);
 		break;
 	case 182:
-		mapping = NoirMapping{"TALKRGB", TALKRGB, 3};
+		mapping = makeNoirMapping("TALKRGB", TALKRGB, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 183:
-		mapping = NoirMapping{"TALKVIA", TALKVIA, 1};
+		mapping = makeNoirMapping("TALKVIA", TALKVIA, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 184:
-		mapping = NoirMapping{"TEMPTAGFONT", TEMPTAGFONT, 1};
+		mapping = makeNoirMapping("TEMPTAGFONT", TEMPTAGFONT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 185:
-		mapping = NoirMapping{"TEMPTALKFONT", TEMPTALKFONT, 1};
+		mapping = makeNoirMapping("TEMPTALKFONT", TEMPTALKFONT, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 186:
-		mapping = NoirMapping{"THISOBJECT", THISOBJECT, 0};
+		mapping = makeNoirMapping("THISOBJECT", THISOBJECT, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 187:
-		mapping = NoirMapping{"THISTAG", THISTAG, 0};
+		mapping = makeNoirMapping("THISTAG", THISTAG, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 188:
-		mapping = NoirMapping{"TIMER", TIMER, 0};
+		mapping = makeNoirMapping("TIMER", TIMER, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 189:
-		mapping = NoirMapping{"TOPIC", TOPIC, 0};
+		mapping = makeNoirMapping("TOPIC", TOPIC, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 190:
-		mapping = NoirMapping{"TOPPLAY", TOPPLAY, 4};
+		mapping = makeNoirMapping("TOPPLAY", TOPPLAY, 4);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3]);
 		break;
 	case 191:
-		mapping = NoirMapping{"TOPWINDOW", TOPWINDOW, 1};
+		mapping = makeNoirMapping("TOPWINDOW", TOPWINDOW, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d)", mapping.name, pp[0]);
 		break;
 	case 192:
-		mapping = NoirMapping{"UNDIMMUSIC", UNDIMMUSIC, 0};
+		mapping = makeNoirMapping("UNDIMMUSIC", UNDIMMUSIC, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 193:
-		mapping = NoirMapping{"UNHOOKSCENE", UNHOOKSCENE, 0};
+		mapping = makeNoirMapping("UNHOOKSCENE", UNHOOKSCENE, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 194:
-		mapping = NoirMapping{"WAITFRAME", WAITFRAME, 2};
+		mapping = makeNoirMapping("WAITFRAME", WAITFRAME, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, %d)", mapping.name, pp[0], pp[1]);
 		break;
 	case 195:
-		mapping = NoirMapping{"WAITKEY", WAITKEY, 0};
+		mapping = makeNoirMapping("WAITKEY", WAITKEY, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 196:
-		mapping = NoirMapping{"WAITSCROLL", WAITSCROLL, 0};
+		mapping = makeNoirMapping("WAITSCROLL", WAITSCROLL, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 197:
-		mapping = NoirMapping{"WAITTIME", WAITTIME, 2};
+		mapping = makeNoirMapping("WAITTIME", WAITTIME, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(%d, %d)", mapping.name, pp[0], pp[1]);
 		break;
 	case 198:
-		mapping = NoirMapping{"WALK", WALK, 5};
+		mapping = makeNoirMapping("WALK", WALK, 5);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4]);
 		break;
 	case 199:
-		mapping = NoirMapping{"WALKED", WALKED, 3};
+		mapping = makeNoirMapping("WALKED", WALKED, 3);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2]);
 		break;
 	case 200:
-		mapping = NoirMapping{"OP200_NOP", ZZZZZZ, 2};
+		mapping = makeNoirMapping("OP200_NOP", ZZZZZZ, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 201:
-		mapping = NoirMapping{"OP201_NOP", ZZZZZZ, 2};
+		mapping = makeNoirMapping("OP201_NOP", ZZZZZZ, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 202:
-		mapping = NoirMapping{"WALKINGACTOR", WALKINGACTOR, 1};
+		mapping = makeNoirMapping("WALKINGACTOR", WALKINGACTOR, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 203:
-		mapping = NoirMapping{"WALKPOLY", WALKPOLY, 2};
+		mapping = makeNoirMapping("WALKPOLY", WALKPOLY, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 204:
-		mapping = NoirMapping{"WALKTAG", WALKTAG, 2};
+		mapping = makeNoirMapping("WALKTAG", WALKTAG, 2);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X)", mapping.name, pp[0], pp[1]);
 		break;
 	case 205:
-		mapping = NoirMapping{"WALKXPOS", WALKXPOS, 0};
+		mapping = makeNoirMapping("WALKXPOS", WALKXPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 206:
-		mapping = NoirMapping{"WALKYPOS", WALKYPOS, 0};
+		mapping = makeNoirMapping("WALKYPOS", WALKYPOS, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 207:
-		mapping = NoirMapping{"WHICHCD", WHICHCD, 0};
+		mapping = makeNoirMapping("WHICHCD", WHICHCD, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 208:
-		mapping = NoirMapping{"WHICHINVENTORY", WHICHINVENTORY, 0};
+		mapping = makeNoirMapping("WHICHINVENTORY", WHICHINVENTORY, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 209:
-		mapping = NoirMapping{"ZZZZZZ", ZZZZZZ, 1};
+		mapping = makeNoirMapping("ZZZZZZ", ZZZZZZ, 1);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 210: // STUBBED
-		mapping = NoirMapping{"NTBPOLYENTRY", NTBPOLYENTRY, 8};
+		mapping = makeNoirMapping("NTBPOLYENTRY", NTBPOLYENTRY, 8);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
 		break;
 	case 211: // 4 parameters
 		error("Unsupported libCode %d PLAYSEQUENCE", libCode);
 	case 212: // STUBBED
-		mapping = NoirMapping{"NTBPOLYPREVPAGE", NTBPOLYPREVPAGE, 8};
+		mapping = makeNoirMapping("NTBPOLYPREVPAGE", NTBPOLYPREVPAGE, 8);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
 		break;
 	case 213: // STUBBED
-		mapping = NoirMapping{"NTBPOLYNEXTPAGE", NTBPOLYNEXTPAGE, 8};
+		mapping = makeNoirMapping("NTBPOLYNEXTPAGE", NTBPOLYNEXTPAGE, 8);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X)", mapping.name, pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
 		break;
 	case 214:
-		mapping = NoirMapping{"SET3DPALETTE", SET3DPALETTE, 1};
+		mapping = makeNoirMapping("SET3DPALETTE", SET3DPALETTE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
 	case 215: // this case produces "Unsupported library function" error,
 			  // followed by "You can't possibly get here", so map it to an invalid value
-		mapping = NoirMapping{"OP215_USUPPORTED", -1, 0};
+		mapping = makeNoirMapping("OP215_USUPPORTED", -1, 0);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 216: // 2 parameters
-		mapping = NoirMapping{"OP216_NOP", ZZZZZZ, 2};
+		mapping = makeNoirMapping("OP216_NOP", ZZZZZZ, 2);
 		debug(7, "%s()", mapping.name);
 		break;
 	case 217:
-		mapping = NoirMapping{"VOICEOVER", VOICEOVER, 1};
+		mapping = makeNoirMapping("VOICEOVER", VOICEOVER, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
@@ -5257,7 +5265,7 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 		error("Unsupported libCode %d", libCode);
 	case 111: // no hold frame
 	case 225: // hold frame
-		mapping = NoirMapping{"PLAYMOVIE", PLAYMOVIE, 1};
+		mapping = makeNoirMapping("PLAYMOVIE", PLAYMOVIE, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;
@@ -5267,7 +5275,7 @@ NoirMapping translateNoirLibCode(int libCode, int32 *pp) {
 		error("Unsupported libCode %d remoce_conversation_icon", libCode);
 	case 228: // STUBBED, PCM related
 		warning("TODO: Implement OP228, PCM related");
-		mapping = NoirMapping{"OP228", ZZZZZZ, 1};
+		mapping = makeNoirMapping("OP228", ZZZZZZ, 1);
 		pp -= mapping.numArgs - 1;
 		debug(7, "%s(0x%08X)", mapping.name, pp[0]);
 		break;

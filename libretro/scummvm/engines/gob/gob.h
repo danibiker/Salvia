@@ -268,7 +268,7 @@ public:
 	const Graphics::PixelFormat &getPixelFormat() const;
 
 	GobEngine(OSystem *syst);
-	~GobEngine() override;
+	~GobEngine();
 
 	void initGame(const GOBGameDescription *gd);
 

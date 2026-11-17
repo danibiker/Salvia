@@ -116,8 +116,8 @@ Common::Array<ConfigElement> ConfigElement::getChildren() const {
 	const Common::Array<Shared::XMLNode *> &children = _node->children();
 	Common::Array<ConfigElement> result;
 
-	for (const auto &c : children)
-		result.push_back(c);
+	for (auto rfIt119 = children.begin(), rfEnd119 = children.end(); rfIt119 != rfEnd119; ++rfIt119)
+		{ const auto &c = *rfIt119; result.push_back(c); }
 
 	return result;
 }

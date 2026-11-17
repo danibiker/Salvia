@@ -85,7 +85,7 @@ public:
 	           GUI_Font *font, ButtonTextAlign alignment, bool is_checkbutton,
 	           GUI_CallBack *callback, bool flat = false);
 
-	~GUI_Button() override;
+	~GUI_Button();
 
 	/* change features of a text button (if one of the dimensions is negativ, it's ignored) */
 	virtual void ChangeTextButton(int x, int y, int w, int h, const char *text, ButtonTextAlign alignment);

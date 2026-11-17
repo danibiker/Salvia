@@ -43,7 +43,7 @@ protected:
 
 public:
 	SeekPath();
-	~SeekPath() override;
+	~SeekPath();
 	sint32 step_cost(const MapCoord &c1, const MapCoord &c2) override {
 		return -1;
 	}

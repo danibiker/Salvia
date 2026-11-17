@@ -37,7 +37,7 @@ namespace MystStacks {
 class Stoneship : public MystScriptParser {
 public:
 	explicit Stoneship(MohawkEngine_Myst *vm);
-	~Stoneship() override;
+	~Stoneship();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

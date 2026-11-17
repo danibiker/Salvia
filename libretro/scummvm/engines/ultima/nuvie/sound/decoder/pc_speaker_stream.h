@@ -36,7 +36,7 @@ public:
 		finished = false;
 	}
 
-	~PCSpeakerStream() override {
+	~PCSpeakerStream() {
 		delete pcspkr;
 	}
 
@@ -78,7 +78,7 @@ public:
 	}
 
 	PCSpeakerFreqStream(uint start, uint16 d);
-	~PCSpeakerFreqStream() override;
+	~PCSpeakerFreqStream();
 	uint32 getLengthInMsec();
 	int readBuffer(sint16 *buffer, const int numSamples) override;
 
@@ -97,7 +97,7 @@ public:
 	}
 
 	PCSpeakerSweepFreqStream(uint start, uint end, uint16 d, uint16 s);
-	~PCSpeakerSweepFreqStream() override;
+	~PCSpeakerSweepFreqStream();
 	uint32 getLengthInMsec();
 	int readBuffer(sint16 *buffer, const int numSamples) override;
 
@@ -125,7 +125,7 @@ public:
 	}
 
 	PCSpeakerRandomStream(uint start, uint16 d, uint16 s);
-	~PCSpeakerRandomStream() override;
+	~PCSpeakerRandomStream();
 	uint32 getLengthInMsec();
 	uint16 getNextFreqValue();
 	int readBuffer(sint16 *buffer, const int numSamples) override;
@@ -152,7 +152,7 @@ public:
 	}
 
 	PCSpeakerStutterStream(sint16 a0, uint16 a2, uint16 a4, uint16 a6, uint16 a8);
-	~PCSpeakerStutterStream() override;
+	~PCSpeakerStutterStream();
 	uint32 getLengthInMsec();
 	int readBuffer(sint16 *buffer, const int numSamples) override;
 

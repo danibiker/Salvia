@@ -162,7 +162,7 @@ public:
 class DOSFont : public Font {
 public:
 	DOSFont();
-	~DOSFont() override { unload(); }
+	~DOSFont() { unload(); }
 
 	bool load(Common::SeekableReadStream &file) override;
 	Type getType() const override { return kASCII; }
@@ -194,7 +194,7 @@ private:
 class AMIGAFont : public Font {
 public:
 	AMIGAFont();
-	~AMIGAFont() override { unload(); }
+	~AMIGAFont() { unload(); }
 
 	bool load(Common::SeekableReadStream &file) override;
 	Type getType() const override { return kASCII; }
@@ -227,7 +227,7 @@ private:
 class SJISFont : public Font {
 public:
 	SJISFont(Common::SharedPtr<Graphics::FontSJIS> &font, const uint8 invisColor, bool is16Color, bool drawOutline, int extraSpacing);
-	~SJISFont() override {}
+	~SJISFont() {}
 
 	bool usesOverlay() const override { return true; }
 	Type getType() const override { return kSJIS; }
@@ -259,7 +259,7 @@ private:
 class ChineseFont : public Font {
 public:
 	ChineseFont(int pitch, int renderWidth, int renderHeight, int spacingWidth, int spacingHeight, int extraSpacingWidth, int extraSpacingHeight);
-	~ChineseFont() override;
+	~ChineseFont();
 
 	virtual Type getType() const override { return kBIG5; }
 
@@ -294,10 +294,10 @@ private:
 	const uint16 _pitch;
 };
 
-class JohabFontLoK final : public Font {
+class JohabFontLoK : public Font {
 public:
 	JohabFontLoK(Font *&font8fat, const uint16 *lookupTable, uint32 lookupTableSize);
-	~JohabFontLoK() override;
+	~JohabFontLoK();
 
 	enum {
 		kNumJongseong = 191,
@@ -329,7 +329,7 @@ private:
 	uint8 *_glyphTemp;
 };
 
-class ChineseOneByteFontLoK final : public ChineseFont {
+class ChineseOneByteFontLoK : public ChineseFont {
 public:
 	ChineseOneByteFontLoK(int pitch);
 private:
@@ -338,7 +338,7 @@ private:
 	void processColorMap() override;
 };
 
-class ChineseTwoByteFontLoK final : public ChineseFont {
+class ChineseTwoByteFontLoK : public ChineseFont {
 public:
 	ChineseTwoByteFontLoK(int pitch, const uint16 *lookupTable, uint32 lookupTableSize);
 private:
@@ -350,7 +350,7 @@ private:
 	uint32 _lookupTableSize;
 };
 
-class ChineseOneByteFontMR final : public ChineseFont {
+class ChineseOneByteFontMR : public ChineseFont {
 public:
 	ChineseOneByteFontMR(int pitch) : ChineseFont(pitch, 7, 14, 9, 14, 0, 2) {}
 private:
@@ -359,7 +359,7 @@ private:
 	void processColorMap() override;
 };
 
-class ChineseTwoByteFontMR final : public ChineseFont {
+class ChineseTwoByteFontMR : public ChineseFont {
 public:
 	ChineseTwoByteFontMR(int pitch) : ChineseFont(pitch, 15, 14, 18, 14, 0, 2) {}
 private:
@@ -370,7 +370,7 @@ private:
 
 #ifdef ENABLE_LOL
 
-class ChineseOneByteFontLoL final : public ChineseFont {
+class ChineseOneByteFontLoL : public ChineseFont {
 public:
 	ChineseOneByteFontLoL(int pitch) : ChineseFont(pitch, 8, 14, 8, 16, 0, 0) { _pixelColorShading = false; }
 	void setStyles(int styles) override {}
@@ -381,7 +381,7 @@ private:
 	void processColorMap() override;
 };
 
-class ChineseTwoByteFontLoL final : public ChineseFont {
+class ChineseTwoByteFontLoL : public ChineseFont {
 public:
 	ChineseTwoByteFontLoL(int pitch) : ChineseFont(pitch, 16, 14, 16, 16, 0, 0) { _pixelColorShading = false; }
 	void setStyles(int styles) override {}
@@ -394,7 +394,7 @@ private:
 
 #endif
 
-class ChineseOneByteFontHOF final : public ChineseFont {
+class ChineseOneByteFontHOF : public ChineseFont {
 public:
 	ChineseOneByteFontHOF(int pitch) : ChineseFont(pitch, 8, 14, 9, 15, 0, 0) {}
 private:
@@ -403,7 +403,7 @@ private:
 	void processColorMap() override;
 };
 
-class ChineseTwoByteFontHOF final : public ChineseFont {
+class ChineseTwoByteFontHOF : public ChineseFont {
 public:
 	ChineseTwoByteFontHOF(int pitch) : ChineseFont(pitch, 16, 14, 18, 15, 0, 0) {}
 private:
@@ -412,7 +412,7 @@ private:
 	void processColorMap() override;
 };
 
-class KoreanOneByteFontHOF final : public ChineseFont {
+class KoreanOneByteFontHOF : public ChineseFont {
 public:
 	KoreanOneByteFontHOF(int pitch) : ChineseFont(pitch, 8, 9, 8, 10, 0, 0) {}
 	Type getType() const override { return kJohab; }
@@ -422,7 +422,7 @@ private:
 	void processColorMap() override;
 };
 
-class KoreanTwoByteFontHOF final : public ChineseFont {
+class KoreanTwoByteFontHOF : public ChineseFont {
 public:
 	KoreanTwoByteFontHOF(int pitch) : ChineseFont(pitch, 10, 9, 10, 10, 0, 0) {}
 	Type getType() const override { return kJohab; }
@@ -432,10 +432,10 @@ private:
 	void processColorMap() override;
 };
 
-class MultiSubsetFont final : public Font {
+class MultiSubsetFont : public Font {
 public:
 	MultiSubsetFont(Common::Array<Font*> *subsets) : Font(), _subsets(subsets) {}
-	~MultiSubsetFont() override;
+	~MultiSubsetFont();
 	Type getType() const override { return kBIG5; }
 
 	// Caveat: This method will try to load a font into the first subset slot it finds.

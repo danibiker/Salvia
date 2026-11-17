@@ -59,7 +59,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Wench() override {}
+	~Wench() {}
 };
 
 } // End of namespace Widgets

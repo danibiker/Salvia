@@ -273,7 +273,8 @@ void Render::maskSplitScreen() {
 void Render::restoreChangedRects() {
 	maskSplitScreen();
 	if (!_fullRefresh) {
-		for (const auto &dirty : _dirtyRects) {
+		for (auto rfIt276 = _dirtyRects.begin(), rfEnd276 = _dirtyRects.end(); rfIt276 != rfEnd276; ++rfIt276) {
+			const auto &dirty = *rfIt276;
 			//_backGroundSurface.frameRect(*it, 1);		// DEBUG
 			if (_vm->_interface->getFadeMode() != kFadeOut) {
 				mCopyRectToScreen(dirty.left, dirty.top, dirty.width(), dirty.height());
@@ -286,7 +287,8 @@ void Render::restoreChangedRects() {
 void Render::drawDirtyRects() {
 	maskSplitScreen();
 	if (!_fullRefresh) {
-		for (const auto &dirty : _dirtyRects) {
+		for (auto rfIt289 = _dirtyRects.begin(), rfEnd289 = _dirtyRects.end(); rfIt289 != rfEnd289; ++rfIt289) {
+			const auto &dirty = *rfIt289;
 			//_backGroundSurface.frameRect(*it, 2);		// DEBUG
 			if (_vm->_interface->getFadeMode() != kFadeOut) {
 				mCopyRectToScreen(dirty.left, dirty.top, dirty.width(), dirty.height());

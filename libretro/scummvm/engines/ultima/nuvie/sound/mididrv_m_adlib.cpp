@@ -131,7 +131,7 @@ void MidiDriver_M_AdLib::send(int8 source, uint32 b) {
 		activeNote = nullptr;
 		// Allocate a melodic OPL channel.
 		InstrumentInfo instrumentInfo;
-		instrumentInfo = { };
+		instrumentInfo = InstrumentInfo();
 		oplChannel = allocateOplChannel(channel, source, instrumentInfo);
 		if (oplChannel != 0xFF)
 			activeNote = &_activeNotes[oplChannel];

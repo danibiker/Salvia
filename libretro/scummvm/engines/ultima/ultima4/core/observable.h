@@ -83,7 +83,8 @@ public:
 
 		clearChanged();
 
-		for (auto *observer : tmp) {
+		for (auto rfIt86 = tmp.begin(), rfEnd86 = tmp.end(); rfIt86 != rfEnd86; ++rfIt86) {
+			auto *observer = *rfIt86;
 			observer->update(static_cast<O>(this), arg);
 		}
 	}

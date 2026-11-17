@@ -35,7 +35,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	DifficultyGump();
-	~DifficultyGump() override;
+	~DifficultyGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 	void Close(bool no_del = false) override;

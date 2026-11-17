@@ -53,7 +53,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Popup() override;
+	~Popup();
 
 	/**
 	 * Show the popup

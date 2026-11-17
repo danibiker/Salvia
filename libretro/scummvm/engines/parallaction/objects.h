@@ -473,7 +473,7 @@ public:
 	Common::String _scriptName;
 
 	Animation();
-	~Animation() override;
+	~Animation();
 	uint16 getFrameNum() const;
 	byte* getFrameData() const;
 

@@ -40,7 +40,7 @@ class PortraitU6 : public Portrait {
 public:
 
 	PortraitU6(const Configuration *cfg) : Portrait(cfg) {};
-	~PortraitU6() override {};
+	~PortraitU6() {};
 
 	bool init() override;
 	bool load(NuvieIO *objlist) override;

@@ -293,7 +293,8 @@ void Image::performTransparencyHack(uint colorValue, uint numFrames,
 		}
 	}
 	int ox, oy;
-	for (const auto &xy : opaqueXYs) {
+	for (auto rfIt296 = opaqueXYs.begin(), rfEnd296 = opaqueXYs.end(); rfIt296 != rfEnd296; ++rfIt296) {
+		const auto &xy = *rfIt296;
 		ox = xy.first;
 		oy = xy.second;
 		int span = int(haloWidth);

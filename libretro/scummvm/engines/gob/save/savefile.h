@@ -111,7 +111,7 @@ public:
 	static const uint32 kID = MKTAG('P','M','E','M');
 
 	SavePartMem(uint32 size);
-	~SavePartMem() override;
+	~SavePartMem();
 
 	bool read(Common::ReadStream &stream) override;
 	bool write(Common::WriteStream &stream) const override;
@@ -133,7 +133,7 @@ public:
 	static const uint32 kID = MKTAG('V','A','R','S');
 
 	SavePartVars(GobEngine *vm, uint32 size);
-	~SavePartVars() override;
+	~SavePartVars();
 
 	bool read(Common::ReadStream &stream) override;
 	bool write(Common::WriteStream &stream) const override;
@@ -165,7 +165,7 @@ public:
 	static const uint32 kID = MKTAG('S','P','R','T');
 
 	SavePartSprite(uint32 width, uint32 height, bool trueColor = false);
-	~SavePartSprite() override;
+	~SavePartSprite();
 
 	bool read(Common::ReadStream &stream) override;
 	bool write(Common::WriteStream &stream) const override;
@@ -212,7 +212,7 @@ public:
 	 */
 	SavePartInfo(uint32 descMaxLength, uint32 gameID,
 			uint32 gameVersion, byte endian, uint32 varCount);
-	~SavePartInfo() override;
+	~SavePartInfo();
 
 	/** Return the save's description. */
 	const char *getDesc() const;

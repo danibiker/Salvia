@@ -37,7 +37,7 @@ public:
 
 	CruWeaponGump();
 	CruWeaponGump(Shape *shape, int x);
-	~CruWeaponGump() override;
+	~CruWeaponGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

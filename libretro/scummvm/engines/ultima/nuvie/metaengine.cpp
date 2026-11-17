@@ -30,7 +30,8 @@ namespace Nuvie {
 
 void MetaEngine::listSaves(SaveStateList &saveList) {
 	// Check whether there's an entry for the original save slot
-	for (const SaveStateDescriptor &state : saveList) {
+	for (auto rfIt33 = saveList.begin(), rfEnd33 = saveList.end(); rfIt33 != rfEnd33; ++rfIt33) {
+		const SaveStateDescriptor &state = *rfIt33;
 		if (state.getSaveSlot() == ORIGINAL_SAVE_SLOT)
 			return;
 	}
@@ -142,7 +143,7 @@ static const NuvieActionDescription CheatKeyDescriptions[] = {
 	{ "TOGGLE_CHEATS", _s("Toggle cheats"), "C+c", nullptr },
 };
 
-static const NuvieActionDescription PerPartyMemberActionDescriptions[] {
+static const NuvieActionDescription PerPartyMemberActionDescriptions[] = {
 	{ "SOLO_MODE_1", _s("Solo mode as Avatar"), "1", nullptr },
 	{ "SOLO_MODE_2", _s("Solo mode as party member 2"), "2", nullptr },
 	{ "SOLO_MODE_3", _s("Solo mode as party member 3"), "3", nullptr },

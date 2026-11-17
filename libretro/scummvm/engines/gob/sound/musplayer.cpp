@@ -268,7 +268,8 @@ bool MUSPlayer::readSNDTimbres(Common::SeekableReadStream &snd, int timbreCount,
 
 	// Read names
 	byte nameBuffer[10];
-	for (auto &timbre : _timbres) {
+	for (auto rfIt271 = _timbres.begin(), rfEnd271 = _timbres.end(); rfIt271 != rfEnd271; ++rfIt271) {
+		auto &timbre = *rfIt271;
 		if (!readString(snd, timbre.name, nameBuffer, 9)) {
 			warning("MUSPlayer::readMUSTimbres(): Failed to read timbre name");
 			return false;
@@ -281,7 +282,8 @@ bool MUSPlayer::readSNDTimbres(Common::SeekableReadStream &snd, int timbreCount,
 	}
 
 	// Read parameters
-	for (auto &timbre : _timbres) {
+	for (auto rfIt284 = _timbres.begin(), rfEnd284 = _timbres.end(); rfIt284 != rfEnd284; ++rfIt284) {
+		auto &timbre = *rfIt284;
 		for (int i = 0; i < (kOperatorsPerVoice * kParamCount); i++)
 			timbre.params[i] = snd.readUint16LE();
 	}

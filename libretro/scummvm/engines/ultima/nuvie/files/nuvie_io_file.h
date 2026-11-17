@@ -34,7 +34,7 @@ namespace Nuvie {
 class NuvieIOFile : public NuvieIO {
 public:
 	NuvieIOFile() {}
-	~NuvieIOFile() override {}
+	~NuvieIOFile() {}
 
 	virtual bool open(const Common::Path &filename) {
 		return false;
@@ -47,7 +47,7 @@ private:
 	Common::File _srcFile;
 public:
 	NuvieIOFileRead() : NuvieIOFile(), _file(nullptr) {}
-	~NuvieIOFileRead() override;
+	~NuvieIOFileRead();
 
 	bool open(const Common::Path &filename) override;
 	virtual bool open(Common::InSaveFile *saveFile);
@@ -86,7 +86,7 @@ protected:
 	}
 public:
 	NuvieIOFileWrite();
-	~NuvieIOFileWrite() override;
+	~NuvieIOFileWrite();
 	bool open(const Common::Path &filename) override;
 	bool open(const Common::String &filename, bool isAutosave);
 	void close() override;

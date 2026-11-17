@@ -55,7 +55,7 @@ protected:
 class Cheater_Geisha : public Cheater {
 public:
 	Cheater_Geisha(GobEngine *vm, Geisha::Diving *diving, Geisha::Penetration *penetration);
-	~Cheater_Geisha() override;
+	~Cheater_Geisha();
 
 	bool cheat(GUI::Debugger &console) override;
 

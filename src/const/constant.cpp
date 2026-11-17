@@ -151,6 +151,7 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"Commodore - Amiga-content.png",										  // cart_amiga
 	"Amiga - CD32-content.png",												  // cart_cd32	
 	"Nintendo - Nintendo 64-content.png",									  // cart_n64
+	"ScummVM-content.png"													  // cart_scummvm
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
@@ -190,7 +191,8 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"",												   // cart_x68k
 	"",				    							   // cart_amiga
 	"",												   // cart_cd32
-	"Nintendo - Nintendo 64"						   // cart_n64
+	"Nintendo - Nintendo 64",						   // cart_n64
+	""												   // cart_scummvm
 };
 
 /* El indice es eje*2 + (valor>0), y que eje es cada stick NO coincide entre

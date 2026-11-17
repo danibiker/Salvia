@@ -628,7 +628,8 @@ void SystemUI::readSavedGameSlots(bool filterNonexistant, bool withAutoSaveSlot)
 	slotIdArray = _vm->getSavegameSlotIds();
 	slotIdArray.push_back(SYSTEMUI_SAVEDGAME_MAXIMUM_SLOTS); // so that the loop will process all slots
 
-	for (auto &curSlotId : slotIdArray) {
+	for (auto rfIt631 = slotIdArray.begin(), rfEnd631 = slotIdArray.end(); rfIt631 != rfEnd631; ++rfIt631) {
+		auto &curSlotId = *rfIt631;
 		assert(curSlotId > lastSlotId); // safety check
 
 		if (curSlotId == 0) {

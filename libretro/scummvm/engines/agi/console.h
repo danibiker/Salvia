@@ -77,7 +77,7 @@ private:
 class MickeyConsole : public GUI::Debugger {
 public:
 	MickeyConsole(MickeyEngine *mickey);
-	~MickeyConsole() override {}
+	~MickeyConsole() {}
 
 private:
 	MickeyEngine *_mickey;
@@ -90,7 +90,7 @@ private:
 class WinnieConsole : public GUI::Debugger {
 public:
 	WinnieConsole(WinnieEngine *winnie);
-	~WinnieConsole() override {}
+	~WinnieConsole() {}
 
 private:
 	WinnieEngine *_winnie;

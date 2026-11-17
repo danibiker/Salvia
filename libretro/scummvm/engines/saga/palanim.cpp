@@ -51,7 +51,8 @@ void PalAnim::loadPalAnim(const ByteArray &resourceData) {
 
 	debug(3, "PalAnim::loadPalAnim(): Loading %d PALANIM entries.", _entries.size());
 
-	for (auto &palAnimEntry : _entries) {
+	for (auto rfIt54 = _entries.begin(), rfEnd54 = _entries.end(); rfIt54 != rfEnd54; ++rfIt54) {
+auto &palAnimEntry = *rfIt54;
 
 		palAnimEntry.cycle = 0;
 
@@ -66,7 +67,8 @@ void PalAnim::loadPalAnim(const ByteArray &resourceData) {
 			palAnimEntry.palIndex[j] = readS.readByte();
 		}
 
-		for (auto &color : palAnimEntry.colors) {
+		for (auto rfIt69 = palAnimEntry.colors.begin(), rfEnd69 = palAnimEntry.colors.end(); rfIt69 != rfEnd69; ++rfIt69) {
+			auto &color = *rfIt69;
 			color.red = readS.readByte();
 			color.green = readS.readByte();
 			color.blue = readS.readByte();
@@ -105,7 +107,8 @@ void PalAnim::cycleStep(int vectortime) {
 
 	_vm->_gfx->getCurrentPal(pal);
 
-	for (auto &palAnimEntry : _entries) {
+	for (auto rfIt108 = _entries.begin(), rfEnd108 = _entries.end(); rfIt108 != rfEnd108; ++rfIt108) {
+		auto &palAnimEntry = *rfIt108;
 		cycle = palAnimEntry.cycle;
 		cycleLimit = palAnimEntry.colors.size();
 		for (j = 0; j < palAnimEntry.palIndex.size(); j++) {

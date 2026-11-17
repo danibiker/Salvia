@@ -80,14 +80,14 @@ private:
 	Common::RandomSource _random;
 	byte _flag1;
 	int8 _flag2;
-	const int _depths[60];
+	int _depths[60];
 	int _counter;
 	const int _movesLateGame;    // this is 52, seems to be a marker of when to change the function pointer to an aleternate scoring algorithm for the late game
 	bool _isLateGame;      // used to choose the scoring function, true means scoreLateGame
-	const int8 _lookupPlayer[3]; // used to convert from internal values that represent piece colors to what the script uses in vars, {21, 40, 31}
-	const int8 _scores[3][4];
-	const int8 _edgesScores[112];
-	const int _cornersScores[105];
+	int8 _lookupPlayer[3]; // used to convert from internal values that represent piece colors to what the script uses in vars, {21, 40, 31}
+	int8 _scores[3][4];
+	int8 _edgesScores[112];
+	int _cornersScores[105];
 	int _isAiTurn;
 	int8 **_lines[64];
 	int8 *_linesStorage[484];

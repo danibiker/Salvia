@@ -173,7 +173,7 @@ public:
 		_allowChoice = true;
 	}
 
-	~ChooseLanguageInputState_NS() override {
+	~ChooseLanguageInputState_NS() {
 		destroyLabels();
 	}
 
@@ -267,7 +267,7 @@ public:
 		_labels[1] = nullptr;
 	}
 
-	~SelectGameInputState_NS() override {
+	~SelectGameInputState_NS() {
 		destroyLabels();
 	}
 
@@ -385,7 +385,7 @@ public:
 		_labels[3] = nullptr;
 	}
 
-	~NewGameInputState_NS() override {
+	~NewGameInputState_NS() {
 		destroyLabels();
 	}
 
@@ -564,7 +564,7 @@ public:
 		_codeTrueBlocks[8] = Common::Rect( 248, 58, 264, 82 );
 	}
 
-	~SelectCharacterInputState_NS() override {
+	~SelectCharacterInputState_NS() {
 		_block.free();
 		_emptySlots.free();
 
@@ -800,7 +800,7 @@ public:
 		_startTime = 0;
 	}
 
-	~ShowCreditsInputState_NS() override {
+	~ShowCreditsInputState_NS() {
 		destroyLabels();
 	}
 
@@ -911,7 +911,7 @@ public:
 		_label = nullptr;
 	}
 
-	~EndIntroInputState_NS() override {
+	~EndIntroInputState_NS() {
 		destroyLabels();
 	}
 

@@ -198,7 +198,7 @@ private:
 class DefaultFont : public Font {
  public:
 	DefaultFont(SagaEngine *vm);
-	~DefaultFont() override;
+	~DefaultFont();
 
 	void setFontMapping(int mapping) override {
 		_fontMapping = mapping;
@@ -283,7 +283,7 @@ class DefaultFont : public Font {
 class SJISFont : public Font {
 public:
 	SJISFont(SagaEngine *vm);
-	~SJISFont() override;
+	~SJISFont();
 
 private:
 	void textDrawRect(FontId fontId, const char *text, const Common::Rect &rect, int color, int effectColor, FontEffectFlags flags) override;

@@ -38,7 +38,7 @@ private:
 
 public:
 	CreateCharacter() : View("CreateCharacter") {}
-	~CreateCharacter() override {}
+	~CreateCharacter() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	void draw() override;

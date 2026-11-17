@@ -50,7 +50,7 @@ public:
 	};
 
 	Submarine(const ANIFile &ani);
-	~Submarine() override;
+	~Submarine();
 
 	Direction getDirection() const;
 

@@ -38,8 +38,8 @@ DialogueLoaders::DialogueLoaders() {
 }
 
 DialogueLoaders::~DialogueLoaders() {
-	for (auto &l : _loaders)
-		delete l._value;
+	for (auto rfIt41 = _loaders.begin(), rfEnd41 = _loaders.end(); rfIt41 != rfEnd41; ++rfIt41)
+		{ auto &l = *rfIt41; delete l._value; }
 	g_loaders = nullptr;
 }
 

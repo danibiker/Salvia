@@ -30,7 +30,7 @@ namespace Agi {
 class SoundGenA2 : public SoundGen {
 public:
 	SoundGenA2(AgiBase *vm, Audio::Mixer *pMixer);
-	~SoundGenA2() override;
+	~SoundGenA2();
 
 	void play(int resnum) override;
 	void stop() override;

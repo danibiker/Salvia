@@ -64,7 +64,8 @@ void FontShapeArchive::setHVLeads() {
 	ConfigFileManager *config = ConfigFileManager::get_instance();
 
 	KeyMap leadkeyvals = config->listKeyValues("game", "fontleads");
-	for (const auto &i : leadkeyvals) {
+	for (auto rfIt67 = leadkeyvals.begin(), rfEnd67 = leadkeyvals.end(); rfIt67 != rfEnd67; ++rfIt67) {
+		const auto &i = *rfIt67;
 		int fontnum = atoi(i._key.c_str());
 		Common::String leaddesc = i._value;
 

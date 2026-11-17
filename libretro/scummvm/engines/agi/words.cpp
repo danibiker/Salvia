@@ -269,7 +269,8 @@ int16 Words::findWordInDictionary(const Common::String &userInputLowercase, uint
 		}
 
 		const Common::Array<WordEntry> &words = _dictionary.getValOrDefault(firstChar);
-		for (const WordEntry &wordEntry : words) {
+		for (auto rfIt272 = words.begin(), rfEnd272 = words.end(); rfIt272 != rfEnd272; ++rfIt272) {
+			const WordEntry &wordEntry = *rfIt272;
 			uint16 dictionaryWordLen = wordEntry.word.size();
 
 			if (dictionaryWordLen <= userInputLeft) {

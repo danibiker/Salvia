@@ -50,21 +50,21 @@ private:
 
 	Common::ScopedPtr<Common::SeekableReadStream> _stream;
 	Common::Array<uint8> _data;
-	size_t _pos = 0;
-	uint32 _frameHz = kDefaultFrameHz;
-	bool _ended = false;
-	uint32 _framesLeftInWait = 0;
-	uint16 _elvira1Tune = 1;
-	ElviraPrgDriver *_elviraPrgDriver = nullptr;
-	bool _isValid = true;
-	YM2149::YM2149 *_chip = nullptr;
+	size_t _pos;
+	uint32 _frameHz;
+	bool _ended;
+	uint32 _framesLeftInWait;
+	uint16 _elvira1Tune;
+	ElviraPrgDriver *_elviraPrgDriver;
+	bool _isValid;
+	YM2149::YM2149 *_chip;
 
 	enum Mode {
 		kModeElvira2PKD,
 		kModeElvira1PRG
 	};
 
-	Mode _mode = kModeElvira2PKD;
+	Mode _mode;
 
 	void resetPlayer();
 	void parseUntilWait();

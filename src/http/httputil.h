@@ -37,7 +37,9 @@
 #include <curl/curl.h>
 
 struct ProgressData {
-    float* progressVar;
+    float* progressVar;   // fraccion 0..1 (solo si el servidor manda Content-Length)
+    float* kbVar;         // KB recibidos (siempre; lo unico que hay en descargas sin tamano)
+    ProgressData() : progressVar(NULL), kbVar(NULL) {}
 };
 
 enum NETWORK_STATUS{NET_OK, NET_NONE, NET_ERROR_IP, NET_ERROR_WSA, NET_ERROR_WINSOCK, NET_MAX};
@@ -55,7 +57,7 @@ class CurlClient {
 		bool fetchUrl(const std::string&, std::string&, float*);
 		bool postUrl(const std::string&, const std::string&, std::string&, float*);
 		bool postUrl(const std::string&, const std::string&, const std::string&, std::string&, float*);
-		bool fetchFile(const std::string&, const std::string&, float*);
+		bool fetchFile(const std::string&, const std::string&, float*, float* kbRecibidos = NULL);
 		std::string escape(const std::string&);
 
 		void setCookie(const std::string &s){

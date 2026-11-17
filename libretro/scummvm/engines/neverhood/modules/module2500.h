@@ -32,7 +32,7 @@ namespace Neverhood {
 class Module2500 : public Module {
 public:
 	Module2500(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Module2500() override;
+	~Module2500();
 protected:
 	int _sceneNum;
 	int _soundIndex;
@@ -47,7 +47,7 @@ class AsCommonCar;
 class Scene2501 : public Scene {
 public:
 	Scene2501(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Scene2501() override;
+	~Scene2501();
 protected:
 	AsCommonCar *_asCar;
 	Sprite *_ssTrackShadowBackground;

@@ -1334,7 +1334,8 @@ void Penetration::checkShields() {
 }
 
 void Penetration::checkMouths() {
-	for (auto &curMouth : _mouths) {
+	for (auto rfIt1337 = _mouths.begin(), rfEnd1337 = _mouths.end(); rfIt1337 != rfEnd1337; ++rfIt1337) {
+		auto &curMouth = *rfIt1337;
 		if (!curMouth.mouth->isDeactivated())
 			continue;
 
@@ -1359,7 +1360,8 @@ void Penetration::checkExits() {
 	if (!_sub->sub->canMove())
 		return;
 
-	for (auto &ex : _exits) {
+	for (auto rfIt1362 = _exits.begin(), rfEnd1362 = _exits.end(); rfIt1362 != rfEnd1362; ++rfIt1362) {
+		auto &ex = *rfIt1362;
 		if ((ex.tileX == _sub->tileX) && (ex.tileY == _sub->tileY)) {
 			_sub->setMapFromTilePosition();
 

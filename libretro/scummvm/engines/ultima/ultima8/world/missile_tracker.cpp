@@ -150,7 +150,8 @@ bool MissileTracker::isPathClear() const {
 		               false, &collisions);
 
 		int32 hit = 0x4000;
-		for (const auto &collision : collisions) {
+		for (auto rfIt153 = collisions.begin(), rfEnd153 = collisions.end(); rfIt153 != rfEnd153; ++rfIt153) {
+			const auto &collision = *rfIt153;
 			if (collision._blocking && !collision._touching && collision._item != _owner) {
 				hit = collision._hitTime;
 				break;

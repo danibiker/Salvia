@@ -50,12 +50,14 @@ protected:
 	 * are MIDI note and velocity values.
 	 */
 	struct MChannelData {
+	MChannelData() : activeNote(-1), velocity(0), queuedNote(-1) {}
+
 		// The MIDI note currently played on this channel.
-		int8 activeNote = -1;
+		int8 activeNote;
 		// The MIDI note velocity currently used on this channel.
-		uint8 velocity = 0;
+		uint8 velocity;
 		// The MIDI note queued for playback on this channel.
-		int8 queuedNote = -1;
+		int8 queuedNote;
 	};
 
 	// Converts M note values to MIDI notes.

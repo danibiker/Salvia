@@ -102,8 +102,8 @@ void GUI_Widget::Delete(void) {
 void GUI_Widget::MoveRelative(int dx, int dy) {
 	area.translate(dx, dy);
 
-	for (GUI_Widget *child : children)
-		child->MoveRelative(dx, dy);
+	for (auto rfIt105 = children.begin(), rfEnd105 = children.end(); rfIt105 != rfEnd105; ++rfIt105)
+		{ GUI_Widget *child = *rfIt105; child->MoveRelative(dx, dy); }
 
 	return;
 }
@@ -111,8 +111,8 @@ void GUI_Widget::MoveRelative(int dx, int dy) {
 void GUI_Widget::Move(int32 new_x, int32 new_y) {
 	area.moveTo(new_x + offset_x, new_y + offset_y);
 
-	for (GUI_Widget *child : children)
-		child->Move(area.left, area.top);
+	for (auto rfIt114 = children.begin(), rfEnd114 = children.end(); rfIt114 != rfEnd114; ++rfIt114)
+		{ GUI_Widget *child = *rfIt114; child->Move(area.left, area.top); }
 
 	return;
 }
@@ -124,8 +124,8 @@ void GUI_Widget::MoveRelativeToParent(int dx, int dy) {
 	offset_x = dx;
 	offset_y = dy;
 
-	for (GUI_Widget *child : children)
-		child->Move(area.left, area.top);
+	for (auto rfIt127 = children.begin(), rfEnd127 = children.end(); rfIt127 != rfEnd127; ++rfIt127)
+		{ GUI_Widget *child = *rfIt127; child->Move(area.left, area.top); }
 
 	return;
 }
@@ -159,8 +159,8 @@ void GUI_Widget::PlaceOnScreen(Screen *s, GUI_DragManager *dm, int x, int y) {
 	SetDisplay(s);
 
 	/* place our children relative to ourself */
-	for (GUI_Widget *child : children)
-		child->PlaceOnScreen(screen, dm, area.left, area.top);
+	for (auto rfIt162 = children.begin(), rfEnd162 = children.end(); rfIt162 != rfEnd162; ++rfIt162)
+		{ GUI_Widget *child = *rfIt162; child->PlaceOnScreen(screen, dm, area.left, area.top); }
 	return;
 }
 
@@ -252,7 +252,8 @@ void GUI_Widget::DisplayChildren(bool full_redraw) {
 
 	if (children.empty() == false) {
 		/* display our children */
-		for (GUI_Widget *child : children) {
+		for (auto rfIt255 = children.begin(), rfEnd255 = children.end(); rfIt255 != rfEnd255; ++rfIt255) {
+			GUI_Widget *child = *rfIt255;
 			if (child->Status() == WIDGET_VISIBLE)
 				child->Display(full_redraw);
 		}
@@ -278,7 +279,8 @@ void GUI_Widget::Redraw(void) {
 GUI_status GUI_Widget::Idle(void) {
 	if (children.empty() == false) {
 		/* idle our children */
-		for (GUI_Widget *child : children) {
+		for (auto rfIt281 = children.begin(), rfEnd281 = children.end(); rfIt281 != rfEnd281; ++rfIt281) {
+			GUI_Widget *child = *rfIt281;
 			GUI_status idleStatus = child->Idle();
 			if (idleStatus != GUI_PASS)
 				return idleStatus;
@@ -329,7 +331,8 @@ GUI_status GUI_Widget::HandleEvent(const Common::Event *event) {
 
 	if (children.empty() == false) {
 		/* handle our children */
-		for (GUI_Widget *child : children) {
+		for (auto rfIt332 = children.begin(), rfEnd332 = children.end(); rfIt332 != rfEnd332; ++rfIt332) {
+			GUI_Widget *child = *rfIt332;
 			GUI_status status_ = child->HandleEvent(event);
 			if (status_ != GUI_PASS)
 				return status_;
@@ -436,7 +439,8 @@ GUI_status GUI_Widget::HandleEvent(const Common::Event *event) {
 // iterate through children if present to hit the correct drag area.
 bool GUI_Widget::drag_accept_drop(int x, int y, int message, void *data) {
 	if (children.empty() == false) {
-		for (GUI_Widget *child : children) {
+		for (auto rfIt439 = children.begin(), rfEnd439 = children.end(); rfIt439 != rfEnd439; ++rfIt439) {
+			GUI_Widget *child = *rfIt439;
 			if (child->HitRect(x, y)) {
 				if (child->drag_accept_drop(x, y, message, data))
 					return true;
@@ -450,7 +454,8 @@ bool GUI_Widget::drag_accept_drop(int x, int y, int message, void *data) {
 
 void GUI_Widget::drag_perform_drop(int x, int y, int message, void *data) {
 	if (children.empty() == false) {
-		for (GUI_Widget *child : children) {
+		for (auto rfIt453 = children.begin(), rfEnd453 = children.end(); rfIt453 != rfEnd453; ++rfIt453) {
+			GUI_Widget *child = *rfIt453;
 			if (child->HitRect(x, y)) {
 				child->drag_perform_drop(x, y, message, data);
 				break;

@@ -39,7 +39,7 @@ class Actor : public Container {
 	friend class AnimationTracker;
 public:
 	Actor();
-	~Actor() override;
+	~Actor();
 
 	int16 getStr() const {
 		return _strength;

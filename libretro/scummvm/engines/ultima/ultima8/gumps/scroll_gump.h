@@ -41,7 +41,7 @@ public:
 
 	ScrollGump();
 	ScrollGump(ObjId owner, const Common::String &msg);
-	~ScrollGump() override;
+	~ScrollGump();
 
 	// Go to the next page on mouse click
 	void onMouseClick(int button, int32 mx, int32 my) override;

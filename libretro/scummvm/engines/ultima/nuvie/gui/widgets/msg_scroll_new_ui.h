@@ -58,7 +58,7 @@ class MsgScrollNewUI: public MsgScroll {
 public:
 
 	MsgScrollNewUI(const Configuration *cfg, Screen *s);
-	~MsgScrollNewUI() override;
+	~MsgScrollNewUI();
 
 	GUI_status callback(uint16 msg, GUI_CallBack *caller, void *data) override {
 		return GUI_PASS;

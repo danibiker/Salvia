@@ -62,7 +62,7 @@ public:
 	static bool load(const Common::Path &subfolder,
 		int reqMajorVersion, int reqMinorVersion, Common::U32String &errorMsg);
 public:
-	~UltimaDataArchive() override {
+	~UltimaDataArchive() {
 		delete _zip;
 	}
 
@@ -129,7 +129,7 @@ private:
 	 */
 	Common::FSNode getNode(const Common::Path &name) const;
 public:
-	~UltimaDataArchiveProxy() override {
+	~UltimaDataArchiveProxy() {
 	}
 
 	/**

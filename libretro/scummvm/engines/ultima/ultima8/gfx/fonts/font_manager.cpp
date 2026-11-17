@@ -65,8 +65,8 @@ void FontManager::resetGameFonts() {
 		delete _ttFonts[i];
 	_ttFonts.clear();
 
-	for (auto &i : _ttfFonts)
-		delete i._value;
+	for (auto rfIt68 = _ttfFonts.begin(), rfEnd68 = _ttfFonts.end(); rfIt68 != rfEnd68; ++rfIt68)
+		{ auto &i = *rfIt68; delete i._value; }
 	_ttfFonts.clear();}
 
 Font *FontManager::getGameFont(unsigned int fontnum,

@@ -154,7 +154,7 @@ protected:
 class OldFeature : public Feature {
 public:
 	OldFeature(View *view);
-	~OldFeature() override;
+	~OldFeature();
 
 	void resetFrame() override;
 	void resetFeatureScript(uint16 enabled, uint16 scrbId) override;
@@ -167,7 +167,7 @@ protected:
 class NewFeature : public Feature {
 public:
 	NewFeature(View *view);
-	~NewFeature() override;
+	~NewFeature();
 
 	void resetFrame() override;
 	void resetFeatureScript(uint16 enabled, uint16 scrbId) override;

@@ -157,7 +157,8 @@ void PathFindingHeap::pop(int16 *x, int16 *y, uint16 *weight) {
 	}
 }
 
-PathFinding::PathFinding() : _blockingRects{{0}} {
+PathFinding::PathFinding() {
+	memset(_blockingRects, 0, sizeof(_blockingRects));
 	_width = 0;
 	_height = 0;
 	_heap = new PathFindingHeap();

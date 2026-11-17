@@ -36,7 +36,7 @@ namespace Asylum {
 #define SCROLL_STEP 10
 
 #define NOPALETTE {0, 0, 0, 0, 0, 0, 0, 0}
-static int paletteIds[][8] {
+static int paletteIds[][8] = {
 	NOPALETTE,
 	{0x0011, 0x001A, 0x001F, 0x003B, 0x003C},
 	NOPALETTE,

@@ -660,8 +660,8 @@ protected:
 
 	Audio::SoundHandle _modHandle;
 	Audio::SoundHandle _digitalMusicHandle;
-	Audio::SeekableAudioStream *_digitalMusicStream = nullptr;
-	ElviraAtariSTPlayer *_elviraAtariSTPlayer = nullptr;
+	Audio::SeekableAudioStream *_digitalMusicStream;
+	ElviraAtariSTPlayer *_elviraAtariSTPlayer;
 
 	Sound *_sound;
 
@@ -702,7 +702,7 @@ protected:
 
 public:
 	AGOSEngine(OSystem *system, const AGOSGameDescription *gd);
-	~AGOSEngine() override;
+	~AGOSEngine();
 
 	byte *_curSfxFile;
 	uint32 _curSfxFileSize;
@@ -1468,7 +1468,7 @@ class AGOSEngine_PN : public AGOSEngine {
 	int readfromline();
 public:
 	AGOSEngine_PN(OSystem *system, const AGOSGameDescription *gd);
-	~AGOSEngine_PN() override;
+	~AGOSEngine_PN();
 
 	void setupGame() override;
 	void setupOpcodes() override;
@@ -1719,7 +1719,7 @@ protected:
 class AGOSEngine_Elvira1 : public AGOSEngine {
 public:
 	AGOSEngine_Elvira1(OSystem *system, const AGOSGameDescription *gd);
-	~AGOSEngine_Elvira1() override;
+	~AGOSEngine_Elvira1();
 	Common::Error init() override;
 
 	void setupGame() override;
@@ -2021,7 +2021,7 @@ protected:
 	void dumpVgaFile(const byte *vga) override;
 
 	bool loadSimonAcornFloppyDemoPalette(Common::Array<byte> &outPalette);
-	bool _simonAcornFloppyDemoPaletteLoaded = false;
+	bool _simonAcornFloppyDemoPaletteLoaded;
 	void patchSimonAcornFloppyDemoPalettes();
 	
 	void clearName() override;
@@ -2107,7 +2107,7 @@ protected:
 class AGOSEngine_Feeble : public AGOSEngine_Simon2 {
 public:
 	AGOSEngine_Feeble(OSystem *system, const AGOSGameDescription *gd);
-	~AGOSEngine_Feeble() override;
+	~AGOSEngine_Feeble();
 
 	void setupGame() override;
 	void setupOpcodes() override;

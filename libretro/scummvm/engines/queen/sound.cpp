@@ -74,7 +74,7 @@ public:
 		else
 			_rate = rate;
 	}
-	~AudioStreamWrapper() override {
+	~AudioStreamWrapper() {
 		delete _stream;
 	}
 	int readBuffer(int16 *buffer, const int numSamples) override {

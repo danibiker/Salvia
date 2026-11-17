@@ -68,7 +68,7 @@ public:
 	// This constructor is only used for _sampleStream inside sound.h
 	TinselFile();
 	TinselFile(bool bigEndian);
-	~TinselFile() override;
+	~TinselFile();
 	bool open(const Common::String &filename);
 	void close();
 	char getCdNumber();

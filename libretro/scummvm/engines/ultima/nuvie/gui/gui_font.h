@@ -56,7 +56,9 @@ public:
 	/* use given YxY surface */
 	GUI_Font(Graphics::ManagedSurface *bitmap);
 
-	GUI_Font(const GUI_Font &font) = delete;
+private:
+	GUI_Font(const GUI_Font &font); // non-copyable (C++03)
+public:
 
 	virtual ~GUI_Font();
 

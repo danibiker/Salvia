@@ -37,7 +37,7 @@ public:
 
 	SlidingWidget();
 	SlidingWidget(int x, int y, FrameID frame, const Common::Rect32 &dragBounds);
-	~SlidingWidget() override;
+	~SlidingWidget();
 
 	int getValueForRange(int min, int max);
 	void setValueForRange(int value, int min, int max);

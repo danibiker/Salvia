@@ -839,142 +839,145 @@ void automapFillTri(Graphics::Surface &s, int ax, int ay, int bx, int by, int cx
 	}
 }
 
+void Automap_EoB::prepIconSurface(Graphics::Surface &surf, const Graphics::PixelFormat &fmt, const uint32 *colTable, int width, int height, int bkgColor) {
+	surf.create(width, height, fmt);
+	surf.fillRect(Common::Rect(surf.w, surf.h), colTable[bkgColor == -1 ? kColorTransp : bkgColor]);
+}
+
+// Former lambdas of createIcons(): VS2010 cannot capture inside nested lambdas.
+void Automap_EoB::renderIcon(Graphics::Surface &surf, const Graphics::PixelFormat &fmt, const uint32 *colTable, int iconID, int boxFitWidth, bool fitWithMargin, bool fillBackground) {
+
+	int size1half = MAX(2, boxFitWidth / 3);
+	int size1full = size1half * 2;
+
+	// For better visuals, we reduce the icon size so there is a bit of a gap between the icon and the cell border.
+	// But not if we're in a low res environment where the icon would just get too small...
+	int size2half = fitWithMargin ? size1half * 4 / 5 : size1half;
+	int size2full = size2half * 2;
+
+	int step1 = MAX(256, (boxFitWidth << 8) / 5);
+	int step2 = MAX(256, ((boxFitWidth - size1half) << 8) / 5);
+	int step2a = step2 * 2;
+
+	int sButtonSize = MAX(1, boxFitWidth / 5);
+	int mButtonSize = MAX(2, boxFitWidth / 4);
+	int nicheWd = MAX(2, boxFitWidth * 2 / 5);
+	int portalWd = MAX(2, boxFitWidth * 2 / 3);
+	int doorLen = boxFitWidth - 2 * MAX(1, boxFitWidth / 5);
+	int doorWdth = MAX(2, boxFitWidth / 5) + 1;
+
+	switch (iconID) {
+	case kIconPartyNorth:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, 0, size2full - 1, size2full - 1, size2full - 1, size2half, 0, colTable[kColorPartyFrame0]);
+		break;
+	case kIconPartyEast:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, 0, 0, 0, size2full - 1, size2full - 1, size2half, colTable[kColorPartyFrame0]);
+		break;
+	case kIconPartySouth:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, 0, 0, size2full - 1, 0, size2half, size2full - 1, colTable[kColorPartyFrame0]);
+		break;
+	case kIconPartyWest:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, size2full - 1, 0, size2full - 1, size2full - 1, 0, size2half, colTable[kColorPartyFrame0]);
+		break;
+	case kIconTeleporter:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		for (int i = 0; i < size2half; ++i) {
+			surf.drawLine(i, size2half - i, size2full - i - 1, size2half - i, colTable[kColorTele]);
+			surf.drawLine(i, size2half + i, size2full - i - 1, size2half + i, colTable[kColorTele]);
+		}
+		break;
+	case kIconStairsUp:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, 0, size2full - 1, size2full - 1, size2full - 1, size2half, 0, colTable[kColorStair]);
+		break;
+	case kIconStairsDown:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		automapFillTri(surf, 0, 0, size2full - 1, 0, size2half, size2full - 1, colTable[kColorStair]);
+		break;
+	case kIconPit:
+	case kIconPlate:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		surf.drawEllipse(0, 0, size2full - 1, size2full - 1, colTable[iconID == kIconPit ? kColorPit : kColorPlate], true);
+		break;
+	case kIconIllusionWall:
+		prepIconSurface(surf, fmt, colTable, boxFitWidth, boxFitWidth, fillBackground ? kColorFloor : -1);
+		for (int pos = 0, g = 0; g < 5; ++g, pos += step1) {
+			surf.drawLine(pos >> 8, 0, pos >> 8, boxFitWidth - 1, colTable[kColorWall]);
+			surf.drawLine(0, pos >> 8, boxFitWidth - 1, pos >> 8, colTable[kColorWall]);
+		}
+		break;
+	case 11:
+		break;
+	case kIconWallOfForce:
+		prepIconSurface(surf, fmt, colTable, size1full, size1full, -1);
+		for (int posX = 0, g = 0; g < 3; ++g, posX += step2a) {
+			for (int posY = 0, gg = 0; gg < 3; ++gg, posY += step2a) {
+				surf.fillRect(Common::Rect(posX >> 8, posY >> 8, ((posX + step2) >> 8) - 1, ((posY + step2) >> 8) - 1), colTable[kColorWoF]);
+				if (g < 2 && gg < 2)
+					surf.fillRect(Common::Rect((posX + step2) >> 8, (posY + step2) >> 8, ((posX + step2a) >> 8) - 1, ((posY + step2a) >> 8) - 1), colTable[kColorWoF]);
+			}
+		}
+		break;
+	case kIconBigObject:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		surf.fillRect(Common::Rect(size2full, size2full), colTable[kColorLever]);
+		break;
+	case kIconDoorButton:
+		prepIconSurface(surf, fmt, colTable, sButtonSize, sButtonSize, -1);
+		surf.fillRect(Common::Rect(sButtonSize, sButtonSize), colTable[kColorLever]);
+		break;
+	case kIconSmallObject:
+		prepIconSurface(surf, fmt, colTable, mButtonSize, mButtonSize, -1);
+		surf.fillRect(Common::Rect(mButtonSize, mButtonSize), colTable[kColorLever]);
+		break;
+	case kIconNicheNS:
+		prepIconSurface(surf, fmt, colTable, nicheWd, mButtonSize, -1);
+		surf.fillRect(Common::Rect(nicheWd, mButtonSize), colTable[kColorNiche]);
+		break;
+	case kIconNicheEW:
+		prepIconSurface(surf, fmt, colTable, mButtonSize, nicheWd, -1);
+		surf.fillRect(Common::Rect(mButtonSize, nicheWd), colTable[kColorNiche]);
+		break;
+	case kIconPortalNS:
+		prepIconSurface(surf, fmt, colTable, portalWd, mButtonSize, -1);
+		surf.fillRect(Common::Rect(portalWd, mButtonSize), colTable[kColorTele]);
+		break;
+	case kIconPortalEW:
+		prepIconSurface(surf, fmt, colTable, mButtonSize, portalWd, -1);
+		surf.fillRect(Common::Rect(mButtonSize, portalWd), colTable[kColorTele]);
+		break;
+	case kIconDoorNS:
+		prepIconSurface(surf, fmt, colTable, doorLen, doorWdth, -1);
+		surf.fillRect(Common::Rect(doorLen, doorWdth), colTable[kColorDoor]);
+		break;
+	case kIconDoorEW:
+		prepIconSurface(surf, fmt, colTable, doorWdth, doorLen, -1);
+		surf.fillRect(Common::Rect(doorWdth, doorLen), colTable[kColorDoor]);
+		break;
+	case kIconSpecial:
+		prepIconSurface(surf, fmt, colTable, size2full, size2full, -1);
+		for (int i = 0; i < 360; i += 45) {
+			for (int ii = -10; ii < 10; ++ii) {
+				float a = (float)((360 + i + ii) % 360) * M_PI / 180.0f;
+				surf.drawLine(size2half + size2half * cosf(a), size2half + size2half * sinf(a), size2half + (size2half / 3) * cosf(a), size2half + (size2half / 3) * sinf(a), colTable[kColorSpecial1]);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 void Automap_EoB::createIcons(bool lowResTarget) {
 	const uint32 *colTable = _colors;
 	Graphics::PixelFormat fmt = _system->getOverlayFormat();
 	const Graphics::Font *bigFont = FontMan.getFontByUsage(Graphics::FontManager::kBigGUIFont);
 	int lineH = (bigFont ? bigFont->getFontHeight() : 8) * _legendBodyScl;
 
-	auto renderIcon = [&fmt, colTable](Graphics::Surface &surf, int iconID, int boxFitWidth, bool fitWithMargin, bool fillBackground) {
-		auto prepSurface = [&fmt, &surf, colTable](int width, int height, int bkgColor) {
-			surf.create(width, height, fmt);
-			surf.fillRect(Common::Rect(surf.w, surf.h), colTable[bkgColor == -1 ? kColorTransp : bkgColor]);
-		};
-
-		int size1half = MAX(2, boxFitWidth / 3);
-		int size1full = size1half * 2;
-
-		// For better visuals, we reduce the icon size so there is a bit of a gap between the icon and the cell border.
-		// But not if we're in a low res environment where the icon would just get too small...
-		int size2half = fitWithMargin ? size1half * 4 / 5 : size1half;
-		int size2full = size2half * 2;
-
-		int step1 = MAX(256, (boxFitWidth << 8) / 5);
-		int step2 = MAX(256, ((boxFitWidth - size1half) << 8) / 5);
-		int step2a = step2 * 2;
-
-		int sButtonSize = MAX(1, boxFitWidth / 5);
-		int mButtonSize = MAX(2, boxFitWidth / 4);
-		int nicheWd = MAX(2, boxFitWidth * 2 / 5);
-		int portalWd = MAX(2, boxFitWidth * 2 / 3);
-		int doorLen = boxFitWidth - 2 * MAX(1, boxFitWidth / 5);
-		int doorWdth = MAX(2, boxFitWidth / 5) + 1;
-
-		switch (iconID) {
-		case kIconPartyNorth:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, 0, size2full - 1, size2full - 1, size2full - 1, size2half, 0, colTable[kColorPartyFrame0]);
-			break;
-		case kIconPartyEast:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, 0, 0, 0, size2full - 1, size2full - 1, size2half, colTable[kColorPartyFrame0]);
-			break;
-		case kIconPartySouth:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, 0, 0, size2full - 1, 0, size2half, size2full - 1, colTable[kColorPartyFrame0]);
-			break;
-		case kIconPartyWest:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, size2full - 1, 0, size2full - 1, size2full - 1, 0, size2half, colTable[kColorPartyFrame0]);
-			break;
-		case kIconTeleporter:
-			prepSurface(size2full, size2full, -1);
-			for (int i = 0; i < size2half; ++i) {
-				surf.drawLine(i, size2half - i, size2full - i - 1, size2half - i, colTable[kColorTele]);
-				surf.drawLine(i, size2half + i, size2full - i - 1, size2half + i, colTable[kColorTele]);
-			}
-			break;
-		case kIconStairsUp:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, 0, size2full - 1, size2full - 1, size2full - 1, size2half, 0, colTable[kColorStair]);
-			break;
-		case kIconStairsDown:
-			prepSurface(size2full, size2full, -1);
-			automapFillTri(surf, 0, 0, size2full - 1, 0, size2half, size2full - 1, colTable[kColorStair]);
-			break;
-		case kIconPit:
-		case kIconPlate:
-			prepSurface(size2full, size2full, -1);
-			surf.drawEllipse(0, 0, size2full - 1, size2full - 1, colTable[iconID == kIconPit ? kColorPit : kColorPlate], true);
-			break;
-		case kIconIllusionWall:
-			prepSurface(boxFitWidth, boxFitWidth, fillBackground ? kColorFloor : -1);
-			for (int pos = 0, g = 0; g < 5; ++g, pos += step1) {
-				surf.drawLine(pos >> 8, 0, pos >> 8, boxFitWidth - 1, colTable[kColorWall]);
-				surf.drawLine(0, pos >> 8, boxFitWidth - 1, pos >> 8, colTable[kColorWall]);
-			}
-			break;
-		case 11:
-			break;
-		case kIconWallOfForce:
-			prepSurface(size1full, size1full, -1);
-			for (int posX = 0, g = 0; g < 3; ++g, posX += step2a) {
-				for (int posY = 0, gg = 0; gg < 3; ++gg, posY += step2a) {
-					surf.fillRect(Common::Rect(posX >> 8, posY >> 8, ((posX + step2) >> 8) - 1, ((posY + step2) >> 8) - 1), colTable[kColorWoF]);
-					if (g < 2 && gg < 2)
-						surf.fillRect(Common::Rect((posX + step2) >> 8, (posY + step2) >> 8, ((posX + step2a) >> 8) - 1, ((posY + step2a) >> 8) - 1), colTable[kColorWoF]);
-				}
-			}
-			break;
-		case kIconBigObject:
-			prepSurface(size2full, size2full, -1);
-			surf.fillRect(Common::Rect(size2full, size2full), colTable[kColorLever]);
-			break;
-		case kIconDoorButton:
-			prepSurface(sButtonSize, sButtonSize, -1);
-			surf.fillRect(Common::Rect(sButtonSize, sButtonSize), colTable[kColorLever]);
-			break;
-		case kIconSmallObject:
-			prepSurface(mButtonSize, mButtonSize, -1);
-			surf.fillRect(Common::Rect(mButtonSize, mButtonSize), colTable[kColorLever]);
-			break;
-		case kIconNicheNS:
-			prepSurface(nicheWd, mButtonSize, -1);
-			surf.fillRect(Common::Rect(nicheWd, mButtonSize), colTable[kColorNiche]);
-			break;
-		case kIconNicheEW:
-			prepSurface(mButtonSize, nicheWd, -1);
-			surf.fillRect(Common::Rect(mButtonSize, nicheWd), colTable[kColorNiche]);
-			break;
-		case kIconPortalNS:
-			prepSurface(portalWd, mButtonSize, -1);
-			surf.fillRect(Common::Rect(portalWd, mButtonSize), colTable[kColorTele]);
-			break;
-		case kIconPortalEW:
-			prepSurface(mButtonSize, portalWd, -1);
-			surf.fillRect(Common::Rect(mButtonSize, portalWd), colTable[kColorTele]);
-			break;
-		case kIconDoorNS:
-			prepSurface(doorLen, doorWdth, -1);
-			surf.fillRect(Common::Rect(doorLen, doorWdth), colTable[kColorDoor]);
-			break;
-		case kIconDoorEW:
-			prepSurface(doorWdth, doorLen, -1);
-			surf.fillRect(Common::Rect(doorWdth, doorLen), colTable[kColorDoor]);
-			break;
-		case kIconSpecial:
-			prepSurface(size2full, size2full, -1);
-			for (int i = 0; i < 360; i += 45) {
-				for (int ii = -10; ii < 10; ++ii) {
-					float a = (float)((360 + i + ii) % 360) * M_PI / 180.0f;
-					surf.drawLine(size2half + size2half * cosf(a), size2half + size2half * sinf(a), size2half + (size2half / 3) * cosf(a), size2half + (size2half / 3) * sinf(a), colTable[kColorSpecial1]);
-				}
-			}
-			break;
-		default:
-			break;
-		}
-	};
 
 	releaseIcons();
 
@@ -983,7 +986,7 @@ void Automap_EoB::createIcons(bool lowResTarget) {
 	// since it would otherwise be hardly visible on the "stone" background.
 	for (int i = 0; i < kIconIDMax; ++i) {
 		Graphics::Surface *surf = new Graphics::Surface();
-		renderIcon(*surf, i, _l.cell, (lowResTarget == false), false);
+		renderIcon(*surf, fmt, colTable, i, _l.cell, (lowResTarget == false), false);
 		if (surf->getPixels() == nullptr) {
 			delete surf;
 			surf = nullptr;
@@ -991,7 +994,7 @@ void Automap_EoB::createIcons(bool lowResTarget) {
 		_mapIcons.push_back(surf);
 
 		surf = new Graphics::Surface();
-		renderIcon(*surf, i, lineH, false, true);
+		renderIcon(*surf, fmt, colTable, i, lineH, false, true);
 		if (surf->getPixels() == nullptr) {
 			delete surf;
 			surf = nullptr;

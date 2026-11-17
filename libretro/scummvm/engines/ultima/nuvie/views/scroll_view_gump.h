@@ -39,7 +39,7 @@ class ScrollViewGump : public DraggableView {
 
 public:
 	ScrollViewGump(const Configuration *cfg);
-	~ScrollViewGump() override;
+	~ScrollViewGump();
 
 	bool init(Screen *tmp_screen, void *view_manager, Font *f, Party *p, TileManager *tm, ObjManager *om, Common::String text_string);
 

@@ -131,7 +131,7 @@ bool MidiParser_M::processEvent(const EventInfo& info, bool fireEvents) {
 
 	if (info.command() == 0x8 && info.channel() == 0x1) {
 		// Call subroutine
-		LoopData loopData { };
+		LoopData loopData = LoopData();
 		loopData.returnPos = playPos;
 		loopData.numLoops = info.ext.data[0];
 		uint16 startOffset = READ_LE_UINT16(info.ext.data + 1);

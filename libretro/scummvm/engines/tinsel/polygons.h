@@ -160,7 +160,9 @@ void NotebookPolyPrevPage(Common::Point c0, Common::Point c1, Common::Point c2, 
 
 void UpdateGroundPlane();
 
-enum class NoteBookPoly {
+// C++03: scoped like the original "enum class" (VS2010 accepts NoteBookPoly::VALUE)
+struct NoteBookPolyScope {
+enum NoteBookPoly {
 	CLUE_0 = 0,
 	CLUE_1 = 1,
 	CLUE_2 = 2,
@@ -174,6 +176,8 @@ enum class NoteBookPoly {
 	PREV,
 	NONE
 };
+};
+typedef NoteBookPolyScope::NoteBookPoly NoteBookPoly;
 
 class NoteBookPolygons {
 public:

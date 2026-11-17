@@ -54,7 +54,8 @@ void GUI_Console:: Display(bool full_redraw) {
 	SDL_FillRect(surface, &area, bg_color->sdl_color);
 
 	uint16 i = 0;
-	for (const Common::String &s : data) {
+	for (auto rfIt57 = data.begin(), rfEnd57 = data.end(); rfIt57 != rfEnd57; ++rfIt57) {
+		const Common::String &s = *rfIt57;
 		font->textOut(surface, area.left, area.top + i * font->charHeight(), s.c_str(), false);
 		i++;
 	}

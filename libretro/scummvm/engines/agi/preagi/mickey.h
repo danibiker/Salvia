@@ -682,7 +682,7 @@ class PictureMgr_Mickey_Winnie;
 class MickeyEngine : public PreAgiEngine {
 public:
 	MickeyEngine(OSystem *syst, const AGIGameDescription *gameDesc);
-	~MickeyEngine() override;
+	~MickeyEngine();
 
 	void init();
 	Common::Error go() override;

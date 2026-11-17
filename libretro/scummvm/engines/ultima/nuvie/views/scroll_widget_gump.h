@@ -66,7 +66,7 @@ class ScrollWidgetGump: public MsgScroll {
 public:
 
 	ScrollWidgetGump(const Configuration *cfg, Screen *s);
-	~ScrollWidgetGump() override;
+	~ScrollWidgetGump();
 
 	bool parse_token(MsgText *token) override;
 

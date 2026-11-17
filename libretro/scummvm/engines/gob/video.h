@@ -177,7 +177,7 @@ public:
 			int16 x, int16 y, int16 transp, Surface &destDesc) override;
 
 	Video_v1(GobEngine *vm);
-	~Video_v1() override {}
+	~Video_v1() {}
 };
 
 class Video_v2 : public Video_v1 {
@@ -186,7 +186,7 @@ public:
 			int16 x, int16 y, int16 transp, Surface &destDesc) override;
 
 	Video_v2(GobEngine *vm);
-	~Video_v2() override {}
+	~Video_v2() {}
 };
 
 class Video_v6 : public Video_v2 {
@@ -195,7 +195,7 @@ public:
 			int16 x, int16 y, int16 transp, Surface &destDesc) override;
 
 	Video_v6(GobEngine *vm);
-	~Video_v6() override {}
+	~Video_v6() {}
 
 private:
 	Graphics::PixelFormat _highColorPackedSpriteFormat;

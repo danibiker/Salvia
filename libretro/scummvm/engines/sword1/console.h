@@ -31,7 +31,7 @@ class SwordEngine;
 class SwordConsole : public GUI::Debugger {
 public:
 	SwordConsole(SwordEngine *vm);
-	~SwordConsole(void) override;
+	~SwordConsole(void);
 
 private:
 	SwordEngine *_vm;

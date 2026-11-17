@@ -66,7 +66,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Info() override;
+	~Info();
 
 	/**
 	 * Draw the contents

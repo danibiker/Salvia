@@ -217,7 +217,7 @@ private:
 	static const uint8 _polishTranslationLanguageStrings[20][43];
 	uint8 _customStrings[20][43];
 	const uint8(*_lStrings)[43];
-	const uint8 _psxPauseStrings[3][7] = { "Paused", "Pause", "Pausa" };
+	static const uint8 _psxPauseStrings[3][7];
 	SwordEngine *_vm;
 	Common::SaveFileManager *_saveFileMan;
 	ObjectMan *_objMan;
@@ -234,31 +234,31 @@ private:
 	Common::Point _mouseCoord;
 	uint16 _mouseState;
 
-	int _oldSnrStatus = SNR_BLANK;
-	bool _newPal = false;
+	int _oldSnrStatus;
+	bool _newPal;
 	Sprite *_slabs[SAVEBUTTONS - 6];
-	int32 _scrollIndex[2] = { 0, 0 };
-	int32 _speedFlag = 0;
+	int32 _scrollIndex[2];
+	int32 _speedFlag;
 
-	int32 _currentButton = 0;
-	int32 _buttonPressed = 0;
-	int32 _buttonHold = 0;
-	int32 _slabSelected = 0;
-	int32 _firstDescription = 0;
+	int32 _currentButton;
+	int32 _buttonPressed;
+	int32 _buttonHold;
+	int32 _slabSelected;
+	int32 _firstDescription;
 	byte  _fileDescriptions[MAXSAVEGAMES][40];
-	int32 _editingDescription = 0;
-	int32 _gamesSaved = 0;
+	int32 _editingDescription;
+	int32 _gamesSaved;
 	int32 _textCursor;
 	int32 _curCharCount;
 	char  _oldString[40];
-	int32 _scroll = 0;
-	int32 _scrollCount = 0;
+	int32 _scroll;
+	int32 _scrollCount;
 
-	uint8 *_restoreBuf = nullptr;
-	uint32 _selectedSavegame = 0;
-	uint8 _numButtons = 0;
-	uint8 _selectedButton = 0;
-	bool _panelShown = false;
+	uint8 *_restoreBuf;
+	uint32 _selectedSavegame;
+	uint8 _numButtons;
+	uint8 _selectedButton;
+	bool _panelShown;
 
 	static const Button panelButtons[8];
 	// We want the death screen buttons to have

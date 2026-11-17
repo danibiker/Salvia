@@ -577,7 +577,8 @@ void ResourceReader::tossResourceFromCache(ResourceSlot *slot) {
 
 void ResourceReader::purgeCache() {
 	debug(2, "ResourceReader::purgeCache()");
-	for (const auto &res : _resSlots) {
+	for (auto rfIt580 = _resSlots.begin(), rfEnd580 = _resSlots.end(); rfIt580 != rfEnd580; ++rfIt580) {
+		const auto &res = *rfIt580;
 		ResourceSlots *slots = res._value;
 		for (ResourceSlots::iterator slotIter = slots->begin(); slotIter != slots->end(); ++slotIter) {
 			ResourceSlot *slot = &(*slotIter);

@@ -115,6 +115,8 @@ private:
 	void recalcScaling(int width, int height);
 	void createColorTable();
 	void createIcons(bool lowResSurface);
+	static void prepIconSurface(Graphics::Surface &surf, const Graphics::PixelFormat &fmt, const uint32 *colTable, int width, int height, int bkgColor);
+	static void renderIcon(Graphics::Surface &surf, const Graphics::PixelFormat &fmt, const uint32 *colTable, int iconID, int boxFitWidth, bool fitWithMargin, bool fillBackground);
 	void releaseIcons();
 	void drawBackground(int width, int height);
 	void drawLegend(int level, uint flags);

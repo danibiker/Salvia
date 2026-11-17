@@ -614,7 +614,7 @@ public:
 	virtual void clearKeyQueue() = 0;
 
 	AgiBase(OSystem *syst, const AGIGameDescription *gameDesc);
-	~AgiBase() override;
+	~AgiBase();
 
 	virtual void clearImageStack() = 0;
 	virtual void recordImageStackCall(uint8 type, int16 p1, int16 p2, int16 p3,
@@ -705,7 +705,7 @@ protected:
 
 public:
 	AgiEngine(OSystem *syst, const AGIGameDescription *gameDesc);
-	~AgiEngine() override;
+	~AgiEngine();
 
 	bool promptIsEnabled() override;
 

@@ -54,12 +54,14 @@ enum FuncCallType {
 };
 
 struct FuncCall {
-	FuncCallType type = kCallSub;
+	FuncCall() : type(kCallSub), callSiteOffset(-1), calleeOffset(-1), tailCall(false) {}
+
+	FuncCallType type;
 	Common::String callingTot;
-	int32 callSiteOffset = -1;
+	int32 callSiteOffset;
 	Common::String calledTot;
-	int32 calleeOffset = -1;
-	bool tailCall = false;
+	int32 calleeOffset;
+	bool tailCall;
 };
 
 class Environments {

@@ -50,7 +50,8 @@ const char *SaveLoad::stripPath(const char *fileName, char separator) {
 
 Common::String SaveLoad::replacePathSeparators(const char *path, char newSeparator) {
 	Common::String result = path;
-	for (char &c : result) {
+	for (auto rfIt53 = result.begin(), rfEnd53 = result.end(); rfIt53 != rfEnd53; ++rfIt53) {
+		char &c = *rfIt53;
 		if (c != newSeparator && (c == '\\' || c == '/' || c == ':'))
 			c = newSeparator;
 	}

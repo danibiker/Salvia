@@ -185,7 +185,8 @@ public:
 
 		Common::FSNode gameDir = fslist.begin()->getParent();
 
-		for (DetectedGame &game : games) {
+		for (auto rfIt188 = games.begin(), rfEnd188 = games.end(); rfIt188 != rfEnd188; ++rfIt188) {
+			DetectedGame &game = *rfIt188;
 			if (game.gameId == "simon2")
 				applySimon2LanguageGUIOptions(game, gameDir);
 		}

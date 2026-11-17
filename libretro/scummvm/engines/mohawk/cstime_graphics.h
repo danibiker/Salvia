@@ -31,7 +31,7 @@ class MohawkEngine_CSTime;
 class CSTimeGraphics : public GraphicsManager {
 public:
 	CSTimeGraphics(MohawkEngine_CSTime *vm);
-	~CSTimeGraphics() override;
+	~CSTimeGraphics();
 
 	void drawRect(Common::Rect rect, byte color);
 

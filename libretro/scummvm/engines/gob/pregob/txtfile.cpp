@@ -78,7 +78,8 @@ bool TXTFile::draw(Surface &surface, int16 &left, int16 &top, int16 &right, int1
 	resizeBuffer(right - left + 1, bottom - top + 1);
 	saveScreen(surface, left, top, right, bottom);
 
-	for (const auto &line : _lines) {
+	for (auto rfIt81 = _lines.begin(), rfEnd81 = _lines.end(); rfIt81 != rfEnd81; ++rfIt81) {
+		const auto &line = *rfIt81;
 		if (line.font >= fontCount)
 			continue;
 

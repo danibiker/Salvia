@@ -45,7 +45,7 @@ enum SceneType {
 class Module : public Entity {
 public:
 	Module(NeverhoodEngine *vm, Module *parentModule);
-	~Module() override;
+	~Module();
 	void draw() override;
 	SceneType getSceneType() { return _sceneType; }
 

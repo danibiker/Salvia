@@ -311,7 +311,7 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 }
 
 // Anyade esto a los metodos publicos de tu clase
-bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, float* progressPtr) {
+bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, float* progressPtr, float* kbPtr) {
 	CURL *curl = curl_easy_init();
 	if (!curl) return false;
 
@@ -325,6 +325,8 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	ProgressData pData;
 	pData.progressVar = progressPtr;
 	if (progressPtr) *progressPtr = 0.0f;
+	pData.kbVar = kbPtr;
+	if (kbPtr) *kbPtr = 0.0f;
 
 	#ifdef NET_DEBUG
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
@@ -356,8 +358,10 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);   // solo conectar
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 200L); // si baja de 200 B/s...
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);   // ...durante 20s -> abortar
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 180L);         // tope absoluto de seguridad
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
+	//No queremos que la descarga se aborte a los 180 segundos. Confiamos en el limite de velocidad
+	//y por eso comentamos la línea
+	//curl_easy_setopt(curl, CURLOPT_TIMEOUT, 180L);         // tope absoluto de seguridad
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX
@@ -420,9 +424,16 @@ int CurlClient::ProgressCallback(void* clientp, double dltotal, double dlnow, do
     }
 	
 	ProgressData* p = (ProgressData*)clientp;
-    if (p && p->progressVar && dltotal > 0) {
-        *(p->progressVar) = (float)(dlnow / dltotal);
-    }
+	if (p) {
+		/* dltotal solo se conoce si el servidor manda Content-Length. Las descargas
+		 * troceadas (chunked; p.ej. ficheros sacados de un .rar/.zip de archive.org
+		 * con view_archive.php) lo dejan siempre a 0: entonces solo hay KB recibidos.
+		 * progressVar es una fraccion 0..1 (el menu de BIOS la pinta x100). */
+		if (p->progressVar && dltotal > 0)
+			*(p->progressVar) = (float)(dlnow / dltotal);
+		if (p->kbVar)
+			*(p->kbVar) = (float)(dlnow / 1024.0);
+	}
     return 0;
 }
 

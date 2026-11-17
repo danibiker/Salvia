@@ -37,7 +37,7 @@ public:
 
 	CruHealthGump();
 	CruHealthGump(Shape *shape, int x);
-	~CruHealthGump() override;
+	~CruHealthGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

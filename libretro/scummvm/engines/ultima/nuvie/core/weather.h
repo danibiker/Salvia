@@ -54,7 +54,7 @@ class Weather: public CallBack {
 public:
 
 	Weather(const Configuration *cfg, GameClock *c, nuvie_game_t type);
-	~Weather() override;
+	~Weather();
 
 	bool load(NuvieIO *objlist);
 	bool save(NuvieIO *objlist);

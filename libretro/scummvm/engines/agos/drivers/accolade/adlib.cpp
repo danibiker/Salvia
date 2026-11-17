@@ -151,7 +151,7 @@ void MidiDriver_Accolade_AdLib::deinitSource(uint8 source) {
 			program = _instrumentRemapping[program];
 		}
 
-		InstrumentInfo instrument { };
+		InstrumentInfo instrument = InstrumentInfo();
 		instrument.instrumentId = program;
 		instrument.instrumentDef = &_instrumentBank[program];
 		instrument.oplNote = 0;
@@ -314,7 +314,7 @@ void MidiDriver_Accolade_AdLib::patchWwInstruments() {
 MidiDriver_Accolade_AdLib::InstrumentInfo MidiDriver_Accolade_AdLib::determineInstrument(uint8 channel, uint8 source, uint8 note) {
 	if (_sources[source].type == SOURCE_TYPE_SFX) {
 		// For SFX sources, return an instrument from the SFX bank.
-		InstrumentInfo instrument { };
+		InstrumentInfo instrument = InstrumentInfo();
 		instrument.instrumentId = 0xFFFF - source;
 		instrument.instrumentDef = &_sfxInstruments[source - 1];
 		instrument.oplNote = note;

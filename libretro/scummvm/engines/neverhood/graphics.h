@@ -134,7 +134,7 @@ class FontSurface : public BaseSurface {
 public:
 	FontSurface(NeverhoodEngine *vm, NPointArray *tracking, uint charsPerRow, uint16 numRows, byte firstChar, uint16 charWidth, uint16 charHeight);
 	FontSurface(NeverhoodEngine *vm, uint32 fileHash, uint charsPerRow, uint16 numRows, byte firstChar, uint16 charWidth, uint16 charHeight);
-	~FontSurface() override;
+	~FontSurface();
 	void drawChar(BaseSurface *destSurface, int16 x, int16 y, byte chr);
 	void drawString(const Common::SharedPtr<BaseSurface> &destSurface, int16 x, int16 y, const byte *string, int stringLen = -1);
 	int16 getStringWidth(const byte *string, int stringLen);

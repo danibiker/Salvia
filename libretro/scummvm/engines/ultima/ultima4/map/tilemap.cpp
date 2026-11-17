@@ -50,7 +50,8 @@ void TileMaps::loadAll() {
 	conf = config->getElement("tilesets").getChildren();
 
 	// Load all of the tilemaps
-	for (const auto &i : conf) {
+	for (auto rfIt53 = conf.begin(), rfEnd53 = conf.end(); rfIt53 != rfEnd53; ++rfIt53) {
+		const auto &i = *rfIt53;
 		if (i.getName() == "tilemap") {
 
 			// Load the tilemap !
@@ -77,7 +78,8 @@ void TileMaps::load(const ConfigElement &tilemapConf) {
 
 	int index = 0;
 	Common::Array<ConfigElement> children = tilemapConf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt80 = children.begin(), rfEnd80 = children.end(); rfIt80 != rfEnd80; ++rfIt80) {
+		const auto &i = *rfIt80;
 		if (i.getName() != "mapping")
 			continue;
 
@@ -128,7 +130,8 @@ MapTile TileMap::translate(uint index) {
 uint TileMap::untranslate(MapTile &tile) {
 	uint index = 0;
 
-	for (const auto &i : _tileMap) {
+	for (auto rfIt131 = _tileMap.begin(), rfEnd131 = _tileMap.end(); rfIt131 != rfEnd131; ++rfIt131) {
+		const auto &i = *rfIt131;
 		if (i._value == tile) {
 			index = i._key;
 			break;

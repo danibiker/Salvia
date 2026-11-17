@@ -64,7 +64,7 @@ private:
 class EoBIntroPlayer : public EoBSeqPlayerCommon {
 public:
 	EoBIntroPlayer(EoBEngine *vm, Screen_EoB *screen);
-	~EoBIntroPlayer() override {}
+	~EoBIntroPlayer() {}
 
 	enum IntroPart {
 		kOnlyCredits = 0,
@@ -121,7 +121,7 @@ private:
 class EoBPC98FinalePlayer : public EoBSeqPlayerCommon {
 public:
 	EoBPC98FinalePlayer(EoBEngine *vm, Screen_EoB *screen);
-	~EoBPC98FinalePlayer() override;
+	~EoBPC98FinalePlayer();
 
 	void start(bool xdt);
 
@@ -162,7 +162,7 @@ private:
 class EoBAmigaFinalePlayer : public EoBSeqPlayerCommon {
 public:
 	EoBAmigaFinalePlayer(EoBEngine *vm, Screen_EoB *screen);
-	~EoBAmigaFinalePlayer() override;
+	~EoBAmigaFinalePlayer();
 
 	void start();
 

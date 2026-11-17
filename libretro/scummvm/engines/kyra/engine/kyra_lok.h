@@ -66,8 +66,10 @@ struct Room {
 };
 
 struct SeqLoop {
-	const uint8 *ptr = nullptr;
-	uint16 count = 0;
+	SeqLoop() : ptr(nullptr), count(0) {}
+
+	const uint8 *ptr;
+	uint16 count;
 };
 
 struct SceneExits {
@@ -101,7 +103,7 @@ class KyraEngine_LoK : public KyraEngine_v1 {
 	friend class GUI_LoK;
 public:
 	KyraEngine_LoK(OSystem *system, const GameFlags &flags);
-	~KyraEngine_LoK() override;
+	~KyraEngine_LoK();
 
 	// _sprites and _seqplayer should be paused here too, to avoid some animation glitches,
 	// also parts of the hardcoded Malcolm fight might need some special handling.

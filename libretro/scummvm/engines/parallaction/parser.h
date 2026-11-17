@@ -308,7 +308,7 @@ public:
 
 	void init() override;
 
-	~LocationParser_br() override {
+	~LocationParser_br() {
 		delete _audioCommandsNames;
 	}
 

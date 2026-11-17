@@ -284,7 +284,7 @@ public:
 	typedef Common::Array<uint16> ArgumentArray;
 
 	RivenSimpleCommand(MohawkEngine_Riven *vm, RivenCommandType type, const ArgumentArray &arguments);
-	~RivenSimpleCommand() override;
+	~RivenSimpleCommand();
 
 	// RivenCommand API
 	void dump(byte tabs) override;
@@ -357,7 +357,7 @@ private:
 class RivenSwitchCommand : public RivenCommand {
 public:
 	static RivenSwitchCommand *createFromStream(MohawkEngine_Riven *vm, Common::ReadStream *stream);
-	~RivenSwitchCommand() override;
+	~RivenSwitchCommand();
 
 	// RivenCommand API
 	void dump(byte tabs) override;
@@ -390,7 +390,7 @@ public:
 		                        bool byStackId, bool byStackCardId);
 
 	static RivenStackChangeCommand *createFromStream(MohawkEngine_Riven *vm, Common::ReadStream *stream);
-	~RivenStackChangeCommand() override;
+	~RivenStackChangeCommand();
 
 	// RivenCommand API
 	void dump(byte tabs) override;

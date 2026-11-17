@@ -124,7 +124,7 @@ protected:
 class PCSound : public Sound {
 public:
 	PCSound(Audio::Mixer *mixer, QueenEngine *vm);
-	~PCSound() override;
+	~PCSound();
 
 	void playSfx(uint16 sfx) override;
 	void playSpeech(const char *base) override;

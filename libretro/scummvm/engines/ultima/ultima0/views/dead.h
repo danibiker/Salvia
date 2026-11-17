@@ -35,7 +35,7 @@ private:
 	}
 public:
 	Dead();
-	~Dead() override {}
+	~Dead() {}
 
 	void draw() override;
 

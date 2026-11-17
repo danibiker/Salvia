@@ -148,18 +148,18 @@ sint32 AStarPath::step_cost(const MapCoord &c1, const MapCoord &c2) {
 /* Return an item in the list of closed nodes whose location matches `ncmp'.
  */
 astar_node *AStarPath::find_closed_node(astar_node *ncmp) {
-	for (astar_node *n : closed_nodes)
-		if (n->loc == ncmp->loc)
-			return n;
+	for (auto rfIt151 = closed_nodes.begin(), rfEnd151 = closed_nodes.end(); rfIt151 != rfEnd151; ++rfIt151)
+		{ astar_node *n = *rfIt151; if (n->loc == ncmp->loc)
+			return n; }
 	return nullptr;
 }
 
 /* Return an item in the list of open nodes whose location matches `ncmp'.
  */
 astar_node *AStarPath::find_open_node(astar_node *ncmp) {
-	for (astar_node *n : open_nodes)
-		if (n->loc == ncmp->loc)
-			return n;
+	for (auto rfIt160 = open_nodes.begin(), rfEnd160 = open_nodes.end(); rfIt160 != rfEnd160; ++rfIt160)
+		{ astar_node *n = *rfIt160; if (n->loc == ncmp->loc)
+			return n; }
 	return nullptr;
 }
 

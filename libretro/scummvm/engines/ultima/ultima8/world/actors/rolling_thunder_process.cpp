@@ -271,7 +271,8 @@ bool RollingThunderProcess::fireDistance(Direction dir, int32 x, int32 y, int32 
 			Common::List<CurrentMap::SweepItem> collisions;
 			cm->sweepTest(start, end, dims, ShapeInfo::SI_SOLID,
 						 _itemNum, false, &collisions);
-			for (const auto &collision : collisions) {
+			for (auto rfIt274 = collisions.begin(), rfEnd274 = collisions.end(); rfIt274 != rfEnd274; ++rfIt274) {
+				const auto &collision = *rfIt274;
 				if (collision._item == _itemNum)
 					continue;
 				if (collision._item != target->getObjId())

@@ -40,7 +40,7 @@ private:
 	void loadWidgets();
 public:
 	MapOverworld(Ultima1Game *game, Ultima1Map *map) : MapBase(game, map) {}
-	~MapOverworld() override {}
+	~MapOverworld() {}
 
 	/**
 	 * Load the map

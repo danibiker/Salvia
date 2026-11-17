@@ -55,7 +55,7 @@ namespace Gob {
 #define OPCODEFUNC(i, x)  _opcodesFunc[i]._OPCODEFUNC(OPCODEVER, x)
 #define OPCODEGOB(i, x)   _opcodesGob[i]._OPCODEGOB(OPCODEVER, x)
 
-Inter_v1::Inter_v1(GobEngine *vm) : Inter(vm) {
+Inter_v1::Inter_v1(GobEngine *vm) : Inter(vm), _ignoreSpeakerOff(false) {
 }
 
 void Inter_v1::setupOpcodesDraw() {

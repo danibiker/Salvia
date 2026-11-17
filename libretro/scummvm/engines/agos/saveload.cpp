@@ -48,7 +48,8 @@ int AGOSEngine::countSaveGames() {
 
 	memset(marks, false, 256 * sizeof(bool));	//assume no savegames for this title
 
-	for (const auto &filename : filenames){
+	for (auto rfIt51 = filenames.begin(), rfEnd51 = filenames.end(); rfIt51 != rfEnd51; ++rfIt51){
+		const auto &filename = *rfIt51;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		assert(filename.size() >= 4);
 		slotNum = atoi(filename.c_str() + filename.size() - 3);

@@ -72,7 +72,7 @@ public:
 		_bufPitch = 0;
 	}
 
-	~BraFont() override {
+	~BraFont() {
 		free(_widths);
 		free(_offsets);
 		free(_data);
@@ -305,7 +305,7 @@ public:
 	DosFont(Cnv *cnv) : _data(cnv), _pitch(cnv->_width), _cp(nullptr), _bufPitch(0) {
 	}
 
-	~DosFont() override {
+	~DosFont() {
 		delete _data;
 	}
 
@@ -445,7 +445,7 @@ public:
 	AmigaFont(Common::SeekableReadStream *stream = nullptr) {
 		_font = new Graphics::AmigaFont(stream);
 	}
-	~AmigaFont() override {
+	~AmigaFont() {
 		delete _font;
 	}
 

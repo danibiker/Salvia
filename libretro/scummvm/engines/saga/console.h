@@ -31,7 +31,7 @@ namespace Saga {
 class Console : public GUI::Debugger {
 public:
 	Console(SagaEngine *vm);
-	~Console() override;
+	~Console();
 
 private:
 	bool cmdActorWalkTo(int argc, const char **argv);

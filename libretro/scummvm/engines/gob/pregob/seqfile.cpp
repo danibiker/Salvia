@@ -144,7 +144,8 @@ const ANIFile *SEQFile::findANI(uint16 index, uint16 &animation) {
 	if (index == 0xFFFF)
 		return nullptr;
 
-	for (const auto &anim : _animations) {
+	for (auto rfIt147 = _animations.begin(), rfEnd147 = _animations.end(); rfIt147 != rfEnd147; ++rfIt147) {
+		const auto &anim = *rfIt147;
 		if (index < anim->getAnimationCount()) {
 			animation = index;
 			return anim;
@@ -214,7 +215,8 @@ void SEQFile::play(bool abortable, uint16 endFrame, uint16 frameRate) {
 		// Loop
 
 		bool looped = false;
-		for (auto &loop : _loops) {
+		for (auto rfIt217 = _loops.begin(), rfEnd217 = _loops.end(); rfIt217 != rfEnd217; ++rfIt217) {
+			auto &loop = *rfIt217;
 			if ((loop.endFrame == _frame) && (loop.currentLoop < loop.loopCount)) {
 				_frame = loop.startFrame;
 
@@ -241,7 +243,8 @@ void SEQFile::playFrame() {
 	clearAnims();
 
 	// Handle background keys, directly updating the background
-	for (const auto &bg : _bgKeys) {
+	for (auto rfIt244 = _bgKeys.begin(), rfEnd244 = _bgKeys.end(); rfIt244 != rfEnd244; ++rfIt244) {
+		const auto &bg = *rfIt244;
 		if (!bg.background || (bg.frame != _frame))
 			continue;
 
@@ -251,7 +254,8 @@ void SEQFile::playFrame() {
 	}
 
 	// Handle the animation keys, updating the objects
-	for (const auto &anim : _animKeys) {
+	for (auto rfIt254 = _animKeys.begin(), rfEnd254 = _animKeys.end(); rfIt254 != rfEnd254; ++rfIt254) {
+		const auto &anim = *rfIt254;
 		if (anim.frame != _frame)
 			continue;
 
@@ -323,7 +327,8 @@ void SEQFile::drawAnims() {
 	Objects objects = getOrderedObjects();
 
 	// Draw the animation frames and advance the animation
-	for (auto &obj : objects) {
+	for (auto rfIt326 = objects.begin(), rfEnd326 = objects.end(); rfIt326 != rfEnd326; ++rfIt326) {
+		auto &obj = *rfIt326;
 		int16 left, top, right, bottom;
 
 		if (obj.object->draw(*_vm->_draw->_backSurface, left, top, right, bottom))

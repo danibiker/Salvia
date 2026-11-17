@@ -636,7 +636,8 @@ int FWScript::o2_stopObjectScript() {
 
 	debugC(5, kCineDebugScript, "Line: %d: stopObjectScript(%d)", _line, param);
 
-	for (auto &script : g_cine->_objectScripts) {
+	for (auto rfIt639 = g_cine->_objectScripts.begin(), rfEnd639 = g_cine->_objectScripts.end(); rfIt639 != rfEnd639; ++rfIt639) {
+		auto &script = *rfIt639;
 		if (script->_index == param) {
 			script->_index = -1;
 		}

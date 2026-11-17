@@ -157,29 +157,29 @@ class ScriptThread {
 public:
 	Common::Array<int16> _stackBuf;
 
-	uint16 _stackTopIndex = 0;
-	uint16 _frameIndex = 0;
+	uint16 _stackTopIndex;
+	uint16 _frameIndex;
 
 	uint16 _threadVars[kThreadVarMax];
 
-	byte *_moduleBase = 0;					//
-	uint16 _moduleBaseSize = 0;
+	byte *_moduleBase;					//
+	uint16 _moduleBaseSize;
 
-	byte *_commonBase = nullptr;			//
-	byte *_staticBase = nullptr;			//
-	VoiceLUT *_voiceLUT = nullptr;			//
-	StringsTable *_strings = nullptr;		//
+	byte *_commonBase;			//
+	byte *_staticBase;			//
+	VoiceLUT *_voiceLUT;			//
+	StringsTable *_strings;		//
 
-	int _flags = 0;							// ThreadFlags
-	int _waitType = 0;						// ThreadWaitTypes
-	uint _sleepTime = 0;
-	void *_threadObj = nullptr;				// which object we're handling
+	int _flags;							// ThreadFlags
+	int _waitType;						// ThreadWaitTypes
+	uint _sleepTime;
+	void *_threadObj;				// which object we're handling
 
-	int16 _returnValue = 0;
+	int16 _returnValue;
 
-	uint16 _instructionOffset = 0;			// Instruction offset
+	uint16 _instructionOffset;			// Instruction offset
 
-	int32 _frameWait = 0;
+	int32 _frameWait;
 
 	enum {
 		THREAD_STACK_SIZE = 256
@@ -250,7 +250,7 @@ public:
 		_frameWait = frames;
 	}
 
-	ScriptThread() {
+	ScriptThread() : _stackTopIndex(0), _frameIndex(0), _moduleBase(0), _moduleBaseSize(0), _commonBase(nullptr), _staticBase(nullptr), _voiceLUT(nullptr), _strings(nullptr), _flags(0), _waitType(0), _sleepTime(0), _threadObj(nullptr), _returnValue(0), _instructionOffset(0), _frameWait(0) {
 		memset(&_frameIndex, 0xFE, sizeof(_frameIndex));
 		memset(_threadVars, 0xFE, sizeof(_threadVars));
 		memset(&_waitType, 0xFE, sizeof(_waitType));
@@ -608,7 +608,7 @@ protected:
 class SAGA1Script : public Script {
 public:
 	SAGA1Script(SagaEngine *vm);
-	~SAGA1Script() override;
+	~SAGA1Script();
 };
 
 } // End of namespace Saga

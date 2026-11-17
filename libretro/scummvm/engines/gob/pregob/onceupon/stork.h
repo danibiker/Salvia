@@ -59,7 +59,7 @@ public:
 	};
 
 	Stork(GobEngine *vm, const ANIFile &ani);
-	~Stork() override;
+	~Stork();
 
 	/** Has the bundle landed? */
 	bool hasBundleLanded() const;

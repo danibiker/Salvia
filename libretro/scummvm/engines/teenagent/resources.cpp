@@ -141,7 +141,8 @@ void Resources::readDialogStacks(byte *src) {
 }
 
 void Resources::precomputeAllOffsets(const Common::Array<ResourceInfo> &resourceInfos) {
-	for (const auto &resInfo : resourceInfos) {
+	for (auto rfIt144 = resourceInfos.begin(), rfEnd144 = resourceInfos.end(); rfIt144 != rfEnd144; ++rfIt144) {
+		const auto &resInfo = *rfIt144;
 		switch ((ResourceType)resInfo._id) {
 		case kResCombinations:
 			precomputeCombinationOffsets(resInfo);
@@ -182,7 +183,8 @@ void Resources::precomputeVoiceIndices(const Common::Array<ResourceInfo>& resour
 	byte numTerminators = 0;
 	uint16 voiceIndex = 0;
 
-	for (auto &resInfo : resourceInfos) {
+	for (auto rfIt185 = resourceInfos.begin(), rfEnd185 = resourceInfos.end(); rfIt185 != rfEnd185; ++rfIt185) {
+		auto &resInfo = *rfIt185;
 		switch ((ResourceType)resInfo._id) {
 		case kResMessages:
 			voiceIndex = 1;
@@ -372,7 +374,8 @@ bool Resources::loadArchives(const ADGameDescription *gd) {
 	Common::Array<ResourceInfo> resourceInfos(kNumResources);
 	uint32 allResourcesSize = 0;
 
-	for (auto &resInfo : resourceInfos) {
+	for (auto rfIt375 = resourceInfos.begin(), rfEnd375 = resourceInfos.end(); rfIt375 != rfEnd375; ++rfIt375) {
+		auto &resInfo = *rfIt375;
 		resInfo._id = dat->readByte();
 		resInfo._offset = dat->readUint32LE();
 		resInfo._size = dat->readUint32LE();

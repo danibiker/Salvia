@@ -33,7 +33,7 @@ namespace Neverhood {
 class Module2800 : public Module {
 public:
 	Module2800(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Module2800() override;
+	~Module2800();
 protected:
 	int _sceneNum;
 	uint32 _currentMusicFileHash;
@@ -46,7 +46,7 @@ protected:
 class Scene2801 : public Scene {
 public:
 	Scene2801(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Scene2801() override;
+	~Scene2801();
 protected:
 	Sprite *_asTape;
 	uint32 _paletteHash;
@@ -56,7 +56,7 @@ protected:
 class Scene2802 : public Scene {
 public:
 	Scene2802(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Scene2802() override;
+	~Scene2802();
 protected:
 	SmackerPlayer *_smackerPlayer;
 	uint _currRadioMusicIndex;
@@ -222,7 +222,7 @@ protected:
 class Scene2810 : public Scene {
 public:
 	Scene2810(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Scene2810() override;
+	~Scene2810();
 protected:
 	Sprite *_sprite1;
 	Sprite *_sprite2;

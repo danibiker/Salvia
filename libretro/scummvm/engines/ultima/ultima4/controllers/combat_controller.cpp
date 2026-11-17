@@ -268,7 +268,8 @@ void CombatController::initDungeonRoom(int room, Direction from) {
 
 void CombatController::applyCreatureTileEffects() {
 	CreatureVector creatures = _map->getCreatures();
-	for (auto *m : creatures) {
+	for (auto rfIt271 = creatures.begin(), rfEnd271 = creatures.end(); rfIt271 != rfEnd271; ++rfIt271) {
+		auto *m = *rfIt271;
 		TileEffect effect = _map->tileTypeAt(m->getCoords(), WITH_GROUND_OBJECTS)->getEffect();
 		m->applyTileEffect(effect);
 	}
@@ -917,7 +918,8 @@ void CombatController::attack(Direction dir, int distance) {
 		targetCoords = path.back();
 
 	distance = 1;
-	for (const auto &coords : path) {
+	for (auto rfIt920 = path.begin(), rfEnd920 = path.end(); rfIt920 != rfEnd920; ++rfIt920) {
+		const auto &coords = *rfIt920;
 		if (attackAt(coords, attacker, MASK_DIR(dir), range, distance)) {
 			foundTarget = true;
 			targetDistance = distance;
@@ -962,7 +964,8 @@ CombatMap::CombatMap() : Map(), _dungeonRoom(false), _altarRoom(VIRT_NONE), _con
 
 CreatureVector CombatMap::getCreatures() {
 	CreatureVector creatures;
-	for (auto *obj : _objects) {
+	for (auto rfIt965 = _objects.begin(), rfEnd965 = _objects.end(); rfIt965 != rfEnd965; ++rfIt965) {
+		auto *obj = *rfIt965;
 		if (isCreature(obj) && !isPartyMember(obj))
 			creatures.push_back(dynamic_cast<Creature *>(obj));
 	}
@@ -971,7 +974,8 @@ CreatureVector CombatMap::getCreatures() {
 
 PartyMemberVector CombatMap::getPartyMembers() {
 	PartyMemberVector party;
-	for (auto *obj : _objects) {
+	for (auto rfIt974 = _objects.begin(), rfEnd974 = _objects.end(); rfIt974 != rfEnd974; ++rfIt974) {
+		auto *obj = *rfIt974;
 		if (isPartyMember(obj))
 			party.push_back(dynamic_cast<PartyMember *>(obj));
 	}
@@ -980,7 +984,8 @@ PartyMemberVector CombatMap::getPartyMembers() {
 
 PartyMember *CombatMap::partyMemberAt(Coords coords) {
 	PartyMemberVector party = getPartyMembers();
-	for (auto *member : party) {
+	for (auto rfIt983 = party.begin(), rfEnd983 = party.end(); rfIt983 != rfEnd983; ++rfIt983) {
+		auto *member = *rfIt983;
 		if (member->getCoords() == coords)
 			return member;
 	}
@@ -989,7 +994,8 @@ PartyMember *CombatMap::partyMemberAt(Coords coords) {
 
 Creature *CombatMap::creatureAt(Coords coords) {
 	CreatureVector creatures = getCreatures();
-	for (auto *c : creatures) {
+	for (auto rfIt992 = creatures.begin(), rfEnd992 = creatures.end(); rfIt992 != rfEnd992; ++rfIt992) {
+		auto *c = *rfIt992;
 		if (c->getCoords() == coords)
 			return c;
 	}

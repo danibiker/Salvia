@@ -41,7 +41,7 @@ private:
 public:
 
 	WOUFont();
-	~WOUFont() override;
+	~WOUFont();
 
 	bool init(const Common::Path &filename);
 	bool initWithBuffer(unsigned char *buffer, uint32 buffer_len);

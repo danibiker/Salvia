@@ -46,7 +46,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Info() override {}
+	~Info() {}
 };
 
 } // End of namespace U1Gfx

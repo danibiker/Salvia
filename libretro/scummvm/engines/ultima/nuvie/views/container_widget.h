@@ -64,7 +64,7 @@ protected:
 
 public:
 	ContainerWidget(const Configuration *cfg, GUI_CallBack *callback = nullptr);
-	~ContainerWidget() override;
+	~ContainerWidget();
 
 	bool init(Actor *a, uint16 x, uint16 y, TileManager *tm, ObjManager *om, Font *f);
 	virtual void set_actor(Actor *a);

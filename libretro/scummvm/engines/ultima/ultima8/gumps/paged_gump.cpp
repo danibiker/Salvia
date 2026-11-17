@@ -43,7 +43,8 @@ PagedGump::~PagedGump(void) {
 
 void PagedGump::Close(bool no_del) {
 	Mouse::get_instance()->popMouseCursor();
-	for (auto *g : _gumps) {
+	for (auto rfIt46 = _gumps.begin(), rfEnd46 = _gumps.end(); rfIt46 != rfEnd46; ++rfIt46) {
+		auto *g = *rfIt46;
 		g->Close(no_del); // CHECKME: no_del?
 	}
 

@@ -73,7 +73,8 @@ void SnapProcess::run() {
 void SnapProcess::addEgg(Item *item) {
 	assert(item);
 	ObjId id = item->getObjId();
-	for (const auto &eggId : _snapEggs) {
+	for (auto rfIt76 = _snapEggs.begin(), rfEnd76 = _snapEggs.end(); rfIt76 != rfEnd76; ++rfIt76) {
+		const auto &eggId = *rfIt76;
 		if (eggId == id)
 			return;
 	}
@@ -95,7 +96,8 @@ void SnapProcess::updateCurrentEgg() {
 	a->getFootpadWorld(axd, ayd, azd);
 	Common::Rect32 arect(pta.x, pta.y, pta.x + axd, pta.y + ayd);
 
-	for (const auto &eggId : _snapEggs) {
+	for (auto rfIt98 = _snapEggs.begin(), rfEnd98 = _snapEggs.end(); rfIt98 != rfEnd98; ++rfIt98) {
+		const auto &eggId = *rfIt98;
 		const Item *egg = getItem(eggId);
 		if (!egg)
 			continue;
@@ -178,7 +180,8 @@ void SnapProcess::saveData(Common::WriteStream *ws) {
 
 	ws->writeUint16LE(_currentSnapEgg);
 	ws->writeUint16LE(_snapEggs.size());
-	for (const auto &eggId : _snapEggs) {
+	for (auto rfIt181 = _snapEggs.begin(), rfEnd181 = _snapEggs.end(); rfIt181 != rfEnd181; ++rfIt181) {
+		const auto &eggId = *rfIt181;
 		ws->writeUint16LE(eggId);
 	}
 }

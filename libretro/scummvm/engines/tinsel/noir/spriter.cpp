@@ -83,7 +83,7 @@ void Spriter::MatrixPush() {
 }
 
 void Spriter::MatrixTranslate(float x, float y, float z) {
-	Math::Vector3d v {x,y,z};
+	Math::Vector3d v(x,y,z);
 	_currentMatrix->top().translate(v);
 }
 
@@ -200,7 +200,7 @@ void Spriter::LoadH(const Common::String& modelName) {
 			}
 
 			if (anim == nullptr) {
-				AnimationInfo tempAnim {};
+				AnimationInfo tempAnim = AnimationInfo();
 				tempAnim.name = name;
 				_animMain.push_back(tempAnim);
 				anim = &_animMain.back();
@@ -572,7 +572,7 @@ Common::Rect Spriter::Draw(int direction, int x, int y, int z, int tDelta) {
 
 	// RenderModel(_modelShadow);
 
-	return Common::Rect {0, 0};
+	return Common::Rect(0, 0);
 }
 
 Meshes Spriter::LoadMeshes(const Hunks &hunks, uint hunk, uint offset, int frame) {
@@ -599,7 +599,8 @@ Meshes Spriter::LoadMeshes(const Hunks &hunks, uint hunk, uint offset, int frame
 	result.meshes.resize(numEntries);
 
 	// Read all meshes
-	for (auto& mesh : result.meshes) {
+	for (auto rfIt602 = result.meshes.begin(), rfEnd602 = result.meshes.end(); rfIt602 != rfEnd602; ++rfIt602) {
+		auto& mesh = *rfIt602;
 		uint meshOffset = meshListStream.readUint32LE();
 		uint meshHunk = hunks[meshListHunk].mappingIdx[0];
 
@@ -615,7 +616,8 @@ Meshes Spriter::LoadMeshes(const Hunks &hunks, uint hunk, uint offset, int frame
 		Common::MemoryReadStream verticesStream(hunks[verticesHunk].data.data(), hunks[verticesHunk].data.size());
 		verticesStream.skip(verticesOffset);
 
-		for (auto& v : mesh.vertices) {
+		for (auto rfIt618 = mesh.vertices.begin(), rfEnd618 = mesh.vertices.end(); rfIt618 != rfEnd618; ++rfIt618) {
+			auto& v = *rfIt618;
 			v.readFromStream(&verticesStream);
 		}
 
@@ -628,7 +630,8 @@ Meshes Spriter::LoadMeshes(const Hunks &hunks, uint hunk, uint offset, int frame
 		Common::MemoryReadStream normalsStream(hunks[normalsHunk].data.data(), hunks[normalsHunk].data.size());
 		normalsStream.skip(normalsOffset);
 
-		for (auto& n : mesh.normals) {
+		for (auto rfIt631 = mesh.normals.begin(), rfEnd631 = mesh.normals.end(); rfIt631 != rfEnd631; ++rfIt631) {
+			auto& n = *rfIt631;
 			n.readFromStream(&normalsStream);
 		}
 
@@ -655,7 +658,8 @@ Meshes Spriter::LoadMeshes(const Hunks &hunks, uint hunk, uint offset, int frame
 			part.primitives.resize(primitiveCount);
 
 			int64 start = primitivesStream.pos();
-			for (auto& prim : part.primitives) {
+			for (auto rfIt658 = part.primitives.begin(), rfEnd658 = part.primitives.end(); rfIt658 != rfEnd658; ++rfIt658) {
+				auto& prim = *rfIt658;
 				for (uint i = 0; i < 8; ++i) {
 					prim.indices[i] = primitivesStream.readUint16LE();
 				}
@@ -712,7 +716,8 @@ AnimationData Spriter::LoadAnimationData(const Hunks& hunks, uint hunk, uint off
 
 		vectors.resize(numEntries);
 
-		for (auto& v : vectors) {
+		for (auto rfIt715 = vectors.begin(), rfEnd715 = vectors.end(); rfIt715 != rfEnd715; ++rfIt715) {
+			auto& v = *rfIt715;
 			if (convert) {
 				uint32 x = vectorsStream.readUint32LE();
 				uint32 y = vectorsStream.readUint32LE();
@@ -752,7 +757,8 @@ void Spriter::InitModel(Model &model, MeshInfo &meshInfo, Common::Array<Animatio
 
 	bool valid = true;
 	if (model.flags & MODEL_HAS_TRANSLATION_TABLE) {
-		for (const auto &anim : animInfos) {
+		for (auto rfIt755 = animInfos.begin(), rfEnd755 = animInfos.end(); rfIt755 != rfEnd755; ++rfIt755) {
+			const auto &anim = *rfIt755;
 			if (anim.translateNum != animInfo.translateNum) {
 				valid = false;
 			}
@@ -927,8 +933,10 @@ void Spriter::FindSimilarVertices(Mesh& mesh, Vectors& vertices, Common::Array<u
 }
 
 void Spriter::MergeVertices(Mesh &mesh, Common::Array<uint16>& sameVertices) {
-	for (auto& part : mesh.parts) {
-		for (auto& prim : part.primitives) {
+	for (auto rfIt930 = mesh.parts.begin(), rfEnd930 = mesh.parts.end(); rfIt930 != rfEnd930; ++rfIt930) {
+		auto& part = *rfIt930;
+		for (auto rfIt931 = part.primitives.begin(), rfEnd931 = part.primitives.end(); rfIt931 != rfEnd931; ++rfIt931) {
+			auto& prim = *rfIt931;
 			for (uint i = 0; i < part.numVertices; ++i) {
 				if (sameVertices[prim.indices[i]] != 0) {
 					prim.indices[i] = sameVertices[prim.indices[i]] - 1;
@@ -942,7 +950,8 @@ void Spriter::TransformMesh(Mesh& mesh, Vectors& vertices) {
 	// Transformed vertices from previous meshes might be used by the current mesh.
 	const Math::Matrix4 &m = MatrixCurrent();
 
-	for (auto& vIn : mesh.vertices) {
+	for (auto rfIt945 = mesh.vertices.begin(), rfEnd945 = mesh.vertices.end(); rfIt945 != rfEnd945; ++rfIt945) {
+		auto& vIn = *rfIt945;
 		Math::Vector3d vOut = vIn;
 		m.transform(&vOut, true);
 		vertices.push_back(vOut);
@@ -950,8 +959,10 @@ void Spriter::TransformMesh(Mesh& mesh, Vectors& vertices) {
 }
 
 void Spriter::CalculateNormals(Mesh& mesh, Vectors& vertices, Vectors &normals) {
-	for (auto& part : mesh.parts) {
-		for (auto& prim : part.primitives) {
+	for (auto rfIt953 = mesh.parts.begin(), rfEnd953 = mesh.parts.end(); rfIt953 != rfEnd953; ++rfIt953) {
+		auto& part = *rfIt953;
+		for (auto rfIt954 = part.primitives.begin(), rfEnd954 = part.primitives.end(); rfIt954 != rfEnd954; ++rfIt954) {
+			auto& prim = *rfIt954;
 			Math::Vector3d v0 = vertices[prim.indices[0]];
 			Math::Vector3d v1 = vertices[prim.indices[1]];
 			Math::Vector3d v2 = vertices[prim.indices[2]];
@@ -966,7 +977,8 @@ void Spriter::CalculateNormals(Mesh& mesh, Vectors& vertices, Vectors &normals) 
 }
 
 void Spriter::RenderMesh(Mesh& mesh, Vectors& vertices, Vectors &normals) {
-	for(auto& part : mesh.parts) {
+	for(auto rfIt969 = mesh.parts.begin(), rfEnd969 = mesh.parts.end(); rfIt969 != rfEnd969; ++rfIt969) {
+		auto& part = *rfIt969;
 		switch(part.type) {
 		case MESH_PART_TYPE_COLOR:
 			RenderMeshPartColor(part, vertices, normals);
@@ -990,7 +1002,8 @@ void Spriter::RenderMeshPartColor(MeshPart& part, Vectors& vertices, Vectors &no
 		tglEnable(TGL_CULL_FACE);
 	}
 
-	for (auto& prim : part.primitives) {
+	for (auto rfIt993 = part.primitives.begin(), rfEnd993 = part.primitives.end(); rfIt993 != rfEnd993; ++rfIt993) {
+		auto& prim = *rfIt993;
 		TGLubyte r = (prim.color >> 0) & 0xff;
 		TGLubyte g = (prim.color >> 8) & 0xff;
 		TGLubyte b = (prim.color >> 16) & 0xff;
@@ -1026,7 +1039,8 @@ void Spriter::RenderMeshPartTexture(MeshPart& part, Vectors& vertices, Vectors &
 	tglEnable(TGL_TEXTURE_2D);
 	tglColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
-	for (auto& prim : part.primitives) {
+	for (auto rfIt1029 = part.primitives.begin(), rfEnd1029 = part.primitives.end(); rfIt1029 != rfEnd1029; ++rfIt1029) {
+		auto& prim = *rfIt1029;
 		tglBindTexture(TGL_TEXTURE_2D, _texture[prim.texture]);
 
 		if (part.numVertices == 4) {

@@ -117,7 +117,7 @@ AGOSEngine_Simon2::AGOSEngine_Simon2(OSystem *system, const AGOSGameDescription 
 }
 
 AGOSEngine_Simon1::AGOSEngine_Simon1(OSystem *system, const AGOSGameDescription *gd)
-	: AGOSEngine_Waxworks(system, gd) {
+	: AGOSEngine_Waxworks(system, gd), _simonAcornFloppyDemoPaletteLoaded(false) {
 }
 
 AGOSEngine_Waxworks::AGOSEngine_Waxworks(OSystem *system, const AGOSGameDescription *gd)
@@ -166,7 +166,7 @@ Common::Error AGOSEngine_Elvira1::init() {
 }
 
 AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
-	: Engine(system), _rnd("agos"), _gameDescription(gd) {
+	: Engine(system), _rnd("agos"), _gameDescription(gd), _digitalMusicStream(nullptr), _elviraAtariSTPlayer(nullptr) {
 
 	//Image dumping command disabled as it doesn't work well
 #if 0

@@ -67,7 +67,7 @@ protected:
 	void sendToChannel(byte channel, uint32 b) override;
 public:
 	Music(Audio::Mixer *mixer);
-	~Music() override;
+	~Music();
 
 	/**
 	 * Play music

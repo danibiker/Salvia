@@ -41,7 +41,7 @@ public:
 	}
 
 	AdLibSfxStream(const Configuration *cfg, int rate, uint8 channel, sint8 note, uint8 velocity, uint8 program_number, uint32 d);
-	~AdLibSfxStream() override;
+	~AdLibSfxStream();
 
 	int readBuffer(sint16 *buffer, const int numSamples) override;
 

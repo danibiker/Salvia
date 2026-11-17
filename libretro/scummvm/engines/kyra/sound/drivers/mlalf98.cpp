@@ -82,7 +82,7 @@ protected:
 			_msg = Common::String::format("%s Channel %d: %s() [ %s]", tpstr[chanType], chanId, dsc, args.c_str());
 			memset(_dt, 0, 7);
 		}
-		~SoundOpcode() override {}
+		~SoundOpcode() {}
 		void run(uint8 *&arg) {
 			assert(arg);
 			memcpy(_dt, arg, _dataLen);
@@ -184,7 +184,7 @@ private:
 class SoundChannelNonSSG : public SoundChannel {
 public:
 	SoundChannelNonSSG(PC98AudioCore *pc98a, int part, int regOffset, int type);
-	~SoundChannelNonSSG() override;
+	~SoundChannelNonSSG();
 
 protected:
 	void parse() override;
@@ -214,7 +214,7 @@ private:
 class MusicChannelFM : public SoundChannelNonSSG {
 public:
 	MusicChannelFM(PC98AudioCore *pc98a, int part, int regOffset);
-	~MusicChannelFM() override;
+	~MusicChannelFM();
 
 	void restore() override;
 	void keyOff() override;
@@ -253,7 +253,7 @@ private:
 class MusicChannelSSG : public SoundChannel {
 public:
 	MusicChannelSSG(PC98AudioCore *pc98a, int part, int regOffset);
-	~MusicChannelSSG() override;
+	~MusicChannelSSG();
 
 	void keyOff() override;
 
@@ -308,7 +308,7 @@ private:
 class MusicChannelRHY : public SoundChannelNonSSG {
 public:
 	MusicChannelRHY(PC98AudioCore *pc98a, int part, int regOffset);
-	~MusicChannelRHY() override;
+	~MusicChannelRHY();
 
 	void keyOff() override;
 
@@ -329,7 +329,7 @@ private:
 class MusicChannelEXT : public SoundChannelNonSSG {
 public:
 	MusicChannelEXT(PC98AudioCore *pc98a, int part, int regOffset, MLALF98::ADPCMData *const &data);
-	~MusicChannelEXT() override;
+	~MusicChannelEXT();
 
 	void keyOff() override;
 
@@ -360,7 +360,7 @@ private:
 class SoundEffectChannel : public MusicChannelFM {
 public:
 	SoundEffectChannel(PC98AudioCore *pc98a, int part, int regOffset, SoundChannel *replaceChannel);
-	~SoundEffectChannel() override;
+	~SoundEffectChannel();
 
 	void setData(uint8 *dataStart, uint8 *loopStart, const uint8 *dataEnd, uint8 *instrBuffer) override;
 	bool checkFinished() override;
@@ -386,7 +386,7 @@ private:
 class MLALF98Internal : public PC98AudioPluginDriver {
 public:
 	MLALF98Internal(Audio::Mixer *mixer, EmuType emuType);
-	~MLALF98Internal() override;
+	~MLALF98Internal();
 
 	static MLALF98Internal *open(Audio::Mixer *mixer, EmuType emuType);
 	static void close();

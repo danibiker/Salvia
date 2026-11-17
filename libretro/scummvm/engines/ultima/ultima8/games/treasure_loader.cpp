@@ -40,7 +40,8 @@ void TreasureLoader::loadDefaults() {
 
 	// load default treasure types
 	lootkeyvals = config->listKeyValues("game", "treasure");
-	for (const auto &i : lootkeyvals) {
+	for (auto rfIt43 = lootkeyvals.begin(), rfEnd43 = lootkeyvals.end(); rfIt43 != rfEnd43; ++rfIt43) {
+		const auto &i = *rfIt43;
 		TreasureInfo ti;
 		bool ok = internalParse(i._value, ti, true);
 		if (ok) {

@@ -42,7 +42,7 @@ private:
 public:
 	CLASSDEF;
 	Status(TreeItem *parent);
-	~Status() override {}
+	~Status() {}
 
 	/**
 	 * Draw the contents

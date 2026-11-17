@@ -68,7 +68,7 @@ struct ChannelInfo {
 class SoundGenSarien : public SoundGen, public Audio::AudioStream {
 public:
 	SoundGenSarien(AgiBase *vm, Audio::Mixer *pMixer);
-	~SoundGenSarien() override;
+	~SoundGenSarien();
 
 	void play(int resnum) override;
 	void stop() override;

@@ -115,7 +115,7 @@ struct VolumeEntry {
 class AdLibSoundDriver : public PCSoundDriver {
 public:
 	AdLibSoundDriver(Audio::Mixer *mixer);
-	~AdLibSoundDriver() override;
+	~AdLibSoundDriver();
 
 	// PCSoundDriver interface
 	void setupChannel(int channel, const byte *data, int instrument, int volume) override;

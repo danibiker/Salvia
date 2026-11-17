@@ -37,7 +37,7 @@ namespace MystStacks {
 class Slides : public MystScriptParser {
 public:
 	explicit Slides(MohawkEngine_Myst *vm);
-	~Slides() override;
+	~Slides();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

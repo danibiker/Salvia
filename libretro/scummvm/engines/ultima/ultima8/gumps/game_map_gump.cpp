@@ -122,7 +122,8 @@ void GameMapGump::PaintThis(RenderSurface *surf, int32 lerp_factor, bool scaled)
 
 			if (!items) continue;
 
-			for (auto item : *items) {
+			for (auto rfIt125 = (*items).begin(), rfEnd125 = (*items).end(); rfIt125 != rfEnd125; ++rfIt125) {
+				auto item = *rfIt125;
 				if (!item) continue;
 
 				item->setupLerp(gametick);

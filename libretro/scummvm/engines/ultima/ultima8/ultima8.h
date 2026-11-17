@@ -164,7 +164,7 @@ protected:
 
 public:
 	Ultima8Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
-	~Ultima8Engine() override;
+	~Ultima8Engine();
 
 	void initializePath(const Common::FSNode &gamePath) override;
 

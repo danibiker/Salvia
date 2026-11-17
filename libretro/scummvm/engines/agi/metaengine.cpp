@@ -305,7 +305,8 @@ SaveStateList AgiMetaEngine::listSaves(const char *target) const {
 	filenames = saveFileMan->listSavefiles(pattern);
 
 	SaveStateList saveList;
-	for (const auto &file : filenames) {
+	for (auto rfIt308 = filenames.begin(), rfEnd308 = filenames.end(); rfIt308 != rfEnd308; ++rfIt308) {
+		const auto &file = *rfIt308;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		int slotNr = atoi(file.c_str() + file.size() - 3);
 

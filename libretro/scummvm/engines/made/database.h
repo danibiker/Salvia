@@ -177,7 +177,7 @@ protected:
 class GameDatabaseV2 : public GameDatabase {
 public:
 	GameDatabaseV2(MadeEngine *vm);
-	~GameDatabaseV2() override;
+	~GameDatabaseV2();
 	int16 *findObjectProperty(int16 objectIndex, int16 propertyId, int16 &propertyFlag) override;
 	const char *getString(uint16 offset) override;
 	bool getSavegameDescription(const char *filename, Common::String &description, int16 version) override;

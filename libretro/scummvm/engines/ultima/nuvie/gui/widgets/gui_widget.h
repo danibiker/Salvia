@@ -84,7 +84,7 @@ public:
 
 	GUI_Widget(void *data);
 	GUI_Widget(void *data, int x, int y, int w, int h);
-	~GUI_Widget() override;
+	~GUI_Widget();
 
 	int AddWidget(GUI_Widget *widget);
 

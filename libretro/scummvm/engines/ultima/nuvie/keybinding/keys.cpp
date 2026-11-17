@@ -483,16 +483,19 @@ Common::Array<Common::U32String> KeyBinder::buildKeyHelp() const {
 	Common::Array<Common::U32String> keyHelp;
 	Common::HashMap<Common::String, const Action*> keyActionMap;
 
-	for (const Action &action : NuvieActions) {
+	for (auto rfIt486 = &NuvieActions[0], rfEnd486 = &NuvieActions[0] + sizeof(NuvieActions) / sizeof(NuvieActions[0]); rfIt486 != rfEnd486; ++rfIt486) {
+		const Action &action = *rfIt486;
 		keyActionMap.setVal(action.kId, &action);
 	}
 
 	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
-	for (const Common::Keymap *map : keymapper->getKeymaps()) {
+	{ auto &rfRange491 = keymapper->getKeymaps(); for (auto rfIt491 = rfRange491.begin(), rfEnd491 = rfRange491.end(); rfIt491 != rfEnd491; ++rfIt491) {
+		const Common::Keymap *map = *rfIt491;
 		if (!map->isEnabled() || map->getType() != Common::Keymap::kKeymapTypeGame)
 			continue;
 
-		for (const Common::Action *action : map->getActions()) {
+		{ auto &rfRange495 = map->getActions(); for (auto rfIt495 = rfRange495.begin(), rfEnd495 = rfRange495.end(); rfIt495 != rfEnd495; ++rfIt495) {
+			const Common::Action *action = *rfIt495;
 			if (keyActionMap.contains(action->id) &&
 					keyActionMap[action->id]->keyVisibility != Action::KeyNormal)
 				continue;
@@ -508,8 +511,8 @@ Common::Array<Common::U32String> KeyBinder::buildKeyHelp() const {
 				desc += Common::U32String(" - ") + action->description;
 				keyHelp.push_back(desc);
 			}
-		}
-	}
+		} }
+	} }
 
 	return keyHelp;
 }
@@ -517,7 +520,8 @@ Common::Array<Common::U32String> KeyBinder::buildKeyHelp() const {
 void KeyBinder::ShowKeys() const {
 	Common::Array<Common::U32String> keyHelp = buildKeyHelp();
 	Common::U32String helpStr;
-	for (const Common::U32String &help : keyHelp) {
+	for (auto rfIt520 = keyHelp.begin(), rfEnd520 = keyHelp.end(); rfIt520 != rfEnd520; ++rfIt520) {
+		const Common::U32String &help = *rfIt520;
 		helpStr += Common::U32String("\n") + help;
 	}
 	KeyHelpDialog helpDialog(helpStr);
@@ -712,10 +716,11 @@ void KeyBinder::LoadFromPatch() { // FIXME default should probably be system spe
 
 // codes used in keybindings-files. (use uppercase here)
 void KeyBinder::FillParseMaps() {
-	for (const KeycodeString keycodeStr : KeycodeStringTable)
-		_keys[keycodeStr.s] = keycodeStr.k;
+	for (auto rfIt715 = &KeycodeStringTable[0], rfEnd715 = &KeycodeStringTable[0] + sizeof(KeycodeStringTable) / sizeof(KeycodeStringTable[0]); rfIt715 != rfEnd715; ++rfIt715)
+		{ const KeycodeString keycodeStr = *rfIt715; _keys[keycodeStr.s] = keycodeStr.k; }
 
-	for (const Action &action : NuvieActions) {
+	for (auto rfIt718 = &NuvieActions[0], rfEnd718 = &NuvieActions[0] + sizeof(NuvieActions) / sizeof(NuvieActions[0]); rfIt718 != rfEnd718; ++rfIt718) {
+		const Action &action = *rfIt718;
 		const Common::String keyId(action.kId);
 		_actions[keyId] = &action;
 		ActionType at;
@@ -724,7 +729,8 @@ void KeyBinder::FillParseMaps() {
 		_actionsHashed[keyId.hash()] = at;
 	}
 
-	for (const char *perMemberAction : PerPartyMemberActions) {
+	for (auto rfIt727 = &PerPartyMemberActions[0], rfEnd727 = &PerPartyMemberActions[0] + sizeof(PerPartyMemberActions) / sizeof(PerPartyMemberActions[0]); rfIt727 != rfEnd727; ++rfIt727) {
+		const char *perMemberAction = *rfIt727;
 		if (!_actions.contains(perMemberAction))
 			error("No base definition for per-party-member action %s", perMemberAction);
 		for (int i = 1; i <= 9; i++) {

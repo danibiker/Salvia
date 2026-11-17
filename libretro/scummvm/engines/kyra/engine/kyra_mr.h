@@ -44,7 +44,7 @@ friend class TextDisplayer_MR;
 friend class GUI_MR;
 public:
 	KyraEngine_MR(OSystem *system, const GameFlags &flags);
-	~KyraEngine_MR() override;
+	~KyraEngine_MR();
 
 	// Regarding pausing of the engine:
 	// Idle animation time, item animations and album animations should be taken

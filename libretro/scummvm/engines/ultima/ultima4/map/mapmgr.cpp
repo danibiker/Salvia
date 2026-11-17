@@ -61,7 +61,8 @@ MapMgr::MapMgr() {
 	Map *map;
 
 	Common::Array<ConfigElement> maps = config->getElement("maps").getChildren();
-	for (const auto &i : maps) {
+	for (auto rfIt64 = maps.begin(), rfEnd64 = maps.end(); rfIt64 != rfEnd64; ++rfIt64) {
+		const auto &i = *rfIt64;
 		map = initMapFromConf(i);
 
 		// Map actually gets loaded later, when it's needed
@@ -70,8 +71,8 @@ MapMgr::MapMgr() {
 }
 
 MapMgr::~MapMgr() {
-	for (auto *i : _mapList)
-		delete i;
+	for (auto rfIt73 = _mapList.begin(), rfEnd73 = _mapList.end(); rfIt73 != rfEnd73; ++rfIt73)
+		{ auto *i = *rfIt73; delete i; }
 }
 
 void MapMgr::unloadMap(MapId id) {
@@ -79,7 +80,8 @@ void MapMgr::unloadMap(MapId id) {
 	const Config *config = Config::getInstance();
 	Common::Array<ConfigElement> maps = config->getElement("maps").getChildren();
 
-	for (const auto &i : maps) {
+	for (auto rfIt82 = maps.begin(), rfEnd82 = maps.end(); rfIt82 != rfEnd82; ++rfIt82) {
+		const auto &i = *rfIt82;
 		if (id == static_cast<MapId>(i.getInt("id"))) {
 			Map *map = initMapFromConf(i);
 			_mapList[id] = map;
@@ -188,7 +190,8 @@ Map *MapMgr::initMapFromConf(const ConfigElement &mapConf) {
 	map->_tileMap = g_tileMaps->get(mapConf.getString("tilemap"));
 
 	Common::Array<ConfigElement> children = mapConf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt191 = children.begin(), rfEnd191 = children.end(); rfIt191 != rfEnd191; ++rfIt191) {
+		const auto &i = *rfIt191;
 		if (i.getName() == "city") {
 			City *city = dynamic_cast<City *>(map);
 			assert(city);
@@ -222,7 +225,8 @@ void MapMgr::initCityFromConf(const ConfigElement &cityConf, City *city) {
 	city->_tlkFname = cityConf.getString("tlk_fname");
 
 	Common::Array<ConfigElement> children = cityConf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt225 = children.begin(), rfEnd225 = children.end(); rfIt225 != rfEnd225; ++rfIt225) {
+		const auto &i = *rfIt225;
 		if (i.getName() == "personrole")
 			city->_personRoles.push_back(initPersonRoleFromConf(i));
 	}
@@ -310,7 +314,8 @@ Portal *MapMgr::initPortalFromConf(const ConfigElement &portalConf) {
 	portal->_tile = portalConf.exists("tile") ? portalConf.getInt("tile") : -1;
 
 	Common::Array<ConfigElement> children = portalConf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt313 = children.begin(), rfEnd313 = children.end(); rfIt313 != rfEnd313; ++rfIt313) {
+		const auto &i = *rfIt313;
 		if (i.getName() == "retroActiveDest") {
 			portal->_retroActiveDest = new PortalDestination();
 

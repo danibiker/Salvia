@@ -44,7 +44,7 @@ public:
 
 	MiniMapGump();
 	MiniMapGump(int x, int y);
-	~MiniMapGump() override;
+	~MiniMapGump();
 
 	void run() override;
 

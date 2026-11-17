@@ -38,7 +38,7 @@ namespace MystStacks {
 class Selenitic : public MystScriptParser {
 public:
 	explicit Selenitic(MohawkEngine_Myst *vm);
-	~Selenitic() override;
+	~Selenitic();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

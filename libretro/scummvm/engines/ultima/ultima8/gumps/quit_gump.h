@@ -36,7 +36,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	QuitGump();
-	~QuitGump() override;
+	~QuitGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 

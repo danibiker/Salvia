@@ -34,7 +34,7 @@ namespace Kyra {
 class AUDStream : public Audio::SeekableAudioStream {
 public:
 	AUDStream(Common::SeekableReadStream* stream);
-	~AUDStream() override;
+	~AUDStream();
 
 	int readBuffer(int16* buffer, const int numSamples) override;
 

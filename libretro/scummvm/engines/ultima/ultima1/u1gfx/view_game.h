@@ -76,7 +76,7 @@ private:
 public:
 	CLASSDEF;
 	ViewGame(TreeItem *parent = nullptr);
-	~ViewGame() override;
+	~ViewGame();
 
 	/**
 	 * Draw the game screen

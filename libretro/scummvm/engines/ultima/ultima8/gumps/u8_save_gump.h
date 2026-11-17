@@ -39,7 +39,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	U8SaveGump(bool save, int page);
-	~U8SaveGump() override;
+	~U8SaveGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 	void Close(bool no_del = false) override;

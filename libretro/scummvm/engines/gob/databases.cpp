@@ -33,7 +33,7 @@
 
 namespace Gob {
 
-TranslationDatabases::TranslationDatabases() {
+TranslationDatabases::TranslationDatabases() : _encodingIsOEM(true) {
 }
 
 TranslationDatabases::~TranslationDatabases() {
@@ -181,8 +181,8 @@ bool TranslationDatabases::buildMap(const dBase &db, Common::StringMap &map) con
 }
 
 Database::~Database() {
-	for (auto &node : _tables)
-		delete node._value;
+	for (auto rfIt184 = _tables.begin(), rfEnd184 = _tables.end(); rfIt184 != rfEnd184; ++rfIt184)
+		{ auto &node = *rfIt184; delete node._value; }
 }
 
 bool Database::openTable(const Common::String &id, const Common::Path &file) {

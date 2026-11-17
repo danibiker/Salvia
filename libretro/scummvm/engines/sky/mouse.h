@@ -25,6 +25,7 @@
 
 #include "common/scummsys.h"
 #include "common/hashmap.h"
+#include "sky/screen.h"
 
 class OSystem;
 
@@ -83,7 +84,6 @@ class Text;
 class Screen;
 class Control;
 struct Compact;
-enum UIIcon : uint8;
 
 class Mouse {
 
@@ -192,11 +192,11 @@ protected:
 	uint16	_invW; // inventory bounds w
 	uint16	_invH; // inventory bounds h
 
-	bool	_actionFlash = false; // clicked on action icon flasher
-	int		_actionFlashTime = 0; // counts down
-	int		_actionFlashIcon = 0;
-	int		_actionFlashX = 0;
-	int		_actionFlashY = 0;
+	bool	_actionFlash; // clicked on action icon flasher
+	int		_actionFlashTime; // counts down
+	int		_actionFlashIcon;
+	int		_actionFlashX;
+	int		_actionFlashY;
 	void initExitIcon(uint32 type, int iconx, int icony);
 
 

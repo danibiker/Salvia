@@ -87,7 +87,7 @@ public:
 	EventsManager *_events;
 public:
 	UltimaEarlyEngine(OSystem *syst, const UltimaGameDescription *gameDesc);
-	~UltimaEarlyEngine() override;
+	~UltimaEarlyEngine();
 
 	/**
 	 * Main method for running the game

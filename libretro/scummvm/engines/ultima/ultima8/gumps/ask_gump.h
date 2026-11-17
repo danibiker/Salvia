@@ -41,7 +41,7 @@ public:
 
 	AskGump();
 	AskGump(uint16 owner, UCList *answers);
-	~AskGump() override;
+	~AskGump();
 
 	// Init the gump, call after construction
 	void        InitGump(Gump *newparent, bool take_focus = true) override;

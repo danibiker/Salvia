@@ -31,7 +31,7 @@ class NeverhoodEngine;
 class Console : public GUI::Debugger {
 public:
 	Console(NeverhoodEngine *vm);
-	~Console(void) override;
+	~Console(void);
 
 private:
 	NeverhoodEngine *_vm;

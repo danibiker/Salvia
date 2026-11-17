@@ -335,7 +335,8 @@ void Actor::add_surrounding_obj(Obj *obj) {
 void Actor::unlink_surrounding_objects(bool make_objects_temporary) {
 //	if(make_objects_temporary)
 	{
-		for (Obj *obj : surrounding_objects) {
+		for (auto rfIt338 = surrounding_objects.begin(), rfEnd338 = surrounding_objects.end(); rfIt338 != rfEnd338; ++rfIt338) {
+			Obj *obj = *rfIt338;
 			if (make_objects_temporary)
 				obj->set_temporary();
 			obj->set_actor_obj(false);
@@ -1413,7 +1414,8 @@ void Actor::clear() {
 void Actor::show() {
 	visible_flag = true;
 
-	for (Obj *obj : surrounding_objects) {
+	for (auto rfIt1416 = surrounding_objects.begin(), rfEnd1416 = surrounding_objects.end(); rfIt1416 != rfEnd1416; ++rfIt1416) {
+		Obj *obj = *rfIt1416;
 		obj->set_invisible(false);
 	}
 
@@ -1422,7 +1424,8 @@ void Actor::show() {
 void Actor::hide() {
 	visible_flag = false;
 
-	for (Obj *obj : surrounding_objects) {
+	for (auto rfIt1425 = surrounding_objects.begin(), rfEnd1425 = surrounding_objects.end(); rfIt1425 != rfEnd1425; ++rfIt1425) {
+		Obj *obj = *rfIt1425;
 		obj->set_invisible(true);
 	}
 }
@@ -1956,9 +1959,9 @@ bool Actor::doesOccupyLocation(uint16 lx, uint16 ly, uint8 lz, bool incDoubleTil
 	NotFound:
 
 	if (incSurroundingObjs)
-		for (const Obj *obj : surrounding_objects)
-			if (obj && obj->x == WRAPPED_COORD(lx, lz) && obj->y == WRAPPED_COORD(ly, lz) && obj->z == lz)
-				return true;
+		for (auto rfIt1959 = surrounding_objects.begin(), rfEnd1959 = surrounding_objects.end(); rfIt1959 != rfEnd1959; ++rfIt1959)
+			{ const Obj *obj = *rfIt1959; if (obj && obj->x == WRAPPED_COORD(lx, lz) && obj->y == WRAPPED_COORD(ly, lz) && obj->z == lz)
+				return true; }
 
 	return false;
 }

@@ -37,7 +37,7 @@ namespace MystStacks {
 class Channelwood : public MystScriptParser {
 public:
 	explicit Channelwood(MohawkEngine_Myst *vm);
-	~Channelwood() override;
+	~Channelwood();
 
 	void disablePersistentScripts() override;
 	void runPersistentScripts() override;

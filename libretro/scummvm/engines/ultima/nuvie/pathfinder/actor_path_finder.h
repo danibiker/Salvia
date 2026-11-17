@@ -36,7 +36,7 @@ protected:
 
 public:
 	ActorPathFinder(Actor *a, MapCoord g);
-	~ActorPathFinder() override;
+	~ActorPathFinder();
 	void set_actor(Actor *a);
 
 	virtual bool update_location(); /* get location from actor (use any time) */

@@ -81,7 +81,7 @@ public:
 class MystOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	MystOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~MystOptionsWidget() override;
+	~MystOptionsWidget();
 
 	// Widget API
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
@@ -112,7 +112,7 @@ private:
 class MystMenuDialog : public MainMenuDialog {
 public:
 	MystMenuDialog(Engine *engine);
-	~MystMenuDialog() override;
+	~MystMenuDialog();
 
 	// MainMenuDialog API
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
@@ -125,7 +125,7 @@ public:
 class RivenOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	explicit RivenOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~RivenOptionsWidget() override;
+	~RivenOptionsWidget();
 
 	// OptionsContainerWidget API
 	void load() override;
@@ -146,7 +146,7 @@ private:
 class MohawkDefaultOptionsWidget : public GUI::OptionsContainerWidget {
 public:
 	MohawkDefaultOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
-	~MohawkDefaultOptionsWidget() override;
+	~MohawkDefaultOptionsWidget();
 
 	// OptionsContainerWidget API
 	void load() override;

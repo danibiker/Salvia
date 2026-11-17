@@ -104,7 +104,7 @@ struct AdLibSoundInstrument {
 class AdLibSoundDriver : public PCSoundDriver {
 public:
 	AdLibSoundDriver(Audio::Mixer *mixer);
-	~AdLibSoundDriver() override;
+	~AdLibSoundDriver();
 
 	MusicType musicType() const override { return MT_ADLIB; }
 	// PCSoundDriver interface
@@ -192,7 +192,7 @@ protected:
 class MidiSoundDriverH32 : public PCSoundDriver {
 public:
 	MidiSoundDriverH32(MidiDriver *output);
-	~MidiSoundDriverH32() override;
+	~MidiSoundDriverH32();
 
 	MusicType musicType() const override { return MT_MT32; }
 	void setUpdateCallback(UpdateCallback upCb, void *ref) override;

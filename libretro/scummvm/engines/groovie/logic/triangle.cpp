@@ -888,11 +888,16 @@ void TriangleGame::test() {
 	for (uint32 i = 200; i < 205; i++)
 		testPlayRandomly(i);
 
-	testGame(1, {24, 32, 30, 42, 37, 53, 45, 39, 19, 47, 20, 56, 55, 59, 36, 49, 29, 46, 23, 38, 18}, true);
-	testGame(1, {24, 32, 30, 42, 37, 53, 19, 39, 45, 47, 46, 59, 56, 49, 38, 48, 31, 40, 25, 50, 20}, true);
-	testGame(2, {24, 31, 33, 38, 43, 46, 16, 41, 54, 52, 64, 61, 53, 37, 42, 51, 32, 40, 23, 60, 15}, true);
-	testGame(2, {24, 31, 33, 38, 43, 46, 16, 41, 53, 52, 64, 61, 54, 37, 34, 50, 25, 36, 17, 0, 10}, true);
-	testGame(40680, {0, 24, 1, 12, 2, 4, 3, 5, 6, 30, 7, 9, 8, 29, 10, 13, 11, 47, 14, 18, 20, 37, 19, 36, 27, 57, 26, 31}, false);
+	static const uint8 kTestMoves1[] = {24, 32, 30, 42, 37, 53, 45, 39, 19, 47, 20, 56, 55, 59, 36, 49, 29, 46, 23, 38, 18};
+	testGame(1, Common::Array<uint8>(kTestMoves1, ARRAYSIZE(kTestMoves1)), true);
+	static const uint8 kTestMoves2[] = {24, 32, 30, 42, 37, 53, 19, 39, 45, 47, 46, 59, 56, 49, 38, 48, 31, 40, 25, 50, 20};
+	testGame(1, Common::Array<uint8>(kTestMoves2, ARRAYSIZE(kTestMoves2)), true);
+	static const uint8 kTestMoves3[] = {24, 31, 33, 38, 43, 46, 16, 41, 54, 52, 64, 61, 53, 37, 42, 51, 32, 40, 23, 60, 15};
+	testGame(2, Common::Array<uint8>(kTestMoves3, ARRAYSIZE(kTestMoves3)), true);
+	static const uint8 kTestMoves4[] = {24, 31, 33, 38, 43, 46, 16, 41, 53, 52, 64, 61, 54, 37, 34, 50, 25, 36, 17, 0, 10};
+	testGame(2, Common::Array<uint8>(kTestMoves4, ARRAYSIZE(kTestMoves4)), true);
+	static const uint8 kTestMoves5[] = {0, 24, 1, 12, 2, 4, 3, 5, 6, 30, 7, 9, 8, 29, 10, 13, 11, 47, 14, 18, 20, 37, 19, 36, 27, 57, 26, 31};
+	testGame(40680, Common::Array<uint8>(kTestMoves5, ARRAYSIZE(kTestMoves5)), false);
 
 	_random.setSeed(oldSeed);
 	warning("finished TriangleGame::test");

@@ -210,7 +210,8 @@ RenderedText *TTFont::renderText(const Common::String &text, unsigned int &remai
 	Graphics::ManagedSurface *texture = new Graphics::ManagedSurface(resultWidth, resultHeight, _PF_RGBA);
 	uint32 *texBuf = (uint32 *)texture->getPixels();
 
-	for (const auto &line : lines) {
+	for (auto rfIt213 = lines.begin(), rfEnd213 = lines.end(); rfIt213 != rfEnd213; ++rfIt213) {
+		const auto &line = *rfIt213;
 		// convert to unicode
 		Common::U32String unicodeText;
 		if (!_SJIS)

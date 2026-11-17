@@ -41,7 +41,7 @@ enum RectState {
 class MystGraphics : public GraphicsManager {
 public:
 	explicit MystGraphics(MohawkEngine_Myst *vm);
-	~MystGraphics() override;
+	~MystGraphics();
 
 	void copyImageSectionToScreen(uint16 image, Common::Rect src, Common::Rect dest);
 	void copyImageSectionToBackBuffer(uint16 image, Common::Rect src, Common::Rect dest);

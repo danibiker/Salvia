@@ -108,19 +108,19 @@ class SwordEngine : public Engine {
 
 public:
 	SwordEngine(OSystem *syst, const ADGameDescription *gameDesc);
-	~SwordEngine() override;
+	~SwordEngine();
 	static SystemVars _systemVars;
 	void reinitialize();
 
 	uint32 _features;
 
-	int _inTimer = -1; // Is the timer running?
-	int32 _vbl60HzUSecElapsed = 0; // 60 Hz counter for palette fades
-	int _vblCount = 0; // How many vblCallback calls have been made?
-	int _rate = DEFAULT_FRAME_TIME / 10;
-	int _targetFrameTime = DEFAULT_FRAME_TIME;
-	uint32 _mainLoopFrameCount = 0;
-	uint32 _ticker = 0; // For the frame time shown within the debug text
+	int _inTimer; // Is the timer running?
+	int32 _vbl60HzUSecElapsed; // 60 Hz counter for palette fades
+	int _vblCount; // How many vblCallback calls have been made?
+	int _rate;
+	int _targetFrameTime;
+	uint32 _mainLoopFrameCount;
+	uint32 _ticker; // For the frame time shown within the debug text
 
 	bool mouseIsActive();
 

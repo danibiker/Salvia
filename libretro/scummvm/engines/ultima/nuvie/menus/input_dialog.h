@@ -46,7 +46,7 @@ protected:
 
 public:
 	InputDialog(GUI_CallBack *callback);
-	~InputDialog() override;
+	~InputDialog();
 	bool init();
 
 	GUI_status close_dialog();

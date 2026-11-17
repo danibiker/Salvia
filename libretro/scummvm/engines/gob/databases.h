@@ -58,7 +58,7 @@ private:
 	DBMap _databases;
 
 	Common::String _language;
-	bool _encodingIsOEM = true;
+	bool _encodingIsOEM;
 
 	int findField(const dBase &db, const Common::String &field, dBase::Type type) const;
 	bool buildMap(const dBase &db, Common::StringMap &map) const;

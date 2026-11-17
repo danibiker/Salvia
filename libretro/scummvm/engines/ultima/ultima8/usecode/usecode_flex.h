@@ -31,7 +31,7 @@ namespace Ultima8 {
 class UsecodeFlex : public Usecode, protected RawArchive {
 public:
 	UsecodeFlex(Common::SeekableReadStream *rs) : RawArchive(rs) { }
-	~UsecodeFlex() override { }
+	~UsecodeFlex() { }
 
 	const uint8 *get_class(uint32 classid) override;
 	uint32 get_class_size(uint32 classid) override;

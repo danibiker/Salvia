@@ -34,7 +34,7 @@ class CineEngine;
 class CineConsole : public GUI::Debugger {
 public:
 	CineConsole(CineEngine *vm);
-	~CineConsole(void) override;
+	~CineConsole(void);
 
 private:
 	CineEngine *_vm;

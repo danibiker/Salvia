@@ -57,7 +57,7 @@ protected:
 public:
 
 	View(const Configuration *cfg);
-	~View() override;
+	~View();
 
 	bool init(uint16 x, uint16 y, Font *f, Party *p, TileManager *tm, ObjManager *om);
 

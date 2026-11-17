@@ -31,7 +31,7 @@ class DrasculaEngine;
 class Console : public GUI::Debugger {
 public:
 	Console(DrasculaEngine *vm);
-	~Console(void) override;
+	~Console(void);
 
 private:
 	DrasculaEngine *_vm;

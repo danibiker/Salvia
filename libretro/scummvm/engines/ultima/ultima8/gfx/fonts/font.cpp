@@ -341,7 +341,8 @@ Common::List<PositionedText> typesetText(Font *font,
 	totalheight += font->getHeight();
 
 	// fixup x coordinates of lines
-	for (auto &l : lines) {
+	for (auto rfIt344 = lines.begin(), rfEnd344 = lines.end(); rfIt344 != rfEnd344; ++rfIt344) {
+		auto &l = *rfIt344;
 		switch (align) {
 		case Font::TEXT_LEFT:
 			break;

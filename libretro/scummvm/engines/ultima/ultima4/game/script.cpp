@@ -129,7 +129,8 @@ Script::~Script() {
 	// Smart pointers anyone?
 
 	// Clean variables
-	for (auto &item : _variables) {
+	for (auto rfIt132 = _variables.begin(), rfEnd132 = _variables.end(); rfIt132 != rfEnd132; ++rfIt132) {
+		auto &item = *rfIt132;
 		delete item._value;
 	}
 }

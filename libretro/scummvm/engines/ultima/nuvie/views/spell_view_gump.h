@@ -47,7 +47,7 @@ class SpellViewGump : public SpellView {
 	NuvieBmpFile bmp;
 public:
 	SpellViewGump(const Configuration *cfg);
-	~SpellViewGump() override;
+	~SpellViewGump();
 
 	bool init(Screen *tmp_screen, void *view_manager, uint16 x, uint16 y, Font *f, Party *p, TileManager *tm, ObjManager *om) override;
 

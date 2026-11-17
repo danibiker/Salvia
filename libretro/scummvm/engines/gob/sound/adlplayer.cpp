@@ -203,7 +203,8 @@ bool ADLPlayer::readHeader(Common::SeekableReadStream &adl, int &timbreCount) {
 
 bool ADLPlayer::readTimbres(Common::SeekableReadStream &adl, int timbreCount) {
 	_timbres.resize(timbreCount);
-	for (auto &timbre : _timbres) {
+	for (auto rfIt206 = _timbres.begin(), rfEnd206 = _timbres.end(); rfIt206 != rfEnd206; ++rfIt206) {
+		auto &timbre = *rfIt206;
 		for (int i = 0; i < (kOperatorsPerVoice * kParamCount); i++)
 			timbre.startParams[i] = adl.readUint16LE();
 	}

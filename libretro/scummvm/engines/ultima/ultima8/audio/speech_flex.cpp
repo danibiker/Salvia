@@ -80,7 +80,8 @@ int SpeechFlex::getIndexForPhrase(const Common::String &phrase,
 
 	debug(6, "Looking for string: \"%s\"", text.c_str());
 
-	for (const auto &p : _phrases) {
+	for (auto rfIt83 = _phrases.begin(), rfEnd83 = _phrases.end(); rfIt83 != rfEnd83; ++rfIt83) {
+		const auto &p = *rfIt83;
 		if (!p.empty() && text.hasPrefixIgnoreCase(p)) {
 			debug(6, "Found: %d", i);
 			end = p.size() + start + pos1;

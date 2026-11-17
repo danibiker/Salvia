@@ -32,7 +32,7 @@ class ShapeFont;
 class JPFont : public Font {
 public:
 	JPFont(ShapeFont *jpfont, unsigned int fontnum);
-	~JPFont() override;
+	~JPFont();
 
 	int getWidth(int c);
 

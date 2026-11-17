@@ -30,7 +30,7 @@ namespace Agi {
 class SoundGenCoCo3 : public SoundGen {
 public:
 	SoundGenCoCo3(AgiBase *vm, Audio::Mixer *pMixer);
-	~SoundGenCoCo3() override;
+	~SoundGenCoCo3();
 
 	void play(int resnum) override;
 	void stop() override;

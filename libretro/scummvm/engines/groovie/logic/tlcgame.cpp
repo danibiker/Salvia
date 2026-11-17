@@ -170,8 +170,8 @@ void TlcGame::regionsInit() {
 	// Read header for each question entry
 	_regionHeader = new TlcRegionsHeader[_numRegionHeaders];
 	for (int i = 0; i < _numRegionHeaders; i++) {
-		regionsfile->read(_regionHeader[i].name, sizeof(TlcRegionsHeader::name));
-		regionsfile->seek(25 - sizeof(TlcRegionsHeader::name), SEEK_CUR);
+		regionsfile->read(_regionHeader[i].name, sizeof(((TlcRegionsHeader *)0)->name));
+		regionsfile->seek(25 - sizeof(((TlcRegionsHeader *)0)->name), SEEK_CUR);
 		_regionHeader[i].numAnswers = regionsfile->readUint32LE();
 		_regionHeader[i].offset = regionsfile->readUint32LE();
 	}
@@ -201,12 +201,12 @@ void TlcGame::regionsLoad() {
 
 	// Get length of question name from variables
 	int nameLen = _scriptVariables[0x1B] * 10 + _scriptVariables[0x1C];
-	if (nameLen >= ARRAYSIZE(TlcRegionsHeader::name)) {
+	if (nameLen >= ARRAYSIZE(((TlcRegionsHeader *)0)->name)) {
 		error("TLC:RegionsLoad: Name to long for loadRegions!");
 	}
 
 	// Decoded and copy name from variables
-	char questName[sizeof(TlcRegionsHeader::name)];
+	char questName[sizeof(((TlcRegionsHeader *)0)->name)];
 	for (int i = 0; i < nameLen; i++) {
 		setScriptVar(0x1D + i, _scriptVariables[0x1D + i] + 0x30);
 		questName[i] = _scriptVariables[0x1D + i];

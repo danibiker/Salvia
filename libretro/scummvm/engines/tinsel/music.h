@@ -125,7 +125,7 @@ private:
 class PCMMusicPlayer : public Audio::AudioStream {
 public:
 	PCMMusicPlayer();
-	~PCMMusicPlayer() override;
+	~PCMMusicPlayer();
 
 	bool isPlaying() const;
 

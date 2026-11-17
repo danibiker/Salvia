@@ -43,7 +43,7 @@ public:
 class SoundFlex : protected Archive {
 public:
 	SoundFlex(Common::SeekableReadStream *rs);
-	~SoundFlex() override;
+	~SoundFlex();
 
 	//! Get an audiosample
 	AudioSample *getSample(uint32 index);

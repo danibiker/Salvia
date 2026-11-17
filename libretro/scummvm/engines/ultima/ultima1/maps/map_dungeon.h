@@ -70,7 +70,7 @@ public:
 public:
 	MapDungeon(Ultima1Game *game, Ultima1Map *map) : MapBase(game, map), _random("UltimaDungeons"),
 		_dungeonLevel(0), _dungeonExitHitPoints(0) {}
-	~MapDungeon() override {}
+	~MapDungeon() {}
 
 	/**
 	 * Handles loading and saving viewport

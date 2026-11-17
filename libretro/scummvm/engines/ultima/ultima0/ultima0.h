@@ -54,7 +54,7 @@ public:
 	MusicPlayer *_music = nullptr;
 
 	Ultima0Engine(OSystem *syst, const Ultima::UltimaGameDescription *gameDesc);
-	~Ultima0Engine() override;
+	~Ultima0Engine();
 
 	/**
 	 * Returns true if the game should quit

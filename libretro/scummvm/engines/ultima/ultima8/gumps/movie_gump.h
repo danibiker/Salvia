@@ -42,7 +42,7 @@ public:
 			  bool introMusicHack = false, bool noScale = false,
 			  const byte *overridePal = nullptr,
 	          uint32 flags = FLAG_PREVENT_SAVE, int32 layer = LAYER_MODAL);
-	~MovieGump() override;
+	~MovieGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 

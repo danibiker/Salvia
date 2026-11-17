@@ -82,7 +82,8 @@ bool PsxArchive::hasFile(const Common::Path &path) const {
 }
 
 int PsxArchive::listMembers(Common::ArchiveMemberList &list) const {
-	for (const auto &file : _map) {
+	for (auto rfIt85 = _map.begin(), rfEnd85 = _map.end(); rfIt85 != rfEnd85; ++rfIt85) {
+		const auto &file = *rfIt85;
 		list.push_back(getMember(file._key));
     }
 

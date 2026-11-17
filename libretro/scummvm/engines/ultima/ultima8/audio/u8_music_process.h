@@ -79,7 +79,7 @@ private:
 public:
 	U8MusicProcess();
 	U8MusicProcess(MidiPlayer *player); // Note that this does NOT delete the driver
-	~U8MusicProcess() override;
+	~U8MusicProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

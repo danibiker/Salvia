@@ -40,7 +40,7 @@ public:
 		_shapes.push_back(shape);
 		_count = 1;
 	}
-	~MouseShapeArchive() override {
+	~MouseShapeArchive() {
 		_shapes.clear();
 	}
 

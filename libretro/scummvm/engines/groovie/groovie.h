@@ -118,7 +118,7 @@ public:
 	static const int AUTOSAVE_SLOT;
 
 	GroovieEngine(OSystem *syst, const GroovieGameDescription *gd);
-	~GroovieEngine() override;
+	~GroovieEngine();
 
 	Common::Platform getPlatform() const;
 	EngineVersion getEngineVersion() const;

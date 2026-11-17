@@ -44,7 +44,8 @@ typedef CruiseEngine::MemInfo MemInfo;
 void MemoryList() {
 	if (!_vm->_memList.empty()) {
 		debug("Current list of un-freed memory blocks:");
-		for (auto &m : _vm->_memList) {
+		for (auto rfIt47 = _vm->_memList.begin(), rfEnd47 = _vm->_memList.end(); rfIt47 != rfEnd47; ++rfIt47) {
+			auto &m = *rfIt47;
 			debug("%s - %d", m->fname, m->lineNum);
 		}
 	}

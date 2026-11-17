@@ -118,7 +118,7 @@ class PathFinding;
 class ToonEngine : public Engine {
 public:
 	ToonEngine(OSystem *syst, const ADGameDescription *gameDescription);
-	~ToonEngine() override;
+	~ToonEngine();
 
 	const ADGameDescription *_gameDescription;
 	Common::Language _language;

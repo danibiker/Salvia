@@ -56,7 +56,7 @@ class ContainerViewGump : public DraggableView {
 
 public:
 	ContainerViewGump(const Configuration *cfg);
-	~ContainerViewGump() override;
+	~ContainerViewGump();
 
 	bool init(Screen *tmp_screen, void *view_manager, uint16 x, uint16 y, Font *f, Party *p, TileManager *tm, ObjManager *om, Obj *container_obj_type);
 

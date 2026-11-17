@@ -148,7 +148,7 @@ protected:
 class AsScene2207Elevator : public AnimatedSprite {
 public:
 	AsScene2207Elevator(NeverhoodEngine *vm, Scene *parentScene);
-	~AsScene2207Elevator() override;
+	~AsScene2207Elevator();
 protected:
 	Scene *_parentScene;
 	NPointArray *_pointArray;
@@ -176,7 +176,7 @@ protected:
 class AsScene2207WallRobotAnimation : public AnimatedSprite {
 public:
 	AsScene2207WallRobotAnimation(NeverhoodEngine *vm, Scene *parentScene);
-	~AsScene2207WallRobotAnimation() override;
+	~AsScene2207WallRobotAnimation();
 protected:
 	bool _idle;
 	uint32 handleMessage(int messageNum, const MessageParam &param, Entity *sender);
@@ -229,7 +229,7 @@ protected:
 class KmScene2206 : public Klaymen {
 public:
 	KmScene2206(NeverhoodEngine *vm, Scene *parentScene, int16 x, int16 y);
-	~KmScene2206() override;
+	~KmScene2206();
 protected:
 	void stRidePlatformDown();
 	void suRidePlatformDown();

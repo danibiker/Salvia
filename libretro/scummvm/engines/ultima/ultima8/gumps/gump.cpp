@@ -57,7 +57,8 @@ Gump::~Gump() {
 	_focusChild = nullptr;
 
 	// Delete all children
-	for (auto *g : _children) {
+	for (auto rfIt60 = _children.begin(), rfEnd60 = _children.end(); rfIt60 != rfEnd60; ++rfIt60) {
+		auto *g = *rfIt60;
 		delete g;
 	}
 }
@@ -128,7 +129,8 @@ void Gump::Close(bool no_del) {
 }
 
 void Gump::RenderSurfaceChanged() {
-	for (auto *g : _children) {
+	for (auto rfIt131 = _children.begin(), rfEnd131 = _children.end(); rfIt131 != rfEnd131; ++rfIt131) {
+		auto *g = *rfIt131;
 		g->RenderSurfaceChanged();
 	}
 }
@@ -248,7 +250,8 @@ void Gump::PaintThis(RenderSurface *surf, int32 /*lerp_factor*/, bool /*scaled*/
 }
 
 void Gump::PaintChildren(RenderSurface *surf, int32 lerp_factor, bool scaled) {
-	for (auto *g : _children) {
+	for (auto rfIt251 = _children.begin(), rfEnd251 = _children.end(); rfIt251 != rfEnd251; ++rfIt251) {
+		auto *g = *rfIt251;
 		// Paint if not closing
 		if (!(g->_flags & FLAG_CLOSING))
 			g->Paint(surf, lerp_factor, scaled);
@@ -508,7 +511,8 @@ Gump *Gump::FindGump(const FindGumpPredicate predicate, bool recursive) {
 	if (predicate(this))
 		return this;
 
-	for (auto *g : _children) {
+	for (auto rfIt511 = _children.begin(), rfEnd511 = _children.end(); rfIt511 != rfEnd511; ++rfIt511) {
+		auto *g = *rfIt511;
 		// Not if closing
 		if (g->_flags & FLAG_CLOSING)
 			continue;
@@ -521,7 +525,8 @@ Gump *Gump::FindGump(const FindGumpPredicate predicate, bool recursive) {
 		return nullptr;
 
 	// Recursive Iterate all children
-	for (auto *g : _children) {
+	for (auto rfIt524 = _children.begin(), rfEnd524 = _children.end(); rfIt524 != rfEnd524; ++rfIt524) {
+		auto *g = *rfIt524;
 		// Not if closing
 		if (g->_flags & FLAG_CLOSING)
 			continue;
@@ -778,7 +783,8 @@ void Gump::saveData(Common::WriteStream *ws) {
 	ws->writeUint32LE(_processResult);
 
 	unsigned int childcount = 0;
-	for (auto *g : _children) {
+	for (auto rfIt781 = _children.begin(), rfEnd781 = _children.end(); rfIt781 != rfEnd781; ++rfIt781) {
+		auto *g = *rfIt781;
 		if (!g->mustSave(false))
 			continue;
 		childcount++;
@@ -786,7 +792,8 @@ void Gump::saveData(Common::WriteStream *ws) {
 
 	// write children:
 	ws->writeUint32LE(childcount);
-	for (auto *g : _children) {
+	for (auto rfIt789 = _children.begin(), rfEnd789 = _children.end(); rfIt789 != rfEnd789; ++rfIt789) {
+		auto *g = *rfIt789;
 		if (!g->mustSave(false))
 			continue;
 

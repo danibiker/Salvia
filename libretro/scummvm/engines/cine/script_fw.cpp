@@ -1353,7 +1353,8 @@ int FWScript::o1_endGlobalScript() {
 
 	debugC(5, kCineDebugScript, "Line: %d: stopGlobalScript(%d)", _line, scriptIdx);
 
-	for (auto &script : g_cine->_globalScripts) {
+	for (auto rfIt1356 = g_cine->_globalScripts.begin(), rfEnd1356 = g_cine->_globalScripts.end(); rfIt1356 != rfEnd1356; ++rfIt1356) {
+		auto &script = *rfIt1356;
 		if (script->_index == scriptIdx) {
 			script->_index = -1;
 		}

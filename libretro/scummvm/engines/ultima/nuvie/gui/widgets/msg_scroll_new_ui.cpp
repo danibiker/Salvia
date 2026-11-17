@@ -134,7 +134,8 @@ void MsgScrollNewUI::display_string(const Common::String &str, Font *f, bool inc
 
 uint16 MsgScrollNewUI::count_empty_lines(const Common::String &s) {
 	uint16 count = 0;
-	for (char c : s) {
+	for (auto rfIt137 = s.begin(), rfEnd137 = s.end(); rfIt137 != rfEnd137; ++rfIt137) {
+		char c = *rfIt137;
 		if (c != ' ' && c != '\t' && c != '\n')
 			break;
 

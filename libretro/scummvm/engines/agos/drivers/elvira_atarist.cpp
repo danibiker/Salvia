@@ -33,12 +33,14 @@ namespace AGOS {
 
 
 struct ElviraPrgTosImage {
+	ElviraPrgTosImage() : textSize(0), dataSize(0), bssSize(0), symSize(0), memSize(0) {}
+
 	Common::Array<uint8> mem;
-	uint32 textSize = 0;
-	uint32 dataSize = 0;
-	uint32 bssSize = 0;
-	uint32 symSize = 0;
-	uint32 memSize = 0;
+	uint32 textSize;
+	uint32 dataSize;
+	uint32 bssSize;
+	uint32 symSize;
+	uint32 memSize;
 
 
 	bool load(const Common::Array<uint8> &prgBytes) {
@@ -100,10 +102,12 @@ struct ElviraPrgTosImage {
 };
 
 struct ElviraPrgLabels {
-	uint32 L003A = 0, L003B = 0, L003C = 0, L003D = 0, L003E = 0, L003F = 0, L0040 = 0, L0041 = 0;
-	uint32 tunetab = 0, L0051 = 0, L004B = 0, L0067 = 0, L0068 = 0;
-	uint32 L0042 = 0, L0043 = 0, L0044 = 0, L0045 = 0, L0046 = 0, L0047 = 0, L0048 = 0, L0049 = 0, L004A = 0;
-	uint32 L004C = 0, L004D = 0, L004E = 0, L004F = 0;
+	ElviraPrgLabels() : L003A(0), L003B(0), L003C(0), L003D(0), L003E(0), L003F(0), L0040(0), L0041(0), tunetab(0), L0051(0), L004B(0), L0067(0), L0068(0), L0042(0), L0043(0), L0044(0), L0045(0), L0046(0), L0047(0), L0048(0), L0049(0), L004A(0), L004C(0), L004D(0), L004E(0), L004F(0) {}
+
+	uint32 L003A, L003B, L003C, L003D, L003E, L003F, L0040, L0041;
+	uint32 tunetab, L0051, L004B, L0067, L0068;
+	uint32 L0042, L0043, L0044, L0045, L0046, L0047, L0048, L0049, L004A;
+	uint32 L004C, L004D, L004E, L004F;
 };
 
 static uint32 findBytePattern(const Common::Array<uint8> &mem, const uint8 *needle, uint32 needleLen, uint32 start) {
@@ -333,7 +337,7 @@ static inline uint16 updateMixerWordForVoiceType(uint16 mixerWord, uint16 channe
 
 class ElviraPrgDriver {
 public:
-	ElviraPrgDriver(ElviraAtariSTPlayer *owner, const Common::Array<uint8> &prgBytes) : _owner(owner) {
+	ElviraPrgDriver(ElviraAtariSTPlayer *owner, const Common::Array<uint8> &prgBytes) : _owner(owner), _valid(false), _savedD7(0) {
 		ElviraPrgTosImage prg;
 		if (!prg.load(prgBytes)) {
 			warning("AGOS: Failed to load ELVIRA.PRG");
@@ -399,10 +403,10 @@ public:
 
 private:
 	ElviraAtariSTPlayer *_owner;
-	bool _valid = false;
+	bool _valid;
 	Common::Array<uint8> _mem;
 	ElviraPrgLabels _labels;
-	uint8 _savedD7 = 0;
+	uint8 _savedD7;
 
 	uint8 read8(uint32 a) const {
 		return _mem[a];
@@ -941,7 +945,7 @@ void ElviraPrgDriver::updateAutomaticEnvelopeWrites_L0037() {
 
 
 ElviraAtariSTPlayer::ElviraAtariSTPlayer(Common::SeekableReadStream *stream)
-	: _stream(stream) {
+	: _stream(stream), _pos(0), _frameHz(kDefaultFrameHz), _ended(false), _framesLeftInWait(0), _elvira1Tune(1), _elviraPrgDriver(nullptr), _isValid(true), _chip(nullptr), _mode(kModeElvira2PKD) {
 	if (!_stream)
 		error("Atari ST YM player: null stream");
 
@@ -962,7 +966,7 @@ ElviraAtariSTPlayer::ElviraAtariSTPlayer(Common::SeekableReadStream *stream)
 }
 
 ElviraAtariSTPlayer::ElviraAtariSTPlayer(Common::SeekableReadStream *stream, uint16 elvira1Tune)
-	: _stream(stream), _elvira1Tune(elvira1Tune) {
+	: _stream(stream), _elvira1Tune(elvira1Tune), _pos(0), _frameHz(kDefaultFrameHz), _ended(false), _framesLeftInWait(0), _elviraPrgDriver(nullptr), _isValid(true), _chip(nullptr), _mode(kModeElvira2PKD) {
 	if (!_stream)
 		error("Atari ST YM player: null stream");
 

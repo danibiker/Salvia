@@ -34,7 +34,7 @@ namespace Nuvie {
 class AdLibSfxManager : public SfxManager {
 public:
 	AdLibSfxManager(const Configuration *cfg, Audio::Mixer *m);
-	~AdLibSfxManager() override;
+	~AdLibSfxManager();
 
 	bool playSfx(SfxIdType sfx_id, uint8 volume) override;
 	bool playSfxLooping(SfxIdType sfx_id, Audio::SoundHandle *handle, uint8 volume) override;

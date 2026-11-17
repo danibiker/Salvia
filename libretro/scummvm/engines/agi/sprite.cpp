@@ -193,7 +193,8 @@ void SpritesMgr::eraseSprites() {
  * Draw all sprites in the given list.
  */
 void SpritesMgr::drawSprites(SpriteList &spriteList) {
-	for (auto &sprite : spriteList) {
+	for (auto rfIt196 = spriteList.begin(), rfEnd196 = spriteList.end(); rfIt196 != rfEnd196; ++rfIt196) {
+		auto &sprite = *rfIt196;
 		_gfx->block_save(sprite.xPos, sprite.yPos, sprite.xSize, sprite.ySize, sprite.backgroundBuffer);
 		drawCel(sprite.screenObjPtr);
 	}
@@ -352,7 +353,8 @@ void SpritesMgr::showSprite(ScreenObjEntry *screenObj) {
 void SpritesMgr::showSprites(SpriteList &spriteList) {
 	ScreenObjEntry *screenObjPtr;
 
-	for (auto &sprite : spriteList) {
+	for (auto rfIt355 = spriteList.begin(), rfEnd355 = spriteList.end(); rfIt355 != rfEnd355; ++rfIt355) {
+		auto &sprite = *rfIt355;
 		screenObjPtr = sprite.screenObjPtr;
 
 		showSprite(screenObjPtr);

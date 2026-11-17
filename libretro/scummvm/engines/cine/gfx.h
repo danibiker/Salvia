@@ -265,7 +265,7 @@ protected:
 
 public:
 	OSRenderer();
-	~OSRenderer() override;
+	~OSRenderer();
 
 	bool initialize() override;
 

@@ -36,7 +36,7 @@
 
 namespace Gob {
 
-Script::Script(GobEngine *vm) : _vm(vm) {
+Script::Script(GobEngine *vm) : _vm(vm), _currentOpcodePos(0) {
 	_expression = new Expression(vm);
 
 	_finished = true;

@@ -40,7 +40,7 @@ protected:
 
 public:
 	FpsCounter(Game *g);
-	~FpsCounter() override;
+	~FpsCounter();
 
 	void setFps(float fps);
 

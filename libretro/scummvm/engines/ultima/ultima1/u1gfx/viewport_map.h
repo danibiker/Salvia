@@ -47,7 +47,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~ViewportMap() override;
+	~ViewportMap();
 
 	/**
 	 * Draws the map

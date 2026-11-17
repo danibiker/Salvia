@@ -124,12 +124,12 @@ SoundManager::~SoundManager() {
 
 	delete opl;
 
-	for (auto &i : m_ObjectSampleMap)
-		delete i._value;
-	for (auto &i : m_TileSampleMap)
-		delete i._value;
-	for (auto &i : m_MusicMap)
-		delete i._value;
+	for (auto rfIt127 = m_ObjectSampleMap.begin(), rfEnd127 = m_ObjectSampleMap.end(); rfIt127 != rfEnd127; ++rfIt127)
+		{ auto &i = *rfIt127; delete i._value; }
+	for (auto rfIt129 = m_TileSampleMap.begin(), rfEnd129 = m_TileSampleMap.end(); rfIt129 != rfEnd129; ++rfIt129)
+		{ auto &i = *rfIt129; delete i._value; }
+	for (auto rfIt131 = m_MusicMap.begin(), rfEnd131 = m_MusicMap.end(); rfIt131 != rfEnd131; ++rfIt131)
+		{ auto &i = *rfIt131; delete i._value; }
 
 	delete m_SfxManager;
 }
@@ -656,7 +656,8 @@ void SoundManager::update_map_sfx() {
 	//m_ViewableTiles
 
 	//get a list of all the sounds
-	for (const Obj *obj : mw->m_ViewableObjects) {
+	for (auto rfIt659 = mw->m_ViewableObjects.begin(), rfEnd659 = mw->m_ViewableObjects.end(); rfIt659 != rfEnd659; ++rfIt659) {
+		const Obj *obj = *rfIt659;
 		//DEBUG(0,LEVEL_DEBUGGING,"%d %s",obj->obj_n,Game::get_game()->get_obj_manager()->get_obj_name(obj));
 		SfxIdType sfx_id = RequestObjectSfxId(obj->obj_n); //does this object have an associated sound?
 		if (sfx_id != NUVIE_SFX_NONE) {
@@ -763,7 +764,8 @@ void SoundManager::update() {
 }
 
 Sound *SoundManager::SongExists(const Common::String &name) {
-	for (Sound *song : m_Songs) {
+	for (auto rfIt766 = m_Songs.begin(), rfEnd766 = m_Songs.end(); rfIt766 != rfEnd766; ++rfIt766) {
+		Sound *song = *rfIt766;
 		if (song->GetName() == name)
 			return song;
 	}
@@ -772,7 +774,8 @@ Sound *SoundManager::SongExists(const Common::String &name) {
 }
 
 Sound *SoundManager::SampleExists(const Common::String &name) {
-	for (Sound *sample : m_Samples) {
+	for (auto rfIt775 = m_Samples.begin(), rfEnd775 = m_Samples.end(); rfIt775 != rfEnd775; ++rfIt775) {
+		Sound *sample = *rfIt775;
 		if (sample->GetName() == name)
 			return sample;
 	}

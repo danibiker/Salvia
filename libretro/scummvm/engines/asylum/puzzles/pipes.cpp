@@ -80,8 +80,10 @@ void Peephole::startUpWater(bool flag) {
 
 	marks[_id] = true;
 
-	for (auto &connector : _connectors) {
-		for (auto &connectedNode : connector->_connectedNodes) {
+	for (auto rfIt83 = _connectors.begin(), rfEnd83 = _connectors.end(); rfIt83 != rfEnd83; ++rfIt83) {
+		auto &connector = *rfIt83;
+		for (auto rfIt84 = connector->_connectedNodes.begin(), rfEnd84 = connector->_connectedNodes.end(); rfIt84 != rfEnd84; ++rfIt84) {
+			auto &connectedNode = *rfIt84;
 			if (!marks[connectedNode->getId()]) {
 
 				for (uint32 i = 0; i < 4; ++i) {
@@ -186,12 +188,14 @@ void Connector::turn(bool updpos) {
 }
 
 void Connector::connect(Connector *connector) {
-	for (auto &connectedNode : _connectedNodes) {
+	for (auto rfIt189 = _connectedNodes.begin(), rfEnd189 = _connectedNodes.end(); rfIt189 != rfEnd189; ++rfIt189) {
+		auto &connectedNode = *rfIt189;
 		connectedNode->connect(connector);
 		connector->_connectedNodes.push_back(connectedNode);
 	}
 
-	for (auto &connectedNode : connector->_connectedNodes) {
+	for (auto rfIt194 = connector->_connectedNodes.begin(), rfEnd194 = connector->_connectedNodes.end(); rfIt194 != rfEnd194; ++rfIt194) {
+		auto &connectedNode = *rfIt194;
 		connectedNode->connect(this);
 		_connectedNodes.push_back(connectedNode);
 	}

@@ -316,7 +316,8 @@ uint PenteGame::scoreCapture(byte x, byte y) {
 	byte bitMask = 0;
 	bool isStauf = _table->boardState[x][y] == STAUF;
 
-	for (const Slope &slope : slopes) {
+	for (auto rfIt319 = &slopes[0], rfEnd319 = &slopes[0] + sizeof(slopes) / sizeof(slopes[0]); rfIt319 != rfEnd319; ++rfIt319) {
+		const Slope &slope = *rfIt319;
 		bitMask <<= 1;
 		bitMask |= scoreCaptureSingle(x, y, slope.x, slope.y);
 	}
@@ -505,7 +506,11 @@ int PenteGame::aiRecurse(char depth, int parentScore) {
 			}
 
 			int scoreDiff = scoreMoveAndRevert(x, y, 0, 0);
-			goodMoves.push({scoreDiff, x, y});
+			GoodMove goodMove;
+			goodMove.scoreDiff = scoreDiff;
+			goodMove.x = x;
+			goodMove.y = y;
+			goodMoves.push(goodMove);
 		}
 	}
 
@@ -720,55 +725,61 @@ void PenteGame::test() {
 	uint32 oldSeed = _random.getSeed();
 
 	// 6 moves per line
-	testGame(3,
-		{
+	static const int kTestMoves1[] = {
 			/*x=*/10, /*y=*/6, /*x=*/9, /*y=*/6, /*x=*/10, /*y=*/7, /*x=*/10, /*y=*/5, /*x=*/10, /*y=*/8, /*x=*/9, /*y=*/9,
 			/*x=*/10, /*y=*/9, /*x=*/10, /*y=*/10, /*x=*/9, /*y=*/8, /*x=*/8, /*y=*/7, /*x=*/8, /*y=*/8, /*x=*/7, /*y=*/8,
 			/*x=*/6, /*y=*/9, /*x=*/11, /*y=*/4,
-		}, false);
+		};
+	testGame(3,
+		Common::Array<int>(kTestMoves1, ARRAYSIZE(kTestMoves1)), false);
 
-	testGame(10,
-		{
+	static const int kTestMoves2[] = {
 			/*x=*/10, /*y=*/6, /*x=*/11, /*y=*/7, /*x=*/10, /*y=*/5, /*x=*/10, /*y=*/7, /*x=*/9, /*y=*/7, /*x=*/12, /*y=*/7,
 			/*x=*/10, /*y=*/4, /*x=*/8, /*y=*/8, /*x=*/10, /*y=*/3, /*x=*/11, /*y=*/5, /*x=*/10, /*y=*/2, /*x=*/9, /*y=*/7,
 			/*x=*/10, /*y=*/6,
-		}, true);
+		};
+	testGame(10,
+		Common::Array<int>(kTestMoves2, ARRAYSIZE(kTestMoves2)), true);
 
 	// test bottom left corner
-	testGame(1993,
-		{
+	static const int kTestMoves3[] = {
 			/*x=*/0, /*y=*/0, /*x=*/1, /*y=*/1, /*x=*/1, /*y=*/0, /*x=*/2, /*y=*/0, /*x=*/0, /*y=*/1, /*x=*/0, /*y=*/2,
 			/*x=*/2, /*y=*/1, /*x=*/3, /*y=*/2, /*x=*/1, /*y=*/2, /*x=*/2, /*y=*/3, /*x=*/4, /*y=*/1, /*x=*/1, /*y=*/4,
 			/*x=*/5, /*y=*/1, /*x=*/6, /*y=*/1, /*x=*/3, /*y=*/0, /*x=*/5, /*y=*/2, /*x=*/4, /*y=*/3, /*x=*/3, /*y=*/1,
 			/*x=*/3, /*y=*/3, /*x=*/5, /*y=*/3, /*x=*/4, /*y=*/1, /*x=*/4, /*y=*/3, /*x=*/3, /*y=*/3, /*x=*/3, /*y=*/4,
 			/*x=*/2, /*y=*/5, /*x=*/7, /*y=*/0
-		}, false);
+		};
+	testGame(1993,
+		Common::Array<int>(kTestMoves3, ARRAYSIZE(kTestMoves3)), false);
 
 	// test bottom right corner
-	testGame(1995,
-		{
+	static const int kTestMoves4[] = {
 			/*x=*/19, /*y=*/0, /*x=*/18, /*y=*/1, /*x=*/19, /*y=*/1, /*x=*/18, /*y=*/2, /*x=*/18, /*y=*/0, /*x=*/18, /*y=*/3,
 			/*x=*/18, /*y=*/4, /*x=*/17, /*y=*/5, /*x=*/17, /*y=*/0, /*x=*/16, /*y=*/5, /*x=*/17, /*y=*/4, /*x=*/16, /*y=*/4,
 			/*x=*/18, /*y=*/5, /*x=*/18, /*y=*/6, /*x=*/18, /*y=*/5, /*x=*/15, /*y=*/3, /*x=*/18, /*y=*/4, /*x=*/14, /*y=*/2,
-		}, false);
+		};
+	testGame(1995,
+		Common::Array<int>(kTestMoves4, ARRAYSIZE(kTestMoves4)), false);
 
 	// test top left corner
-	testGame(1996,
-		{
+	static const int kTestMoves5[] = {
 			/*x=*/0, /*y=*/14, /*x=*/1, /*y=*/13, /*x=*/1, /*y=*/14, /*x=*/2, /*y=*/14, /*x=*/0, /*y=*/13, /*x=*/0, /*y=*/12,
 			/*x=*/1, /*y=*/12, /*x=*/2, /*y=*/11, /*x=*/2, /*y=*/12, /*x=*/3, /*y=*/12, /*x=*/4, /*y=*/13, /*x=*/1, /*y=*/10,
 			/*x=*/0, /*y=*/9, /*x=*/3, /*y=*/10, /*x=*/1, /*y=*/12, /*x=*/4, /*y=*/9, /*x=*/5, /*y=*/8, /*x=*/6, /*y=*/9,
 			/*x=*/3, /*y=*/11, /*x=*/6, /*y=*/10, /*x=*/6, /*y=*/11, /*x=*/4, /*y=*/8, /*x=*/3, /*y=*/9, /*x=*/4, /*y=*/10,
 			/*x=*/4, /*y=*/11, /*x=*/2, /*y=*/10, /*x=*/0, /*y=*/10, /*x=*/5, /*y=*/10
-		}, false);
+		};
+	testGame(1996,
+		Common::Array<int>(kTestMoves5, ARRAYSIZE(kTestMoves5)), false);
 
 	// test top right corner
-	testGame(2019,
-		{
+	static const int kTestMoves6[] = {
 			/*x=*/19, /*y=*/14, /*x=*/18, /*y=*/13, /*x=*/19, /*y=*/12, /*x=*/18, /*y=*/12, /*x=*/18, /*y=*/11, /*x=*/17, /*y=*/10,
 			/*x=*/18, /*y=*/14, /*x=*/16, /*y=*/11, /*x=*/18, /*y=*/9, /*x=*/15, /*y=*/12, /*x=*/14, /*y=*/13, /*x=*/15, /*y=*/10,
 			/*x=*/15, /*y=*/11, /*x=*/14, /*y=*/10, /*x=*/17, /*y=*/12, /*x=*/16, /*y=*/10, /*x=*/13, /*y=*/10, /*x=*/18, /*y=*/10
-		}, false);
+		};
+	testGame(2019,
+		Common::Array<int>(kTestMoves6, ARRAYSIZE(kTestMoves6)), false);
 
 	for (uint32 i = 0; i < 10; i++)
 		testRandomGame(i);

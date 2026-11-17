@@ -42,7 +42,7 @@ public:
 
 	ReadableGump();
 	ReadableGump(ObjId owner, uint16 shape, int font, const Common::String &msg);
-	~ReadableGump() override;
+	~ReadableGump();
 
 	// Close on mouse click on key press
 	Gump *onMouseDown(int button, int32 mx, int32 my) override;

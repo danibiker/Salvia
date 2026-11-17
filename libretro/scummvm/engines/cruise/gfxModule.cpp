@@ -295,7 +295,8 @@ void flip() {
 	_vm->_priorFrameRects = _vm->_dirtyRects;
 
 	// Merge the prior frame's dirty rects into the current frame's list
-	for (auto &r : tempList) {
+	for (auto rfIt298 = tempList.begin(), rfEnd298 = tempList.end(); rfIt298 != rfEnd298; ++rfIt298) {
+		auto &r = *rfIt298;
 		_vm->_dirtyRects.push_back(Common::Rect(r.left, r.top, r.right, r.bottom));
 	}
 
@@ -303,7 +304,8 @@ void flip() {
 	mergeClipRects();
 
 	// Copy any modified areas
-	for (auto &r : _vm->_dirtyRects) {
+	for (auto rfIt306 = _vm->_dirtyRects.begin(), rfEnd306 = _vm->_dirtyRects.end(); rfIt306 != rfEnd306; ++rfIt306) {
+		auto &r = *rfIt306;
 		g_system->copyRectToScreen(globalScreen + 320 * r.top + r.left, 320,
 			r.left, r.top, r.width(), r.height());
 	}

@@ -33,7 +33,7 @@ namespace Ultima8 {
 class DelayProcess : public Process {
 public:
 	explicit DelayProcess(int count_ = 0);
-	~DelayProcess() override;
+	~DelayProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

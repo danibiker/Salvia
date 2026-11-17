@@ -141,7 +141,8 @@ void ObjectManager::objectTypes() {
 		objecttypes[o->GetClassType()._className]++;
 	}
 
-	for (const auto &i : objecttypes) {
+	for (auto rfIt144 = objecttypes.begin(), rfEnd144 = objecttypes.end(); rfIt144 != rfEnd144; ++rfIt144) {
+		const auto &i = *rfIt144;
 		g_debugger->debugPrintf("%s: %u\n", i._key.c_str(), i._value);
 	}
 }

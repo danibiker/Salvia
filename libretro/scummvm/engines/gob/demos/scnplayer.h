@@ -39,7 +39,7 @@ namespace Gob {
 class SCNPlayer : public DemoPlayer {
 public:
 	SCNPlayer(GobEngine *vm);
-	~SCNPlayer() override;
+	~SCNPlayer();
 
 protected:
 	bool playStream(Common::SeekableReadStream &scn) override;

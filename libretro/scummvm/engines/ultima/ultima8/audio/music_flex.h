@@ -49,7 +49,7 @@ public:
 	};
 
 	MusicFlex(Common::SeekableReadStream *rs);
-	~MusicFlex() override;
+	~MusicFlex();
 
 	//! Get an xmidi
 	XMidiData *getXMidi(uint32 index);

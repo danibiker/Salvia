@@ -97,7 +97,8 @@ bool MainActor::CanAddItem(Item *item, bool checkwghtvol) {
 		// valid item type?
 		if (equiptype == ShapeInfo::SE_NONE && !backpack) return false;
 
-		for (const auto *i : _contents) {
+		for (auto rfIt100 = _contents.begin(), rfEnd100 = _contents.end(); rfIt100 != rfEnd100; ++rfIt100) {
+			const auto *i = *rfIt100;
 			uint32 cet = i->getShapeInfo()->_equipType;
 			bool cbackpack = (i->getShape() == backpack_shape);
 
@@ -431,7 +432,8 @@ void MainActor::teleport(int mapNum, int teleport_id) {
 uint16 MainActor::getDefenseType() const {
 	uint16 type = 0;
 
-	for (const auto *i : _contents) {
+	for (auto rfIt434 = _contents.begin(), rfEnd434 = _contents.end(); rfIt434 != rfEnd434; ++rfIt434) {
+		const auto *i = *rfIt434;
 		uint32 frameNum = i->getFrame();
 		const ShapeInfo *si = i->getShapeInfo();
 		if (si->_armourInfo) {
@@ -445,7 +447,8 @@ uint16 MainActor::getDefenseType() const {
 uint32 MainActor::getArmourClass() const {
 	uint32 armour = 0;
 
-	for (const auto *i : _contents) {
+	for (auto rfIt448 = _contents.begin(), rfEnd448 = _contents.end(); rfIt448 != rfEnd448; ++rfIt448) {
+		const auto *i = *rfIt448;
 		uint32 frameNum = i->getFrame();
 		const ShapeInfo *si = i->getShapeInfo();
 		if (si->_armourInfo) {

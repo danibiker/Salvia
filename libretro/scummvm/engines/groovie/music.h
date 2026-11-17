@@ -113,7 +113,7 @@ protected:
 class MusicPlayerMidi : public MusicPlayer, public MidiDriver_BASE {
 public:
 	MusicPlayerMidi(GroovieEngine *vm);
-	~MusicPlayerMidi() override;
+	~MusicPlayerMidi();
 
 	// MidiDriver_BASE interface
 	void send(uint32 b) override;
@@ -194,7 +194,7 @@ protected:
 class MusicPlayerIOS : public MusicPlayer {
 public:
 	MusicPlayerIOS(GroovieEngine *vm);
-	~MusicPlayerIOS() override;
+	~MusicPlayerIOS();
 
 protected:
 	void updateVolume() override;

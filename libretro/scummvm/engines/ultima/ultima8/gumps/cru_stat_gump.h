@@ -37,7 +37,7 @@ public:
 
 	CruStatGump();
 	CruStatGump(Shape *shape, int x);
-	~CruStatGump() override;
+	~CruStatGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

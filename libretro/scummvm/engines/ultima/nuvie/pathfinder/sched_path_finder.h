@@ -37,7 +37,7 @@ public:
 	/* Pass 'path_type' to define search rules and methods to be used. The
 	   PathFinder is responsible for deleting it when finished. */
 	SchedPathFinder(Actor *a, MapCoord g, Path *path_type);
-	~SchedPathFinder() override;
+	~SchedPathFinder();
 
 	bool get_next_move(MapCoord &step) override; /* returns the next step in the path */
 	bool find_path() override; /* gets a NEW path from location->goal */

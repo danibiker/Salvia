@@ -82,7 +82,7 @@ class TextDisplayer;
 class GUI_v1 : public GUI {
 public:
 	GUI_v1(KyraEngine_v1 *vm);
-	~GUI_v1() override {}
+	~GUI_v1() {}
 
 	// button specific
 	virtual Button *addButtonToList(Button *list, Button *newButton);

@@ -40,7 +40,7 @@ public:
 	             int32 layer = LAYER_NORMAL);
 	ButtonWidget(int x, int y, FrameID frame_up, FrameID frame_down,
 	             bool mouseOver = false, int32 layer = LAYER_NORMAL);
-	~ButtonWidget() override;
+	~ButtonWidget();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 	uint16 TraceObjId(int32 mx, int32 my) override;

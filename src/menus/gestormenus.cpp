@@ -45,8 +45,9 @@ extern std::string downloadCheatWithProgress();
 extern std::string lastCheatSourceName();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
-static std::string TXT_BIOSFOUND = "found";
-static std::string TXT_BIOSNOTFOUND = "not found";
+static const std::string TXT_BIOSFOUND = "found";
+static const std::string TXT_BIOSNOTFOUND = "not found";
+static const std::string TXT_BIOSDOWNLOADED = "downloaded";
 
 
 GestorMenus::GestorMenus(int screenw, int screenh){
@@ -87,6 +88,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	tmpTextOption = NULL;
 	menuLangsIdx = 0;
 	selecAlphaRec = NULL;
+	hBiosDownThread = NULL;
 }
 
 GestorMenus::~GestorMenus() {
@@ -215,6 +217,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
+	menuRaiz->opciones.push_back(submenuSearchGuides);
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.title"), menuUpdater, ico_updater));
 	//Acciones del menu principal para guardar las opciones, volver al juego y salir de Salvia
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
@@ -330,6 +333,15 @@ void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig)
 	listaLang->context  = langMenuData;
 
 }
+void GestorMenus::poblarMenuUpdater(Menu* menuEntrada, CfgLoader *refConfig){
+	this->menuUpdaterBios = new Menu(LanguageManager::instance()->get("menu.updater.bios"), menuEntrada);
+	todosLosMenus.push_back(this->menuUpdaterBios);
+	OpcionSubMenu *submenuUpdater = new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.bios"), this->menuUpdaterBios);
+	//Rellenamos el menu en un callback para que no afecte a la velocidad de arranque del emulador
+	submenuUpdater->callback = &GestorMenus::fillBiosMenuAction;
+	submenuUpdater->context = this;	
+	menuEntrada->opciones.push_back(submenuUpdater);
+}
 
 std::string GestorMenus::fillBiosMenuAction(void* inst){
 	GestorMenus* gestorMenus = static_cast<GestorMenus*>(inst);
@@ -372,7 +384,7 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 			if (!biosDatabase[i].dir.empty()){
 				biosRelativePath += biosDatabase[i].dir + Constant::getFileSep();
 			}
-			biosRelativePath += biosDatabase[i].listBios[j].file;
+			biosRelativePath += Constant::replaceAll(biosDatabase[i].listBios[j].file, "/", "\\");
 			biosFullPath += biosRelativePath;
 	
 			if (dir.fileExists(biosFullPath.c_str())){
@@ -383,8 +395,12 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 				bios->found = false;
 				biosForSystem->allFound = false;
 			}
-	
-			menuBiosForSystem->opciones.push_back(new OpcionTxtAndDynValue(biosDatabase[i].listBios[j].file, bios->textFound));
+			
+			OpcionTxtAndDynProgressValue *option = new OpcionTxtAndDynProgressValue(biosDatabase[i].listBios[j].file, bios->textFound);
+			option->progress = &bios->progress;
+			option->kb = &bios->kbReceived;
+
+			menuBiosForSystem->opciones.push_back(option);
 			bios->filepath = biosFullPath;
 			bios->urlpath = biosDatabase[i].listBios[j].url;
 			biosForSystem->list.push_back(bios);
@@ -393,22 +409,32 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 	return "";
 }
 
-void GestorMenus::poblarMenuUpdater(Menu* menuEntrada, CfgLoader *refConfig){
-	this->menuUpdaterBios = new Menu(LanguageManager::instance()->get("menu.updater.bios"), menuEntrada);
-	todosLosMenus.push_back(this->menuUpdaterBios);
-	OpcionSubMenu *submenuUpdater = new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.bios"), this->menuUpdaterBios);
-	//Rellenamos el menu en un callback para que no afecte a la velocidad de arranque del emulador
-	submenuUpdater->callback = &GestorMenus::fillBiosMenuAction;
-	submenuUpdater->context = this;	
-	menuEntrada->opciones.push_back(submenuUpdater);
+std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
+	DWORD exitCode = 0;
+
+	if (hBiosDownThread != NULL && GetExitCodeThread(hBiosDownThread, &exitCode)){
+		if (exitCode == STILL_ACTIVE)
+			return "";
+	}
+
+	hBiosDownThread = CreateThread(NULL, 0, biosDownThread, biosForSystem, CREATE_SUSPENDED, NULL);
+	if (hBiosDownThread) {
+		Constant::setup_and_run_thread(hBiosDownThread, IO_THREAD, false);
+	}
+	return "";
 }
 
-std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
+DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
+	t_biosForSystem* biosForSystem = static_cast<t_biosForSystem*>(lpParam);
+	if (biosForSystem == NULL)
+		return 1;
+
 	LOG_DEBUG("Descargando bios..");
 	LOG_DEBUG("Bios for system: %s with url %s", biosForSystem->system.c_str(), biosForSystem->url.c_str());
 	
 	if (biosForSystem->allFound){
-		return "All bios are already downloaded";
+		//return "All bios are already downloaded";
+		return 0;
 	}
 	
 	dirutil dir;
@@ -444,7 +470,11 @@ std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
 					dir.createDirRecursive(dirBios.c_str());
 
 				biosOk = downloader.fetchFile(biosForSystem->url + biosForSystem->list[i]->urlpath, 
-					biosForSystem->list[i]->filepath, &progress);
+					biosForSystem->list[i]->filepath, &(biosForSystem->list[i]->progress), &(biosForSystem->list[i]->kbReceived));
+
+				biosForSystem->list[i]->kbReceived = 0.0f;   // fin de la descarga: el menu vuelve al texto
+				biosForSystem->list[i]->textFound = TXT_BIOSDOWNLOADED;
+
 				tries++;
 			}
 		}
@@ -464,14 +494,14 @@ std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
 	
 	if (ok && !localPath.empty()){
 		dir.borrarArchivo(localPath);
-		return "Bios downloaded and extracted";
+		//return "Bios downloaded and extracted";
 	}
 	
-	if (!ok){
-		return "Problem downloading resource";
-	}
-	
-	return "";
+	//if (!ok){
+	//	return "Problem downloading resource";
+	//}
+
+	return 0;
 }
 
 inline void GestorMenus::parse_sysbios_xml(const std::string& filepath, std::vector<t_bios_data>& biosDatabase){
@@ -1934,7 +1964,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 void GestorMenus::poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick){
 	TipoKey type = KEY_JOY_BTN;
 	t_joy_state *input = &joystick->inputs;
-	menuHotkeys->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.hidehotkeypress"), &joystick->hotkeyEnablerHidePress));	
+	menuHotkeys->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.hidehotkeypress"), &joystick->inputs.hotkeyEnablerHidePress));	
 
 	for (int i=0; i < HK_MAX; i++){
 		if (input->mapperHotkeys.getSdlHat(0, i) > -1){
@@ -2553,6 +2583,31 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			OpcionTxtAndDynValue *OptVal = static_cast<OpcionTxtAndDynValue *>(option);
 			if (OptVal != NULL){
 				value = *(OptVal->valor);
+				if (OptVal->callback == NULL){
+					valueColor = Constant::colors[clHighligtOption].sdlColor;
+				}
+			}
+		} else if (option->tipo == OPC_SHOW_DYNTXT_PROG_VAL){
+			line = option->titulo;
+			OpcionTxtAndDynProgressValue *OptVal = static_cast<OpcionTxtAndDynProgressValue *>(option);
+			if (OptVal != NULL){
+				if (OptVal->progress != NULL && *(OptVal->progress) > 0.0f && *(OptVal->progress) < 1.0f){
+					char buffer[32];
+					sprintf_s(buffer, sizeof(buffer), "%.0f%%", *(OptVal->progress) * 100.0f);
+					value = buffer;
+				} else if (OptVal->kb != NULL && *(OptVal->kb) > 0.0f){
+					/* Descarga sin tamano conocido (servidor sin Content-Length): se
+					 * muestran los KB recibidos (en MB con un decimal a partir de 1000 KB). */
+					char buffer[32];
+					if (*(OptVal->kb) > 1024.0f)
+						sprintf_s(buffer, sizeof(buffer), "%.1f MB", *(OptVal->kb) / 1024.0f);
+					else
+						sprintf_s(buffer, sizeof(buffer), "%.0f KB", *(OptVal->kb));
+					value = buffer;
+				} else {
+					value = *(OptVal->valor);
+				}
+
 				if (OptVal->callback == NULL){
 					valueColor = Constant::colors[clHighligtOption].sdlColor;
 				}

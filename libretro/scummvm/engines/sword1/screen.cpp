@@ -38,13 +38,21 @@
 
 namespace Sword1 {
 
+const uint8 Screen::_white[3] = {      63,      63,      63 };
+const uint8 Screen::_red[3] = { 63 << 2, 0  << 2, 0  << 2 };
+const uint8 Screen::_blue[3] = { 0  << 2, 0  << 2, 63 << 2 };
+const uint8 Screen::_yellow[3] = { 63 << 2, 63 << 2, 0  << 2 };
+const uint8 Screen::_green[3] = { 0  << 2, 63 << 2, 0  << 2 };
+const uint8 Screen::_purple[3] = { 32 << 2, 0  << 2, 32 << 2 };
+const uint8 Screen::_black[3] = { 0  << 2, 0  << 2, 0  << 2 };
+
 #define SCROLL_FRACTION      16
 #define MAX_SCROLL_DISTANCE  8
 #define NO_FADE              0
 #define FADE_UP              1
 #define FADE_DOWN           -1
 
-Screen::Screen(OSystem *system, SwordEngine *vm, ResMan *pResMan, ObjectMan *pObjMan) {
+Screen::Screen(OSystem *system, SwordEngine *vm, ResMan *pResMan, ObjectMan *pObjMan) : _forceNextFadeOutToBlack(false) {
 	_system = system;
 	_vm = vm;
 	_resMan = pResMan;

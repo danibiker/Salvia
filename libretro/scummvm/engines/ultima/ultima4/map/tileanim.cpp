@@ -49,7 +49,8 @@ TileAnimTransform *TileAnimTransform::create(const ConfigElement &conf) {
 			conf.getInt("x"), conf.getInt("y"));
 
 		Common::Array<ConfigElement> children = conf.getChildren();
-		for (const auto &i : children) {
+		for (auto rfIt52 = children.begin(), rfEnd52 = children.end(); rfIt52 != rfEnd52; ++rfIt52) {
+			const auto &i = *rfIt52;
 			if (i.getName() == "color") {
 				RGBA *rgba = loadColorFromConf(i);
 				((TileAnimPixelTransform *)transform)->_colors.push_back(rgba);
@@ -240,7 +241,8 @@ TileAnimContext *TileAnimContext::create(const ConfigElement &conf) {
 	if (context) {
 		Common::Array<ConfigElement> children = conf.getChildren();
 
-		for (const auto &i : children) {
+		for (auto rfIt243 = children.begin(), rfEnd243 = children.end(); rfIt243 != rfEnd243; ++rfIt243) {
+			const auto &i = *rfIt243;
 			if (i.getName() == "transform") {
 				TileAnimTransform *transform = TileAnimTransform::create(i);
 				context->add(transform);
@@ -273,7 +275,8 @@ TileAnimSet::TileAnimSet(const ConfigElement &conf) {
 	_name = conf.getString("name");
 
 	Common::Array<ConfigElement> children = conf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt276 = children.begin(), rfEnd276 = children.end(); rfIt276 != rfEnd276; ++rfIt276) {
+		const auto &i = *rfIt276;
 		if (i.getName() == "tileanim") {
 			TileAnim *anim = new TileAnim(i);
 			_tileAnims[anim->_name] = anim;
@@ -282,8 +285,8 @@ TileAnimSet::TileAnimSet(const ConfigElement &conf) {
 }
 
 TileAnimSet::~TileAnimSet() {
-	for (auto &t : _tileAnims)
-		delete t._value;
+	for (auto rfIt285 = _tileAnims.begin(), rfEnd285 = _tileAnims.end(); rfIt285 != rfEnd285; ++rfIt285)
+		{ auto &t = *rfIt285; delete t._value; }
 }
 
 TileAnim *TileAnimSet::getByName(const Common::String &name) {
@@ -301,7 +304,8 @@ TileAnim::TileAnim(const ConfigElement &conf) : _random(0) {
 		_random = conf.getInt("random");
 
 	Common::Array<ConfigElement> children = conf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt304 = children.begin(), rfEnd304 = children.end(); rfIt304 != rfEnd304; ++rfIt304) {
+		const auto &i = *rfIt304;
 		if (i.getName() == "transform") {
 			TileAnimTransform *transform = TileAnimTransform::create(i);
 

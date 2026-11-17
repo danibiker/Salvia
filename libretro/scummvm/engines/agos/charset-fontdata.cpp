@@ -3190,7 +3190,8 @@ void AGOSEngine_Elvira1::addHiResTextDirtyRect(Common::Rect rect) {
 	rect.right >>= 1;
 	rect.bottom <<= 1;
 
-	for (auto &i : _sjisTextFields) {
+	for (auto rfIt3193 = _sjisTextFields.begin(), rfEnd3193 = _sjisTextFields.end(); rfIt3193 != rfEnd3193; ++rfIt3193) {
+		auto &i = *rfIt3193;
 		// Merge rects if it makes sense, but only once.
 		if (rect.left <= i.right && rect.right >= i.left && rect.top <= i.bottom && rect.bottom >= i.top) {
 			i.left = MIN<int16>(i.left, rect.left);
@@ -3212,7 +3213,8 @@ void AGOSEngine_Elvira1::clearHiResTextLayer() {
 	assert(p);
 
 	if (_sjisTextFields.size() < 10) {
-		for (auto &i : _sjisTextFields) {
+		for (auto rfIt3215 = _sjisTextFields.begin(), rfEnd3215 = _sjisTextFields.end(); rfIt3215 != rfEnd3215; ++rfIt3215) {
+			auto &i = *rfIt3215;
 			uint16 w = i.width();
 			uint16 ptch = _scaleBuf->pitch >> 2;
 			uint32 *dst = (uint32*)p + i.top * ptch + i.left;

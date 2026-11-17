@@ -69,7 +69,8 @@ uint16 MsgText::getDisplayWidth() {
 }
 
 MsgLine::~MsgLine() {
-	for (MsgText *token : text) {
+	for (auto rfIt72 = text.begin(), rfEnd72 = text.end(); rfIt72 != rfEnd72; ++rfIt72) {
+		MsgText *token = *rfIt72;
 		delete token;
 	}
 }
@@ -124,7 +125,8 @@ MsgText *MsgLine::get_text_at_pos(uint16 pos) {
 	if (pos > total_length)
 		return nullptr;
 
-	for (auto *t : text) {
+	for (auto rfIt127 = text.begin(), rfEnd127 = text.end(); rfIt127 != rfEnd127; ++rfIt127) {
+		auto *t = *rfIt127;
 		if (i + t->s.size() >= pos)
 			return t;
 
@@ -136,7 +138,8 @@ MsgText *MsgLine::get_text_at_pos(uint16 pos) {
 
 uint16 MsgLine::get_display_width() {
 	uint16 len = 0;
-	for (MsgText *token : text) {
+	for (auto rfIt139 = text.begin(), rfEnd139 = text.end(); rfIt139 != rfEnd139; ++rfIt139) {
+		MsgText *token = *rfIt139;
 		len += token->font->getStringWidth(token->s.c_str());
 	}
 	return len;
@@ -235,12 +238,12 @@ MsgScroll::MsgScroll(const Configuration *cfg, Font *f) : GUI_Widget(nullptr, 0,
 
 MsgScroll::~MsgScroll() {
 	// delete the scroll buffer
-	for (MsgLine *line : msg_buf)
-		delete line;
+	for (auto rfIt238 = msg_buf.begin(), rfEnd238 = msg_buf.end(); rfIt238 != rfEnd238; ++rfIt238)
+		{ MsgLine *line = *rfIt238; delete line; }
 
 	// delete the holding buffer
-	for (MsgText *token : holding_buffer)
-		delete token;
+	for (auto rfIt242 = holding_buffer.begin(), rfEnd242 = holding_buffer.end(); rfIt242 != rfEnd242; ++rfIt242)
+		{ MsgText *token = *rfIt242; delete token; }
 }
 
 bool MsgScroll::init(const char *player_name) {
@@ -538,7 +541,8 @@ bool MsgScroll::is_garg_font() {
 }
 
 void MsgScroll::clear_scroll() {
-	for (MsgLine *line : msg_buf) {
+	for (auto rfIt541 = msg_buf.begin(), rfEnd541 = msg_buf.end(); rfIt541 != rfEnd541; ++rfIt541) {
+		MsgLine *line = *rfIt541;
 		delete line;
 	}
 
@@ -978,7 +982,8 @@ void MsgScroll::Display(bool full_redraw) {
 inline void MsgScroll::drawLine(Screen *theScreen, MsgLine *msg_line, uint16 line_y) {
 	uint16 total_length = 0;
 
-	for (MsgText *token : msg_line->text) {
+	for (auto rfIt981 = msg_line->text.begin(), rfEnd981 = msg_line->text.end(); rfIt981 != rfEnd981; ++rfIt981) {
+		MsgText *token = *rfIt981;
 		token->font->drawString(theScreen, token->s.c_str(), area.left + left_margin + total_length * 8, area.top + line_y * 8, token->color, font_highlight_color); //FIX for hardcoded font height
 		total_length += token->s.size();
 	}

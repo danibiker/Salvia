@@ -34,12 +34,12 @@ City::City() : Map() {
 }
 
 City::~City() {
-	for (auto *i : _persons)
-		delete i;
-	for (auto *j : _personRoles)
-		delete j;
-	for (auto *k : _extraDialogues)
-		delete k;
+	for (auto rfIt37 = _persons.begin(), rfEnd37 = _persons.end(); rfIt37 != rfEnd37; ++rfIt37)
+		{ auto *i = *rfIt37; delete i; }
+	for (auto rfIt39 = _personRoles.begin(), rfEnd39 = _personRoles.end(); rfIt39 != rfEnd39; ++rfIt39)
+		{ auto *j = *rfIt39; delete j; }
+	for (auto rfIt41 = _extraDialogues.begin(), rfEnd41 = _extraDialogues.end(); rfIt41 != rfEnd41; ++rfIt41)
+		{ auto *k = *rfIt41; delete k; }
 }
 
 Common::String City::getName() {

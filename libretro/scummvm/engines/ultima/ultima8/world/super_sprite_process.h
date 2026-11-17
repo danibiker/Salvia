@@ -79,7 +79,7 @@ public:
 					   uint16 damage, uint16 source, uint16 target, bool inexact);
 
 	//! The SuperSpriteProcess destructor
-	~SuperSpriteProcess(void) override;
+	~SuperSpriteProcess(void);
 
 	//! The SpriteProcess run function
 	void run() override;

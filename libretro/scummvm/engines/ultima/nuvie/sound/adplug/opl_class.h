@@ -203,7 +203,7 @@ private:
 
 public:
 	OplClass(int rate, bool bit16, bool usestereo); // rate = sample rate
-	~OplClass() override {
+	~OplClass() {
 		YM3812Shutdown();
 	}
 

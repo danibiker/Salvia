@@ -49,7 +49,7 @@ public:
 	};
 
 	CharGenChild(const ANIFile &ani);
-	~CharGenChild() override;
+	~CharGenChild();
 
 	/** Advance the animation to the next frame. */
 	void advance() override;

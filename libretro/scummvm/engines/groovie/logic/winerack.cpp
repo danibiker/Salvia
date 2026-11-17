@@ -523,10 +523,13 @@ void WineRackGame::runTests() {
 	}
 
 	// pairs of x,y for the player's moves
-	testGame(1, {9,0, 9,1, 9,2, 9,3, 9,4, 9,5, 9,6, 9,7, 9,8, 9,9}, false);
-	testGame(2, {5,5, 3,5, 7,4, 1,6, 9,3, 0,7, 2,6, 4,5, 6,5, 8,4}, true);
+	static const int kTestMoves1[] = {9,0, 9,1, 9,2, 9,3, 9,4, 9,5, 9,6, 9,7, 9,8, 9,9};
+	testGame(1, Common::Array<int>(kTestMoves1, ARRAYSIZE(kTestMoves1)), false);
+	static const int kTestMoves2[] = {5,5, 3,5, 7,4, 1,6, 9,3, 0,7, 2,6, 4,5, 6,5, 8,4};
+	testGame(2, Common::Array<int>(kTestMoves2, ARRAYSIZE(kTestMoves2)), true);
 	// in the original game, the AI had a 25% chance to move to 2,6 as its first move, even if your first move was to 2,6 already
-	testGame(147160395, {2,6, 3,6, 4,6, 5,6, 7,6, 8,6, 9,6, 2,7, 3,7, 4,7}, false);
+	static const int kTestMoves3[] = {2,6, 3,6, 4,6, 5,6, 7,6, 8,6, 9,6, 2,7, 3,7, 4,7};
+	testGame(147160395, Common::Array<int>(kTestMoves3, ARRAYSIZE(kTestMoves3)), false);
 
 	_random.setSeed(oldSeed);
 	warning("WineRackGame::runTests() finished");

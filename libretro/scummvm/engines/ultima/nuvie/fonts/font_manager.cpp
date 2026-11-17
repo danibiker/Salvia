@@ -41,7 +41,8 @@ FontManager::FontManager(const Configuration *cfg) : config(cfg), num_fonts(0),
 }
 
 FontManager::~FontManager() {
-	for (auto *font : fonts) {
+	for (auto rfIt44 = fonts.begin(), rfEnd44 = fonts.end(); rfIt44 != rfEnd44; ++rfIt44) {
+		auto *font = *rfIt44;
 		delete font;
 	}
 	if (conv_font) {

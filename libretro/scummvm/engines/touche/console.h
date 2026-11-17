@@ -31,7 +31,7 @@ class ToucheEngine;
 class ToucheConsole : public GUI::Debugger {
 public:
 	ToucheConsole(ToucheEngine *vm);
-	~ToucheConsole(void) override;
+	~ToucheConsole(void);
 
 private:
 	ToucheEngine *_vm;

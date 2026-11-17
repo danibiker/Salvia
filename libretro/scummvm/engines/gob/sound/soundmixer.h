@@ -40,7 +40,7 @@ class SoundDesc;
 class SoundMixer : public Audio::AudioStream {
 public:
 	SoundMixer(Audio::Mixer &mixer, Audio::Mixer::SoundType type);
-	~SoundMixer() override;
+	~SoundMixer();
 
 	virtual void play(SoundDesc &sndDesc, int16 repCount,
 			int16 frequency, int16 fadeLength = 0);

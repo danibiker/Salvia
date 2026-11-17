@@ -354,7 +354,8 @@ void Spells::spellMagicAttack(const Common::String &tilename, Direction dir, int
 
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir), MASK_DIR_ALL, (*party)[controller->getFocus()]->getCoords(),
 	                           1, 11, Tile::canAttackOverTile, false);
-	for (const auto &coords : path) {
+	for (auto rfIt357 = path.begin(), rfEnd357 = path.end(); rfIt357 != rfEnd357; ++rfIt357) {
+		const auto &coords = *rfIt357;
 		if (spellMagicAttackAt(coords, tile, attackDamage))
 			return;
 	}
@@ -480,7 +481,8 @@ int Spells::spellDispel(int dir) {
 	 */
 	Annotation::List a = g_context->_location->_map->_annotations->allAt(field);
 	if (a.size() > 0) {
-		for (auto &i : a) {
+		for (auto rfIt483 = a.begin(), rfEnd483 = a.end(); rfIt483 != rfEnd483; ++rfIt483) {
+			auto &i = *rfIt483;
 			if (i.getTile().getTileType()->canDispel()) {
 
 				/*
@@ -562,7 +564,8 @@ int Spells::spellEField(int param) {
 		/* Get rid of old field, if any */
 		Annotation::List a = g_context->_location->_map->_annotations->allAt(coords);
 		if (a.size() > 0) {
-			for (auto &i : a) {
+			for (auto rfIt565 = a.begin(), rfEnd565 = a.end(); rfIt565 != rfEnd565; ++rfIt565) {
+				auto &i = *rfIt565;
 				if (i.getTile().getTileType()->canDispel())
 					g_context->_location->_map->_annotations->remove(i);
 			}
@@ -656,7 +659,8 @@ int Spells::spellSleep(int unused) {
 
 	/* try to put each creature to sleep */
 
-	for (auto *m : creatures) {
+	for (auto rfIt659 = creatures.begin(), rfEnd659 = creatures.end(); rfIt659 != rfEnd659; ++rfIt659) {
+		auto *m = *rfIt659;
 		Coords coords = m->getCoords();
 		GameController::flashTile(coords, "wisp", 1);
 		if ((m->getResists() != EFFECT_SLEEP) &&
@@ -674,7 +678,8 @@ int Spells::spellSleep(int unused) {
 int Spells::spellTremor(int unused) {
 	CombatController *ct = spellCombatController();
 	CreatureVector creatures = ct->getMap()->getCreatures();
-	for (auto *m : creatures) {
+	for (auto rfIt677 = creatures.begin(), rfEnd677 = creatures.end(); rfIt677 != rfEnd677; ++rfIt677) {
+		auto *m = *rfIt677;
 		Coords coords = m->getCoords();
 		//GameController::flashTile(coords, "rocks", 1);
 
@@ -708,7 +713,8 @@ int Spells::spellUndead(int unused) {
 	CombatController *ct = spellCombatController();
 	CreatureVector creatures = ct->getMap()->getCreatures();
 
-	for (auto *m : creatures) {
+	for (auto rfIt711 = creatures.begin(), rfEnd711 = creatures.end(); rfIt711 != rfEnd711; ++rfIt711) {
+		auto *m = *rfIt711;
 		if (m && m->isUndead() && xu4_random(2) == 0)
 			m->setHp(23);
 	}

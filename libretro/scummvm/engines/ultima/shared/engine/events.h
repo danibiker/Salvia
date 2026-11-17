@@ -102,7 +102,7 @@ public:
 public:
 	CPressTarget() : _pressed(false) {
 	}
-	~CPressTarget() override {
+	~CPressTarget() {
 	}
 	void leftButtonDown(const Common::Point &mousePos) override {
 		_pressed = true;

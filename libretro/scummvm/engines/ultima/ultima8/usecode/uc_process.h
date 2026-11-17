@@ -37,7 +37,7 @@ public:
 	UCProcess();
 	UCProcess(uint16 classid, uint16 offset, uint32 this_ptr = 0,
 	          int thissize = 0, const uint8 *args = 0, int argsize = 0);
-	~UCProcess() override;
+	~UCProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

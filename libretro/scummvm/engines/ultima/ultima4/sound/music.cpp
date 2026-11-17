@@ -62,7 +62,8 @@ Music::Music(Audio::Mixer *mixer) :
 	const Config *config = Config::getInstance();
 
 	Common::Array<ConfigElement> musicConfs = config->getElement("music").getChildren();
-	for (const auto &m : musicConfs) {
+	for (auto rfIt65 = musicConfs.begin(), rfEnd65 = musicConfs.end(); rfIt65 != rfEnd65; ++rfIt65) {
+		const auto &m = *rfIt65;
 		if (m.getName() != "track")
 			continue;
 

@@ -1218,7 +1218,8 @@ Common::String Game::getGobStack() {
 	}
 
 	Common::Array<Common::String> loadedTots;
-	for (Common::String &tot : totsToLoad) {
+	for (auto rfIt1221 = totsToLoad.begin(), rfEnd1221 = totsToLoad.end(); rfIt1221 != rfEnd1221; ++rfIt1221) {
+		Common::String &tot = *rfIt1221;
 		if (_totFunctions.load(tot))
 			loadedTots.push_back(tot);
 	}
@@ -1275,8 +1276,8 @@ Common::String Game::getGobStack() {
 	}
 	result += "------------------------\n";
 
-	for (Common::String &tot : loadedTots)
-		_totFunctions.unload(tot);
+	for (auto rfIt1278 = loadedTots.begin(), rfEnd1278 = loadedTots.end(); rfIt1278 != rfEnd1278; ++rfIt1278)
+		{ Common::String &tot = *rfIt1278; _totFunctions.unload(tot); }
 
 	return result;
 }

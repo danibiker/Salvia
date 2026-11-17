@@ -51,7 +51,7 @@ class SonarcAudioSample : public AudioSample {
 
 public:
 	SonarcAudioSample(const uint8 *buffer, uint32 size);
-	~SonarcAudioSample(void) override;
+	~SonarcAudioSample(void);
 
 	Audio::SeekableAudioStream *makeStream() const override;
 

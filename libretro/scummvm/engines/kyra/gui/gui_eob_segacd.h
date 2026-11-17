@@ -33,7 +33,7 @@ namespace Kyra {
 class GUI_EoB_SegaCD : public GUI_EoB {
 public:
 	GUI_EoB_SegaCD(EoBEngine *vm);
-	~GUI_EoB_SegaCD() override;
+	~GUI_EoB_SegaCD();
 
 protected:
 	int mapPointToEntry(const Common::Point &p) const override;

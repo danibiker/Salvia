@@ -66,7 +66,8 @@ WeaselDat::WeaselDat(Common::ReadStream *rs) {
 
 uint16 WeaselDat::getNumOfType(WeaselType type) const {
 	int count = 0;
-	for (const auto &item : _items) {
+	for (auto rfIt69 = _items.begin(), rfEnd69 = _items.end(); rfIt69 != rfEnd69; ++rfIt69) {
+		const auto &item = *rfIt69;
 		if (item._type == type)
 			count++;
 	}

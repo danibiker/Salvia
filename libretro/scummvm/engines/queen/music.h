@@ -38,7 +38,7 @@ class QueenEngine;
 class MidiMusic : public MidiDriver_BASE {
 public:
 	MidiMusic(QueenEngine *vm);
-	~MidiMusic() override;
+	~MidiMusic();
 	void setVolume(int volume);
 	int getVolume()	const { return _masterVolume; }
 

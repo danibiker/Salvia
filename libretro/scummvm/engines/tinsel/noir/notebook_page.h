@@ -31,19 +31,27 @@ namespace Tinsel {
 
 class NotebookLine {
 public:
-	int _id = 0;
+	NotebookLine() : _id(0), _crossedOut(false), _anim(), _obj(nullptr), _scribbles(nullptr), _scribbleAnim() {}
+private:
+
+public:
+	int _id;
 	void crossOut();
 	void clear();
 	void fillIn(int pageLine);
 private:
-	bool _crossedOut = false;
-	ANIM _anim = {};
-	OBJECT *_obj = nullptr;
-	OBJECT *_scribbles = nullptr;
-	ANIM _scribbleAnim = {};
+	bool _crossedOut;
+	ANIM _anim;
+	OBJECT *_obj;
+	OBJECT *_scribbles;
+	ANIM _scribbleAnim;
 };
 
 class NotebookPage {
+public:
+	NotebookPage() : _pointedClue(-1), _lines(), _numLines(0) {}
+private:
+
 public:
 	bool containsClue(int id);
 	void crossClue(int id);
@@ -58,10 +66,10 @@ public:
 private:
 	int indexOfClue(int id) const;
 
-	int _pointedClue = -1;
+	int _pointedClue;
 	const static uint32 MAX_ENTRIES_PER_PAGE = 8;
-	NotebookLine _lines[MAX_ENTRIES_PER_PAGE] = {};
-	uint32 _numLines = 0;
+	NotebookLine _lines[MAX_ENTRIES_PER_PAGE];
+	uint32 _numLines;
 };
 
 } // End of namespace Tinsel

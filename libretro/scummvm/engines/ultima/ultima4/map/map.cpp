@@ -237,8 +237,8 @@ Map::Map() : _id(0), _type(WORLD), _width(0), _height(0), _levels(1),
 }
 
 Map::~Map() {
-	for (auto *i : _portals)
-		delete i;
+	for (auto rfIt240 = _portals.begin(), rfEnd240 = _portals.end(); rfIt240 != rfEnd240; ++rfIt240)
+		{ auto *i = *rfIt240; delete i; }
 	delete _annotations;
 }
 
@@ -442,7 +442,8 @@ ObjectDeque::iterator Map::removeObject(ObjectDeque::iterator rem, bool deleteOb
 Creature *Map::moveObjects(MapCoords avatar) {
 	Creature *attacker = nullptr;
 
-	for (auto *object : _objects) {
+	for (auto rfIt445 = _objects.begin(), rfEnd445 = _objects.end(); rfIt445 != rfEnd445; ++rfIt445) {
+		auto *object = *rfIt445;
 		Creature *m = dynamic_cast<Creature *>(object);
 
 		if (m) {
@@ -748,7 +749,8 @@ bool Map::fillMonsterTable() {
 	 */
 	int i = 0;
 	TileMap *base = g_tileMaps->get("base");
-	for (auto *monster : monsters) {
+	for (auto rfIt751 = monsters.begin(), rfEnd751 = monsters.end(); rfIt751 != rfEnd751; ++rfIt751) {
+		auto *monster = *rfIt751;
 		Coords c = monster->getCoords(),
 			prevc = monster->getPrevCoords();
 

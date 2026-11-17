@@ -59,7 +59,7 @@ class MidiOutput;
 class SoundMidiPC : public Sound {
 public:
 	SoundMidiPC(KyraEngine_v1 *vm, Audio::Mixer *mixer, MidiDriver *driver, kType type);
-	~SoundMidiPC() override;
+	~SoundMidiPC();
 
 	kType getMusicType() const override { return _type; }
 
@@ -118,7 +118,7 @@ private:
 class SoundTowns_LoK : public Sound {
 public:
 	SoundTowns_LoK(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundTowns_LoK() override;
+	~SoundTowns_LoK();
 
 	kType getMusicType() const override { return kTowns; }
 
@@ -173,7 +173,7 @@ private:
 class SoundPC98_LoK : public Sound {
 public:
 	SoundPC98_LoK(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundPC98_LoK() override;
+	~SoundPC98_LoK();
 
 	kType getMusicType() const override { return kPC98; }
 
@@ -208,7 +208,7 @@ private:
 class SoundTownsPC98_v2 : public Sound {
 public:
 	SoundTownsPC98_v2(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundTownsPC98_v2() override;
+	~SoundTownsPC98_v2();
 
 	kType getMusicType() const override { return _vm->gameFlags().platform == Common::kPlatformFMTowns ? kTowns : kPC98; }
 
@@ -248,7 +248,7 @@ private:
 class MidiDriver_PCSpeaker : public MidiDriver_Emulated {
 public:
 	MidiDriver_PCSpeaker(Audio::Mixer *mixer);
-	~MidiDriver_PCSpeaker() override;
+	~MidiDriver_PCSpeaker();
 
 	// MidiDriver interface
 	void close() override {}
@@ -324,7 +324,7 @@ struct AmigaSfxTable {
 class SoundAmiga_LoK : public Sound {
 public:
 	SoundAmiga_LoK(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundAmiga_LoK() override;
+	~SoundAmiga_LoK();
 
 	kType getMusicType() const override { return kAmiga; } //FIXME
 
@@ -359,7 +359,7 @@ class SoundMacRes;
 class SoundMac : public Sound {
 public:
 	SoundMac(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundMac() override;
+	~SoundMac();
 
 	kType getMusicType() const override;
 
@@ -411,7 +411,7 @@ private:
 class SoundTowns_Darkmoon : public Sound, public TownsAudioInterfacePluginDriver {
 public:
 	SoundTowns_Darkmoon(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundTowns_Darkmoon() override;
+	~SoundTowns_Darkmoon();
 
 	kType getMusicType() const override { return kTowns; }
 
@@ -468,7 +468,7 @@ class AudioMaster2;
 class SoundAmiga_EoB: public Sound {
 public:
 	SoundAmiga_EoB(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundAmiga_EoB() override;
+	~SoundAmiga_EoB();
 
 	kType getMusicType() const override;
 
@@ -504,7 +504,7 @@ class MLALF98;
 class SoundPC98_EoB : public Sound {
 public:
 	SoundPC98_EoB(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundPC98_EoB() override;
+	~SoundPC98_EoB();
 
 	kType getMusicType() const override;
 
@@ -537,7 +537,7 @@ class CapcomPC98AudioDriver;
 class SoundPC98_Darkmoon : public Sound {
 public:
 	SoundPC98_Darkmoon(KyraEngine_v1 *vm, MidiDriver::DeviceHandle dev, Audio::Mixer *mixer);
-	~SoundPC98_Darkmoon() override;
+	~SoundPC98_Darkmoon();
 
 	kType getMusicType() const override;
 	kType getSfxType() const override;
@@ -591,7 +591,7 @@ class SegaAudioDriver;
 class SoundSegaCD_EoB : public Sound {
 public:
 	SoundSegaCD_EoB(KyraEngine_v1 *vm, Audio::Mixer *mixer);
-	~SoundSegaCD_EoB() override;
+	~SoundSegaCD_EoB();
 
 	kType getMusicType() const override;
 

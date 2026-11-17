@@ -47,7 +47,6 @@ struct PadProfile {
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
-	hotkeyEnablerHidePress = true;
 	this->w = 0;
     this->h = 0;
     gestorCursor = new CursorGestor();
@@ -489,6 +488,13 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 		anal += Constant::intToString(inputs.frontAxisAsPad);
 		fileConfigJoystick.push_back(anal);
 	}
+	
+	fileConfigJoystick.push_back(""); // Linea en blanco
+	fileConfigJoystick.push_back("[COMMON]");
+	std::string skip = "skip=";
+	skip += Constant::intToString(inputs.hotkeyEnablerHidePress);
+	fileConfigJoystick.push_back(skip);
+
     FileList::guardarVector(ruta, fileConfigJoystick);
 	Fileio::commit(ruta.c_str());
 	
@@ -498,7 +504,7 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 }
 
 /**
-* ★ OJO: esta carga PISA las asignaciones que haya en memoria, incluidas las que
+* OJO: esta carga PISA las asignaciones que haya en memoria, incluidas las que
 * el usuario acabe de hacer en el menu y no haya guardado.
 *
 * No es que haga un clear() al principio -- es mas sutil: los bucles de abajo
@@ -545,9 +551,9 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
             currentSection = line;
             continue;
         }
-
-        // --- PARSEO DE SECCIONES ---
-        if (currentSection == "[RETROPAD_LIST]") {
+	
+		// --- PARSEO DE SECCIONES ---
+		if (currentSection == "[RETROPAD_LIST]") { 
             if (line.find("name=") == 0) {
                 currentProfileName = line.substr(5);
             } else if (!currentProfileName.empty()) {
@@ -613,8 +619,13 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
             } else if (line.find("anal=") == 0){
 				//Set a proper option for the frontend and don't rely only with the option assigned to the core
 				inputs.frontAxisAsPad = (line.substr(5) == "1");
+			} 
+        } else if (currentSection == "[COMMON]"){
+			//Don't send the hotkey button to the core until released
+			if (line.find("skip=") == 0){
+				inputs.hotkeyEnablerHidePress = (line.substr(5) == "1");
 			}
-        }
+		}
     }
 
 	/* Relleno de hueco para los gatillos del frontend (JOY_AXIS_L2/R2). Son destinos
@@ -896,6 +907,7 @@ void Joystick::updateMice(int spanW, int spanH){
 */
 bool Joystick::pollKeys(int gameStatus){
     SDL_Event event;
+	t_key_input* keyInput = inputs.keyboard_state;
 
 	inputs.mouse_rel_x = 0;
 	inputs.mouse_rel_y = 0;
@@ -942,7 +954,7 @@ bool Joystick::pollKeys(int gameStatus){
 
 					if (sdlModifier == btn) {
 						//Detectamos pulsacion del habilitador de hotkeys
-						if (!hotkeyEnablerHidePress){
+						if (!inputs.hotkeyEnablerHidePress){
 							hotkeySendToCore[p] = isDown ? 1 : 0;
 							LOG_DEBUG("Hotkey enabler pressed");
 						} else if (isDown){
@@ -954,7 +966,7 @@ bool Joystick::pollKeys(int gameStatus){
 							LOG_DEBUG("Hotkey detectada");
 							hotkeyKeyPressed[p] = 0;
 							hotkeyEnabler[p] = 0;
-						} else if (hotkeyEnablerHidePress){
+						} else if (inputs.hotkeyEnablerHidePress){
 							//En este caso marcamos que el boton asignado al habilitador de hotkeys deberia
 							//procesarse por el core normalmente
 							LOG_DEBUG("Hotkey enabler soltado pero sin hotkey pulsada. Deberia procesarse como pulsado");
@@ -1142,13 +1154,15 @@ bool Joystick::pollKeys(int gameStatus){
 					// está en nuestra tabla — algunos cores hacen su propio mapeo.
 					salvia_dispatch_keyboard_event(true, retro_key, character, retro_mod);
 				} else if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
-					t_key_input *keyInput = &inputs.keyboard_state[retro_key];
-					keyInput->keyjoydown = true;
-					keyInput->key        = retro_key;
-					keyInput->keyMod     = retro_mod;
-					keyInput->unicode    = character;
+					keyInput[retro_key].keyjoydown = true;
+					keyInput[retro_key].key        = retro_key;
+					keyInput[retro_key].keyMod     = retro_mod;
+					keyInput[retro_key].unicode    = character;
+
+					if (keyInput[RETROK_F4].keyjoydown && keyInput[RETROK_F4].keyMod & RETROKMOD_ALT){
+						evento.quit = true;
+					}
 				}
-				
 				break;
 			}
 
@@ -1175,6 +1189,9 @@ bool Joystick::pollKeys(int gameStatus){
 			}
         }
     }
+
+	
+
     return true;
 }
 

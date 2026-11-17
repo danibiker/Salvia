@@ -116,7 +116,8 @@ void UCProcess::freeOnTerminate(uint16 index, int type) {
 }
 
 void UCProcess::terminate() {
-	for (auto &i : _freeOnTerminate) {
+	for (auto rfIt119 = _freeOnTerminate.begin(), rfEnd119 = _freeOnTerminate.end(); rfIt119 != rfEnd119; ++rfIt119) {
+		auto &i = *rfIt119;
 		uint16 index = i.first;
 		int typeNum = i.second;
 
@@ -159,7 +160,8 @@ void UCProcess::saveData(Common::WriteStream *ws) {
 	ws->writeUint16LE(_ip);
 	ws->writeUint32LE(_temp32);
 	ws->writeUint32LE(static_cast<uint32>(_freeOnTerminate.size()));
-	for (const auto &i : _freeOnTerminate) {
+	for (auto rfIt162 = _freeOnTerminate.begin(), rfEnd162 = _freeOnTerminate.end(); rfIt162 != rfEnd162; ++rfIt162) {
+		const auto &i = *rfIt162;
 		ws->writeUint16LE(i.first);
 		ws->writeUint32LE(static_cast<uint32>(i.second));
 	}

@@ -67,7 +67,7 @@ protected:
 	void clearKeyQueue() override {}
 
 	PreAgiEngine(OSystem *syst, const AGIGameDescription *gameDesc);
-	~PreAgiEngine() override;
+	~PreAgiEngine();
 	int getGameId() const { return _gameId; }
 
 	void clearImageStack() override {}

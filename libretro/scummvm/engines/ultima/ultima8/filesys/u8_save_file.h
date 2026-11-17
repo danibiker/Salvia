@@ -33,7 +33,7 @@ public:
 	//! create U8SaveFile from datasource; U8SaveFile takes ownership of ds
 	//! and deletes it when destructed
 	explicit U8SaveFile(Common::SeekableReadStream *rs);
-	~U8SaveFile() override;
+	~U8SaveFile();
 
 	//! Check if constructed object is indeed a valid archive
 	bool isValid() const {

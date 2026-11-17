@@ -43,7 +43,7 @@ class SoundDesc;
 class SoundBlaster : public SoundMixer {
 public:
 	SoundBlaster(Audio::Mixer &mixer);
-	~SoundBlaster() override;
+	~SoundBlaster();
 
 	void playSample(SoundDesc &sndDesc, int16 repCount,
 			int16 frequency, int16 fadeLength = 0);

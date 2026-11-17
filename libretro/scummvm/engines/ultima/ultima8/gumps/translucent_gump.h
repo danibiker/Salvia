@@ -38,7 +38,7 @@ public:
 	TranslucentGump();
 	TranslucentGump(int x, int y, int width, int height, uint16 owner = 0,
 	     uint32 flags = 0, int32 layer = LAYER_NORMAL);
-	~TranslucentGump() override;
+	~TranslucentGump();
 
 	// Paint this Gump
 	void PaintThis(RenderSurface *, int32 lerp_factor, bool scaled) override;

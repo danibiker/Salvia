@@ -43,7 +43,7 @@ class SaveWriter;
 class SaveConverter : public Common::SeekableReadStream {
 public:
 	SaveConverter(GobEngine *vm, const Common::String &fileName);
-	~SaveConverter() override;
+	~SaveConverter();
 
 	/** Clear the converter. */
 	virtual void clear();
@@ -111,7 +111,7 @@ private:
 class SaveConverter_Notes : public SaveConverter {
 public:
 	SaveConverter_Notes(GobEngine *vm, uint32 notesSize, const Common::String &fileName = "");
-	~SaveConverter_Notes() override;
+	~SaveConverter_Notes();
 
 	int isOldSave(Common::InSaveFile **save = 0) const override;
 	char *getDescription(Common::SeekableReadStream &save) const override;
@@ -128,7 +128,7 @@ private:
 class SaveConverter_v2 : public SaveConverter {
 public:
 	SaveConverter_v2(GobEngine *vm, const Common::String &fileName = "");
-	~SaveConverter_v2() override;
+	~SaveConverter_v2();
 
 	int isOldSave(Common::InSaveFile **save = 0) const override;
 	char *getDescription(Common::SeekableReadStream &save) const override;
@@ -147,7 +147,7 @@ private:
 class SaveConverter_v3 : public SaveConverter {
 public:
 	SaveConverter_v3(GobEngine *vm, const Common::String &fileName = "");
-	~SaveConverter_v3() override;
+	~SaveConverter_v3();
 
 	int isOldSave(Common::InSaveFile **save = 0) const override;
 	char *getDescription(Common::SeekableReadStream &save) const override;
@@ -169,7 +169,7 @@ private:
 class SaveConverter_v4 : public SaveConverter {
 public:
 	SaveConverter_v4(GobEngine *vm, const Common::String &fileName = "");
-	~SaveConverter_v4() override;
+	~SaveConverter_v4();
 
 	int isOldSave(Common::InSaveFile **save = 0) const override;
 	char *getDescription(Common::SeekableReadStream &save) const override;

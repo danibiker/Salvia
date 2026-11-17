@@ -298,7 +298,7 @@ class PictureMgr_Mickey_Winnie;
 class WinnieEngine : public PreAgiEngine {
 public:
 	WinnieEngine(OSystem *syst, const AGIGameDescription *gameDesc);
-	~WinnieEngine() override;
+	~WinnieEngine();
 
 	void init();
 	Common::Error go() override;

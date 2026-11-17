@@ -102,7 +102,7 @@ protected:
 
 public:
 	Disk_ns(Parallaction *vm);
-	~Disk_ns() override;
+	~Disk_ns();
 
 	Common::String selectArchive(const Common::String &name) override;
 	void setLanguage(uint16 language) override;
@@ -128,7 +128,7 @@ protected:
 
 public:
 	DosDisk_ns(Parallaction *vm);
-	~DosDisk_ns() override;
+	~DosDisk_ns();
 
 	void init() override;
 
@@ -163,7 +163,7 @@ protected:
 
 public:
 	AmigaDisk_ns(Parallaction *vm);
-	~AmigaDisk_ns() override;
+	~AmigaDisk_ns();
 
 	void init() override;
 
@@ -200,7 +200,7 @@ protected:
 
 public:
 	Disk_br(Parallaction *vm);
-	~Disk_br() override;
+	~Disk_br();
 };
 
 //	for the moment DosDisk_br subclasses Disk. When Amiga support will

@@ -39,7 +39,7 @@ protected:
 
 public:
 	Town();
-	~Town() override {}
+	~Town() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

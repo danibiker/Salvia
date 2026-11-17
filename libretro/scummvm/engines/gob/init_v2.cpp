@@ -80,7 +80,8 @@ void Init_v2::initGame() {
 		// Add additional applications directories (e.g. "Read/Count 4-5 years").
 		Common::FSList subdirs;
 		gameDataDir.getChildren(subdirs, Common::FSNode::kListDirectoriesOnly);
-		for (const Common::FSNode &subdirNode : subdirs) {
+		for (auto rfIt83 = subdirs.begin(), rfEnd83 = subdirs.end(); rfIt83 != rfEnd83; ++rfIt83) {
+			const Common::FSNode &subdirNode = *rfIt83;
 			Common::FSDirectory subdir(subdirNode);
 			if (subdir.hasFile("c51.stk") || subdir.hasFile("c61.stk") || subdir.hasFile("l51.stk") || subdir.hasFile("l61.stk")) {
 				debugC(1, kDebugFileIO, "Found Adibou/Adi application subdirectory \"%s\", adding it to the search path", subdir.getFSNode().getName().c_str());

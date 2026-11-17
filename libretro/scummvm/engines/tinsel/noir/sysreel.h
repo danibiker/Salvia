@@ -26,7 +26,9 @@
 
 namespace Tinsel {
 
-enum class SysReel {
+// C++03: scoped like the original "enum class" (VS2010 accepts SysReel::VALUE)
+struct SysReelScope {
+enum SysReel {
 	NOTEPAD_OPENING = 4,
 	NOTEPAD_OPEN = 5,
 	NOTEPAD_CLOSED = 6,
@@ -47,10 +49,12 @@ enum class SysReel {
 	RIGHT = 30,
 	LOADSCREEN = 31
 };
+};
+typedef SysReelScope::SysReel SysReel;
 
 class SystemReel {
 public:
-	SystemReel() = default;
+	SystemReel() {}
 
 	SCNHANDLE get(SysReel index);
 	void set(int32 index, SCNHANDLE reel);

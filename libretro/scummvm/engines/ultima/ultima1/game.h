@@ -51,7 +51,7 @@ public:
 public:
 	CLASSDEF;
 	Ultima1Game();
-	~Ultima1Game() override;
+	~Ultima1Game();
 
 	/**
 	 * Handles loading and saving games

@@ -335,7 +335,8 @@ bool Creature::specialAction() {
 		if (mapdist <= 3 && xu4_random(2) == 0 && (g_context->_location->_context & CTX_CITY) == 0) {
 			Common::Array<Coords> path = gameGetDirectionalActionPath(dir, MASK_DIR_ALL, _coords,
 			                           1, 3, nullptr, false);
-			for (const auto &coords : path) {
+			for (auto rfIt338 = path.begin(), rfEnd338 = path.end(); rfIt338 != rfEnd338; ++rfIt338) {
+				const auto &coords = *rfIt338;
 				if (creatureRangeAttack(coords, this))
 					break;
 			}
@@ -356,7 +357,8 @@ bool Creature::specialAction() {
 			// nothing (not even mountains!) can block cannonballs
 			Common::Array<Coords> path = gameGetDirectionalActionPath(dir, broadsidesDirs, _coords,
 			                           1, 3, nullptr, false);
-			for (const auto &coords : path) {
+			for (auto rfIt359 = path.begin(), rfEnd359 = path.end(); rfIt359 != rfEnd359; ++rfIt359) {
+				const auto &coords = *rfIt359;
 				if (fireAt(coords, false))
 					break;
 			}
@@ -547,7 +549,8 @@ void Creature::act(CombatController *controller) {
 		/* Apply the sleep spell to party members still in combat */
 		if (!isPartyMember(this)) {
 			PartyMemberVector party = controller->getMap()->getPartyMembers();
-			for (auto *member : party) {
+			for (auto rfIt550 = party.begin(), rfEnd550 = party.end(); rfIt550 != rfEnd550; ++rfIt550) {
+				auto *member = *rfIt550;
 				if (xu4_random(2) == 0)
 					member->putToSleep();
 			}
@@ -598,7 +601,8 @@ void Creature::act(CombatController *controller) {
 		Common::Array<Coords> path = gameGetDirectionalActionPath(dir, MASK_DIR_ALL, m_coords,
 		                           1, 11, &Tile::canAttackOverTile, false);
 		bool hit = false;
-		for (const auto &coords : path) {
+		for (auto rfIt601 = path.begin(), rfEnd601 = path.end(); rfIt601 != rfEnd601; ++rfIt601) {
+			const auto &coords = *rfIt601;
 			if (controller->rangedAttack(coords, this)) {
 				hit = true;
 				break;
@@ -758,7 +762,8 @@ Creature *Creature::nearestOpponent(int *dist, bool ranged) {
 	bool jinx = (*g_context->_aura == Aura::JINX);
 	Map *map = getMap();
 
-	for (auto *obj : map->_objects) {
+	for (auto rfIt761 = map->_objects.begin(), rfEnd761 = map->_objects.end(); rfIt761 != rfEnd761; ++rfIt761) {
+		auto *obj = *rfIt761;
 		if (!isCreature(obj))
 			continue;
 
@@ -893,7 +898,8 @@ void CreatureMgr::loadAll() {
 	const Config *config = Config::getInstance();
 	Common::Array<ConfigElement> creatureConfs = config->getElement("creatures").getChildren();
 
-	for (const auto &i : creatureConfs) {
+	for (auto rfIt896 = creatureConfs.begin(), rfEnd896 = creatureConfs.end(); rfIt896 != rfEnd896; ++rfIt896) {
+		const auto &i = *rfIt896;
 		if (i.getName() != "creature")
 			continue;
 
@@ -906,7 +912,8 @@ void CreatureMgr::loadAll() {
 }
 
 Creature *CreatureMgr::getByTile(MapTile tile) {
-	for (const auto &c : _creatures) {
+	for (auto rfIt909 = _creatures.begin(), rfEnd909 = _creatures.end(); rfIt909 != rfEnd909; ++rfIt909) {
+		const auto &c = *rfIt909;
 		if (c._value->getTile() == tile)
 			return c._value;
 	}
@@ -925,7 +932,8 @@ Creature *CreatureMgr::getById(CreatureId id) {
 }
 
 Creature *CreatureMgr::getByName(Common::String name) {
-	for (const auto &c : _creatures) {
+	for (auto rfIt928 = _creatures.begin(), rfEnd928 = _creatures.end(); rfIt928 != rfEnd928; ++rfIt928) {
+		const auto &c = *rfIt928;
 		if (scumm_stricmp(c._value->getName().c_str(), name.c_str()) == 0)
 			return c._value;
 	}
@@ -982,7 +990,8 @@ Creature *CreatureMgr::randomAmbushing() {
 	    randCreature;
 
 	/* first, find out how many creatures exist that might ambush you */
-	for (const auto &c : _creatures) {
+	for (auto rfIt985 = _creatures.begin(), rfEnd985 = _creatures.end(); rfIt985 != rfEnd985; ++rfIt985) {
+		const auto &c = *rfIt985;
 		if (c._value->ambushes())
 			numAmbushingCreatures++;
 	}
@@ -993,7 +1002,8 @@ Creature *CreatureMgr::randomAmbushing() {
 		numAmbushingCreatures = 0;
 
 		/* now, find the one we selected */
-		for (const auto &c : _creatures) {
+		for (auto rfIt996 = _creatures.begin(), rfEnd996 = _creatures.end(); rfIt996 != rfEnd996; ++rfIt996) {
+			const auto &c = *rfIt996;
 			if (c._value->ambushes()) {
 				/* found the creature - return it! */
 				if (numAmbushingCreatures == randCreature)

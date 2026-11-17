@@ -47,7 +47,7 @@
 
 namespace Gob {
 
-class SurfacePrimitives final : public Graphics::Primitives {
+class SurfacePrimitives : public Graphics::Primitives {
 public:
         void drawPoint(int x, int y, uint32 color, void *data) override {
 		Surface *s = (Surface *)data;

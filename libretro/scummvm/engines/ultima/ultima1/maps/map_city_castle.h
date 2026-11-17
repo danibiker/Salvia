@@ -142,7 +142,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~MapCity() override {}
+	~MapCity() {}
 
 	/**
 	 * Load the map

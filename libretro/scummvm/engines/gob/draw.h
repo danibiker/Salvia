@@ -262,7 +262,7 @@ public:
 	void spriteOperation(int16 operation, bool ttsAddHotspotText = true) override;
 
 	Draw_v1(GobEngine *vm);
-	~Draw_v1() override {}
+	~Draw_v1() {}
 };
 
 class Draw_v2 : public Draw_v1 {
@@ -275,7 +275,7 @@ public:
 	void spriteOperation(int16 operation, bool ttsAddHotspotText = true) override;
 
 	Draw_v2(GobEngine *vm);
-	~Draw_v2() override {}
+	~Draw_v2() {}
 
 private:
 	uint8 _mayorWorkaroundStatus;
@@ -288,13 +288,13 @@ public:
 	void initScreen() override;
 
 	Draw_Bargon(GobEngine *vm);
-	~Draw_Bargon() override {}
+	~Draw_Bargon() {}
 };
 
 class Draw_Fascination: public Draw_v2 {
 public:
 	Draw_Fascination(GobEngine *vm);
-	~Draw_Fascination() override {}
+	~Draw_Fascination() {}
 	void spriteOperation(int16 operation, bool ttsAddHotspotText = true) override;
 
 	void decompWin(int16 x, int16 y, SurfacePtr destPtr);
@@ -318,19 +318,21 @@ public:
 class Draw_Playtoons: public Draw_v2 {
 private:
 	struct TotTextInfo {
+	TotTextInfo() : rectLeft(0), rectRight(0), rectTop(0), rectBottom(0), colCmd(0), fontIndex(0), color(0) {}
+
 		Common::String str;
-		int16 rectLeft = 0;
-		int16 rectRight = 0;
-		int16 rectTop = 0;
-		int16 rectBottom = 0;
-		int16 colCmd = 0;
-		int16 fontIndex = 0;
-		int16 color = 0;
+		int16 rectLeft;
+		int16 rectRight;
+		int16 rectTop;
+		int16 rectBottom;
+		int16 colCmd;
+		int16 fontIndex;
+		int16 color;
 	};
 
 public:
 	Draw_Playtoons(GobEngine *vm);
-	~Draw_Playtoons() override {}
+	~Draw_Playtoons() {}
 	void printTotText(int16 id) override;
 	void spriteOperation(int16 operation, bool ttsAddHotspotText = true) override;
 };
@@ -339,7 +341,7 @@ public:
 class Draw_v7 : public Draw_Playtoons {
 public:
 	Draw_v7(GobEngine *vm);
-	~Draw_v7() override;
+	~Draw_v7();
 
 	void initScreen() override;
 	void animateCursor(int16 cursor) override;

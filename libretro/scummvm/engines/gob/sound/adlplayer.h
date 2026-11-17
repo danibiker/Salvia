@@ -42,7 +42,7 @@ namespace Gob {
 class ADLPlayer : public AdLib {
 public:
 	ADLPlayer();
-	~ADLPlayer() override;
+	~ADLPlayer();
 
 	bool load(Common::SeekableReadStream &adl);
 	bool load(const byte *data, uint32 dataSize, int index = -1);

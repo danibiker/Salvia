@@ -68,7 +68,8 @@ void Armors::loadConf() {
 	const Config *config = Config::getInstance();
 
 	Common::Array<ConfigElement> armorConfs = config->getElement("armors").getChildren();
-	for (const auto &i : armorConfs) {
+	for (auto rfIt71 = armorConfs.begin(), rfEnd71 = armorConfs.end(); rfIt71 != rfEnd71; ++rfIt71) {
+		const auto &i = *rfIt71;
 		if (i.getName() != "armor")
 			continue;
 
@@ -85,7 +86,8 @@ Armor::Armor(ArmorType armorType, const ConfigElement &conf) :
 	_defense = conf.getInt("defense");
 
 	Common::Array<ConfigElement> contraintConfs = conf.getChildren();
-	for (const auto &i : contraintConfs) {
+	for (auto rfIt88 = contraintConfs.begin(), rfEnd88 = contraintConfs.end(); rfIt88 != rfEnd88; ++rfIt88) {
+		const auto &i = *rfIt88;
 		byte useMask = 0;
 
 		if (i.getName() != "constraint")

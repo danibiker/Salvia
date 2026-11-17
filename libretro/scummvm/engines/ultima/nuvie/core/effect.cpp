@@ -1319,8 +1319,8 @@ void TileFadeEffect::add_actor_anim() {
 	add_tile_anim(loc, from);
 
 	const Common::List<Obj *> &surrounding_objs = actor->get_surrounding_obj_list();
-	for (Obj *obj : surrounding_objs)
-		add_obj_anim(obj);
+	for (auto rfIt1322 = surrounding_objs.begin(), rfEnd1322 = surrounding_objs.end(); rfIt1322 != rfEnd1322; ++rfIt1322)
+		{ Obj *obj = *rfIt1322; add_obj_anim(obj); }
 }
 
 void TileFadeEffect::add_obj_anim(Obj *obj) {
@@ -1420,8 +1420,8 @@ void TileBlackFadeEffect::add_actor_anim() {
 	add_tile_anim(loc, from);
 
 	const Common::List<Obj *> &surrounding_objs = actor->get_surrounding_obj_list();
-	for (Obj *o : surrounding_objs)
-		add_obj_anim(o);
+	for (auto rfIt1423 = surrounding_objs.begin(), rfEnd1423 = surrounding_objs.end(); rfIt1423 != rfEnd1423; ++rfIt1423)
+		{ Obj *o = *rfIt1423; add_obj_anim(o); }
 }
 
 void TileBlackFadeEffect::add_obj_anim(Obj *o) {

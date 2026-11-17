@@ -135,7 +135,7 @@ friend class SeqPlayer_HOF;		// For skipFlag()
 friend class TransferPartyWiz;	// For save state API
 public:
 	KyraEngine_v1(OSystem *system, const GameFlags &flags);
-	~KyraEngine_v1() override;
+	~KyraEngine_v1();
 
 	uint8 game() const { return _flags.gameID; }
 	const GameFlags &gameFlags() const { return _flags; }

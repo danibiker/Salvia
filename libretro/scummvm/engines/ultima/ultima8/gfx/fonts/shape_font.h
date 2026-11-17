@@ -38,7 +38,7 @@ class ShapeFont : public Font, public Shape {
 public:
 	ShapeFont(const uint8 *data, uint32 size, const ConvertShapeFormat *format,
 	          const uint16 flexId, const uint32 shapenum);
-	~ShapeFont() override;
+	~ShapeFont();
 
 	int getHeight() override;
 	int getBaseline() override;

@@ -31,7 +31,7 @@ namespace Nuvie {
 class CEmuopl: public Copl {
 public:
 	CEmuopl(int rate, bool bit16, bool usestereo);  // rate = sample rate
-	~CEmuopl() override;
+	~CEmuopl();
 
 	int getRate() {
 		return oplRate;

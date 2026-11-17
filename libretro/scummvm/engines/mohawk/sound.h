@@ -188,8 +188,10 @@ struct DataChunk {
  * An empty range means that the resource has no supported embedded loop.
  */
 struct MohawkWaveLoopInfo {
-	uint32 start = 0;
-	uint32 end = 0;
+	MohawkWaveLoopInfo() : start(0), end(0) {}
+
+	uint32 start;
+	uint32 end;
 
 	bool isValid() const { return start < end; }
 };

@@ -108,7 +108,7 @@ private:
 
 public:
 	CLUInputStream(Common::File *file, int size);
-	~CLUInputStream() override;
+	~CLUInputStream();
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 
@@ -152,7 +152,7 @@ private:
 
 public:
 	MusicInputStream(int cd, SoundFileHandle *fh, uint32 musicId, bool looping);
-	~MusicInputStream() override;
+	~MusicInputStream();
 
 	int readBuffer(int16 *buffer, const int numSamples) override;
 
@@ -220,7 +220,7 @@ private:
 
 public:
 	Sound(Sword2Engine *vm);
-	~Sound() override;
+	~Sound();
 
 	// AudioStream API
 

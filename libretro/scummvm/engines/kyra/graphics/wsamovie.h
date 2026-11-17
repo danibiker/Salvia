@@ -60,7 +60,7 @@ protected:
 class WSAMovie_v1 : public Movie {
 public:
 	WSAMovie_v1(KyraEngine_v1 *vm);
-	~WSAMovie_v1() override;
+	~WSAMovie_v1();
 
 	int width() const override { return _width; }
 	int height() const override { return _height; }

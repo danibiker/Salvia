@@ -63,7 +63,7 @@ class InventoryView : public View {
 
 public:
 	InventoryView(const Configuration *cfg);
-	~InventoryView() override;
+	~InventoryView();
 
 	bool init(Screen *tmp_screen, void *view_manager, uint16 x, uint16 y, Font *f, Party *p, TileManager *tm, ObjManager *om);
 	bool set_party_member(uint8 party_member) override;

@@ -138,7 +138,7 @@ private:
 
 public:
 	Debugger();
-	~Debugger() override;
+	~Debugger();
 };
 
 extern Debugger *g_debugger;

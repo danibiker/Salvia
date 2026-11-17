@@ -31,7 +31,7 @@ class Egg : public Item {
 	friend class ItemFactory;
 public:
 	Egg();
-	~Egg() override;
+	~Egg();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

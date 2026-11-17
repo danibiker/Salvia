@@ -109,7 +109,8 @@ SaveStateList CruiseMetaEngine::listSaves(const char *target) const {
 	filenames = saveFileMan->listSavefiles(pattern);
 
 	SaveStateList saveList;
-	for (const auto &filename : filenames) {
+	for (auto rfIt112 = filenames.begin(), rfEnd112 = filenames.end(); rfIt112 != rfEnd112; ++rfIt112) {
+		const auto &filename = *rfIt112;
 		// Obtain the last 2 digits of the filename, since they correspond to the save slot
 		int slotNum = atoi(filename.c_str() + filename.size() - 2);
 

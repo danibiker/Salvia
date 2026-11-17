@@ -50,7 +50,7 @@ class FilePack : public Pack {
 
 public:
 	FilePack();
-	~FilePack() override;
+	~FilePack();
 
 	bool open(const Common::Path &filename) override;
 	void close() override;
@@ -69,7 +69,7 @@ class TransientFilePack : public Pack {
 
 public:
 	TransientFilePack();
-	~TransientFilePack() override;
+	~TransientFilePack();
 
 	bool open(const Common::Path &filename) override;
 	void close() override;

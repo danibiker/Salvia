@@ -38,7 +38,7 @@ class Container : public Item {
 	friend class PaperdollGump;
 public:
 	Container();
-	~Container() override;
+	~Container();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

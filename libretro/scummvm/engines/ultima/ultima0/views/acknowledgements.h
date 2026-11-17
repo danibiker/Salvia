@@ -40,7 +40,7 @@ private:
 	}
 public:
 	Acknowledgements() : View("Acknowledgements") {}
-	~Acknowledgements() override {}
+	~Acknowledgements() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	void draw() override;

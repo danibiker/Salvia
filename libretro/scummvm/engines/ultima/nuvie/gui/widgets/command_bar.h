@@ -72,7 +72,7 @@ protected:
 public:
 	CommandBar();
 	CommandBar(Game *g);
-	~CommandBar() override;
+	~CommandBar();
 	virtual bool init_buttons();
 
 	void Display(bool full_redraw) override;

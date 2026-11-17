@@ -159,7 +159,8 @@ ADDetectedGame AgiMetaEngineDetection::fallbackDetect(const FileMap &allFilesXXX
 	g_fallbackDesc.version = 0x2917;
 
 	// First grab all filenames and at the same time count the number of *.wag files
-	for (const auto &file : fslist) {
+	for (auto rfIt162 = fslist.begin(), rfEnd162 = fslist.end(); rfIt162 != rfEnd162; ++rfIt162) {
+		const auto &file = *rfIt162;
 		if (file.isDirectory()) continue;
 		Common::String filename = file.getName();
 		filename.toLowercase();
@@ -200,7 +201,8 @@ ADDetectedGame AgiMetaEngineDetection::fallbackDetect(const FileMap &allFilesXXX
 	} else { // Try v3
 		char name[8];
 
-		for (const auto &f : allFiles) {
+		for (auto rfIt203 = allFiles.begin(), rfEnd203 = allFiles.end(); rfIt203 != rfEnd203; ++rfIt203) {
+			const auto &f = *rfIt203;
 			if (f._key.hasSuffix("vol.0")) {
 				memset(name, 0, 8);
 				strncpy(name, f._key.c_str(), MIN((uint)8, f._key.size() > 5 ? f._key.size() - 5 : f._key.size()));
@@ -347,7 +349,8 @@ void AgiMetaEngineDetection::getPotentialDiskImages(
 	Common::Array<Common::Path> &imageFiles) {
 
 	// build an array of files with disk image extensions
-	for (const auto &f : allFiles) {
+	for (auto rfIt350 = allFiles.begin(), rfEnd350 = allFiles.end(); rfIt350 != rfEnd350; ++rfIt350) {
+		const auto &f = *rfIt350;
 		for (size_t i = 0; i < imageExtensionCount; i++) {
 			if (f._key.baseName().hasSuffixIgnoreCase(imageExtensions[i])) {
 				debug(3, "potential disk image: %s", f._key.baseName().c_str());
@@ -373,7 +376,8 @@ ADDetectedGame AgiMetaEngineDetection::detectPcDiskImageGame(const FileMap &allF
 	getPotentialDiskImages(allFiles, pcDiskImageExtensions, ARRAYSIZE(pcDiskImageExtensions), imageFiles);
 
 	// find disk one by reading potential images until a match is found
-	for (const Common::Path &imageFile : imageFiles) {
+	for (auto rfIt376 = imageFiles.begin(), rfEnd376 = imageFiles.end(); rfIt376 != rfEnd376; ++rfIt376) {
+		const Common::Path &imageFile = *rfIt376;
 		Common::SeekableReadStream *stream = openPCDiskImage(imageFile, allFiles[imageFile]);
 		if (stream == nullptr) {
 			continue;
@@ -491,7 +495,8 @@ ADDetectedGame AgiMetaEngineDetection::detectA2DiskImageGame(const FileMap &allF
 	getPotentialDiskImages(allFiles, a2DiskImageExtensions, ARRAYSIZE(a2DiskImageExtensions), imageFiles);
 
 	// find disk one by reading potential images until a match is found
-	for (const Common::Path &imageFile : imageFiles) {
+	for (auto rfIt494 = imageFiles.begin(), rfEnd494 = imageFiles.end(); rfIt494 != rfEnd494; ++rfIt494) {
+		const Common::Path &imageFile = *rfIt494;
 		// lazily-load disk image tracks as they're accessed.
 		// prevents decoding entire disks just to read a few dynamic sectors.
 		// this would create a significant delay for images in the .woz format.

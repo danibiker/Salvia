@@ -170,7 +170,7 @@ private:
 class SegaAudioChannel_FM : public SegaAudioChannel {
 public:
 	SegaAudioChannel_FM(uint8 id, SegaAudioInterface *sai, uint8 part, uint8 regOffs);
-	~SegaAudioChannel_FM() override {}
+	~SegaAudioChannel_FM() {}
 
 private:
 	void keyOff() override;
@@ -200,7 +200,7 @@ private:
 class SegaAudioChannel_SG : public SegaAudioChannel {
 public:
 	SegaAudioChannel_SG(uint8 id, SegaAudioInterface *sai, uint8 regOffs);
-	~SegaAudioChannel_SG() override {}
+	~SegaAudioChannel_SG() {}
 
 private:
 	void keyOff() override;
@@ -237,7 +237,7 @@ private:
 class SegaAudioChannel_NG : public SegaAudioChannel_FM {
 public:
 	SegaAudioChannel_NG(uint8 id, SegaAudioInterface *sai);
-	~SegaAudioChannel_NG() override {}
+	~SegaAudioChannel_NG() {}
 
 private:
 };

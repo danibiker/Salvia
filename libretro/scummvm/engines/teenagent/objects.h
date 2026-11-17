@@ -164,7 +164,7 @@ struct Object {
 	//19
 	Common::String name, description;
 
-	Object(): _base(NULL), _nameSize(0) { id = 0; actorOrientation = 0; enabled = 0; _hasDefaultDescription = false;  }
+	Object(): _base(NULL), _nameSize(0), _addr(0) { id = 0; actorOrientation = 0; enabled = 0; _hasDefaultDescription = false;  }
 	void dump(int level = 0) const;
 	void setRealName();
 	void load(byte *addr, byte sceneId = 0);
@@ -183,7 +183,7 @@ protected:
 	Common::String _realName;
 
 	bool _hasDefaultDescription;
-	uint32 _addr = 0; // Address inside eseg
+	uint32 _addr; // Address inside eseg
 };
 
 struct InventoryObject {

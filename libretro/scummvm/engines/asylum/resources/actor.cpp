@@ -3557,7 +3557,8 @@ bool Actor::testPolyInLink(const Common::Point &pt, Common::Array<int> *actions)
 	if (actions->empty())
 		return false;
 
-	for (auto &action : *actions) {
+	for (auto rfIt3560 = (*actions).begin(), rfEnd3560 = (*actions).end(); rfIt3560 != rfEnd3560; ++rfIt3560) {
+		auto &action = *rfIt3560;
 		if (isInActionArea(pt, getWorld()->actions[action]))
 			return true;
 	}
@@ -3577,7 +3578,8 @@ bool Actor::isInActionArea(const Common::Point &pt, ActionArea *area) {
 
 	// Check flags
 	bool found = false;
-	for (auto &flag : area->flagNums) {
+	for (auto rfIt3580 = &area->flagNums[0], rfEnd3580 = &area->flagNums[0] + sizeof(area->flagNums) / sizeof(area->flagNums[0]); rfIt3580 != rfEnd3580; ++rfIt3580) {
+		auto &flag = *rfIt3580;
 		bool state = (flag <= 0) ? _vm->isGameFlagNotSet((GameFlag)-flag) : _vm->isGameFlagSet((GameFlag)flag);
 
 		if (!state) {

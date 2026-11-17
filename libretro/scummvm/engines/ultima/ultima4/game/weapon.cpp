@@ -68,7 +68,8 @@ void Weapons::loadConf() {
 	const Config *config = Config::getInstance();
 
 	Common::Array<ConfigElement> weaponConfs = config->getElement("weapons").getChildren();
-	for (const auto &i : weaponConfs) {
+	for (auto rfIt71 = weaponConfs.begin(), rfEnd71 = weaponConfs.end(); rfIt71 != rfEnd71; ++rfIt71) {
+		const auto &i = *rfIt71;
 		if (i.getName() != "weapon")
 			continue;
 
@@ -137,7 +138,8 @@ Weapon::Weapon(WeaponType weaponType, const ConfigElement &conf)
 	}
 
 	Common::Array<ConfigElement> contraintConfs = conf.getChildren();
-	for (const auto &i : contraintConfs) {
+	for (auto rfIt140 = contraintConfs.begin(), rfEnd140 = contraintConfs.end(); rfIt140 != rfEnd140; ++rfIt140) {
+		const auto &i = *rfIt140;
 		byte mask = 0;
 
 		if (i.getName() != "constraint")

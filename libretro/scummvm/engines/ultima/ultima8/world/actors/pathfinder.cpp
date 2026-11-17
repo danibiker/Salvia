@@ -127,8 +127,8 @@ Pathfinder::~Pathfinder() {
 		_cleanupNodes.size(), _visited.size(), expandednodes, _expandTime);
 
 	// clean up _nodes
-	for (auto *node : _cleanupNodes)
-		delete node;
+	for (auto rfIt130 = _cleanupNodes.begin(), rfEnd130 = _cleanupNodes.end(); rfIt130 != rfEnd130; ++rfIt130)
+		{ auto *node = *rfIt130; delete node; }
 	_cleanupNodes.clear();
 }
 
@@ -180,7 +180,8 @@ bool Pathfinder::alreadyVisited(const Point3 &pt) const {
 	//
 	// Linear search of an array is just as fast, or slightly faster.
 	//
-	for (const auto &i : _visited) {
+	for (auto rfIt183 = _visited.begin(), rfEnd183 = _visited.end(); rfIt183 != rfEnd183; ++rfIt183) {
+		const auto &i = *rfIt183;
 		if (i.checkPoint(pt, 8*8))
 			return true;
 	}

@@ -65,7 +65,9 @@ NeverhoodOptionsWidget::NeverhoodOptionsWidget(GuiObject *boss, const Common::St
 	Common::FSDirectory dir(ConfMan.getPath("path", _domain));
 	Common::Path extraPath(ConfMan.getPath("extrapath", _domain));
 	Common::FSDirectory extraDir(extraPath);
-	Common::Array<Common::FSDirectory *> langdirs = { &dir, dir.getSubDirectory("language") };
+	Common::Array<Common::FSDirectory *> langdirs;
+	langdirs.push_back(&dir);
+	langdirs.push_back(dir.getSubDirectory("language"));
 	if (!extraPath.empty()) {
 		langdirs.push_back(&extraDir);
 		langdirs.push_back(extraDir.getSubDirectory("language"));

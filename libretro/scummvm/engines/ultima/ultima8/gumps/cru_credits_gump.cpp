@@ -110,7 +110,8 @@ CruCreditsGump::CruCreditsGump(Common::SeekableReadStream *txtrs,
 CruCreditsGump::~CruCreditsGump() {
 	delete _background;
 
-	for (auto *line : _currentLines) {
+	for (auto rfIt113 = _currentLines.begin(), rfEnd113 = _currentLines.end(); rfIt113 != rfEnd113; ++rfIt113) {
+		auto *line = *rfIt113;
 		delete line;
 	}
 }
@@ -154,7 +155,8 @@ void CruCreditsGump::run() {
 	}
 
 	_nextScreenStart += _screens[_screenNo]._delay;
-	for (auto *line : _currentLines) {
+	for (auto rfIt157 = _currentLines.begin(), rfEnd157 = _currentLines.end(); rfIt157 != rfEnd157; ++rfIt157) {
+		auto *line = *rfIt157;
 		delete line;
 	}
 	_currentLines.clear();
@@ -172,7 +174,8 @@ void CruCreditsGump::run() {
 	if (pal && nameshapefont)
 		nameshapefont->setPalette(pal);
 
-	for (const auto &line : lines) {
+	for (auto rfIt175 = lines.begin(), rfEnd175 = lines.end(); rfIt175 != rfEnd175; ++rfIt175) {
+		const auto &line = *rfIt175;
 		Font *linefont = (line._lineType == kCredTitle) ? titlefont : namefont;
 		if (!linefont) {
 			// shouldn't happen.. just to be sure?
@@ -201,7 +204,8 @@ void CruCreditsGump::PaintThis(RenderSurface *surf, int32 lerp_factor, bool scal
 	int total = nlines * (height + vlead);
 	int yoffset = 240 - total / 2;
 
-	for (auto *line : _currentLines) {
+	for (auto rfIt204 = _currentLines.begin(), rfEnd204 = _currentLines.end(); rfIt204 != rfEnd204; ++rfIt204) {
+		auto *line = *rfIt204;
 		line->draw(surf, 0, yoffset);
 		yoffset += (height + vlead);
 	}

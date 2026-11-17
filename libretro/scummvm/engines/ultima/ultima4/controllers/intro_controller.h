@@ -81,7 +81,7 @@ public:
 class IntroController : public Controller, public Observer<Menu *, MenuEvent &> {
 public:
 	IntroController();
-	~IntroController() override;
+	~IntroController();
 
 	/**
 	 * Initializes intro state and loads in introduction graphics, text

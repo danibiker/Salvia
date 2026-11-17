@@ -30,7 +30,7 @@ namespace Kyra {
 class Screen_v2 : public Screen {
 public:
 	Screen_v2(KyraEngine_v1 *vm, OSystem *system, const ScreenDim *dimTable, const int dimTableSize);
-	~Screen_v2() override;
+	~Screen_v2();
 
 	// screen page handling
 	void checkedPageUpdate(int srcPage, int dstPage);

@@ -138,8 +138,8 @@ void UCMachine::reset() {
 	}
 
 	// clear strings, lists
-	for (auto &i : _listHeap)
-		delete i._value;
+	for (auto rfIt141 = _listHeap.begin(), rfEnd141 = _listHeap.end(); rfIt141 != rfEnd141; ++rfIt141)
+		{ auto &i = *rfIt141; delete i._value; }
 	_listHeap.clear();
 	_stringHeap.clear();
 }
@@ -2293,7 +2293,8 @@ void UCMachine::saveStrings(Common::WriteStream *ws) const {
 	_stringIDs->save(ws);
 	ws->writeUint32LE(static_cast<uint32>(_stringHeap.size()));
 
-	for (const auto &i : _stringHeap) {
+	for (auto rfIt2296 = _stringHeap.begin(), rfEnd2296 = _stringHeap.end(); rfIt2296 != rfEnd2296; ++rfIt2296) {
+		const auto &i = *rfIt2296;
 		ws->writeUint16LE(i._key);
 		ws->writeUint32LE(i._value.size());
 		ws->write(i._value.c_str(), i._value.size());
@@ -2304,7 +2305,8 @@ void UCMachine::saveLists(Common::WriteStream *ws) const {
 	_listIDs->save(ws);
 	ws->writeUint32LE(_listHeap.size());
 
-	for (const auto &i : _listHeap) {
+	for (auto rfIt2307 = _listHeap.begin(), rfEnd2307 = _listHeap.end(); rfIt2307 != rfEnd2307; ++rfIt2307) {
+		const auto &i = *rfIt2307;
 		ws->writeUint16LE(i._key);
 		i._value->save(ws);
 	}

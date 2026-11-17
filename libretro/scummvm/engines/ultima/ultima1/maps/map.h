@@ -89,7 +89,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Ultima1Map() override;
+	~Ultima1Map();
 
 	/**
 	 * Clears all map data

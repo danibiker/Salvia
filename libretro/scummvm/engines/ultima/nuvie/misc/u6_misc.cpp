@@ -695,7 +695,8 @@ sint8 get_wrapped_rel_dir(sint16 p1, sint16 p2, uint8 level) {
 Common::String encode_xml_entity(const Common::String &s) {
 	Common::String  ret;
 
-	for (const auto &c : s) {
+	for (auto rfIt698 = s.begin(), rfEnd698 = s.end(); rfIt698 != rfEnd698; ++rfIt698) {
+		const auto &c = *rfIt698;
 		switch (c) {
 		case '<':
 			ret += "&lt;";

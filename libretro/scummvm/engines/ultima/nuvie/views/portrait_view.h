@@ -61,7 +61,7 @@ class PortraitView : public View {
 
 public:
 	PortraitView(const Configuration *cfg);
-	~PortraitView() override;
+	~PortraitView();
 
 	bool init(uint16 x, uint16 y, Font *f, Party *p, Player *player, TileManager *tm, ObjManager *om, Portrait *port);
 	void Display(bool full_redraw) override;

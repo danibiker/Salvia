@@ -212,17 +212,23 @@ int VideoPlayer::openVideo(bool primary, const Common::String &file, Properties 
 			videoFile = videoFile.substr(0, videoFile.find('.'));
 
 		if (primary && (_vm->getGameType() == kGameTypeLostInTime)) {
-			static const Common::StringArray videosWithCursorLIT = {
+			static const char *const videosWithCursorLIT[] = {
 				"PORTA03", "PORTA03A", "CALE1", "AMIL2", "AMIL3B", "DELB", "DELG"
 			};
-			_noCursorSwitch = (Common::find(videosWithCursorLIT.begin(), videosWithCursorLIT.end(), videoFile) != videosWithCursorLIT.end());
+			_noCursorSwitch = false;
+			for (uint i = 0; i < ARRAYSIZE(videosWithCursorLIT); i++)
+				if (videoFile == videosWithCursorLIT[i])
+					_noCursorSwitch = true;
 		}
 
 		if (primary && (_vm->getGameType() == kGameTypeGob3)) {
-			static const Common::StringArray videosWithCursorGob3 = {
+			static const char *const videosWithCursorGob3[] = {
 				"CAIL1", "CAIL2"
 			};
-			_noCursorSwitch = (Common::find(videosWithCursorGob3.begin(), videosWithCursorGob3.end(), videoFile) != videosWithCursorGob3.end());
+			_noCursorSwitch = false;
+			for (uint i = 0; i < ARRAYSIZE(videosWithCursorGob3); i++)
+				if (videoFile == videosWithCursorGob3[i])
+					_noCursorSwitch = true;
 		}
 
 		// WORKAROUND: In Woodruff, Coh Cott vanished in one video on her party.

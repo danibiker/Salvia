@@ -56,7 +56,7 @@ private:
 
 public:
 	CruMusicProcess();
-	~CruMusicProcess() override;
+	~CruMusicProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

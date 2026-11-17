@@ -31,7 +31,8 @@ void DreamWebEngine::showRain() {
 
 	const uint8 *frameData = _mainSprites.getFrameData(58);
 
-	for (auto &rain : _rainList) {
+	for (auto rfIt34 = _rainList.begin(), rfEnd34 = _rainList.end(); rfIt34 != rfEnd34; ++rfIt34) {
+		auto &rain = *rfIt34;
 		uint16 y = rain.y + _mapAdY + _mapYStart;
 		uint16 x = rain.x + _mapAdX + _mapXStart;
 		uint16 size = rain.size;

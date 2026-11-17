@@ -232,7 +232,8 @@ void Debugger::printN(const char *fmt, ...) {
 		// Strip off any color special characters that aren't
 		// relevant for showing the text in the debugger
 		Common::String s;
-		for (const auto &c : str) {
+		for (auto rfIt235 = str.begin(), rfEnd235 = str.end(); rfIt235 != rfEnd235; ++rfIt235) {
+			const auto &c = *rfIt235;
 			if (c >= ' ' || c == '\n')
 				s += c;
 		}
@@ -669,7 +670,8 @@ bool Debugger::cmdFire(int argc, const char **argv) {
 	// nothing (not even mountains!) can block cannonballs
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir), broadsidesDirs, g_context->_location->_coords,
 		1, 3, nullptr, false);
-	for (const auto &coords : path) {
+	for (auto rfIt672 = path.begin(), rfEnd672 = path.end(); rfIt672 != rfEnd672; ++rfIt672) {
+		const auto &coords = *rfIt672;
 		if (fireAt(coords, true))
 			return isDebuggerActive();
 	}
@@ -829,7 +831,8 @@ bool Debugger::cmdJimmy(int argc, const char **argv) {
 
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir), MASK_DIR_ALL, g_context->_location->_coords,
 		1, 1, nullptr, true);
-	for (const auto &coords : path) {
+	for (auto rfIt832 = path.begin(), rfEnd832 = path.end(); rfIt832 != rfEnd832; ++rfIt832) {
+		const auto &coords = *rfIt832;
 		if (jimmyAt(coords))
 			return isDebuggerActive();
 	}
@@ -972,7 +975,8 @@ bool Debugger::cmdOpenDoor(int argc, const char **argv) {
 
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir), MASK_DIR_ALL, g_context->_location->_coords,
 		1, 1, nullptr, true);
-	for (const auto &coords : path) {
+	for (auto rfIt975 = path.begin(), rfEnd975 = path.end(); rfIt975 != rfEnd975; ++rfIt975) {
+		const auto &coords = *rfIt975;
 		if (openAt(coords))
 			return isDebuggerActive();
 	}
@@ -1226,7 +1230,8 @@ bool Debugger::cmdTalk(int argc, const char **argv) {
 
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir), MASK_DIR_ALL, g_context->_location->_coords,
 		1, 2, &Tile::canTalkOverTile, true);
-	for (const auto &coords : path) {
+	for (auto rfIt1229 = path.begin(), rfEnd1229 = path.end(); rfIt1229 != rfEnd1229; ++rfIt1229) {
+		const auto &coords = *rfIt1229;
 		if (talkAt(coords))
 			return isDebuggerActive();
 	}
@@ -1383,7 +1388,8 @@ bool Debugger::cmdDestroy(int argc, const char **argv) {
 
 	Common::Array<Coords> path = gameGetDirectionalActionPath(MASK_DIR(dir),
 		MASK_DIR_ALL, g_context->_location->_coords, 1, 1, nullptr, true);
-	for (const auto &coords : path) {
+	for (auto rfIt1386 = path.begin(), rfEnd1386 = path.end(); rfIt1386 != rfEnd1386; ++rfIt1386) {
+		const auto &coords = *rfIt1386;
 		if (destroyAt(coords)) {
 			return false;
 		}

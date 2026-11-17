@@ -254,7 +254,7 @@ public:
 	};
 
 	Events(const Configuration *cfg);
-	~Events() override;
+	~Events();
 
 	void clear();
 

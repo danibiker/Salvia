@@ -237,7 +237,7 @@ byte *GrvCursorMan_t7g::loadPalette(Common::SeekableReadStream &file) {
 class Cursor_v2 : public Cursor {
 public:
 	Cursor_v2(Common::File &file);
-	~Cursor_v2() override;
+	~Cursor_v2();
 
 	void enable() override;
 	void showFrame(uint16 frame) override;

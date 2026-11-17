@@ -45,7 +45,7 @@ public:
 
 	MessageBoxGump();
 	MessageBoxGump(const Common::String &title, const Common::String &message, uint32 title_colour, Common::Array<Common::String> *buttons);
-	~MessageBoxGump() override;
+	~MessageBoxGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

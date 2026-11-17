@@ -36,7 +36,7 @@ public:
 	uint16 samples_left;
 
 	SongAdPlug(Audio::Mixer *m, CEmuopl *o);
-	~SongAdPlug() override;
+	~SongAdPlug();
 	bool Init(const Common::Path &path, const char *fileId) override {
 		return Init(path, fileId, 0);
 	}

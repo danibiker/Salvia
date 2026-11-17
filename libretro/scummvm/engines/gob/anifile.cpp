@@ -164,7 +164,8 @@ void ANIFile::loadAnimation(Animation &animation, FrameArray &frames,
 		area.left  = area.top    =  0x7FFF;
 		area.right = area.bottom = -0x7FFF;
 
-		for (const auto &c : frame) {
+		for (auto rfIt167 = frame.begin(), rfEnd167 = frame.end(); rfIt167 != rfEnd167; ++rfIt167) {
+			const auto &c = *rfIt167;
 			uint16 cL, cT, cR, cB;
 
 			if (!getCoordinates(c.layer, c.part, cL, cT, cR, cB))

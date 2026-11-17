@@ -164,7 +164,7 @@ public:
 		yes_no_only(false), aye_nay_only(false), numbers_only(false),
 		using_target_cursor(false) {
 	}
-	~MsgScroll() override;
+	~MsgScroll();
 
 	void init(const Configuration *cfg, Font *f);
 
@@ -194,8 +194,24 @@ public:
 	virtual void set_font(uint8 font_type);
 	virtual bool is_garg_font();
 
-	template<class... TParam>
-	int print(const Common::String &format, TParam... param);
+	// C++03 (VS2010): fixed-arity overloads instead of a variadic template
+	int print(const Common::String &format) { return print_internal(&format); }
+	template<class T1>
+	int print(const Common::String &format, T1 p1) { return print_internal(&format, p1); }
+	template<class T1, class T2>
+	int print(const Common::String &format, T1 p1, T2 p2) { return print_internal(&format, p1, p2); }
+	template<class T1, class T2, class T3>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3) { return print_internal(&format, p1, p2, p3); }
+	template<class T1, class T2, class T3, class T4>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3, T4 p4) { return print_internal(&format, p1, p2, p3, p4); }
+	template<class T1, class T2, class T3, class T4, class T5>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5) { return print_internal(&format, p1, p2, p3, p4, p5); }
+	template<class T1, class T2, class T3, class T4, class T5, class T6>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6) { return print_internal(&format, p1, p2, p3, p4, p5, p6); }
+	template<class T1, class T2, class T3, class T4, class T5, class T6, class T7>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7) { return print_internal(&format, p1, p2, p3, p4, p5, p6, p7); }
+	template<class T1, class T2, class T3, class T4, class T5, class T6, class T7, class T8>
+	int print(const Common::String &format, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7, T8 p8) { return print_internal(&format, p1, p2, p3, p4, p5, p6, p7, p8); }
 
 	virtual void display_string(const Common::String &s, Font *f, bool include_on_map_window);
 	void display_string(const Common::String &s, Font *f, uint8 color, bool include_on_map_window);
@@ -290,10 +306,6 @@ private:
 	int print_internal(const Common::String *format, ...);
 };
 
-template<class... TParam>
-inline int MsgScroll::print(const Common::String &format, TParam... param) {
-	return print_internal(&format, Common::forward<TParam>(param)...);
-}
 
 } // End of namespace Nuvie
 } // End of namespace Ultima

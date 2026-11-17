@@ -74,7 +74,7 @@ protected:
 
 public:
 	Effect();
-	~Effect() override;
+	~Effect();
 
 	void retain() {
 		retain_count++;
@@ -180,7 +180,7 @@ public:
 		timer = nullptr;
 		start_timer(delay);
 	}
-	~TimedEffect() override                 {
+	~TimedEffect()                 {
 		stop_timer();
 	}
 
@@ -212,7 +212,7 @@ class QuakeEffect : public TimedEffect {
 
 public:
 	QuakeEffect(uint8 magnitude, uint32 duration, Actor *keep_on = nullptr);
-	~QuakeEffect() override;
+	~QuakeEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 
 	void init_directions();
@@ -305,7 +305,7 @@ protected:
 
 public:
 	ThrowObjectEffect();
-	~ThrowObjectEffect() override { }
+	~ThrowObjectEffect() { }
 
 	void hit_target(); // stops effect
 	void start_anim();
@@ -391,7 +391,7 @@ class SleepEffect : public Effect {
 public:
 	SleepEffect(Common::String until);
 	SleepEffect(uint8 to_hour);
-	~SleepEffect() override;
+	~SleepEffect();
 
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 	void delete_self();
@@ -429,7 +429,7 @@ public:
 	FadeEffect(FadeType fade, FadeDirection dir, uint32 color = 0, uint32 speed = 0);
 	FadeEffect(FadeType fade, FadeDirection dir, Graphics::ManagedSurface *capture, uint32 speed = 0);
 	FadeEffect(FadeType fade, FadeDirection dir, Graphics::ManagedSurface *capture, uint16 x, uint16 y, uint32 speed = 0);
-	~FadeEffect() override;
+	~FadeEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 
 	bool pixelated_fade_out();
@@ -456,7 +456,7 @@ protected:
 class GameFadeInEffect : public FadeEffect {
 public:
 	GameFadeInEffect(uint32 color);
-	~GameFadeInEffect() override;
+	~GameFadeInEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 };
 
@@ -470,7 +470,7 @@ class FadeObjectEffect : public Effect {
 	FadeDirection fade_dir;
 public:
 	FadeObjectEffect(Obj *obj, FadeDirection dir);
-	~FadeObjectEffect() override;
+	~FadeObjectEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 };
 
@@ -484,7 +484,7 @@ class VanishEffect : public Effect {
 	bool input_blocked;
 public:
 	VanishEffect(bool pause_user = VANISH_NOWAIT);
-	~VanishEffect() override;
+	~VanishEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 };
 
@@ -502,7 +502,7 @@ public:
 	TileFadeEffect(const MapCoord &loc, Tile *from, Tile *to, FadeType type, uint16 speed);
 	//TileFadeEffect(MapCoord loc, Tile *from, uint8 color_from, uint8 color_to, bool reverse, uint16 speed);
 	TileFadeEffect(Actor *a, uint16 speed);
-	~TileFadeEffect() override;
+	~TileFadeEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 
 protected:
@@ -523,7 +523,7 @@ class TileBlackFadeEffect : public TimedEffect {
 public:
 	TileBlackFadeEffect(Actor *a, uint8 fade_color, uint16 speed);
 	TileBlackFadeEffect(Obj *o, uint8 fade_color, uint16 speed);
-	~TileBlackFadeEffect() override;
+	~TileBlackFadeEffect();
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 protected:
 	void init(uint8 fade_color, uint16 speed);
@@ -546,7 +546,7 @@ class XorEffect : public TimedEffect {
 public:
 	/* eff_ms=length of visual effect */
 	XorEffect(uint32 eff_ms);
-	~XorEffect() override { }
+	~XorEffect() { }
 
 	/* Called by the timer between each effect stage. */
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
@@ -568,7 +568,7 @@ class U6WhitePotionEffect : public TimedEffect {
 public:
 	/* eff_ms=length of visual effect; delay_ms=length of x-ray effect */
 	U6WhitePotionEffect(uint32 eff_ms, uint32 delay_ms, Obj *callback_obj = nullptr);
-	~U6WhitePotionEffect() override { }
+	~U6WhitePotionEffect() { }
 
 	/* Called by the timer between each effect stage. */
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
@@ -582,7 +582,7 @@ class XRayEffect : public TimedEffect {
 public:
 	/* eff_ms=length of x-ray effect */
 	XRayEffect(uint32 eff_ms);
-	~XRayEffect() override { }
+	~XRayEffect() { }
 
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 };
@@ -596,7 +596,7 @@ public:
 		Effect::delete_self();
 	}
 	PauseEffect();
-	~PauseEffect() override { }
+	~PauseEffect() { }
 };
 
 /* Gather text from scroll input then continue. */
@@ -606,7 +606,7 @@ public:
 	/* Called by the Effect handler when input is available. */
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 	TextInputEffect(const char *allowed_chars, bool can_escape);
-	~TextInputEffect() override { }
+	~TextInputEffect() { }
 	Common::String get_input() {
 		return input;
 	}
@@ -620,7 +620,7 @@ public:
 		Effect::delete_self();
 	}
 	WizardEyeEffect(const MapCoord &location, uint16 duration);
-	~WizardEyeEffect() override { }
+	~WizardEyeEffect() { }
 };
 
 /* colors for PeerEffect */
@@ -659,7 +659,7 @@ class PeerEffect : public PauseEffect {
 
 public:
 	PeerEffect(uint16 x, uint16 y, uint8 z, Obj *callback_obj = 0);
-	~PeerEffect() override { }
+	~PeerEffect() { }
 	void init_effect();
 	void delete_self() override;
 };
@@ -692,7 +692,7 @@ protected:
 
 public:
 	AsyncEffect(Effect *e);
-	~AsyncEffect() override;
+	~AsyncEffect();
 	void run(bool process_gui_input = false);
 	uint16 callback(uint16 msg, CallBack *caller, void *data) override;
 };

@@ -47,7 +47,8 @@ void Object::remove() {
 	uint size = _maps.size();
 	uint i = 0;
 
-	for (auto *map : _maps) {
+	for (auto rfIt50 = _maps.begin(), rfEnd50 = _maps.end(); rfIt50 != rfEnd50; ++rfIt50) {
+		auto *map = *rfIt50;
 		if (i == size - 1)
 			map->removeObject(this);
 		else map->removeObject(this, false);

@@ -110,7 +110,7 @@ private:
 
 public:
 	LureEngine(OSystem *system, const LureGameDescription *gameDesc);
-	~LureEngine() override;
+	~LureEngine();
 	static LureEngine &getReference();
 	bool _saveLoadAllowed;
 

@@ -87,7 +87,7 @@ enum A2DirVersion {
 class AgiLoader_A2 : public AgiLoader {
 public:
 	AgiLoader_A2(AgiEngine *vm) : AgiLoader(vm) {}
-	~AgiLoader_A2() override;
+	~AgiLoader_A2();
 
 	void init() override;
 	int loadDirs() override;

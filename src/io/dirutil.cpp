@@ -412,7 +412,7 @@ string dirutil::getFolder(string file) {
         if (found == 0) return file.substr(0, 1);
         
         // Devolvemos la ruta hasta el ultimo separador (sin incluirlo)
-        return file.substr(0, found);
+		return Constant::replaceAll(file.substr(0, found), "/", "\\");
     }
 
 #ifdef _XBOX

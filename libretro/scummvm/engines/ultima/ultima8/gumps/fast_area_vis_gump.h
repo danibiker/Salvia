@@ -37,7 +37,7 @@ public:
 	ENABLE_RUNTIME_CLASSTYPE()
 
 	FastAreaVisGump();
-	~FastAreaVisGump() override;
+	~FastAreaVisGump();
 
 	void        PaintThis(RenderSurface *surf, int32 lerp_factor, bool scaled) override;
 	uint16      TraceObjId(int32 mx, int32 my) override;

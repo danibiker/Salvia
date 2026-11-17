@@ -352,7 +352,8 @@ Common::String Person::getIntro(Conversation *cnv) {
 Common::String Person::processResponse(Conversation *cnv, Response *response) {
 	Common::String text;
 	const Common::Array<ResponsePart> &parts = response->getParts();
-	for (const auto &i : parts) {
+	for (auto rfIt355 = parts.begin(), rfEnd355 = parts.end(); rfIt355 != rfEnd355; ++rfIt355) {
+const auto &i = *rfIt355;
 
 		// check for command triggers
 		if (i.isCommand())

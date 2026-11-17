@@ -32,8 +32,10 @@
 namespace Tinsel {
 // links two clue/title objects together
 struct HYPERLINK {
-	int32 id1 = 0;
-	int32 id2 = 0;
+	HYPERLINK() : id1(0), id2(0) {}
+
+	int32 id1;
+	int32 id2;
 };
 
 // 6 bytes large
@@ -46,13 +48,17 @@ struct ENTRY {
 	int32 indexOnPage2;
 };
 
-enum class BOOKSTATE {
+// C++03: scoped like the original "enum class" (VS2010 accepts BOOKSTATE::VALUE)
+struct BOOKSTATEScope {
+enum BOOKSTATE {
 	CLOSED = 0,
 	OPEN_UNKNOWN = 1,
 	OPEN_ANIMATING = 2,
 	OPENED = 3,
 	PAGEFLIP = 4
 };
+};
+typedef BOOKSTATEScope::BOOKSTATE BOOKSTATE;
 
 class NoteBookPolygons;
 class InventoryObjectT3;
@@ -79,7 +85,7 @@ public:
 	void stepAnimScripts();
 	void refresh();
 
-	NoteBookPolygons *_polygons = nullptr;
+	NoteBookPolygons *_polygons;
 private:
 	int addTitle(const InventoryObjectT3 &invObject);
 	void addClue(const InventoryObjectT3 &invObject);
@@ -98,19 +104,19 @@ private:
 
 	HYPERLINK _hyperlinks[MAX_HYPERS];
 
-	uint32 _numPages = 1;
-	int32 _prevPage = -1;
-	uint32 _currentPage = 1;
+	uint32 _numPages;
+	int32 _prevPage;
+	uint32 _currentPage;
 
-	NotebookPage _pages[MAX_PAGES] = {};
+	NotebookPage _pages[MAX_PAGES];
 
-	ANIM _anim = {};
-	OBJECT *_object = nullptr;
+	ANIM _anim;
+	OBJECT *_object;
 
-	ANIM _pageAnim = {};
-	OBJECT *_pageObject = nullptr;
+	ANIM _pageAnim;
+	OBJECT *_pageObject;
 
-	BOOKSTATE _state = BOOKSTATE::CLOSED;
+	BOOKSTATE _state;
 };
 
 } // End of namespace Tinsel

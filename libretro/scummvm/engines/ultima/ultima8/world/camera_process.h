@@ -45,7 +45,7 @@ public:
 	CameraProcess(const Point3 &p);               // Goto location
 	CameraProcess(const Point3 &p, int32 time);   // Scroll to location
 
-	~CameraProcess() override;
+	~CameraProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

@@ -75,7 +75,8 @@ bool U8SaveFile::hasFile(const Common::Path &path) const {
 
 int U8SaveFile::listMembers(Common::ArchiveMemberList& list) const {
 	list.clear();
-	for (const auto &member : _map) {
+	for (auto rfIt78 = _map.begin(), rfEnd78 = _map.end(); rfIt78 != rfEnd78; ++rfIt78) {
+		const auto &member = *rfIt78;
 		list.push_back(Common::ArchiveMemberPtr(new Common::GenericArchiveMember(member._key, *this)));
 	}
 

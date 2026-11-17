@@ -815,23 +815,25 @@ void BeehiveGame::tests() {
 	// 8 moves per line, in from and to pairs
 
 	// speedrun strat
-	testGame({
+	static const int kTestMoves1[] = {
 		/**/ 34, 42, /**/ 56, 50, /**/ 50, 35, /**/ 42, 55, /**/ 34, 42, /**/ 42, 49, /**/ 35, 43, /**/ 43, 50,
 		/**/ 50, 51, /**/ 51, 52, /**/ 52, 53, /**/ 53, 54, /**/ 52, 57, /**/ 52, 46, /**/ 34, 25, /**/ 34, 24,
 		/**/ 25, 23, /**/ 46, 31, /**/ 31, 30, /**/ 52, 38, /**/ 29, 12, /**/ 31, 39, /**/ 35, 28, /**/ 49, 32,
 		/**/ 31, 40, /**/ 39, 47, /**/ 20, 19, /**/ 29, 37, /**/ 57, 58, /**/ 53, 46, /**/ 53, 52
-	}, true);
+	};
+	testGame(Common::Array<int>(kTestMoves1, ARRAYSIZE(kTestMoves1)), true);
 
 	// losing game
-	testGame({
+	static const int kTestMoves2[] = {
 		/**/ 34, 25, /**/ 25, 10, /**/ 34, 17, /**/ 0, 2, /**/ 56, 57, /**/ 57, 51, /**/ 51, 50, /**/ 51, 52,
 		/**/ 51, 44, /**/ 50, 43, /**/ 50, 35, /**/ 36, 38, /**/ 35, 37, /**/ 38, 39, /**/ 38, 29, /**/ 45, 58,
 		/**/ 58, 59, /**/ 57, 45, /**/ 44, 35, /**/ 35, 26, /**/ 46, 54, /**/ 59, 60, /**/ 59, 55, /**/ 55, 40,
 		/**/ 39, 23
-	}, false);
+	};
+	testGame(Common::Array<int>(kTestMoves2, ARRAYSIZE(kTestMoves2)), false);
 
 	// copy the moveset from one of the tests to play it out yourself
-	overrideMoves = {};
+	overrideMoves.clear();
 	overrideIndex = 0;
 
 	warning("finished BeehiveGame::tests()");

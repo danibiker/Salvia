@@ -41,7 +41,7 @@ typedef Common::List<PersonRole *> PersonRoleList;
 class City : public Map {
 public:
 	City();
-	~City() override;
+	~City();
 
 	// Members
 	/**

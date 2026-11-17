@@ -2495,7 +2495,7 @@ void UpdateGroundPlane() {
 
 class NoteBookPolygonsImpl : public NoteBookPolygons {
 public:
-	NoteBookPolygonsImpl() {
+	NoteBookPolygonsImpl() : _polyIndex(0) {
 		setPolygon(NoteBookPoly::MAIN,
 				   Common::Point(220, 0),
 				   Common::Point(446, 0),
@@ -2562,7 +2562,7 @@ public:
 	}
 private:
 	static const int MAX_CLUE_POLYS = 8;
-	int _polyIndex = 0;
+	int _polyIndex;
 	POLYGON _main, _prev, _next;
 	POLYGON _cluePoly[MAX_CLUE_POLYS];
 };

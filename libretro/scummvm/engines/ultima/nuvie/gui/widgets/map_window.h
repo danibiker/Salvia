@@ -149,7 +149,7 @@ class MapWindow: public GUI_Widget {
 public:
 
 	MapWindow(const Configuration *cfg, Map *m);
-	~MapWindow() override;
+	~MapWindow();
 
 	bool init(TileManager *tm, ObjManager *om, ActorManager *am);
 

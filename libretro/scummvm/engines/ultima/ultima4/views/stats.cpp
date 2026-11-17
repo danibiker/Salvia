@@ -359,7 +359,8 @@ void StatsArea::showReagents(bool active) {
 
 	_reagentsMixMenu.show(&_mainArea);
 
-	for (const auto *item : _reagentsMixMenu) {
+	for (auto rfIt362 = _reagentsMixMenu.begin(), rfEnd362 = _reagentsMixMenu.end(); rfIt362 != rfEnd362; ++rfIt362) {
+		const auto *item = *rfIt362;
 		if (item->isVisible()) {
 			// Insert the reagent menu item shortcut character
 			shortcut.setChar('A' + r, 0);
@@ -396,7 +397,8 @@ void StatsArea::showMixtures() {
 void StatsArea::resetReagentsMenu() {
 	int i = 0, row = 0;
 
-	for (auto *item : _reagentsMixMenu) {
+	for (auto rfIt399 = _reagentsMixMenu.begin(), rfEnd399 = _reagentsMixMenu.end(); rfIt399 != rfEnd399; ++rfIt399) {
+		auto *item = *rfIt399;
 		if (g_ultima->_saveGame->_reagents[i++] > 0) {
 			item->setVisible(true);
 			item->setY(row++);

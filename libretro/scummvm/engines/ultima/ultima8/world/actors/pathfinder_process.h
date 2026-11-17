@@ -37,7 +37,7 @@ public:
 	PathfinderProcess();
 	PathfinderProcess(Actor *actor, ObjId item, bool hit = false);
 	PathfinderProcess(Actor *actor, const Point3 &target);
-	~PathfinderProcess() override;
+	~PathfinderProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

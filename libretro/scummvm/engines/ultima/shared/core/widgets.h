@@ -42,7 +42,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~StandardWidget() override {}
+	~StandardWidget() {}
 };
 
 class Creature : public StandardWidget {
@@ -78,7 +78,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~Creature() override {}
+	~Creature() {}
 
 	/**
 	 * Handles loading and saving games
@@ -115,7 +115,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~DungeonWidget() override {}
+	~DungeonWidget() {}
 
 	/**
 	 * Draws an item

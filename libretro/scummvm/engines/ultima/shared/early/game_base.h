@@ -89,7 +89,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~GameBase() override;
+	~GameBase();
 
 	/**
 	 * Called to handle any regular updates the game requires

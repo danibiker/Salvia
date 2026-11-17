@@ -38,7 +38,7 @@ class ToonEngine;
 class CharacterDrew : public Character {
 public:
 	CharacterDrew(ToonEngine *vm);
-	~CharacterDrew() override;
+	~CharacterDrew();
 	bool setupPalette() override;
 	void playStandingAnim() override;
 	void setPosition(int16 x, int16 y) override;

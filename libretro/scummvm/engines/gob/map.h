@@ -170,7 +170,7 @@ public:
 	void optimizePoints(Mult::Mult_Object *obj, int16 x, int16 y) override;
 
 	Map_v1(GobEngine *vm);
-	~Map_v1() override;
+	~Map_v1();
 
 protected:
 	void init();
@@ -188,7 +188,7 @@ public:
 	void optimizePoints(Mult::Mult_Object *obj, int16 x, int16 y) override;
 
 	Map_v2(GobEngine *vm);
-	~Map_v2() override;
+	~Map_v2();
 
 protected:
 	void loadGoblinStates(Common::SeekableReadStream &data, int index);

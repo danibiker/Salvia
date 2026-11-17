@@ -45,7 +45,7 @@ class GUI_EoB : public GUI {
 	friend class CharacterGenerator;
 public:
 	GUI_EoB(EoBCoreEngine *vm);
-	~GUI_EoB() override;
+	~GUI_EoB();
 
 	void initStaticData() {}
 

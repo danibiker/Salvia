@@ -149,21 +149,21 @@ struct IconBlock {
 };
 
 struct WindowBlock {
-	byte mode = 0;
-	byte flags = 0;
-	int16 x = 0, y = 0;
-	int16 width = 0, height = 0;
-	int16 textColumn = 0, textRow = 0;
-	int16 scrollY = 0;
-	uint16 textColumnOffset = 0, textLength = 0, textMaxLength = 0;
-	uint8 fillColor, textColor = 0;
-	IconBlock *iconPtr = nullptr;
-	WindowBlock() = default;
-	WindowBlock(const WindowBlock &) = delete;
-	WindowBlock(WindowBlock &&) = delete;
-	WindowBlock &operator=(const WindowBlock &) = delete;
-	WindowBlock &operator=(WindowBlock &&) = delete;
+	byte mode;
+	byte flags;
+	int16 x, y;
+	int16 width, height;
+	int16 textColumn, textRow;
+	int16 scrollY;
+	uint16 textColumnOffset, textLength, textMaxLength;
+	uint8 fillColor, textColor;
+	IconBlock *iconPtr;
+	WindowBlock() : mode(0), flags(0), x(0), y(0), width(0), height(0), textColumn(0), textRow(0), scrollY(0), textColumnOffset(0), textLength(0), textMaxLength(0), textColor(0), iconPtr(nullptr) {};
 	~WindowBlock() { free (iconPtr); }
+private:
+	// Non-copyable (C++03: declared, never defined)
+	WindowBlock(const WindowBlock &);
+	WindowBlock &operator=(const WindowBlock &);
 };
 // note on text offset:
 // the actual x-coordinate is: textColumn * 8 + textColumnOffset

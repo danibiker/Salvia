@@ -161,7 +161,7 @@ class PictureMgr_Troll;
 class TrollEngine : public PreAgiEngine {
 public:
 	TrollEngine(OSystem *syst, const AGIGameDescription *gameDesc);
-	~TrollEngine() override;
+	~TrollEngine();
 
 	Common::Error go() override;
 

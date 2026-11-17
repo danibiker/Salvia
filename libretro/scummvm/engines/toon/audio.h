@@ -41,7 +41,7 @@ class AudioStreamInstance : public Audio::AudioStream {
 
 public:
 	AudioStreamInstance(AudioManager *man, Audio::Mixer *mixer, Common::SeekableReadStream *stream, bool looping = false, bool deleteFileStreamAtEnd = false);
-	~AudioStreamInstance() override;
+	~AudioStreamInstance();
 	void play(bool fade = false, Audio::Mixer::SoundType soundType = Audio::Mixer::kMusicSoundType);
 	void stop(bool fade = false);
 

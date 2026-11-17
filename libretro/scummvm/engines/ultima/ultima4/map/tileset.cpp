@@ -48,7 +48,8 @@ void TileRules::load() {
 	const Config *config = Config::getInstance();
 	Common::Array<ConfigElement> rules = config->getElement("tileRules").getChildren();
 
-	for (const auto &i : rules) {
+	for (auto rfIt51 = rules.begin(), rfEnd51 = rules.end(); rfIt51 != rfEnd51; ++rfIt51) {
+		const auto &i = *rfIt51;
 		TileRule *rule = new TileRule();
 		rule->initFromConf(i);
 		(*this)[rule->_name] = rule;
@@ -91,7 +92,8 @@ void TileSets::loadAll() {
 		g_tileRules->load();
 
 	// Load all of the tilesets
-	for (const auto &i : conf) {
+	for (auto rfIt94 = conf.begin(), rfEnd94 = conf.end(); rfIt94 != rfEnd94; ++rfIt94) {
+		const auto &i = *rfIt94;
 		if (i.getName() == "tileset") {
 
 			Tileset *tileset = new Tileset();
@@ -258,7 +260,8 @@ void Tileset::load(const ConfigElement &tilesetConf) {
 
 	int index = 0;
 	Common::Array<ConfigElement> children = tilesetConf.getChildren();
-	for (const auto &i : children) {
+	for (auto rfIt261 = children.begin(), rfEnd261 = children.end(); rfIt261 != rfEnd261; ++rfIt261) {
+		const auto &i = *rfIt261;
 		if (i.getName() != "tile")
 			continue;
 

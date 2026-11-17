@@ -31,7 +31,7 @@ namespace Ultima8 {
 class QuickAvatarMoverProcess : public Process {
 public:
 	QuickAvatarMoverProcess();
-	~QuickAvatarMoverProcess() override;
+	~QuickAvatarMoverProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

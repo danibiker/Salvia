@@ -30,7 +30,7 @@ namespace Neverhood {
 class GameModule : public Module {
 public:
 	GameModule(NeverhoodEngine *vm);
-	~GameModule() override;
+	~GameModule();
 	void startup();
 	void requestRestoreGame();
 	void requestRestartGame(bool requestMainMenu);

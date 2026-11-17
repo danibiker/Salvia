@@ -88,7 +88,7 @@ class QueenEngine : public Engine {
 public:
 
 	QueenEngine(OSystem *syst);
-	~QueenEngine() override;
+	~QueenEngine();
 
 	BamScene *bam() const { return _bam; }
 	BankManager *bankMan() const { return _bankMan; }

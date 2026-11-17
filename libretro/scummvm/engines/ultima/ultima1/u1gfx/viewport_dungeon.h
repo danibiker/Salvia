@@ -41,7 +41,7 @@ protected:
 	Shared::DungeonSurface getSurface() override;
 public:
 	ViewportDungeon(TreeItem *parent) : Shared::ViewportDungeon(parent) {}
-	~ViewportDungeon() override {}
+	~ViewportDungeon() {}
 };
 
 } // End of namespace U1Gfx

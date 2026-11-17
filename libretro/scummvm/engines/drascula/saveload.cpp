@@ -62,7 +62,8 @@ void DrasculaEngine::checkForOldSaveGames() {
 	Common::StringArray filenames = saveFileMan->listSavefiles(pattern);
 	Common::Array<int> slots;
 
-	for (auto &filename : filenames) {
+	for (auto rfIt65 = filenames.begin(), rfEnd65 = filenames.end(); rfIt65 != rfEnd65; ++rfIt65) {
+		auto &filename = *rfIt65;
 		// Obtain the last 2 digits of the filename, since they correspond to the save slot
 		int slotNum = atoi(filename.c_str() + filename.size() - 2);
 

@@ -753,7 +753,8 @@ void SagaEngine::enableKeyMap(int mode) {
 
 	Common::Keymapper *keymapper = g_system->getEventManager()->getKeymapper();
 	const Common::KeymapArray &keymaps = keymapper->getKeymaps();
-	for (Common::Keymap *keymap : keymaps) {
+	for (auto rfIt756 = keymaps.begin(), rfEnd756 = keymaps.end(); rfIt756 != rfEnd756; ++rfIt756) {
+		Common::Keymap *keymap = *rfIt756;
 		const Common::String &keymapId = keymap->getId();
 		if (keymap->getType() == Common::Keymap::kKeymapTypeGame && keymapId != engineKeyMapId) {
 			keymap->setEnabled(keymapId == id);

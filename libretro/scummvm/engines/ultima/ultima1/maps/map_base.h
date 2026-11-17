@@ -53,7 +53,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~MapBase() override {}
+	~MapBase() {}
 
 	/**
 	 * Gets a tile at a given position

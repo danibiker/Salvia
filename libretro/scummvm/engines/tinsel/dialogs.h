@@ -29,6 +29,7 @@
 #include "tinsel/inv_objects.h"
 #include "tinsel/object.h"
 #include "tinsel/movers.h"
+#include "tinsel/noir/sysreel.h"
 
 namespace Common {
 class Serializer;
@@ -262,7 +263,6 @@ struct BUTTONEFFECT {
 	bool press; // true = button press; false = button toggle
 };
 
-enum class SysReel;
 
 class Dialogs {
 public:

@@ -46,7 +46,7 @@ public:
 	Parents(GobEngine *vm, const Common::String &seq, const Common::String &gct,
 	        const Common::String &childName, uint8 house, const Font &font,
 	        const byte *normalPalette, const byte *brightPalette, uint paletteSize);
-	~Parents() override;
+	~Parents();
 
 	void play();
 

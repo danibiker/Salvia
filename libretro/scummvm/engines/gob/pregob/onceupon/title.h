@@ -38,7 +38,7 @@ namespace OnceUpon {
 class Title : public SEQFile {
 public:
 	Title(GobEngine *vm);
-	~Title() override;
+	~Title();
 
 	void play();
 

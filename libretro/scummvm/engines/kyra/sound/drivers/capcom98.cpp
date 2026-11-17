@@ -115,7 +115,7 @@ private:
 	const uint16 _playFlags;
 };
 
-class CapcomPC98Player_MIDI final : public CapcomPC98Player {
+class CapcomPC98Player_MIDI : public CapcomPC98Player {
 public:
 	typedef Common::Functor0Mem<PC98AudioCore::MutexLock, CapcomPC98AudioDriverInternal> MutexProc;
 
@@ -242,12 +242,12 @@ private:
 	static const uint8 _volTablePara[128];
 };
 
-class CapcomPC98Player_FM final : public CapcomPC98Player, PC98AudioPluginDriver {
+class CapcomPC98Player_FM : public CapcomPC98Player, PC98AudioPluginDriver {
 public:
 	typedef Common::Functor0Mem<void, CapcomPC98AudioDriverInternal> CBProc;
 
 	CapcomPC98Player_FM(Audio::Mixer *mixer, CBProc &cbproc, bool playerPrio, uint16 playFlags, uint8 chanReserveFlags, uint8 chanDisableFlags, uint16 volControlMask, bool needsTimer);
-	~CapcomPC98Player_FM() override;
+	~CapcomPC98Player_FM();
 
 	bool init() override;
 	void deinit() override;

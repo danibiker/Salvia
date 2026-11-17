@@ -36,7 +36,7 @@ namespace Ultima8 {
 class CruAvatarMoverProcess : public AvatarMoverProcess {
 public:
 	CruAvatarMoverProcess();
-	~CruAvatarMoverProcess() override;
+	~CruAvatarMoverProcess();
 
 	ENABLE_RUNTIME_CLASSTYPE()
 

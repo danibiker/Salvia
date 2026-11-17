@@ -30,7 +30,7 @@ namespace Ultima8 {
 class CruGame : public Game {
 public:
 	CruGame();
-	~CruGame() override;
+	~CruGame();
 
 	//! load/init game's data files
 	bool loadFiles() override;

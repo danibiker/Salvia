@@ -44,7 +44,7 @@ protected:
 	GUI_Button *button_index[11]; // add to here when you add a button. Keep buttons in order by height
 public:
 	VideoDialog(GUI_CallBack *callback);
-	~VideoDialog() override;
+	~VideoDialog();
 	bool init();
 
 	GUI_status close_dialog();

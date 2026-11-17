@@ -134,7 +134,8 @@ SaveStateList DrasculaMetaEngine::listSaves(const char *target) const {
 	SaveStateList saveList;
 	int slotNum = 0;
 
-	for (const auto &filename : filenames) {
+	for (auto rfIt137 = filenames.begin(), rfEnd137 = filenames.end(); rfIt137 != rfEnd137; ++rfIt137) {
+		const auto &filename = *rfIt137;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		slotNum = atoi(filename.c_str() + filename.size() - 3);
 

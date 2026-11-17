@@ -35,7 +35,7 @@ public:
 		_isOpen = false;
 	}
 
-	~AdLibMidiDriver() override {}
+	~AdLibMidiDriver() {}
 
 	// MidiDriver
 	int open() override;

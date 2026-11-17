@@ -119,13 +119,13 @@ private:
 	// The original values are 6-bit RGB numbers, so they have to be shifted,
 	// except for white, which for some reason has to stay unshifted in order
 	// to work correctly.
-	const uint8 _white[3]  = {      63,      63,      63 };
-	const uint8 _red[3]    = { 63 << 2, 0  << 2, 0  << 2 };
-	const uint8 _blue[3]   = { 0  << 2, 0  << 2, 63 << 2 };
-	const uint8 _yellow[3] = { 63 << 2, 63 << 2, 0  << 2 };
-	const uint8 _green[3]  = { 0  << 2, 63 << 2, 0  << 2 };
-	const uint8 _purple[3] = { 32 << 2, 0  << 2, 32 << 2 };
-	const uint8 _black[3]  = { 0  << 2, 0  << 2, 0  << 2 };
+	static const uint8 _white[3];
+	static const uint8 _red[3];
+	static const uint8 _blue[3];
+	static const uint8 _yellow[3];
+	static const uint8 _green[3];
+	static const uint8 _purple[3];
+	static const uint8 _black[3];
 	//const uint8 _grey[3]   = { 32 << 2, 32 << 2, 32 << 2 };
 
 	struct PaletteFadeInfo {
@@ -190,7 +190,7 @@ private:
 	uint8 _currentPalette[256 * 3]; // for fading
 	uint8 _zeroPalette[256 * 3];
 
-	bool _forceNextFadeOutToBlack = false;
+	bool _forceNextFadeOutToBlack;
 };
 
 } // End of namespace Sword1

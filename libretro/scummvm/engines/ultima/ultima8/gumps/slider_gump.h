@@ -41,7 +41,7 @@ public:
 	SliderGump();
 	SliderGump(int x, int y, int16 min, int16 max,
 	           int16 value, int16 delta = 1);
-	~SliderGump() override;
+	~SliderGump();
 
 	void InitGump(Gump *newparent, bool take_focus = true) override;
 	void PaintThis(RenderSurface *surf, int32 lerp_factor, bool scaled) override;

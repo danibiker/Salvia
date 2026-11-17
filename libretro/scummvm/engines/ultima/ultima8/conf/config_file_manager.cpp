@@ -63,7 +63,8 @@ bool ConfigFileManager::readConfigFile(const Common::Path &fname, const Common::
 }
 
 void ConfigFileManager::clear() {
-	for (auto *i : _configFiles) {
+	for (auto rfIt66 = _configFiles.begin(), rfEnd66 = _configFiles.end(); rfIt66 != rfEnd66; ++rfIt66) {
+		auto *i = *rfIt66;
 		delete i;
 	}
 	_configFiles.clear();
@@ -116,10 +117,12 @@ bool ConfigFileManager::get(const Common::String &category, const Common::String
 
 Common::Array<Common::String> ConfigFileManager::listSections(const Common::String &category) const {
 	Common::Array<Common::String> sections;
-	for (const auto *i : _configFiles) {
+	for (auto rfIt119 = _configFiles.begin(), rfEnd119 = _configFiles.end(); rfIt119 != rfEnd119; ++rfIt119) {
+		const auto *i = *rfIt119;
 		if (category.equalsIgnoreCase(i->_category)) {
 			Common::INIFile::SectionList sectionList = i->_iniFile.getSections();
-			for (const auto &j : sectionList) {
+			for (auto rfIt122 = sectionList.begin(), rfEnd122 = sectionList.end(); rfIt122 != rfEnd122; ++rfIt122) {
+				const auto &j = *rfIt122;
 				sections.push_back(j.name);
 			}
 		}
@@ -130,10 +133,12 @@ Common::Array<Common::String> ConfigFileManager::listSections(const Common::Stri
 
 KeyMap ConfigFileManager::listKeyValues(const Common::String &category, const Common::String &section) const {
 	KeyMap values;
-	for (const auto *c : _configFiles) {
+	for (auto rfIt133 = _configFiles.begin(), rfEnd133 = _configFiles.end(); rfIt133 != rfEnd133; ++rfIt133) {
+		const auto *c = *rfIt133;
 		if (category.equalsIgnoreCase(c->_category) && c->_iniFile.hasSection(section)) {
 			Common::INIFile::SectionKeyList keys = c->_iniFile.getKeys(section);
-			for (const auto &j : keys) {
+			for (auto rfIt136 = keys.begin(), rfEnd136 = keys.end(); rfIt136 != rfEnd136; ++rfIt136) {
+				const auto &j = *rfIt136;
 				values[j.key] = j.value;
 			}
 		}

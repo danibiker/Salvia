@@ -57,7 +57,7 @@ public:
 	VisualItem(const Common::String &name, const Rect &r, TreeItem *parent = nullptr) : NamedItem(name),
 		_bounds(r) { init(parent); }
 
-	~VisualItem() override {
+	~VisualItem() {
 	}
 
 	/**

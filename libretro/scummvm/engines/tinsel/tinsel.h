@@ -175,7 +175,7 @@ protected:
 
 public:
 	TinselEngine(OSystem *syst, const TinselGameDescription *gameDesc);
-	~TinselEngine() override;
+	~TinselEngine();
 	int getGameId() {
 		return _gameId;
 	}
@@ -209,9 +209,9 @@ public:
 	Config *_config;
 	Scroll *_scroll;
 	Dialogs *_dialogs;
-	Notebook *_notebook = nullptr;
-	SystemReel *_systemReel = nullptr;
-	Spriter *_spriter = nullptr;
+	Notebook *_notebook;
+	SystemReel *_systemReel;
+	Spriter *_spriter;
 	bool _memoryManagerInitialized;
 
 	KEYFPTR _keyHandler;

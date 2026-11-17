@@ -31,7 +31,7 @@ namespace Neverhood {
 class Module1100 : public Module {
 public:
 	Module1100(NeverhoodEngine *vm, Module *parentModule, int which);
-	~Module1100() override;
+	~Module1100();
 protected:
 	int _sceneNum;
 	int _countdown;

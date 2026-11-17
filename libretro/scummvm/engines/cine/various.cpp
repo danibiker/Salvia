@@ -1550,7 +1550,8 @@ void addMessage(byte param1, int16 param2, int16 param3, int16 param4, int16 par
 }
 
 void removeSeq(uint16 param1, uint16 param2, uint16 param3) {
-	for (auto &seq : g_cine->_seqList) {
+	for (auto rfIt1553 = g_cine->_seqList.begin(), rfEnd1553 = g_cine->_seqList.end(); rfIt1553 != rfEnd1553; ++rfIt1553) {
+		auto &seq = *rfIt1553;
 		if (seq.objIdx == param1 && seq.var4 == param2 && seq.varE == param3) {
 			seq.var4 = -1;
 			break;
@@ -1560,7 +1561,8 @@ void removeSeq(uint16 param1, uint16 param2, uint16 param3) {
 
 // Checked against Operation Stealth 16 color DOS disassembly, should be correct.
 bool isSeqRunning(uint16 param1, uint16 param2, uint16 param3) {
-	for (auto &seq : g_cine->_seqList) {
+	for (auto rfIt1563 = g_cine->_seqList.begin(), rfEnd1563 = g_cine->_seqList.end(); rfIt1563 != rfEnd1563; ++rfIt1563) {
+		auto &seq = *rfIt1563;
 		if (seq.objIdx == param1 && seq.var4 == param2 && seq.varE == param3) {
 			// Just to be on the safe side there's a restriction of the
 			// addition's result to 16-bit arithmetic here like in the
@@ -1599,7 +1601,8 @@ void addSeqListElement(uint16 objIdx, int16 param1, int16 param2, int16 frame, i
 
 void modifySeqListElement(uint16 objIdx, int16 var4Test, int16 param1, int16 param2, int16 param3, int16 param4) {
 	// Find a suitable list element and modify it
-	for (auto &seq : g_cine->_seqList) {
+	for (auto rfIt1602 = g_cine->_seqList.begin(), rfEnd1602 = g_cine->_seqList.end(); rfIt1602 != rfEnd1602; ++rfIt1602) {
+		auto &seq = *rfIt1602;
 		if (seq.objIdx == objIdx && seq.var4 == var4Test) {
 			seq.varC  = param1;
 			seq.var18 = param2;
@@ -1882,7 +1885,8 @@ void processSeqListElement(SeqListElement &element) {
 }
 
 void processSeqList() {
-	for (auto &seq : g_cine->_seqList) {
+	for (auto rfIt1885 = g_cine->_seqList.begin(), rfEnd1885 = g_cine->_seqList.end(); rfIt1885 != rfEnd1885; ++rfIt1885) {
+		auto &seq = *rfIt1885;
 		if (seq.var4 == -1) {
 			continue;
 		}

@@ -94,7 +94,7 @@ private:
 
 public:
 	OptionsDialog(Sword2Engine *vm);
-	~OptionsDialog() override;
+	~OptionsDialog();
 
 	void paint() override;
 	void onAction(Widget *widget, int result = 0) override;
@@ -120,7 +120,7 @@ private:
 
 public:
 	SaveRestoreDialog(Sword2Engine *vm, int mode);
-	~SaveRestoreDialog() override;
+	~SaveRestoreDialog();
 
 	void updateSlots();
 	void drawEditBuffer(Slot *slot);
@@ -148,7 +148,7 @@ private:
 
 public:
 	MiniDialog(Sword2Engine *vm, uint32 headerTextId, uint32 okTextId = TEXT_OK, uint32 cancelTextId = TEXT_CANCEL);
-	~MiniDialog() override;
+	~MiniDialog();
 	void paint() override;
 	void onAction(Widget *widget, int result = 0) override;
 };

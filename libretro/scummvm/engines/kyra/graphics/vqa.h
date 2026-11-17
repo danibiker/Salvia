@@ -40,7 +40,7 @@ class Screen;
 class VQADecoder : public Video::VideoDecoder {
 public:
 	VQADecoder();
-	~VQADecoder() override;
+	~VQADecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream) override;
 	void readNextPacket() override;
@@ -80,7 +80,7 @@ private:
 	class VQAAudioTrack : public AudioTrack {
 	public:
 		VQAAudioTrack(const VQAHeader *header, Audio::Mixer::SoundType soundType);
-		~VQAAudioTrack() override;
+		~VQAAudioTrack();
 
 		void handleSND0(Common::SeekableReadStream *stream);
 		void handleSND1(Common::SeekableReadStream *stream);
@@ -96,7 +96,7 @@ private:
 	class VQAVideoTrack : public FixedRateVideoTrack {
 	public:
 		VQAVideoTrack(const VQAHeader *header);
-		~VQAVideoTrack() override;
+		~VQAVideoTrack();
 
 		uint16 getWidth() const override;
 		uint16 getHeight() const override;

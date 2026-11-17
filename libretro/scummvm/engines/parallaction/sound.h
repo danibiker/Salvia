@@ -111,7 +111,7 @@ protected:
 
 public:
 	SoundMan_ns(Parallaction_ns *vm);
-	~SoundMan_ns() override {}
+	~SoundMan_ns() {}
 
 	virtual void playSfx(const char *filename, uint channel, bool looping, int volume = -1) { }
 	virtual void stopSfx(uint channel) { }
@@ -138,7 +138,7 @@ class DosSoundMan_ns : public SoundMan_ns {
 
 public:
 	DosSoundMan_ns(Parallaction_ns *vm);
-	~DosSoundMan_ns() override;
+	~DosSoundMan_ns();
 	void playMusic() override;
 	void stopMusic() override;
 
@@ -164,7 +164,7 @@ class AmigaSoundMan_ns : public SoundMan_ns {
 
 public:
 	AmigaSoundMan_ns(Parallaction_ns *vm);
-	~AmigaSoundMan_ns() override;
+	~AmigaSoundMan_ns();
 	void playMusic() override;
 	void stopMusic() override;
 
@@ -203,7 +203,7 @@ protected:
 
 public:
 	SoundMan_br(Parallaction_br *vm);
-	~SoundMan_br() override;
+	~SoundMan_br();
 
 	virtual void playSfx(const char *filename, uint channel, bool looping, int volume = -1) { }
 	void stopSfx(uint channel);
@@ -226,7 +226,7 @@ class DosSoundMan_br : public SoundMan_br {
 
 public:
 	DosSoundMan_br(Parallaction_br *vm);
-	~DosSoundMan_br() override;
+	~DosSoundMan_br();
 
 	void playMusic() override;
 	void stopMusic() override;
@@ -244,7 +244,7 @@ class AmigaSoundMan_br : public SoundMan_br {
 
 public:
 	AmigaSoundMan_br(Parallaction_br *vm);
-	~AmigaSoundMan_br() override;
+	~AmigaSoundMan_br();
 
 	void playMusic() override;
 	void stopMusic() override;

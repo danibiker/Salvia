@@ -712,7 +712,8 @@ void Screen::drawGraphicsInQueue() {
 	// Sort by priority first
 	Common::sort(_queueItems.begin(), _queueItems.end(), &Screen::graphicQueueItemComparator);
 
-	for (const auto &item : _queueItems) {
+	for (auto rfIt715 = _queueItems.begin(), rfEnd715 = _queueItems.end(); rfIt715 != rfEnd715; ++rfIt715) {
+		const auto &item = *rfIt715;
 		if (item.type == kGraphicItemNormal) {
 			if (item.transTableNum <= 0 || Config.performance <= 1)
 				draw(item.resourceId, item.frameIndex, item.source, item.flags);

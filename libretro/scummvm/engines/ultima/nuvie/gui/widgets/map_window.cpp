@@ -120,7 +120,8 @@ MapWindow::MapWindow(const Configuration *cfg, Map *m): GUI_Widget(nullptr, 0, 0
 		custom_actor_tiles(false), tmp_map_width(0), tmp_map_height(0), tile_manager(nullptr),
 		obj_manager(nullptr), actor_manager(nullptr), map_center_xoff(0), cursor_tile(nullptr),
 		use_tile(nullptr), win_width(0), win_height(0), border_width(0), hackmove(false),
-		game_started(false), wizard_eye_info({nullptr, 0, 0, 0, nullptr}) {
+		game_started(false) {
+	memset(&wizard_eye_info, 0, sizeof(wizard_eye_info));
 
 	config->value("config/GameType", game_type);
 
@@ -751,7 +752,8 @@ void MapWindow::updateLighting() {
 			}
 		}
 
-		for (const TileInfo &ti : m_ViewableMapTiles) {
+		for (auto rfIt754 = m_ViewableMapTiles.begin(), rfEnd754 = m_ViewableMapTiles.end(); rfIt754 != rfEnd754; ++rfIt754) {
+			const TileInfo &ti = *rfIt754;
 			if (GET_TILE_LIGHT_LEVEL(ti.t) > 0)
 				screen->drawalphamap8globe(ti.x, ti.y, GET_TILE_LIGHT_LEVEL(ti.t));
 		}
@@ -949,7 +951,8 @@ inline void MapWindow::drawActor(const Actor *actor) {
 			drawTile(tile, wrapped_x, actor->y - cur_y, true);
 			if (game->get_clock()->get_timer(GAMECLOCK_TIMER_U6_INFRAVISION) != 0) {
 				const Common::List<Obj *> &surrounding_objs = actor->get_surrounding_obj_list();
-				for (Obj *obj : surrounding_objs) {
+				for (auto rfIt952 = surrounding_objs.begin(), rfEnd952 = surrounding_objs.end(); rfIt952 != rfEnd952; ++rfIt952) {
+					Obj *obj = *rfIt952;
 					const Tile *t = tile_manager->get_original_tile(obj_manager->get_obj_tile_num(obj->obj_n) + obj->frame_n);
 					uint16 wrapped_obj_x = WRAP_VIEWP(cur_x, obj->x, map_width);
 					drawTile(t, wrapped_obj_x, obj->y - cur_y, false);
@@ -2501,11 +2504,11 @@ void MapWindow::set_overlay(Graphics::ManagedSurface *surfpt) {
 bool MapWindow::in_town() const {
 	const MapCoord player_loc = actor_manager->get_player()->get_location();
 
-	for (const TileInfo &ti : m_ViewableMapTiles)
-		if (MapCoord(ti.x + cur_x, ti.y + cur_y, cur_level).distance(player_loc) <= 5 && // make sure tile is close enough
+	for (auto rfIt2504 = m_ViewableMapTiles.begin(), rfEnd2504 = m_ViewableMapTiles.end(); rfIt2504 != rfEnd2504; ++rfIt2504)
+		{ const TileInfo &ti = *rfIt2504; if (MapCoord(ti.x + cur_x, ti.y + cur_y, cur_level).distance(player_loc) <= 5 && // make sure tile is close enough
 		        (ti.t->flags1 & TILEFLAG_WALL) && (ti.t->flags1 & TILEFLAG_WALL_MASK)) { //only wall tiles with wall direction bits set.
 			return true;
-		}
+		} }
 	return false;
 }
 

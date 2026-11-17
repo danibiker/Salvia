@@ -121,7 +121,8 @@ SaveStateList AgosMetaEngine::listSaves(const char *target) const {
 	filenames = saveFileMan->listSavefiles(pattern);
 
 	SaveStateList saveList;
-	for (const auto &file : filenames) {
+	for (auto rfIt124 = filenames.begin(), rfEnd124 = filenames.end(); rfIt124 != rfEnd124; ++rfIt124) {
+		const auto &file = *rfIt124;
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		int slotNum = atoi(file.c_str() + file.size() - 3);
 

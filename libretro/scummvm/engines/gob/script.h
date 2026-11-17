@@ -142,7 +142,7 @@ public:
 
 	static uint32 getVariablesCount(const char *fileName, GobEngine *vm);
 
-	int32 _currentOpcodePos = 0; // for debugging purposes only
+	int32 _currentOpcodePos; // for debugging purposes only
 
 private:
 	struct CallEntry {

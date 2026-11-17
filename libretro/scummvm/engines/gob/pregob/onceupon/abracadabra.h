@@ -37,7 +37,7 @@ namespace OnceUpon {
 class Abracadabra : public OnceUpon {
 public:
 	Abracadabra(GobEngine *vm);
-	~Abracadabra() override;
+	~Abracadabra();
 
 	void run() override;
 

@@ -16,7 +16,7 @@
 
 
 // --- Definicion de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SHOW_DYNTXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SHOW_DYNTXT_VAL, OPC_SHOW_DYNTXT_PROG_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
 	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
 
 /* KEY_JOY_ANALOG: la opcion apunta a una DIRECCION ANALOGICA del core, no a un
@@ -195,6 +195,26 @@ public:
     // El constructor recibe el string externo por referencia y guarda su dirección (&v)
     OpcionTxtAndDynValue(std::string t, const std::string& v) 
         : Opcion(t, OPC_SHOW_DYNTXT_VAL), valor(&v), callback(NULL), context(NULL) {}
+
+    std::string ejecutar() override {
+        if (callback != NULL) {
+            // Pasamos la dirección del string original (que es lo que almacena el puntero)
+            return callback(context, (void *)valor); 
+        }
+        return "";
+    }
+};
+
+class OpcionTxtAndDynProgressValue : public OpcionTxtAndDynValue {
+public:
+	float *progress;   // fraccion 0..1 (se pinta x100)
+	float *kb;         // KB recibidos; se muestran si no hay porcentaje
+
+	// El constructor recibe el string externo por referencia y guarda su dirección (&v)
+    OpcionTxtAndDynProgressValue(std::string t, const std::string& v) 
+        : OpcionTxtAndDynValue(t, v), progress(NULL), kb(NULL) {
+		tipo = OPC_SHOW_DYNTXT_PROG_VAL;
+	}
 
     std::string ejecutar() override {
         if (callback != NULL) {
@@ -415,10 +435,14 @@ struct t_bios{
 	std::string filepath;
 	std::string urlpath;
 	std::string textFound;
+	float progress;     // fraccion 0..1 (si el servidor da el tamano)
+	float kbReceived;   // KB recibidos durante la descarga (0 fuera de ella)
 	bool found;
 
 	t_bios(){
 		found = false;
+		progress = 0.0f;
+		kbReceived = 0.0f;
 	}
 };
 
@@ -588,7 +612,8 @@ private:
 	std::string startScrapping(CONFIG_STATUS *st);	
 	std::string downloadBios(t_biosForSystem *);
 	
-	
+	static DWORD WINAPI biosDownThread(LPVOID lpParam);
+	HANDLE hBiosDownThread;
 
 public:
     GestorMenus(int screenw, int screenh);

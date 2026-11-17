@@ -42,7 +42,7 @@ public:
 	};
 
 	MainActor();
-	~MainActor() override;
+	~MainActor();
 
 	bool CanAddItem(Item *item, bool checkwghtvol = false) override;
 	bool addItem(Item *item, bool checkwghtvol = false) override;

@@ -41,7 +41,7 @@ public:
 	CreditsGump();
 	CreditsGump(const Common::String &text, int parskip = 24,
 	            uint32 flags = FLAG_PREVENT_SAVE, int32 layer = LAYER_MODAL);
-	~CreditsGump() override;
+	~CreditsGump();
 
 	// Init the gump, call after construction
 	void InitGump(Gump *newparent, bool take_focus = true) override;

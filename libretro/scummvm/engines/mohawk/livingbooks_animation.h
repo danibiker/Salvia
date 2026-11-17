@@ -117,7 +117,7 @@ protected:
 class LBAnimationItem : public LBItem {
 public:
 	LBAnimationItem(MohawkEngine_LivingBooks *_vm, LBPage *page, Common::Rect rect);
-	~LBAnimationItem() override;
+	~LBAnimationItem();
 
 	void setEnabled(bool enabled) override;
 	bool contains(Common::Point point) override;

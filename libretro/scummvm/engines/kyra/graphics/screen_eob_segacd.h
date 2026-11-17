@@ -24,8 +24,8 @@
 
 #ifdef ENABLE_EOB
 
-#define SEGA_PERFORMANCE		true
-#define SEGA_USE_MEMPOOL		true
+#define SEGA_PERFORMANCE		1
+#define SEGA_USE_MEMPOOL		1
 
 #include "kyra/graphics/screen_eob.h"
 

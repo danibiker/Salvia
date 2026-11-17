@@ -36,7 +36,7 @@ namespace Ultima8 {
 class AvatarMoverProcess : public Process {
 public:
 	AvatarMoverProcess();
-	~AvatarMoverProcess() override;
+	~AvatarMoverProcess();
 
 	void run() override;
 

@@ -161,7 +161,7 @@ public:
 class IIgsSample : public AgiSound {
 public:
 	IIgsSample(byte resourceNr, byte *data, uint32 length, uint16 type);
-	~IIgsSample() override { delete[] _sample; }
+	~IIgsSample() { delete[] _sample; }
 	uint16 type() override { return _header.type; }
 	const IIgsSampleHeader &getHeader() const { return _header; }
 	bool isValid() override { return _isValid; }
@@ -216,7 +216,7 @@ private:
 class SoundGen2GS : public SoundGen, public Audio::AudioStream {
 public:
 	SoundGen2GS(AgiBase *vm, Audio::Mixer *pMixer);
-	~SoundGen2GS() override;
+	~SoundGen2GS();
 
 	void play(int resnum) override;
 	void stop() override;

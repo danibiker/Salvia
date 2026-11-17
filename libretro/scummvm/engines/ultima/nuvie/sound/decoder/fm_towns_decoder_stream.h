@@ -37,7 +37,7 @@ public:
 
 	FMtownsDecoderStream(unsigned char *buf, uint32 len);
 	FMtownsDecoderStream(const Common::Path &filename, uint16 sample_num, bool isCompressed = true);
-	~FMtownsDecoderStream() override;
+	~FMtownsDecoderStream();
 
 	uint32 getLengthInMsec();
 

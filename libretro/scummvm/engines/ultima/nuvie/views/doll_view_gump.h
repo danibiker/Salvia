@@ -60,7 +60,7 @@ class DollViewGump : public DraggableView {
 
 public:
 	DollViewGump(const Configuration *cfg);
-	~DollViewGump() override;
+	~DollViewGump();
 
 	bool init(Screen *tmp_screen, void *view_manager, uint16 x, uint16 y, Actor *a, Font *f, Party *p, TileManager *tm, ObjManager *om);
 

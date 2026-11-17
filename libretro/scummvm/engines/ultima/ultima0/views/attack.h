@@ -48,7 +48,7 @@ private:
 
 public:
 	Attack();
-	~Attack() override {}
+	~Attack() {}
 
 	bool msgFocus(const FocusMessage &msg) override;
 	bool msgUnfocus(const UnfocusMessage &msg) override;

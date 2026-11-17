@@ -44,7 +44,7 @@ public:
 
 	GameMapGump();
 	GameMapGump(int x, int y, int w, int h);
-	~GameMapGump() override;
+	~GameMapGump();
 
 	void        PaintThis(RenderSurface *surf, int32 lerp_factor, bool scaled) override;
 

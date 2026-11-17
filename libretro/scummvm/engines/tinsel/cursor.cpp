@@ -54,8 +54,8 @@ Cursor::Cursor() {
 	_mainCursor = nullptr;
 	_auxCursor = nullptr;
 
-	_mainCursorAnim = {0, 0, 0, 0, 0};
-	_auxCursorAnim = {0, 0, 0, 0, 0};
+	memset(&_mainCursorAnim, 0, sizeof(_mainCursorAnim));
+	memset(&_auxCursorAnim, 0, sizeof(_auxCursorAnim));
 
 	_hiddenCursor = false;
 	_hiddenTrails = false;
