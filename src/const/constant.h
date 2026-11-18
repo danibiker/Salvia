@@ -346,6 +346,8 @@ typedef enum {
 		ico_turbo,
 		ico_download,
 		ico_updater,
+		ico_menu_check,
+		ico_menu_error,
 		ico_input_dpad_u,
 		ico_input_dpad_d,
 		ico_input_dpad_l,

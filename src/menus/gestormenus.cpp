@@ -20,6 +20,7 @@
 #include <video/HLSLBackground.h>
 #include <http/scrapper.h>
 #include <unzip/unziptool.h>
+#include <unzip/sevenzip.h>
 
 #include <http/pugixml.hpp>
 
@@ -45,10 +46,13 @@ extern std::string downloadCheatWithProgress();
 extern std::string lastCheatSourceName();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
-static const std::string TXT_BIOSFOUND = "found";
-static const std::string TXT_BIOSNOTFOUND = "not found";
-static const std::string TXT_BIOSDOWNLOADED = "downloaded";
-
+static const std::string TXT_BIOSFOUND = "menu.updater.bios.found";
+static const std::string TXT_BIOSNOTFOUND = "menu.updater.bios.error.notfound";
+static const std::string TXT_BIOSDOWNLOADED = "menu.updater.bios.downloaded";
+static const std::string TXT_BIOSERRORCRC = "menu.updater.bios.error.crc";
+static const std::string TXT_BIOSERRORDOWNLOAD = "menu.updater.bios.error.download";
+static const std::string TXT_BIOSDOWNLOADING = "menu.updater.bios.downloading";
+static const std::string TXT_BIOSCHECKINGCRC = "menu.updater.bios.checkingcrc";
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
@@ -341,6 +345,113 @@ void GestorMenus::poblarMenuUpdater(Menu* menuEntrada, CfgLoader *refConfig){
 	submenuUpdater->callback = &GestorMenus::fillBiosMenuAction;
 	submenuUpdater->context = this;	
 	menuEntrada->opciones.push_back(submenuUpdater);
+
+	this->menuUpdaterSbi = new Menu(LanguageManager::instance()->get("menu.updater.sbi"), menuEntrada);
+	todosLosMenus.push_back(this->menuUpdaterSbi);
+	OpcionSubMenu *submenuUpdaterSbi = new OpcionSubMenu(LanguageManager::instance()->get("menu.updater.sbi"), this->menuUpdaterSbi);
+	//Rellenamos el menu en un callback para que no afecte a la velocidad de arranque del emulador
+	submenuUpdaterSbi->callback = &GestorMenus::fillSbiMenuAction;
+	submenuUpdaterSbi->context = this;	
+	menuEntrada->opciones.push_back(submenuUpdaterSbi);
+
+}
+
+std::string GestorMenus::fillSbiMenuAction(void* inst){
+	GestorMenus* gestorMenus = static_cast<GestorMenus*>(inst);
+
+	CurlClient downloader;
+	std::string response;
+	float progress;
+	std::vector<t_bios_data> sbiDatabase;
+
+	if (downloader.fetchUrl("https://psxdatacenter.com/sbifiles.html", response, &progress)){
+		processHtmlSbi("https://psxdatacenter.com", response, sbiDatabase);
+
+		std::string system_path = dirutil::getPathPrefix("system");
+		CrcCache crcCache(system_path + Constant::getFileSep() + "salvia_crc.cache");
+
+		t_biosForSystem *biosForSystem = new t_biosForSystem();
+		biosForSystem->system = "PSX SBI Files";
+		biosForSystem->url = "";			//el elemento a descargar ya tiene la url completa
+		biosForSystem->submenu = NULL;		//No necesitamos un submenu para actualizar su estado
+		biosForSystem->allFound = true;		//Para indicar si se han encontrado todos los ficheros
+		biosForSystem->decompress = true;	//Para descomprimir los ficheros .7z
+
+		gestorMenus->menuUpdaterSbi->opciones.push_back(new OpcionExec<t_biosForSystem>(LanguageManager::instance()->get("menu.updater.bios.sys.save"), 
+			&GestorMenus::downloadBios, biosForSystem, ico_saving, gestorMenus));
+
+		for (std::size_t i=0; i < sbiDatabase[0].listBios.size(); i++){
+			t_bios *bios = new t_bios();
+
+			bios->filepath = sbiDatabase[0].dir + Constant::getFileSep() + sbiDatabase[0].listBios[i].file;
+			bios->urlpath = sbiDatabase[0].listBios[i].url;
+			bios->crc = sbiDatabase[0].listBios[i].crc;
+			if (!checkBiosCRC(crcCache, bios)){
+				biosForSystem->allFound = false;
+			}
+
+			biosForSystem->list.push_back(bios);
+
+			OpcionTxtAndDynProgressValue *option = new OpcionTxtAndDynProgressValue(sbiDatabase[0].listBios[i].file, bios->textFound);
+			option->progress = &bios->progress;
+			option->kb = &bios->kbReceived;
+			option->color = &bios->color;
+
+			gestorMenus->menuUpdaterSbi->opciones.push_back(option);
+		}
+	}
+	return "";
+}
+
+std::string GestorMenus::convertSbiName(const std::string &name){
+	std::string resp = name;
+	if (resp.length() == 10){
+		resp = Constant::replaceAll(resp, "-", "_");
+		resp.insert(8, ".");
+		resp.append(".sbi");
+	}
+	return resp;
+}
+
+void GestorMenus::processHtmlSbi(const std::string &BASE, const std::string &data, std::vector<t_bios_data> &sbiDatabase){
+	std::size_t pos = 0;
+	static const std::string TABLE_LINE = "<td class=\"col2\"";
+	
+	t_bios_data sbiData;
+	sbiData.url = BASE;
+	sbiData.dir = dirutil::getPathPrefix("system\\patches\\psx");
+	LOG_DEBUG("System: %s", sbiData.system.c_str());
+
+	while ((pos = data.find(TABLE_LINE, pos)) != std::string::npos) {
+		pos += TABLE_LINE.size();
+
+		std::size_t NameTagStart = data.find('>', pos);
+		if (NameTagStart == std::string::npos) break;
+		std::size_t NameTagEnd = data.find("</td>", pos);
+		if (NameTagEnd == std::string::npos) break;
+
+		std::string filename = data.substr(NameTagStart + 1, NameTagEnd - NameTagStart - 1);
+
+		std::size_t aOpen = data.find("<a", pos);
+		if (aOpen == std::string::npos) break;
+		std::size_t aTagEnd = data.find('>', aOpen);
+		if (aTagEnd == std::string::npos) break;
+
+		std::string url = CurlClient::getHrefContent(data, aOpen, aTagEnd, BASE);
+		LOG_DEBUG("sbi: %s", url.c_str());
+		
+		std::size_t lastSep = url.find_last_of("/\\");
+		std::size_t startSearch = (lastSep == string::npos) ? 0 : lastSep + 1;
+
+		t_file_url fileOrUrl;
+		fileOrUrl.file = url.substr(startSearch);
+		//fileOrUrl.file = convertSbiName(filename);
+		fileOrUrl.url = CurlClient::escapeFullUrl(url);
+		fileOrUrl.crc = "";
+		sbiData.listBios.push_back(fileOrUrl);
+		pos = aTagEnd;
+	}
+	sbiDatabase.push_back(sbiData);
 }
 
 std::string GestorMenus::fillBiosMenuAction(void* inst){
@@ -356,18 +467,22 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 	std::string system_path = dirutil::getPathPrefix("system");
 	
 	gestorMenus->parse_sysbios_xml(bios_xml_path, biosDatabase);
-	
-	dirutil dir;
+	/* CRC de las BIOS con cache: solo se relee un fichero si cambia su tamano o
+	 * su fecha. Se guarda al salir de esta funcion (destructor). */
+	CrcCache crcCache(system_path + Constant::getFileSep() + "salvia_crc.cache");
 	
 	for (std::size_t i=0; i < biosDatabase.size(); i++){
 		systemName = biosDatabase[i].system;
 		Menu* menuBiosForSystem = new Menu(systemName, gestorMenus->menuUpdaterBios);
 		gestorMenus->todosLosMenus.push_back(menuBiosForSystem);
-		gestorMenus->menuUpdaterBios->opciones.push_back(new OpcionSubMenu(systemName, menuBiosForSystem));
+
+		OpcionSubMenu *itemMenuSistema = new OpcionSubMenu(systemName, menuBiosForSystem, ico_menu_check);
+		gestorMenus->menuUpdaterBios->opciones.push_back(itemMenuSistema);
 	
 		t_biosForSystem *biosForSystem = new t_biosForSystem();
 		biosForSystem->system = systemName;
 		biosForSystem->url = biosDatabase[i].url;
+		biosForSystem->submenu = itemMenuSistema;
 	
 		//Boton para descargar las bios
 		menuBiosForSystem->opciones.push_back(new OpcionExec<t_biosForSystem>(LanguageManager::instance()->get("menu.updater.bios.sys.save"), 
@@ -376,7 +491,7 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 		//Add the required bios files for the system
 		for (std::size_t j=0; j < biosDatabase[i].listBios.size(); j++){
 			t_bios *bios = new t_bios();
-	
+			
 			std::string biosFullPath = system_path;
 			std::string biosRelativePath;
 	
@@ -386,27 +501,61 @@ std::string GestorMenus::fillBiosMenuAction(void* inst){
 			}
 			biosRelativePath += Constant::replaceAll(biosDatabase[i].listBios[j].file, "/", "\\");
 			biosFullPath += biosRelativePath;
-	
-			if (dir.fileExists(biosFullPath.c_str())){
-				bios->textFound = TXT_BIOSFOUND;
-				bios->found = true;
-			} else {
-				bios->textFound = TXT_BIOSNOTFOUND;
-				bios->found = false;
+
+			bios->filepath = biosFullPath;
+			bios->urlpath = biosDatabase[i].listBios[j].url;
+			bios->crc = biosDatabase[i].listBios[j].crc;
+			
+			if (!checkBiosCRC(crcCache, bios)){
 				biosForSystem->allFound = false;
 			}
 			
 			OpcionTxtAndDynProgressValue *option = new OpcionTxtAndDynProgressValue(biosDatabase[i].listBios[j].file, bios->textFound);
 			option->progress = &bios->progress;
 			option->kb = &bios->kbReceived;
+			option->color = &bios->color;
 
 			menuBiosForSystem->opciones.push_back(option);
-			bios->filepath = biosFullPath;
-			bios->urlpath = biosDatabase[i].listBios[j].url;
 			biosForSystem->list.push_back(bios);
+		}
+
+		if (!biosForSystem->allFound){
+			itemMenuSistema->icon = ico_menu_error;
 		}
 	}
 	return "";
+}
+
+bool GestorMenus::checkBiosCRC(CrcCache &crcCache, t_bios *bios){
+	bool found = true;
+
+	if (dirutil::fileExists(bios->filepath.c_str())){
+		uint32_t crc = 0;
+		bios->textFound = LanguageManager::instance()->get(TXT_BIOSCHECKINGCRC);
+
+		crcCache.getCrc(bios->filepath, crc);   // solo lee el fichero si cambio tamano o fecha
+		char buf[11] = {0}; // Zero-initialize for automatic null termination
+		_snprintf_s(buf, sizeof(buf), _TRUNCATE, "%I32u", crc); 
+		
+		if (!bios->crc.empty() && bios->crc.compare(buf) != 0){
+			bios->textFound = LanguageManager::instance()->get(TXT_BIOSERRORCRC);
+			bios->status = BS_ERRORCRC;
+			bios->color = clRed;
+			found = false;
+			LOG_DEBUG("Error CRC: %s=%s", bios->filepath.c_str(), buf);
+		} else {
+			bios->textFound = LanguageManager::instance()->get(TXT_BIOSFOUND);
+			bios->status = BS_FOUND;
+			bios->color = clHighligtOption;
+		}
+	} else {
+		bios->textFound = LanguageManager::instance()->get(TXT_BIOSNOTFOUND);
+		bios->status = BS_NOTFOUND;
+		bios->color = clRed;
+		found = false;
+	}
+
+	return found;
 }
 
 std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
@@ -414,7 +563,14 @@ std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
 
 	if (hBiosDownThread != NULL && GetExitCodeThread(hBiosDownThread, &exitCode)){
 		if (exitCode == STILL_ACTIVE)
-			return "";
+			return LanguageManager::instance()->get("menu.updater.bios.msg.activedownload");
+	}
+
+	if (biosForSystem == NULL)
+		return "";
+
+	if (biosForSystem->allFound){
+		return LanguageManager::instance()->get("menu.updater.bios.msg.alldownloaded");
 	}
 
 	hBiosDownThread = CreateThread(NULL, 0, biosDownThread, biosForSystem, CREATE_SUSPENDED, NULL);
@@ -431,19 +587,16 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 
 	LOG_DEBUG("Descargando bios..");
 	LOG_DEBUG("Bios for system: %s with url %s", biosForSystem->system.c_str(), biosForSystem->url.c_str());
-	
-	if (biosForSystem->allFound){
-		//return "All bios are already downloaded";
-		return 0;
-	}
-	
+		
 	dirutil dir;
 	CurlClient downloader;
 	float progress = 0.0f;
 	const std::string tempDir = Constant::getTmpDir();
 	const std::string localPath = tempDir + Constant::getFileSep() + "BiosDownload.zip";
+	const std::string system_path = dirutil::getPathPrefix("system");
 	bool ok = true;
-	
+	CrcCache crcCache(system_path + Constant::getFileSep() + "salvia_crc.cache");
+
 	if (biosForSystem->url.find(".zip") != std::string::npos || biosForSystem->url.find("https://archive.org/compress/") != std::string::npos){
 		if (!dir.fileExists(localPath.c_str())){
 			ok = downloader.fetchFile(biosForSystem->url, localPath, &progress);
@@ -452,54 +605,65 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 	
 		std::vector<string> pathsToExtract;
 		for (std::size_t i=0; i < biosForSystem->list.size(); i++){
-			if (!biosForSystem->list[i]->found){
+			if (biosForSystem->list[i]->status != BS_FOUND){
 				pathsToExtract.push_back(biosForSystem->list[i]->filepath);
 			}
 		}
 		extractFiles(localPath, pathsToExtract);
-	} else{
+
+	} else {
+		const int MAX_TRIES = 2;
 		for (std::size_t i=0; i < biosForSystem->list.size(); i++){
 			int tries = 0;
 			bool biosOk = false;
 
-			while (!dir.fileExists(biosForSystem->list[i]->filepath.c_str()) && tries < 2 && !biosOk){
-				LOG_DEBUG("Downloading url bios: %s", biosForSystem->url + biosForSystem->list[i]->urlpath);
-
+			while (tries < MAX_TRIES && !biosOk && !checkBiosCRC(crcCache, biosForSystem->list[i])){
+				//LOG_DEBUG("Downloading url bios: %s", biosForSystem->url + biosForSystem->list[i]->urlpath);
 				std::string dirBios = dir.getFolder(biosForSystem->list[i]->filepath);
 				if (!dir.dirExists(dirBios.c_str()))
 					dir.createDirRecursive(dirBios.c_str());
+
+				biosForSystem->list[i]->color = clWhite;
+				biosForSystem->list[i]->textFound = LanguageManager::instance()->get(TXT_BIOSDOWNLOADING);
 
 				biosOk = downloader.fetchFile(biosForSystem->url + biosForSystem->list[i]->urlpath, 
 					biosForSystem->list[i]->filepath, &(biosForSystem->list[i]->progress), &(biosForSystem->list[i]->kbReceived));
 
 				biosForSystem->list[i]->kbReceived = 0.0f;   // fin de la descarga: el menu vuelve al texto
-				biosForSystem->list[i]->textFound = TXT_BIOSDOWNLOADED;
 
+				if (!biosOk){
+					biosForSystem->list[i]->textFound = LanguageManager::instance()->get(TXT_BIOSERRORDOWNLOAD);
+					biosForSystem->list[i]->status = BS_ERRORDOWNLOAD;
+					biosForSystem->list[i]->color = clRed;
+					SDL_Delay(1000);
+				} else if (checkBiosCRC(crcCache, biosForSystem->list[i])){
+					biosForSystem->list[i]->textFound = LanguageManager::instance()->get(TXT_BIOSDOWNLOADED);
+					biosForSystem->list[i]->status = BS_DOWNLOADED;
+
+					if (biosForSystem->decompress && biosForSystem->list[i]->filepath.find(".7z") != std::string::npos){
+						std::string err;
+						float prog;
+						SevenZip::extract(biosForSystem->list[i]->filepath, dirBios, NULL, &prog, &err);
+					}
+				} 
 				tries++;
 			}
 		}
 	}
 
+	bool allBiosFound = true;
 	for (std::size_t i=0; i < biosForSystem->list.size(); i++){
-		if (dir.fileExists(biosForSystem->list[i]->filepath.c_str())){
-			LOG_DEBUG("Found bios: %s", biosForSystem->list[i]->filepath.c_str());
-			biosForSystem->list[i]->textFound = TXT_BIOSFOUND;
-			biosForSystem->list[i]->found = true;
-		} else {
-			LOG_DEBUG("Bios not found: %s", biosForSystem->list[i]->filepath.c_str());
-			biosForSystem->list[i]->textFound = TXT_BIOSNOTFOUND;
-			biosForSystem->list[i]->found = false;
+		if (!checkBiosCRC(crcCache, biosForSystem->list[i])){
+			allBiosFound = false;
 		}
 	}
-	
+
+	if (biosForSystem->submenu != NULL)
+		biosForSystem->submenu->icon = allBiosFound ? ico_menu_check : ico_menu_error;
+
 	if (ok && !localPath.empty()){
 		dir.borrarArchivo(localPath);
-		//return "Bios downloaded and extracted";
 	}
-	
-	//if (!ok){
-	//	return "Problem downloading resource";
-	//}
 
 	return 0;
 }
@@ -526,6 +690,7 @@ inline void GestorMenus::parse_sysbios_xml(const std::string& filepath, std::vec
 			t_file_url fileOrUrl;
 			fileOrUrl.file = bios.text().get();
 			fileOrUrl.url = bios.attribute("url").value();
+			fileOrUrl.crc = bios.attribute("crc").value();
 			data.listBios.push_back(fileOrUrl);
 		}
 		biosDatabase.push_back(data);
@@ -2599,7 +2764,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 					/* Descarga sin tamano conocido (servidor sin Content-Length): se
 					 * muestran los KB recibidos (en MB con un decimal a partir de 1000 KB). */
 					char buffer[32];
-					if (*(OptVal->kb) > 1024.0f)
+					if (*(OptVal->kb) >= 1024.0f)
 						sprintf_s(buffer, sizeof(buffer), "%.1f MB", *(OptVal->kb) / 1024.0f);
 					else
 						sprintf_s(buffer, sizeof(buffer), "%.0f KB", *(OptVal->kb));
@@ -2608,8 +2773,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 					value = *(OptVal->valor);
 				}
 
-				if (OptVal->callback == NULL){
-					valueColor = Constant::colors[clHighligtOption].sdlColor;
+				if (OptVal->callback == NULL && OptVal->color != NULL && *OptVal->color < clTotalColors){
+					valueColor = Constant::colors[*OptVal->color].sdlColor;
 				}
 			}
 		} else {

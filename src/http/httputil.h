@@ -58,7 +58,9 @@ class CurlClient {
 		bool postUrl(const std::string&, const std::string&, std::string&, float*);
 		bool postUrl(const std::string&, const std::string&, const std::string&, std::string&, float*);
 		bool fetchFile(const std::string&, const std::string&, float*, float* kbRecibidos = NULL);
-		std::string escape(const std::string&);
+		static std::string escape(const std::string&);
+		static std::string escapeFullUrl(const std::string&);
+		static std::string getHrefContent(const std::string &data, std::size_t startPos, std::size_t aTagEnd, std::string base, std::string prop = "href");
 
 		void setCookie(const std::string &s){
 			cookie = s;

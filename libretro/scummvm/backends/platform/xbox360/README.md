@@ -195,6 +195,13 @@ Larry 7 y Grim Fandango en Windows; The Secret of Monkey Island en Xbox 360.
 * Xbox 360: Discworld Noir (dentro de `tinsel`) es 3D con TinyGL y probablemente vaya lento, como Grim.
 * Xbox 360: los SCI32 a 640x480 con vídeo (Gabriel Knight 2, Phantasmagoria,
   Larry 7, Lighthouse) pueden ir justos; sin probar.
+* Explorador de archivos de ScummVM ("Añadir juego", "Añadir varios"): subiendo
+  de carpeta hasta arriba aparece la lista de unidades. En Windows salen todas
+  las letras de unidad; en Xbox 360 salen `Game:`, `Hdd:`, `Usb0:`, `Usb1:` y
+  `Usb2:` (el core las monta igual que `Launcher::initDrives` de Salvia si no
+  lo están) y, si alguien las ha montado, `Hdd1:`, `UsbMu0:` e `IntMu:`. Solo se
+  listan las que responden.
+* Mando: L3 abre el teclado virtual (Select queda libre).
 
 ## Juegos que no funcionan
 

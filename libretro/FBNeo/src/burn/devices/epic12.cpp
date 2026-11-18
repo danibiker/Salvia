@@ -353,6 +353,7 @@ void epic12_init(INT32 ram_size, UINT16 *ram, UINT8 *dippy)
 	m_delay_method = 0; // accurate
 	m_delay_scale = 50;
 	m_blitter_busy = 0;
+	sh4_clear_cave_blitter_delay_timer();
 	m_gfx_addr = 0;
 	m_gfx_addr_shadowcopy = 0;
 	m_gfx_scroll_x = 0;
@@ -441,6 +442,7 @@ void epic12_reset()
 #endif
 
 	m_blitter_busy = 0;
+	sh4_clear_cave_blitter_delay_timer();
 	m_gfx_addr = 0;
 	m_gfx_addr_shadowcopy = 0;
 	m_gfx_scroll_x = 0;
@@ -1186,6 +1188,8 @@ static void gfx_exec()
 void epic12_wait_blitterthread()
 {
 	thready.notify_wait();
+	m_blitter_busy = 0;
+	sh4_clear_cave_blitter_delay_timer();
 }
 
 static void gfx_exec_write(UINT32 data)
@@ -1239,13 +1243,22 @@ static void gfx_exec_write(UINT32 data)
 
 				//bprintf(0, _T("new blit_delay  %I64d   cycles  %d\n"),m_blit_delay_ns, cycles);
 
-				sh4_set_cave_blitter_delay_timer(cycles);
+				if (cycles > 0)
+				{
+					m_blitter_busy = 1;
+					sh4_set_cave_blitter_delay_timer(cycles);
 #ifdef _XBOX
-				// ibara360 architecture: CV1000 Blitter SDRAM bus contention stalls the SH-3 CPU.
-				if (cycles > 0 && dips && !(dips[1] & 0x08)) {
-					Sh3BurnCycles(cycles);
-				}
+					// ibara360 architecture: CV1000 Blitter SDRAM bus contention stalls the SH-3 CPU.
+					if (dips && !(dips[1] & 0x08)) {
+						Sh3BurnCycles(cycles);
+					}
 #endif
+				}
+				else
+				{
+					m_blitter_busy = 0;
+					sh4_clear_cave_blitter_delay_timer();
+				}
 			}
 
 			epic12_device_blit_delay = 0;
@@ -1318,6 +1331,8 @@ void epic12_draw_screen(UINT8 &recalc_palette)
 	// The frame must be complete even with the legacy "Before Exec" DIP.
 	thready.notify_wait();
 #endif
+	m_blitter_busy = 0;
+	sh4_clear_cave_blitter_delay_timer();
 	INT32 scrollx = -m_gfx_scroll_x;
 	INT32 scrolly = -m_gfx_scroll_y;
 
@@ -1373,12 +1388,17 @@ UINT32 epic12_blitter_read(UINT32 offset)
 	switch (offset)
 	{
 		case 0x10:
+			if (m_blitter_busy && !thready.is_busy())
+			{
+				m_blitter_busy = 0;
+				sh4_clear_cave_blitter_delay_timer();
+			}
+
 			if (m_blitter_busy)
 			{
 				//m_maincpu->spin_until_time(attotime::from_usec(10));
 				if (sleep_on_busy) {
-					INT32 rem = Sh3GetRemainingCycles();
-					Sh3BurnCycles(rem > 0 ? rem : m_burn_cycles);
+					Sh3BurnCycles(m_burn_cycles);
 				}
 				//bprintf(0, _T("%d frame - blitter busy read....."), nCurrentFrame);
 
@@ -1438,6 +1458,8 @@ void epic12_blitter_write(UINT32 offset, UINT32 data)
 void epic12_scan(INT32 nAction, INT32 *pnMin)
 {
 	thready.notify_wait();
+	m_blitter_busy = 0;
+	sh4_clear_cave_blitter_delay_timer();
 	SCAN_VAR(m_gfx_addr);
 //	SCAN_VAR(m_gfx_addr_shadowcopy); // probably not needed!
 	SCAN_VAR(m_gfx_scroll_x);

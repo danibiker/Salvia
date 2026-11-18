@@ -189,8 +189,14 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	set  SLN[34]=blueMSX\vs2010\blueMSX.sln
 	set PLAT[34]=Both
 	set  CFG[34]=%CONFIG%
+	
+	set NAME[35]=scummvm
+	set  SLN[35]=scummvm\backends\platform\xbox360\scummvm\scummvm.sln
+	set PLAT[35]=Both
+	set  CFG[35]=%CONFIG%
+	
 
-	for /l %%i in (0,1,34) do (
+	for /l %%i in (0,1,35) do (
 		set "_n=!NAME[%%i]!"
 		set "_s=!SLN[%%i]!"
 		set "_p=!PLAT[%%i]!"

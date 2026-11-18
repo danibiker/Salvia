@@ -97,6 +97,126 @@ static bool libretroFsIsInsideAuthorizedLocation(const Common::String &path) {
 
 static Common::String libretroFsPosixDefaultDir();
 
+#if defined(_WIN32)
+/*
+ * Windows / Xbox 360: there is no single "/" root. The "/" node becomes a
+ * virtual root listing the available drives, and every drive root ("C:/",
+ * "Usb0:/", ...) has that virtual root as parent, so the ScummVM file browser
+ * can reach any drive, not only the one holding the system directory.
+ */
+#if defined(_XBOX)
+extern "C" {
+	struct LibRetroXboxAnsiString {
+		unsigned short Length;
+		unsigned short MaximumLength;
+		char *Buffer;
+	};
+	long __stdcall ObCreateSymbolicLink(LibRetroXboxAnsiString *linkName, LibRetroXboxAnsiString *deviceName);
+}
+
+struct LibRetroXboxDrive {
+	const char *name;   // drive name as seen by the file system ("Usb0:")
+	const char *device; // kernel device to mount it on, or NULL if it is never mounted by the core
+};
+
+// Same mount points the Salvia frontend uses (Launcher::initDrives). Mounting
+// an already existing link just fails with a name collision, so this is
+// harmless when the frontend has mounted them already.
+static const LibRetroXboxDrive s_libretroXboxDrives[] = {
+	{ "Game:", NULL },
+	{ "Hdd:",  "\\Device\\Harddisk0\\Partition1" },
+	{ "Hdd1:", NULL },
+	{ "Usb0:", "\\Device\\Mass0" },
+	{ "Usb1:", "\\Device\\Mass1" },
+	{ "Usb2:", "\\Device\\Mass2" },
+	{ "UsbMu0:", NULL },
+	{ "IntMu:", NULL },
+};
+
+static void libretroFsXboxMountDrives() {
+	static bool mounted = false;
+	if (mounted)
+		return;
+	mounted = true;
+
+	for (int i = 0; i < ARRAYSIZE(s_libretroXboxDrives); ++i) {
+		const LibRetroXboxDrive &drive = s_libretroXboxDrives[i];
+		if (!drive.device)
+			continue;
+
+		Common::String linkPath("\\??\\");
+		linkPath += drive.name;
+
+		LibRetroXboxAnsiString linkName, deviceName;
+		linkName.Buffer = (char *)linkPath.c_str();
+		linkName.Length = (unsigned short)linkPath.size();
+		linkName.MaximumLength = (unsigned short)(linkName.Length + 1);
+		deviceName.Buffer = (char *)drive.device;
+		deviceName.Length = (unsigned short)strlen(drive.device);
+		deviceName.MaximumLength = (unsigned short)(deviceName.Length + 1);
+
+		ObCreateSymbolicLink(&linkName, &deviceName);
+	}
+}
+#else
+#include <direct.h>
+#endif
+
+// True for "C:", "C:/", "Usb0:", "Usb0:/" (no URI, no further components).
+static bool libretroFsIsDriveRoot(const Common::String &path) {
+	if (path.empty() || strstr(path.c_str(), "://"))
+		return false;
+
+	size_t colon = path.findFirstOf(':');
+	if (colon == Common::String::npos || colon == 0)
+		return false;
+
+	for (size_t i = 0; i < colon; ++i) {
+		if (path[i] == '/' || path[i] == '\\')
+			return false;
+	}
+
+	return path.size() == colon + 1 || (path.size() == colon + 2 && (path[colon + 1] == '/' || path[colon + 1] == '\\'));
+}
+
+// Drive roots are checked by listing them: stat() on a bare drive root is
+// unreliable on old CRTs and on the Xbox 360.
+static bool libretroFsDriveRootAccessible(const Common::String &root) {
+	if (path_is_directory(root.c_str()))
+		return true;
+
+	struct RDIR *dirp = retro_opendir(root.c_str());
+	if (!dirp)
+		return false;
+
+	retro_closedir(dirp);
+	return true;
+}
+
+static void libretroFsListDrives(Common::Array<Common::String> &drives) {
+#if defined(_XBOX)
+	libretroFsXboxMountDrives();
+
+	for (int i = 0; i < ARRAYSIZE(s_libretroXboxDrives); ++i) {
+		Common::String root(s_libretroXboxDrives[i].name);
+		root += '/';
+		if (libretroFsDriveRootAccessible(root))
+			drives.push_back(root);
+	}
+#else
+	unsigned long mask = _getdrives();
+	for (int i = 0; i < 26; ++i) {
+		if (!(mask & (1UL << i)))
+			continue;
+
+		Common::String root = Common::String::format("%c:/", 'A' + i);
+		if (libretroFsDriveRootAccessible(root))
+			drives.push_back(root);
+	}
+#endif
+}
+#endif // _WIN32
+
 static bool libretroFsHasUriScheme(const Common::String &path) {
 	return strstr(path.c_str(), "://") != nullptr;
 }
@@ -371,6 +491,13 @@ void LibRetroFilesystemNode::setFlags() {
 	_isValid = path_is_valid(fspath);
 	_isDirectory = path_is_directory(fspath);
 
+#if defined(_WIN32)
+	if (!_isDirectory && libretroFsIsDriveRoot(_path) && libretroFsDriveRootAccessible(_path)) {
+		_isValid = true;
+		_isDirectory = true;
+	}
+#endif
+
 	// libretro-common exposes stat-style validity/directory queries here, but
 	// no portable readability/writability probes. Treat valid paths as readable
 	// for ScummVM's FSNode purposes and let createReadStream()/createWriteStream()
@@ -391,6 +518,18 @@ LibRetroFilesystemNode::LibRetroFilesystemNode(const Common::String &p) {
 		_isWritable = false;
 		return;
 	}
+
+#if defined(_WIN32)
+	if (p.equals("/")) {
+		_path = p;
+		_displayName = "Drives";
+		_isValid = true;
+		_isDirectory = true;
+		_isReadable = true;
+		_isWritable = false;
+		return;
+	}
+#endif
 
 	if (libretroFsHasUriScheme(p)) {
 		_path = p;
@@ -420,6 +559,15 @@ LibRetroFilesystemNode::LibRetroFilesystemNode(const Common::String &p) {
 	// Normalize the path (that is, remove unneeded slashes etc.)
 	_path = Common::normalizePath(Common::String(&portable_path[0]), '/');
 	_displayName = Common::lastPathComponent(_path, '/');
+#if defined(_WIN32)
+	// Keep drive roots as "C:/" ("C:" alone means the current directory of
+	// that drive on Windows) and show them as "C:".
+	if (libretroFsIsDriveRoot(_path)) {
+		if (_path.lastChar() != '/')
+			_path += '/';
+		_displayName = Common::String(_path.c_str(), _path.size() - 1);
+	}
+#endif
 	setFlags();
 }
 
@@ -463,6 +611,20 @@ bool LibRetroFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, 
 
 		return true;
 	}
+
+#if defined(_WIN32)
+	if (_path.equals("/")) {
+		if (mode == Common::FSNode::kListFilesOnly)
+			return true;
+
+		Common::Array<Common::String> drives;
+		libretroFsListDrives(drives);
+		for (uint i = 0; i < drives.size(); ++i)
+			myList.push_back(new LibRetroFilesystemNode(drives[i]));
+
+		return true;
+	}
+#endif
 
 	struct RDIR *dirp = retro_opendir(_path.c_str());
 
@@ -513,6 +675,11 @@ AbstractFSNode *LibRetroFilesystemNode::getParent() const {
 
 	if (hasAuthorizedLocations() && libretroFsIsAuthorizedRoot(_path))
 		return makeNode(kLibRetroAuthorizedRootPath);
+
+#if defined(_WIN32)
+	if (libretroFsIsDriveRoot(_path))
+		return makeNode("/");
+#endif
 
 	Common::String parentPath(_path);
 

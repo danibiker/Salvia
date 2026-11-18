@@ -51,6 +51,12 @@
     <Filter Include="Source Files\db">
       <UniqueIdentifier>{89dfc58a-c5f7-4294-924b-5c7c6424a59c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\unzip">
+      <UniqueIdentifier>{6b1f3c2e-8d4a-4f7e-9c21-5a0e7d3b9f14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\unzip\lzma">
+      <UniqueIdentifier>{c47e2a90-1b5d-4e38-a6f2-93d0b8e1c5a7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\io\filelist.h">
@@ -128,6 +134,66 @@
     <ClCompile Include="src\io\dirutil.cpp">
       <Filter>Source Files\io</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\crccache.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\sevenzip.cpp">
+      <Filter>Source Files\unzip</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zAlloc.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zArcIn.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zBuf.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zCrc.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zCrcOpt.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zDec.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zFile.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\7zStream.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\Bcj2.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\Bra.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\Bra86.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\BraIA64.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\CpuArch.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\Delta.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\Lzma2Dec.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\lzma\LzmaDec.c">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClCompile>
+    <ClInclude Include="src\unzip\sevenzip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\unzip\lzma\salvia_7z_rename.h">
+      <Filter>Source Files\unzip\lzma</Filter>
+    </ClInclude>
     <ClCompile Include="src\io\fileio.cpp">
       <Filter>Source Files\io</Filter>
     </ClCompile>
@@ -275,6 +341,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\dirutil.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\crccache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\fileprops.h">

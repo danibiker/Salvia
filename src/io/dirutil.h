@@ -72,6 +72,11 @@ class dirutil{
 		static std::string getRelativeDir(std::string filepath, std::string basePath);
 		static string dirutil::getFileNameNoExt(const string& file);
 		static string getFileName(string file);
+		static uint32_t computeRomCrcFromFile(const std::string& path);
+		static uint32_t computeRomCrc(const uint8_t* data, std::size_t size);
+		/* CRC32 del fichero completo (sin saltar cabeceras ni tope de tamano). ok indica
+		 * si se pudo leer entero: un CRC de 0 tambien es valido. */
+		static uint32_t computeCrcFromFile(const std::string& path, bool* ok = NULL);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

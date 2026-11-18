@@ -9,6 +9,7 @@
 #include <http/badgedownloader.h>
 #include <const/cfgconst.h>
 #include <http/gamefaqs.h>
+#include <io/crccache.h>
 
 #include <iostream>
 #include <vector>
@@ -209,10 +210,11 @@ class OpcionTxtAndDynProgressValue : public OpcionTxtAndDynValue {
 public:
 	float *progress;   // fraccion 0..1 (se pinta x100)
 	float *kb;         // KB recibidos; se muestran si no hay porcentaje
+	int *color;		   // Used to show different text colors
 
 	// El constructor recibe el string externo por referencia y guarda su dirección (&v)
     OpcionTxtAndDynProgressValue(std::string t, const std::string& v) 
-        : OpcionTxtAndDynValue(t, v), progress(NULL), kb(NULL) {
+        : OpcionTxtAndDynValue(t, v), progress(NULL), kb(NULL), color(NULL) {
 		tipo = OPC_SHOW_DYNTXT_PROG_VAL;
 	}
 
@@ -429,7 +431,7 @@ struct MenuStatus{
 	Menu *menu;
 };
 
-
+enum BIOS_STATUS {BS_FOUND, BS_DOWNLOADED, BS_NOTFOUND, BS_ERRORCRC, BS_ERRORDOWNLOAD};
 
 struct t_bios{
 	std::string filepath;
@@ -437,29 +439,36 @@ struct t_bios{
 	std::string textFound;
 	float progress;     // fraccion 0..1 (si el servidor da el tamano)
 	float kbReceived;   // KB recibidos durante la descarga (0 fuera de ella)
-	bool found;
+	BIOS_STATUS status;
+	int color;
+	std::string crc;
 
 	t_bios(){
-		found = false;
+		status = BS_NOTFOUND;
 		progress = 0.0f;
 		kbReceived = 0.0f;
+		color = 0;
 	}
 };
 
 struct t_biosForSystem{
+	OpcionSubMenu *submenu;
 	std::vector<t_bios *> list;
 	std::string system;
 	std::string url;
 	bool allFound;
+	bool decompress;
 	
 	t_biosForSystem(){
 		allFound = true;
+		decompress = false;
 	}
 };
 
 struct t_file_url{
 	std::string file;
 	std::string url;
+	std::string crc;
 };
 
 struct t_bios_data{
@@ -593,8 +602,12 @@ private:
 	void checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx);
 	void addMusicOptionList(CfgLoader *refConfig, int posCore, std::vector<Opcion*> &opciones);
 	void buscarIdiomasMenu(std::string selectedLang);
-
 	void addCoreOptionsByCategory(Menu *parent, const std::vector<std::pair<std::string, std::string> > &categories, const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
+	
+
+	static bool checkBiosCRC(CrcCache &crcCache, t_bios *bios);
+	static void processHtmlSbi(const std::string &, const std::string &, std::vector<t_bios_data> &);
+	static std::string convertSbiName(const std::string &name);
 
 	std::string guardarJoysticks(Joystick* joy);
 	std::string guardarGameJoysticks(Joystick* joy);
@@ -652,6 +665,7 @@ public:
 
 	Menu* menuGameFilter;
 	Menu* menuUpdaterBios;
+	Menu* menuUpdaterSbi;
 	void iniciarFiltros(GameDataFields& gameDataFieldsFilter);
 
 	std::string stopScrapping(CONFIG_STATUS *st);
@@ -741,6 +755,7 @@ public:
 	static std::string selectLang(void* inst, void *index, void *values);
 	static std::string selectSync(void* inst, void *index, void *values);
 	static std::string fillBiosMenuAction(void* inst);
+	static std::string fillSbiMenuAction(void* inst);
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);
 	static void onRAUserText(const std::string& text, void* userData);

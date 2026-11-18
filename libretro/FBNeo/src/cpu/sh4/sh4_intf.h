@@ -20,6 +20,7 @@ void Sh3Exit();
 
 void sh4_set_cave_blitter_delay_func(void (*pfunc)(int));
 void sh4_set_cave_blitter_delay_timer(int cycles);
+void sh4_clear_cave_blitter_delay_timer();
 INT32 sh4_get_cpu_speed();
 void Sh3SetClockCV1k(INT32 clock);
 

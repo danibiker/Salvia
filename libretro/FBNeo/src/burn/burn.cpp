@@ -844,6 +844,10 @@ extern "C" INT32 BurnDrvInit()
 		return 1;
 	}
 
+	// [Salvia] a callback installed by the previous game's devices (vector.cpp)
+	// must not reach this one: the core is not unloaded between games here.
+	BurnResizeCallback = NULL;
+
 #if defined (FBNEO_DEBUG)
 	{
 		TCHAR szText[1024] = _T("");

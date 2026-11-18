@@ -19,6 +19,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * **Cheats support** with automatic cheats download from [libretro database](https://github.com/libretro/libretro-database)
 * Image and description **scraper** from screenscraper.fr
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
+* **Bios anb sbi** files downloader for each core
 * **Fast forward**
 * **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
 * **Disc control** to change disks on PSX, SegaCD, PC Engine CD and multi-disk Commodore 64 / Amiga / Atari 
@@ -51,6 +52,7 @@ Salvia provides the following emulators from the latests releases:
   - gambatte
 * Game Boy Advance
   - vba-next
+  - mgba (with d3d acceleration!)
 * Nintendo 64
   - xbox64 (port of wii64 with GLideN64 improvements) 
 * PC Engine/Turbografx-16/PC Engine CD
@@ -77,10 +79,14 @@ Salvia provides the following emulators from the latests releases:
   - mame-2003-plus
 * MSX
   - FBNeo
+* MSX/MSX2/MSX2+
+  - blueMSX
 * Spectrum  
   - FBNeo
 * MS-DOS
   - dosbox-pure (with dynamic powerpc recompiler working)
+* SCUMMVM
+  - scummvm 2026.4.1.git
 * Commodore 64
   - frodo
 * Sharp X68000
@@ -88,6 +94,8 @@ Salvia provides the following emulators from the latests releases:
 * Amiga 500/1200/CD32
   - puae2021
   - puae
+* Atari 2600
+  - stella2014
 * Atari 5200 and Atari 8-bit computers (400/800/XL/XE)
   - atari800
 * Quake
@@ -105,122 +113,10 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 <img width="694" height="527" alt="image" src="https://github.com/user-attachments/assets/2e667993-959c-4f28-8117-97db79dd522b" />
 
 ### Bios
-The only thing needed for the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from the RetroPie zip of [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases) .
-The system directory should have the following files:
+The only thing needed for the emulators to work is to provide the proper BIOS files, as usual with any RetroArch frontend. All the required files can be downloaded from the RetroPie zip at [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases) and placed into the system directory.
 
-```
-system/
-├── 3do_arcade_saot.bin
-├── 3do_devkit_1.0fc2.bin
-├── 32X_G_BIOS.BIN
-├── 32X_M_BIOS.BIN
-├── 32X_S_BIOS.BIN
-├── 5200.rom
-├── ATARIBAS.ROM
-├── ATARIOSA.ROM
-├── ATARIOSB.ROM
-├── ATARIXL.ROM
-├── BB01R4_OS.ROM
-├── bios_CD_E.bin
-├── bios_CD_J.bin
-├── bios_CD_U.bin
-├── bios_MD.bin
-├── disksys.rom
-├── gba_bios.bin
-├── goldstar.bin
-├── kick33180.A500
-├── kick34005.A500
-├── kick34005.CDTV
-├── kick37175.A500
-├── kick37350.A600
-├── kick39106.A1200
-├── kick39106.A4000
-├── kick40060.CD32
-├── kick40060.CD32.ext
-├── kick40063.A600
-├── kick40068.A1200
-├── kick40068.A4000
-├── WHDLoad.prefs
-├── WHDLoad.prefs_backup
-├── lynxboot.img
-├── NstDatabase.xml
-├── panafz1-kanji.bin
-├── panafz1.bin
-├── panafz10-norsa.bin
-├── panafz10-patched.bin
-├── panafz10.bin
-├── panafz10e-anvil-norsa.bin
-├── panafz10e-anvil-patched.bin
-├── panafz10e-anvil.bin
-├── panafz10ja-anvil-kanji.bin
-├── panafz1j-kanji.bin
-├── panafz1j-norsa.bin
-├── panafz1j.bin
-├── prboom.wad
-├── sanyotry.bin
-├── SCPH1001.BIN
-├── scph101.bin
-├── scph5500.bin
-├── scph5501.bin
-├── scph5502.bin
-├── scph7001.bin
-├── scph7502.bin
-├── syscard1.pce
-├── syscard2.pce
-├── syscard3.pce
-├── XEGAME.ROM
-├── RiceVideo.cfg
-├── RiceVideoLinux.ini
-├── mupen64plus.ini
-├── keropi/
-│   ├── cgrom.dat
-│   ├── iplrom.dat
-│   ├── iplrom30.dat
-│   ├── iplromco.dat
-│   └── iplromxv.dat
-├── fbneo/
-│   ├── blend/ (Not needed really but nice to have)
-│   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
-│   │   └── ...
-│   ├── cheats/
-│   │   └── cheat.dat
-│   ├── samples/
-│   │   ├── paprium/ (52 .wav files)
-│   │   ├── blockade.zip ... zerohour.zip (samples .zip files)
-│   │   └── ...
-│   ├── bubsys.zip
-│   ├── cchip.zip
-│   ├── channelf.zip
-│   ├── cnebula.zip
-│   ├── coleco.zip
-│   ├── decocass.zip
-│   ├── fdsbios.zip
-│   ├── hiscore.dat
-│   ├── isgsm.zip
-│   ├── midssio.zip
-│   ├── msx.zip
-│   ├── namcoc69.zip
-│   ├── namcoc70.zip
-│   ├── namcoc75.zip
-│   ├── neocdz.zip
-│   ├── neogeo.zip
-│   ├── ngp.zip
-│   ├── nmk004.zip
-│   ├── pgm.zip
-│   ├── skns.zip
-│   ├── spec128.zip
-│   ├── spec1282a.zip
-│   ├── spectrum.zip
-│   └── ym2608.zip
-└── mame2003-plus/
-│   ├── artwork/
-│   ├── samples/
-│   └── hiscore.dat
-└── patches/
-    └── psx/
-       └── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
+Starting from version 1.1.2, there is a built-in BIOS downloader available under "Options > Online updates > Bios Updater". With this utility, you can download all the required BIOS files to play every system. No proprietary BIOS files are hosted by Salvia; they are all hosted on external GitHub repositories or on archive.org.
 
-```
 ### Roms
 **On Xbox 360**, the configuration files are preconfigured to read games from the "roms" directory wich can be copied at the root of your USB drive (usb:\roms) or at the same level of all the .xex files (game:\roms). To begin, simply extract the "Roms" directory from the release archive and move it to the root of your USB device or leave it as is.
 
@@ -236,6 +132,7 @@ Usb0:\Roms
 ├── amiga1200\           (Amiga 1200 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
 ├── amigacd32\           (Amiga CD32 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
 ├── atari800\            (Atari 8-bit --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
+├── atari2600\           (Atari 2600 --> a26 bin mvz zip)
 ├── atari5200\           (Atari 5200 --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
 ├── atarilynx\           (Atari Lynx --> lnx lyx bll o zip)
 ├── c64\                 (Commodore 64 --> d64 t64 x64 p00 lnx lyx zip prg m3u)
@@ -253,6 +150,7 @@ Usb0:\Roms
 │   └── roms\            
 ├── megacd\              (Sega CD --> m3u bin cue iso chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
+├── msx2\                (Bluemsx MSX/MSX2/MSX2+ --> zip rom ri mx1 mx2 dsk col sg sc sf cas m3u)
 ├── n64\                 (Nintendo 64 --> zip n64 z64)
 ├── nes\                 (Nintendo Nes/Famicom --> nes fds unf unif zip)
 ├── ngp\                 (FBNeo NeoGeo Pocket --> zip)
@@ -263,6 +161,7 @@ Usb0:\Roms
 ├── prboom\              (Doom Engine --> wad)
 ├── psx\                 (Play Station 1 --> iso chd bin cue m3u img mdf pbp cbn)
 ├── quake\               (Quake 1 Engine -> pak)
+├── scummvm\             (SCUMMVM --> scummvm svm)
 ├── sms\                 (Master System/SG-1000 --> sms bms sg zip)
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc smc fig gd3 gd7 dx2 bsx swc)
 ├── spectrum\            (FBNeo ZX Spectrum --> zip)
@@ -317,6 +216,22 @@ This core features a built-in virtual keyboard, which is activated by pressing t
 
 <img width="1278" height="721" alt="image" src="https://github.com/user-attachments/assets/4f5a428b-fc2f-46d2-8ed6-3debee99cdbe" />
 
+### SCUMMVM
+This core needs a file with the extension svm or scummvm to be able to load a game. For example, for the game Monkey island, a file named "The Secret of Monkey Island.scummvm" should be created and its contents must specify the id of the game:
+```
+thesecret
+```
+These files can be created from the main scummvm gui, with the Backend tab of the Global Options menu:
+
+  * Check the ‘Hooks location’ setting, to have one ‘.scummvm’ in each game folder
+  * Check the ‘Playlist version’ setting. JSON format should be selected, 6-lines format is deprecated and provided for backwards compatibility only
+  * Select the ‘Clear existing hooks’ checkbox to remove any existing ‘.scummvm’ file in the working folders
+  * Press the ‘Generate playlist’ button
+
+If for some reason you can't access to the scummvm gui, it can be run from the options menu: Options > Emulation > Discs control > Load bios/OS
+
+This core also features a built-in virtual keyboard, which is activated by pressing the L3 stick by default.
+
 ### COMMODORE 64 (frodo)
 Just select a game and it boots and runs on its own — Salvia auto-types `LOAD"*",8,1` + `RUN` for you once the C64 reaches the `READY.` prompt. Supported formats: `d64`, `t64`, `x64`, `p00`, `prg`, `lnx`, `m3u` and `zip`.
 
@@ -362,7 +277,7 @@ When the game ask you to change disk, it can be done easily cycling diskettes wi
 ### FBNEO and FBANext
 For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)
 
-Some games should run fullspeed but the fbneo team introduced some changes that make them slower than it should be (Altered Beast for example). For these game, use the alternative emulator FBANext
+Some games should run fullspeed but the fbneo team introduced some changes that make them slower than it should be. For these games, use the alternative emulator FBANext
 
 ### MAME 2003 Plus
 For the games that need a chd file to work, they should be placed in the same folder as the roms directory. Example for the game Killer Instinct (sad example because in XBOX 360 runs terribly slow):
@@ -404,7 +319,7 @@ Usb0:\Roms
         └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ```
 #### Other FBNEO cores
-The MSX, ZX-Spectrum and NeoGeo Pocket (ngp now supported also by beetle-ngp) rely on FBNEO. Search a compatible romset for these cores.
+The MSX, ZX-Spectrum and NeoGeo Pocket (ngp now supported also by beetle-ngp and MSX also supported by bluemsx) rely on FBNEO. Search a compatible romset for these cores.
 For MSX and ZX Spectrum cores, an on-screen overlay keyboard is available and can be enabled by pressing the default shortcut SELECT + X
 
 <img width="1281" height="722" alt="image" src="https://github.com/user-attachments/assets/01e73cc0-96b4-4e67-82e5-b78738a58989" />
@@ -439,6 +354,7 @@ Usb0:\Roms
 To be able to load achievements for your local games, you must first register into the following link: [retroachievements.org](https://retroachievements.org/createaccount.php)
 
 Once you are registered, you must enter your username and password using the menu: Options > Achievements > User | Password
+No hardcore mode is supported at this time.
 
 ## Cheats
 

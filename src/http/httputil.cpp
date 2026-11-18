@@ -160,7 +160,12 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 
 	// Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
+    //curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);   // solo conectar
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 200L); // si baja de 200 B/s...
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);   // ...durante 20s -> abortar
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
+
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 	// SSL / TLS options
@@ -397,6 +402,34 @@ std::string CurlClient::escape(const std::string& text) {
 	return escapedStr;
 }
 
+std::string CurlClient::escapeFullUrl(const std::string& text) {
+    CURLU *h = curl_url();
+    if (!h) {
+        return text; // Fallo al asignar memoria para CURLU
+    }
+
+    // 1. Comprobamos si curl_url_set acepta la URL
+    CURLUcode rc = curl_url_set(h, CURLUPART_URL, text.c_str(), CURLU_URLENCODE | CURLU_ALLOW_SPACE);
+    if (rc != CURLUE_OK) {
+        curl_url_cleanup(h); // Liberamos h antes de salir
+        return "";           // O devuelve text, evita devolver NULL
+    }
+
+    char *encoded_url = NULL;
+    // 2. Comprobamos si curl_url_get extrajo la cadena correctamente
+    rc = curl_url_get(h, CURLUPART_URL, &encoded_url, 0);
+    
+    std::string result;
+    if (rc == CURLUE_OK && encoded_url != NULL) {
+        result = encoded_url;     // Copiamos a std::string
+        curl_free(encoded_url);   // Liberamos la memoria reservada por libcurl
+    }
+
+    // 3. Limpiamos el manejador CURLU siempre
+    curl_url_cleanup(h);
+    
+    return result;
+}
 // Callback estatico para recibir datos
 std::size_t CurlClient::WriteCallback(void *contents, std::size_t size, std::size_t nmemb, void *userp) {
     /* NULL check defensivo: si por alguna razon userp llega NULL,
@@ -444,6 +477,26 @@ int CurlClient::curl_sockopt_callback(void *clientp, curl_socket_t curlfd, curls
 	if (setsockopt(curlfd, SOL_SOCKET, 0x5801, (char*)&bypass, sizeof(bypass)) != 0) {
 		LOG_DEBUG("Error aplicando bypass en socket de cURL\n");
 	}
+
+	/* Buffer de recepcion TCP. Sin XNetStartup propio, la 360 da a cada socket
+	 * 16 KB (cfgSockDefaultRecvBufsizeInK, winsockx.h): como la ventana TCP no
+	 * puede ser mayor que el buffer, la velocidad maxima queda en 16 KB / RTT
+	 * (~100 KB/s contra servidores de EE.UU. como archive.org). Se amplia aqui,
+	 * antes de connect(), que es cuando se anuncia la ventana. */
+	int rcvbuf = 256 * 1024;
+	if (setsockopt(curlfd, SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, sizeof(rcvbuf)) != 0) {
+		LOG_DEBUG("Error ampliando SO_RCVBUF del socket de cURL (%d)\n", WSAGetLastError());
+	}
+	{
+		static bool informado = false;   /* solo la primera vez: valor que acepta el sistema */
+		if (!informado) {
+			int efectivo = 0;
+			int len = sizeof(efectivo);
+			if (getsockopt(curlfd, SOL_SOCKET, SO_RCVBUF, (char*)&efectivo, &len) == 0)
+				LOG_DEBUG("cURL: SO_RCVBUF pedido %d, efectivo %d\n", rcvbuf, efectivo);
+			informado = true;
+		}
+	}
 	return CURL_SOCKOPT_OK;
 }
 
@@ -465,6 +518,25 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
         }
     }
     return 0;
+}
+
+std::string CurlClient::getHrefContent(const std::string &data, std::size_t startPos, std::size_t aTagEnd, std::string base, std::string prop){
+	std::string url;
+	size_t propContentIni = std::string(prop + "=\"").length();
+	// href del enlace (viene con backslashes: \snes\588436-...) -> URL completa
+	size_t propPos = data.find(prop + "=\"", startPos);
+	if (propPos != std::string::npos && propPos < aTagEnd) {
+		size_t hrefStart = propPos + propContentIni; // strlen("href=\"")
+		size_t hrefEnd = data.find('"', hrefStart);
+		if (hrefEnd != std::string::npos) {
+			std::string href = data.substr(hrefStart, hrefEnd - hrefStart);
+			for (size_t i = 0; i < href.size(); ++i)
+				if (href[i] == '\\') href[i] = '/';
+			if (!href.empty())
+				url = base + (base.back() != '/' && href.front() != '/' ? "/" : "") + href;
+		}
+	}
+	return url;
 }
 
 #ifdef _XBOX

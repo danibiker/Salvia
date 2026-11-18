@@ -70,7 +70,6 @@ private:
 	std::string processGuideImage(const std::string &data);
 
 	CurlClient downloader;
-	std::string getHrefContent(const std::string &data, std::size_t startPos, std::size_t aTagEnd, std::string base, std::string prop = "href");
 
 	std::vector<GameResult>    games;
 	std::vector<GuidesResult>  guides;

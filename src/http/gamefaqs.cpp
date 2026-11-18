@@ -289,7 +289,7 @@ std::string GameFaqs::processGuideImage(const std::string &data){
 		if (srcIni != string::npos){
 			std::size_t srcEnd = data.find("\"", srcIni + SR_SRC.length());
 			if (srcEnd != string::npos && srcEnd > srcIni){
-				return getHrefContent(data, srcIni, srcEnd, BASE, "src");
+				return CurlClient::getHrefContent(data, srcIni, srcEnd, BASE, "src");
 			}
 		}
 	}
@@ -375,7 +375,7 @@ bool GameFaqs::parseGuideEntry(const std::string &data, std::size_t &searchPos, 
     std::size_t nameOpen = searchPos;
     std::size_t nameClose = data.find('>', nameOpen);
     if (nameClose == std::string::npos) return false;
-    guide.url = getHrefContent(data, nameOpen, nameClose, BASE);
+    guide.url = CurlClient::getHrefContent(data, nameOpen, nameClose, BASE);
 
     std::size_t tagEnd;
     guide.name = extractTagText(data, nameOpen, TAG_A_CLOSE, tagEnd);
@@ -574,25 +574,25 @@ std::vector<GameResult> GameFaqs::processGameSearch(const std::string &data){
 	static const std::string SR_FAQ_URL = "data-col=\"2\"";
 	static const std::string HREF_TAG = "href";
 
-	size_t pos = 0;
+	std::size_t pos = 0;
 	while ((pos = data.find(SR_NAME, pos)) != std::string::npos) {
 		pos += SR_NAME.size();
 
 		// Primer <a ...> tras el div.sr_name
-		size_t aOpen = data.find("<a", pos);
+		std::size_t aOpen = data.find("<a", pos);
 		if (aOpen == std::string::npos) break;
-		size_t aTagEnd = data.find('>', aOpen);
+		std::size_t aTagEnd = data.find('>', aOpen);
 		if (aTagEnd == std::string::npos) break;
 
 		GameResult g;
 
 		// href del enlace (viene con backslashes: \snes\588436-...) -> URL completa
 
-		g.url = getHrefContent(data, aOpen, aTagEnd, BASE);
+		g.url = CurlClient::getHrefContent(data, aOpen, aTagEnd, BASE);
 
 		// Texto entre <a ...> y </a> = nombre del juego
-		size_t textStart = aTagEnd + 1;
-		size_t textEnd = data.find("</a>", textStart);
+		std::size_t textStart = aTagEnd + 1;
+		std::size_t textEnd = data.find("</a>", textStart);
 		if (textEnd == std::string::npos) break;
 		g.name = htmlDecode(Constant::Trim(data.substr(textStart, textEnd - textStart)));
 
@@ -622,7 +622,7 @@ std::vector<GameResult> GameFaqs::processGameSearch(const std::string &data){
 
 			is = data.find("href", faqPos);
 			ie = data.find(">", faqPos);
-			g.faqUrl = getHrefContent(data, is, ie, BASE);
+			g.faqUrl = CurlClient::getHrefContent(data, is, ie, BASE);
 		}
 
 		results.push_back(g);
@@ -636,24 +636,4 @@ std::vector<GameResult> GameFaqs::processGameSearch(const std::string &data){
 			results[i].name.c_str(), results[i].info.c_str(), results[i].platform.c_str(), results[i].url.c_str());
 
 	return results;
-}
-
-
-std::string GameFaqs::getHrefContent(const std::string &data, std::size_t startPos, std::size_t aTagEnd, std::string base, std::string prop){
-	std::string url;
-	size_t propContentIni = string(prop + "=\"").length();
-	// href del enlace (viene con backslashes: \snes\588436-...) -> URL completa
-	size_t propPos = data.find(prop + "=\"", startPos);
-	if (propPos != std::string::npos && propPos < aTagEnd) {
-		size_t hrefStart = propPos + propContentIni; // strlen("href=\"")
-		size_t hrefEnd = data.find('"', hrefStart);
-		if (hrefEnd != std::string::npos) {
-			std::string href = data.substr(hrefStart, hrefEnd - hrefStart);
-			for (size_t i = 0; i < href.size(); ++i)
-				if (href[i] == '\\') href[i] = '/';
-			if (!href.empty())
-				url = base + href;
-		}
-	}
-	return url;
 }

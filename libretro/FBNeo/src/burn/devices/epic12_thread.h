@@ -29,6 +29,15 @@ struct epic12_thread {
 	void reset() { notify_wait(); startup_frame = 180; }
 	void scan() { notify_wait(); SCAN_VAR(startup_frame); }
 
+	bool is_busy() {
+		if (!pending) return false;
+		if (worker.poll_complete()) {
+			pending = false;
+			return false;
+		}
+		return true;
+	}
+
 	void set_threading(INT32 value) {
 		// A change to single-core mode must finish the previous list first.
 		bool requested = value && nBurnRenderCores > 1;

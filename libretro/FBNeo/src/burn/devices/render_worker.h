@@ -57,6 +57,14 @@ public:
 		SetEvent(ready);
 		return true;
 	}
+	bool poll_complete() {
+		if (!pending) return true;
+		if (WaitForSingleObject(complete, 0) == WAIT_OBJECT_0) {
+			pending = false;
+			return true;
+		}
+		return false;
+	}
 	void finish() {
 		if (pending) {
 			WaitForSingleObject(complete, INFINITE);
@@ -134,6 +142,13 @@ public:
 		pthread_mutex_unlock(&mutex);
 		return true;
 	}
+	bool poll_complete() {
+		if (!active) return true;
+		pthread_mutex_lock(&mutex);
+		bool is_done = done;
+		pthread_mutex_unlock(&mutex);
+		return is_done;
+	}
 	void finish() {
 		if (!active) return;
 		pthread_mutex_lock(&mutex);
@@ -160,6 +175,7 @@ class BurnRenderWorker {
 public:
 	bool init(void (*)(INT32, INT32, INT32), INT32) { return false; }
 	bool start(INT32, INT32) { return false; }
+	bool poll_complete() { return true; }
 	void finish() {}
 	void exit() {}
 };

@@ -95,6 +95,8 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"input_TURBO.png",							// ico_turbo
 	"menu_download.png",						// ico_download
 	"menu_updater.png",							// ico_updater
+	"menu_check.png",							// ico_menu_check
+	"menu_error.png",							// ico_menu_error
 	"input_DPAD-U.png",							// ico_input_dpad_u
 	"input_DPAD-D.png",							// ico_input_dpad_d
 	"input_DPAD-L.png",							// ico_input_dpad_l

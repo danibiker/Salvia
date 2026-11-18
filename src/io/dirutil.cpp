@@ -1,4 +1,6 @@
 #include "dirutil.h"
+#include <stdlib.h>
+#include <zlib.h>   /* crc32 (computeCrcFromFile) */
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4996)
@@ -709,4 +711,62 @@ void dirutil::checkXboxDrive(std::string &path){
 			}
 		}
 	}
+}
+
+/* CRC32 (el de zlib, el mismo de los .zip y las bases de datos de ROMs) del
+ * fichero COMPLETO: sin saltar cabeceras y sin tope de tamano.
+ *
+ * Lo que cuesta es leer el fichero, no el calculo, asi que la lectura va lo
+ * mas directa posible:
+ *  - ReadFile en bloques de 256 KB, sin el buffer intermedio del CRT (fread
+ *    copia cada bloque dos veces) y con menos llamadas que con 32 KB.
+ *  - FILE_FLAG_SEQUENTIAL_SCAN: el sistema lee por delante sabiendo que el
+ *    acceso es secuencial.
+ * La memoria es fija (el bloque de 256 KB) sea cual sea el tamano del fichero.
+ *
+ * Si ok != NULL indica si se pudo leer el fichero entero; un CRC de 0 tambien
+ * es un valor valido, asi que el 0 solo no sirve para saber si fallo. */
+uint32_t dirutil::computeCrcFromFile(const std::string& path, bool* ok){
+	if (ok) *ok = false;
+	if (path.empty()) return 0;
+
+	const std::size_t BLOQUE = 256 * 1024;
+	unsigned char* buf = (unsigned char*)malloc(BLOQUE);
+	if (!buf) return 0;
+
+	uLong c = crc32(0L, Z_NULL, 0);
+	bool leido = true;
+
+#if defined(_WIN32) || defined(_XBOX)
+	HANDLE h = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+	if (h == INVALID_HANDLE_VALUE) {
+		free(buf);
+		return 0;
+	}
+	for (;;) {
+		DWORD r = 0;
+		if (!ReadFile(h, buf, (DWORD)BLOQUE, &r, NULL)) { leido = false; break; }
+		if (r == 0) break;   // fin de fichero
+		c = crc32(c, buf, (uInt)r);
+	}
+	CloseHandle(h);
+#else
+	FILE* f = fopen(path.c_str(), "rb");
+	if (!f) {
+		free(buf);
+		return 0;
+	}
+	setvbuf(f, NULL, _IONBF, 0);   // sin buffer del CRT: se lee directo al bloque
+	std::size_t r;
+	while ((r = fread(buf, 1, BLOQUE, f)) > 0)
+		c = crc32(c, buf, (uInt)r);
+	if (ferror(f)) leido = false;
+	fclose(f);
+#endif
+
+	free(buf);
+	if (!leido) return 0;
+	if (ok) *ok = true;
+	return (uint32_t)c;
 }

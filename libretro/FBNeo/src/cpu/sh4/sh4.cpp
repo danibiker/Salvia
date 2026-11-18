@@ -436,6 +436,11 @@ void sh4_set_cave_blitter_delay_timer(int cycles)
 	cave_blitter_delay.start(cycles, -1, 1, 0);
 }
 
+void sh4_clear_cave_blitter_delay_timer()
+{
+	cave_blitter_delay.stop();
+}
+
 static void cave_blitter_delay_func(int param)
 {
 	if (pCaveBlitterDelayFunc) {

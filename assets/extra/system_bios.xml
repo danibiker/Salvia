@@ -1,0 +1,598 @@
+<!--more sources-->
+<!--http://longhorn.tassig.com/downloads/roms/bios-->
+
+<system>
+	<file name="3DO" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2F3DO%20Company%2C%20The%20-%203DO.zip">
+		<dir/>
+		<bios crc="3090340506">3do_arcade_saot.bin</bios>
+		<bios crc="3069510283">goldstar.bin</bios>
+		<bios crc="3368615817">panafz1.bin</bios>
+		<bios crc="1478765806">panafz10.bin</bios>
+		<bios crc="613795072">panafz10e-anvil.bin</bios>
+		<bios crc="2585289249">panafz10e-anvil-patched.bin</bios>
+		<bios crc="4285764574">panafz10ja-anvil-kanji.bin</bios>
+		<bios crc="588148715">panafz10-patched.bin</bios>
+		<bios crc="2833859708">panafz1-kanji.bin</bios>
+		<bios crc="3586901257">sanyotry.bin</bios>
+	</file>
+	<file name="Atari800" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Atari/400-800/">
+		<dir/>
+		<bios crc="2103984516" url="ATARIBAS.ROM">ATARIBAS.ROM</bios>
+		<bios crc="1924398804" url="ATARIOSA.ROM">ATARIOSA.ROM</bios>
+		<bios crc="1042850302" url="ATARIOSB.ROM">ATARIOSB.ROM</bios>
+		<bios crc="530371184" url="ATARIXL.ROM">ATARIXL.ROM</bios>
+		<bios crc="514801666" url="BB01R4_OS.ROM">BB01R4_OS.ROM</bios>
+		<bios crc="3184132603" url="XEGAME.ROM">XEGAME.ROM</bios>
+	</file>
+	<file name="Atari5200" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FAtari%20-%205200.zip">
+		<dir/>
+		<bios crc="1112069091">5200.rom</bios>
+	</file>
+	<file name="Atari - Lynx" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FAtari%20-%20Lynx.zip">
+		<dir/>
+		<bios crc="228015261">lynxboot.img</bios>
+	</file>
+	<file name="BlueMSX" url="https://github.com/danibiker/Salvia/raw/refs/heads/main/libretro/blueMSX/system/bluemsx.zip">
+		<bios crc="1547875793" url="Databases/colecodb.xml">Databases/colecodb.xml</bios>
+		<bios crc="1256549362" url="Databases/msxcaswavdb.xml">Databases/msxcaswavdb.xml</bios>
+		<bios crc="3981207328" url="Databases/msxromdb.xml">Databases/msxromdb.xml</bios>
+		<bios crc="2702718915" url="Databases/msxsysromdb.xml">Databases/msxsysromdb.xml</bios>
+		<bios crc="4090648860" url="Databases/segadb.xml">Databases/segadb.xml</bios>
+		<bios crc="2228522836" url="Databases/svidb.xml">Databases/svidb.xml</bios>
+		<bios crc="2903997212" url="Machines/COL%20-%20Bit%20Corporation%20Dina/config.ini">Machines/COL - Bit Corporation Dina/config.ini</bios>
+		<bios crc="1768689690" url="Machines/COL%20-%20Bit%20Corporation%20Dina/czz50-1.rom">Machines/COL - Bit Corporation Dina/czz50-1.rom</bios>
+		<bios crc="1698225458" url="Machines/COL%20-%20Bit%20Corporation%20Dina/czz50-2.rom">Machines/COL - Bit Corporation Dina/czz50-2.rom</bios>
+		<bios crc="984170227" url="Machines/COL%20-%20ColecoVision%20with%20Opcode%20Memory%20Extension/coleco.rom">Machines/COL - ColecoVision with Opcode Memory Extension/coleco.rom</bios>
+		<bios crc="1110700941" url="Machines/COL%20-%20ColecoVision%20with%20Opcode%20Memory%20Extension/config.ini">Machines/COL - ColecoVision with Opcode Memory Extension/config.ini</bios>
+		<bios crc="984170227" url="Machines/COL%20-%20ColecoVision/coleco.rom">Machines/COL - ColecoVision/coleco.rom</bios>
+		<bios crc="3554568665" url="Machines/COL%20-%20ColecoVision/config.ini">Machines/COL - ColecoVision/config.ini</bios>
+		<bios crc="4172804667" url="Machines/COL%20-%20Spectravideo%20SVI-603%20Coleco/config.ini">Machines/COL - Spectravideo SVI-603 Coleco/config.ini</bios>
+		<bios crc="434707330" url="Machines/COL%20-%20Spectravideo%20SVI-603%20Coleco/SVI603.ROM">Machines/COL - Spectravideo SVI-603 Coleco/SVI603.ROM</bios>
+		<bios crc="3531617920" url="Machines/Forte%20II%20Games%20-%20Pesadelo/config.ini">Machines/Forte II Games - Pesadelo/config.ini</bios>
+		<bios crc="451082020" url="Machines/Forte%20II%20Games%20-%20Pesadelo/pesadelo.rom">Machines/Forte II Games - Pesadelo/pesadelo.rom</bios>
+		<bios crc="4194189204" url="Machines/MSX%20-%20Al%20Alamiah%20AX-170/config.ini">Machines/MSX - Al Alamiah AX-170/config.ini</bios>
+		<bios crc="3773940605" url="Machines/MSX%20-%20Arabic/config.ini">Machines/MSX - Arabic/config.ini</bios>
+		<bios crc="3942386923" url="Machines/MSX%20-%20Brazilian/config.ini">Machines/MSX - Brazilian/config.ini</bios>
+		<bios crc="544747733" url="Machines/MSX%20-%20C-BIOS/cbios.txt">Machines/MSX - C-BIOS/cbios.txt</bios>
+		<bios crc="4184466468" url="Machines/MSX%20-%20C-BIOS/cbios_logo_msx1.rom">Machines/MSX - C-BIOS/cbios_logo_msx1.rom</bios>
+		<bios crc="4026861445" url="Machines/MSX%20-%20C-BIOS/cbios_main_msx1.rom">Machines/MSX - C-BIOS/cbios_main_msx1.rom</bios>
+		<bios crc="885274508" url="Machines/MSX%20-%20C-BIOS/config.ini">Machines/MSX - C-BIOS/config.ini</bios>
+		<bios crc="2596441569" url="Machines/MSX%20-%20Canon%20V-10/config.ini">Machines/MSX - Canon V-10/config.ini</bios>
+		<bios crc="2824461579" url="Machines/MSX%20-%20Canon%20V-20/config.ini">Machines/MSX - Canon V-20/config.ini</bios>
+		<bios crc="2007302207" url="Machines/MSX%20-%20Daewoo%20DPC-100/config.ini">Machines/MSX - Daewoo DPC-100/config.ini</bios>
+		<bios crc="162939973" url="Machines/MSX%20-%20Daewoo%20DPC-180/config.ini">Machines/MSX - Daewoo DPC-180/config.ini</bios>
+		<bios crc="699568589" url="Machines/MSX%20-%20Daewoo%20DPC-200/config.ini">Machines/MSX - Daewoo DPC-200/config.ini</bios>
+		<bios crc="543436913" url="Machines/MSX%20-%20Daewoo%20DPC-200E/config.ini">Machines/MSX - Daewoo DPC-200E/config.ini</bios>
+		<bios crc="2978236726" url="Machines/MSX%20-%20Estonian/config.ini">Machines/MSX - Estonian/config.ini</bios>
+		<bios crc="4179550776" url="Machines/MSX%20-%20Frael%20Bruc%20100-1/config.ini">Machines/MSX - Frael Bruc 100-1/config.ini</bios>
+		<bios crc="1242062901" url="Machines/MSX%20-%20French/config.ini">Machines/MSX - French/config.ini</bios>
+		<bios crc="4269450387" url="Machines/MSX%20-%20German/config.ini">Machines/MSX - German/config.ini</bios>
+		<bios crc="2901544990" url="Machines/MSX%20-%20Goldstar%20FC-200/config.ini">Machines/MSX - Goldstar FC-200/config.ini</bios>
+		<bios crc="3591389753" url="Machines/MSX%20-%20Gradiente%20Expert%201.0/config.ini">Machines/MSX - Gradiente Expert 1.0/config.ini</bios>
+		<bios crc="4221472948" url="Machines/MSX%20-%20Gradiente%20Expert%201.1/config.ini">Machines/MSX - Gradiente Expert 1.1/config.ini</bios>
+		<bios crc="3086492141" url="Machines/MSX%20-%20Gradiente%20Expert%201.3/config.ini">Machines/MSX - Gradiente Expert 1.3/config.ini</bios>
+		<bios crc="32791957" url="Machines/MSX%20-%20Gradiente%20Expert%20DDPlus/config.ini">Machines/MSX - Gradiente Expert DDPlus/config.ini</bios>
+		<bios crc="4049245291" url="Machines/MSX%20-%20Gradiente%20Expert%20Plus/config.ini">Machines/MSX - Gradiente Expert Plus/config.ini</bios>
+		<bios crc="1816991820" url="Machines/MSX%20-%20Japanese/config.ini">Machines/MSX - Japanese/config.ini</bios>
+		<bios crc="2324003448" url="Machines/MSX%20-%20JVC%20HC-7GB/config.ini">Machines/MSX - JVC HC-7GB/config.ini</bios>
+		<bios crc="2010076505" url="Machines/MSX%20-%20Korean/config.ini">Machines/MSX - Korean/config.ini</bios>
+		<bios crc="3498086855" url="Machines/MSX%20-%20Mitsubishi%20ML-F80/config.ini">Machines/MSX - Mitsubishi ML-F80/config.ini</bios>
+		<bios crc="1891736111" url="Machines/MSX%20-%20Mitsubishi%20ML-FX1/config.ini">Machines/MSX - Mitsubishi ML-FX1/config.ini</bios>
+		<bios crc="3311559038" url="Machines/MSX%20-%20National%20CF-1200/config.ini">Machines/MSX - National CF-1200/config.ini</bios>
+		<bios crc="2206115388" url="Machines/MSX%20-%20National%20CF-2000/config.ini">Machines/MSX - National CF-2000/config.ini</bios>
+		<bios crc="1952012701" url="Machines/MSX%20-%20National%20CF-2700/config.ini">Machines/MSX - National CF-2700/config.ini</bios>
+		<bios crc="2924333246" url="Machines/MSX%20-%20National%20CF-3000/config.ini">Machines/MSX - National CF-3000/config.ini</bios>
+		<bios crc="880629897" url="Machines/MSX%20-%20National%20CF-3300/config.ini">Machines/MSX - National CF-3300/config.ini</bios>
+		<bios crc="4118221518" url="Machines/MSX%20-%20National%20FS-1300/config.ini">Machines/MSX - National FS-1300/config.ini</bios>
+		<bios crc="3319807848" url="Machines/MSX%20-%20National%20FS-4000/config.ini">Machines/MSX - National FS-4000/config.ini</bios>
+		<bios crc="270897855" url="Machines/MSX%20-%20Olympia%20PHC-28/config.ini">Machines/MSX - Olympia PHC-28/config.ini</bios>
+		<bios crc="3069095941" url="Machines/MSX%20-%20Olympia%20PHC-2/config.ini">Machines/MSX - Olympia PHC-2/config.ini</bios>
+		<bios crc="1016112392" url="Machines/MSX%20-%20Panasonic%20CF-2700G/config.ini">Machines/MSX - Panasonic CF-2700G/config.ini</bios>
+		<bios crc="808346600" url="Machines/MSX%20-%20Philips%20NMS-801/config.ini">Machines/MSX - Philips NMS-801/config.ini</bios>
+		<bios crc="4169484512" url="Machines/MSX%20-%20Philips%20VG-8000/config.ini">Machines/MSX - Philips VG-8000/config.ini</bios>
+		<bios crc="2517412898" url="Machines/MSX%20-%20Philips%20VG-8010/config.ini">Machines/MSX - Philips VG-8010/config.ini</bios>
+		<bios crc="1368750951" url="Machines/MSX%20-%20Philips%20VG-8010F/config.ini">Machines/MSX - Philips VG-8010F/config.ini</bios>
+		<bios crc="287077039" url="Machines/MSX%20-%20Philips%20VG-8020-00/config.ini">Machines/MSX - Philips VG-8020-00/config.ini</bios>
+		<bios crc="948110550" url="Machines/MSX%20-%20Philips%20VG-8020-20/config.ini">Machines/MSX - Philips VG-8020-20/config.ini</bios>
+		<bios crc="4218203164" url="Machines/MSX%20-%20Philips%20VG-8020F/config.ini">Machines/MSX - Philips VG-8020F/config.ini</bios>
+		<bios crc="2103558500" url="Machines/MSX%20-%20Pioneer%20PX-7/config.ini">Machines/MSX - Pioneer PX-7/config.ini</bios>
+		<bios crc="1059423784" url="Machines/MSX%20-%20Pioneer%20PX-V60/config.ini">Machines/MSX - Pioneer PX-V60/config.ini</bios>
+		<bios crc="3576862279" url="Machines/MSX%20-%20Russian/config.ini">Machines/MSX - Russian/config.ini</bios>
+		<bios crc="3341528617" url="Machines/MSX%20-%20Sanyo%20MPC-100/config.ini">Machines/MSX - Sanyo MPC-100/config.ini</bios>
+		<bios crc="484943535" url="Machines/MSX%20-%20Sanyo%20MPC-64/config.ini">Machines/MSX - Sanyo MPC-64/config.ini</bios>
+		<bios crc="3752640350" url="Machines/MSX%20-%20Sanyo%20PHC-28L/config.ini">Machines/MSX - Sanyo PHC-28L/config.ini</bios>
+		<bios crc="2558798149" url="Machines/MSX%20-%20Sanyo%20PHC-28S/config.ini">Machines/MSX - Sanyo PHC-28S/config.ini</bios>
+		<bios crc="1102259319" url="Machines/MSX%20-%20Sanyo%20Wavy%20MPC-10/config.ini">Machines/MSX - Sanyo Wavy MPC-10/config.ini</bios>
+		<bios crc="3394668626" url="Machines/MSX%20-%20Sharp%20Epcom%20HotBit%201.1/config.ini">Machines/MSX - Sharp Epcom HotBit 1.1/config.ini</bios>
+		<bios crc="582411097" url="Machines/MSX%20-%20Sharp%20Epcom%20HotBit%201.2/config.ini">Machines/MSX - Sharp Epcom HotBit 1.2/config.ini</bios>
+		<bios crc="3211520880" url="Machines/MSX%20-%20Sharp%20Epcom%20HotBit%201.3b/config.ini">Machines/MSX - Sharp Epcom HotBit 1.3b/config.ini</bios>
+		<bios crc="3798432503" url="Machines/MSX%20-%20Sharp%20Epcom%20HotBit%201.3p/config.ini">Machines/MSX - Sharp Epcom HotBit 1.3p/config.ini</bios>
+		<bios crc="3980859193" url="Machines/MSX%20-%20Sony%20HB-10P/config.ini">Machines/MSX - Sony HB-10P/config.ini</bios>
+		<bios crc="2413896756" url="Machines/MSX%20-%20Sony%20HB-201/config.ini">Machines/MSX - Sony HB-201/config.ini</bios>
+		<bios crc="1873501920" url="Machines/MSX%20-%20Sony%20HB-201P/config.ini">Machines/MSX - Sony HB-201P/config.ini</bios>
+		<bios crc="3037672923" url="Machines/MSX%20-%20Sony%20HB-20P/config.ini">Machines/MSX - Sony HB-20P/config.ini</bios>
+		<bios crc="806912484" url="Machines/MSX%20-%20Sony%20HB-501P/config.ini">Machines/MSX - Sony HB-501P/config.ini</bios>
+		<bios crc="2607629802" url="Machines/MSX%20-%20Sony%20HB-55D/config.ini">Machines/MSX - Sony HB-55D/config.ini</bios>
+		<bios crc="1658274596" url="Machines/MSX%20-%20Sony%20HB-55P/config.ini">Machines/MSX - Sony HB-55P/config.ini</bios>
+		<bios crc="3351251603" url="Machines/MSX%20-%20Sony%20HB-75D/config.ini">Machines/MSX - Sony HB-75D/config.ini</bios>
+		<bios crc="4154649401" url="Machines/MSX%20-%20Sony%20HB-75P/config.ini">Machines/MSX - Sony HB-75P/config.ini</bios>
+		<bios crc="266793804" url="Machines/MSX%20-%20Spanish/config.ini">Machines/MSX - Spanish/config.ini</bios>
+		<bios crc="977594655" url="Machines/MSX%20-%20Spectravideo%20SVI-728/config.ini">Machines/MSX - Spectravideo SVI-728/config.ini</bios>
+		<bios crc="1533048948" url="Machines/MSX%20-%20Spectravideo%20SVI-738%20Henrik%20Gilvad/config.ini">Machines/MSX - Spectravideo SVI-738 Henrik Gilvad/config.ini</bios>
+		<bios crc="2434313550" url="Machines/MSX%20-%20Spectravideo%20SVI-738%20Swedish/config.ini">Machines/MSX - Spectravideo SVI-738 Swedish/config.ini</bios>
+		<bios crc="2971921261" url="Machines/MSX%20-%20Spectravideo%20SVI-738/config.ini">Machines/MSX - Spectravideo SVI-738/config.ini</bios>
+		<bios crc="2006662058" url="Machines/MSX%20-%20Swedish/config.ini">Machines/MSX - Swedish/config.ini</bios>
+		<bios crc="123703766" url="Machines/MSX%20-%20Talent%20DPC-200/config.ini">Machines/MSX - Talent DPC-200/config.ini</bios>
+		<bios crc="1471107986" url="Machines/MSX%20-%20Talent%20DPC-200A/config.ini">Machines/MSX - Talent DPC-200A/config.ini</bios>
+		<bios crc="885460388" url="Machines/MSX%20-%20Toshiba%20HX-10/config.ini">Machines/MSX - Toshiba HX-10/config.ini</bios>
+		<bios crc="4152318205" url="Machines/MSX%20-%20Toshiba%20HX-10S/config.ini">Machines/MSX - Toshiba HX-10S/config.ini</bios>
+		<bios crc="1753848123" url="Machines/MSX%20-%20Toshiba%20HX-20/config.ini">Machines/MSX - Toshiba HX-20/config.ini</bios>
+		<bios crc="3017927854" url="Machines/MSX%20-%20Yamaha%20CX5M-128/config.ini">Machines/MSX - Yamaha CX5M-128/config.ini</bios>
+		<bios crc="3787742" url="Machines/MSX%20-%20Yamaha%20CX5M-1/config.ini">Machines/MSX - Yamaha CX5M-1/config.ini</bios>
+		<bios crc="3219220290" url="Machines/MSX%20-%20Yamaha%20CX5M-2/config.ini">Machines/MSX - Yamaha CX5M-2/config.ini</bios>
+		<bios crc="3131470350" url="Machines/MSX%20-%20Yamaha%20CX5MII/config.ini">Machines/MSX - Yamaha CX5MII/config.ini</bios>
+		<bios crc="3821547661" url="Machines/MSX%20-%20Yamaha%20YIS303/config.ini">Machines/MSX - Yamaha YIS303/config.ini</bios>
+		<bios crc="1362836821" url="Machines/MSX%20-%20Yamaha%20YIS503/config.ini">Machines/MSX - Yamaha YIS503/config.ini</bios>
+		<bios crc="4113800013" url="Machines/MSX%20-%20Yamaha%20YIS503F/config.ini">Machines/MSX - Yamaha YIS503F/config.ini</bios>
+		<bios crc="1804633678" url="Machines/MSX%20-%20Yamaha%20YIS503II/config.ini">Machines/MSX - Yamaha YIS503II/config.ini</bios>
+		<bios crc="4238751417" url="Machines/MSX%20-%20Yamaha%20YIS503IIR%20Estonian/config.ini">Machines/MSX - Yamaha YIS503IIR Estonian/config.ini</bios>
+		<bios crc="839505551" url="Machines/MSX%20-%20Yamaha%20YIS503IIR/config.ini">Machines/MSX - Yamaha YIS503IIR/config.ini</bios>
+		<bios crc="3977542615" url="Machines/MSX%20-%20Yamaha%20YIS503M/config.ini">Machines/MSX - Yamaha YIS503M/config.ini</bios>
+		<bios crc="3313618063" url="Machines/MSX%20-%20Yashica%20YC-64/config.ini">Machines/MSX - Yashica YC-64/config.ini</bios>
+		<bios crc="3716280497" url="Machines/MSX%20-%20Yeno%20DPC-64/config.ini">Machines/MSX - Yeno DPC-64/config.ini</bios>
+		<bios crc="3019409845" url="Machines/MSX%20-%20Yeno%20MX64/config.ini">Machines/MSX - Yeno MX64/config.ini</bios>
+		<bios crc="1122385617" url="Machines/MSX2%20-%20Al%20Alamiah%20AX-350/config.ini">Machines/MSX2 - Al Alamiah AX-350/config.ini</bios>
+		<bios crc="2324600630" url="Machines/MSX2%20-%20Al%20Alamiah%20AX-370/config.ini">Machines/MSX2 - Al Alamiah AX-370/config.ini</bios>
+		<bios crc="2621013685" url="Machines/MSX2%20-%20Arabic/config.ini">Machines/MSX2 - Arabic/config.ini</bios>
+		<bios crc="2955254449" url="Machines/MSX2%20-%20Brazilian/config.ini">Machines/MSX2 - Brazilian/config.ini</bios>
+		<bios crc="544747733" url="Machines/MSX2%20-%20C-BIOS/cbios.txt">Machines/MSX2 - C-BIOS/cbios.txt</bios>
+		<bios crc="1280607658" url="Machines/MSX2%20-%20C-BIOS/cbios_logo_msx2.rom">Machines/MSX2 - C-BIOS/cbios_logo_msx2.rom</bios>
+		<bios crc="3962560649" url="Machines/MSX2%20-%20C-BIOS/cbios_main_msx2.rom">Machines/MSX2 - C-BIOS/cbios_main_msx2.rom</bios>
+		<bios crc="4154824673" url="Machines/MSX2%20-%20C-BIOS/cbios_sub.rom">Machines/MSX2 - C-BIOS/cbios_sub.rom</bios>
+		<bios crc="134966046" url="Machines/MSX2%20-%20C-BIOS/config.ini">Machines/MSX2 - C-BIOS/config.ini</bios>
+		<bios crc="1381174476" url="Machines/MSX2%20-%20Daewoo%20CPC-300/config.ini">Machines/MSX2 - Daewoo CPC-300/config.ini</bios>
+		<bios crc="3800247011" url="Machines/MSX2%20-%20Daewoo%20CPC-300E/config.ini">Machines/MSX2 - Daewoo CPC-300E/config.ini</bios>
+		<bios crc="2599608330" url="Machines/MSX2%20-%20Daewoo%20CPC-400/config.ini">Machines/MSX2 - Daewoo CPC-400/config.ini</bios>
+		<bios crc="2375453248" url="Machines/MSX2%20-%20Daewoo%20CPC-400S/config.ini">Machines/MSX2 - Daewoo CPC-400S/config.ini</bios>
+		<bios crc="429205285" url="Machines/MSX2%20-%20Estonian/config.ini">Machines/MSX2 - Estonian/config.ini</bios>
+		<bios crc="2790258811" url="Machines/MSX2%20-%20French/config.ini">Machines/MSX2 - French/config.ini</bios>
+		<bios crc="3165770676" url="Machines/MSX2%20-%20German/config.ini">Machines/MSX2 - German/config.ini</bios>
+		<bios crc="3748507418" url="Machines/MSX2%20-%20Gradiente%20Expert%202.0/config.ini">Machines/MSX2 - Gradiente Expert 2.0/config.ini</bios>
+		<bios crc="402408917" url="Machines/MSX2%20-%20Japanese/config.ini">Machines/MSX2 - Japanese/config.ini</bios>
+		<bios crc="4042871844" url="Machines/MSX2%20-%20Korean/config.ini">Machines/MSX2 - Korean/config.ini</bios>
+		<bios crc="3532273926" url="Machines/MSX2%20-%20National%20FS-4500/config.ini">Machines/MSX2 - National FS-4500/config.ini</bios>
+		<bios crc="1907503506" url="Machines/MSX2%20-%20National%20FS-4600/config.ini">Machines/MSX2 - National FS-4600/config.ini</bios>
+		<bios crc="794898452" url="Machines/MSX2%20-%20National%20FS-4700/config.ini">Machines/MSX2 - National FS-4700/config.ini</bios>
+		<bios crc="3951409855" url="Machines/MSX2%20-%20National%20FS-5000/config.ini">Machines/MSX2 - National FS-5000/config.ini</bios>
+		<bios crc="3866521045" url="Machines/MSX2%20-%20National%20FS-5500F1/config.ini">Machines/MSX2 - National FS-5500F1/config.ini</bios>
+		<bios crc="342088411" url="Machines/MSX2%20-%20National%20FS-5500F2/config.ini">Machines/MSX2 - National FS-5500F2/config.ini</bios>
+		<bios crc="1930428550" url="Machines/MSX2%20-%20Only%20PSG/config.ini">Machines/MSX2 - Only PSG/config.ini</bios>
+		<bios crc="3860841257" url="Machines/MSX2%20-%20Panasonic%20FS-A1%20%28a%29/config.ini">Machines/MSX2 - Panasonic FS-A1 (a)/config.ini</bios>
+		<bios crc="3382128700" url="Machines/MSX2%20-%20Panasonic%20FS-A1/config.ini">Machines/MSX2 - Panasonic FS-A1/config.ini</bios>
+		<bios crc="2176073032" url="Machines/MSX2%20-%20Panasonic%20FS-A1F/config.ini">Machines/MSX2 - Panasonic FS-A1F/config.ini</bios>
+		<bios crc="1612892926" url="Machines/MSX2%20-%20Panasonic%20FS-A1FM/config.ini">Machines/MSX2 - Panasonic FS-A1FM/config.ini</bios>
+		<bios crc="3554430108" url="Machines/MSX2%20-%20Panasonic%20FS-A1MK2/config.ini">Machines/MSX2 - Panasonic FS-A1MK2/config.ini</bios>
+		<bios crc="2839406784" url="Machines/MSX2%20-%20Philips%20NMS-8220%20%28a%29/config.ini">Machines/MSX2 - Philips NMS-8220 (a)/config.ini</bios>
+		<bios crc="247350167" url="Machines/MSX2%20-%20Philips%20NMS-8220/config.ini">Machines/MSX2 - Philips NMS-8220/config.ini</bios>
+		<bios crc="3967751366" url="Machines/MSX2%20-%20Philips%20NMS-8245/config.ini">Machines/MSX2 - Philips NMS-8245/config.ini</bios>
+		<bios crc="1953870901" url="Machines/MSX2%20-%20Philips%20NMS-8245F/config.ini">Machines/MSX2 - Philips NMS-8245F/config.ini</bios>
+		<bios crc="2707588709" url="Machines/MSX2%20-%20Philips%20NMS-8250/config.ini">Machines/MSX2 - Philips NMS-8250/config.ini</bios>
+		<bios crc="3328980464" url="Machines/MSX2%20-%20Philips%20NMS-8255/config.ini">Machines/MSX2 - Philips NMS-8255/config.ini</bios>
+		<bios crc="1772258740" url="Machines/MSX2%20-%20Philips%20NMS-8280/config.ini">Machines/MSX2 - Philips NMS-8280/config.ini</bios>
+		<bios crc="170911861" url="Machines/MSX2%20-%20Philips%20NMS-8280G/config.ini">Machines/MSX2 - Philips NMS-8280G/config.ini</bios>
+		<bios crc="4092185700" url="Machines/MSX2%20-%20Philips%20VG-8230/config.ini">Machines/MSX2 - Philips VG-8230/config.ini</bios>
+		<bios crc="1522599175" url="Machines/MSX2%20-%20Philips%20VG-8235/config.ini">Machines/MSX2 - Philips VG-8235/config.ini</bios>
+		<bios crc="782723334" url="Machines/MSX2%20-%20Philips%20VG-8235F/config.ini">Machines/MSX2 - Philips VG-8235F/config.ini</bios>
+		<bios crc="2275536454" url="Machines/MSX2%20-%20Philips%20VG-8240/config.ini">Machines/MSX2 - Philips VG-8240/config.ini</bios>
+		<bios crc="3583579215" url="Machines/MSX2%20-%20Russian/config.ini">Machines/MSX2 - Russian/config.ini</bios>
+		<bios crc="1366570921" url="Machines/MSX2%20-%20Sanyo%20Wavy%20MPC-25FD/config.ini">Machines/MSX2 - Sanyo Wavy MPC-25FD/config.ini</bios>
+		<bios crc="2893348912" url="Machines/MSX2%20-%20Sanyo%20Wavy%20PHC-23/config.ini">Machines/MSX2 - Sanyo Wavy PHC-23/config.ini</bios>
+		<bios crc="1076411781" url="Machines/MSX2%20-%20Sharp%20Epcom%20HotBit%202.0/config.ini">Machines/MSX2 - Sharp Epcom HotBit 2.0/config.ini</bios>
+		<bios crc="1028225001" url="Machines/MSX2%20-%20Sony%20HB-F1/config.ini">Machines/MSX2 - Sony HB-F1/config.ini</bios>
+		<bios crc="1280809324" url="Machines/MSX2%20-%20Sony%20HB-F1II/config.ini">Machines/MSX2 - Sony HB-F1II/config.ini</bios>
+		<bios crc="2915977181" url="Machines/MSX2%20-%20Sony%20HB-F1XD/config.ini">Machines/MSX2 - Sony HB-F1XD/config.ini</bios>
+		<bios crc="2606027915" url="Machines/MSX2%20-%20Sony%20HB-F1XDMK2/config.ini">Machines/MSX2 - Sony HB-F1XDMK2/config.ini</bios>
+		<bios crc="1631103991" url="Machines/MSX2%20-%20Sony%20HB-F500/config.ini">Machines/MSX2 - Sony HB-F500/config.ini</bios>
+		<bios crc="3531929047" url="Machines/MSX2%20-%20Sony%20HB-F500P/config.ini">Machines/MSX2 - Sony HB-F500P/config.ini</bios>
+		<bios crc="3312485353" url="Machines/MSX2%20-%20Sony%20HB-F700D/config.ini">Machines/MSX2 - Sony HB-F700D/config.ini</bios>
+		<bios crc="3473838595" url="Machines/MSX2%20-%20Sony%20HB-F700F/config.ini">Machines/MSX2 - Sony HB-F700F/config.ini</bios>
+		<bios crc="1302058031" url="Machines/MSX2%20-%20Sony%20HB-F700P/config.ini">Machines/MSX2 - Sony HB-F700P/config.ini</bios>
+		<bios crc="1121635632" url="Machines/MSX2%20-%20Sony%20HB-F700S/config.ini">Machines/MSX2 - Sony HB-F700S/config.ini</bios>
+		<bios crc="1543970982" url="Machines/MSX2%20-%20Sony%20HB-F900%20%28a%29/config.ini">Machines/MSX2 - Sony HB-F900 (a)/config.ini</bios>
+		<bios crc="1830428517" url="Machines/MSX2%20-%20Sony%20HB-F900/config.ini">Machines/MSX2 - Sony HB-F900/config.ini</bios>
+		<bios crc="1891847268" url="Machines/MSX2%20-%20Sony%20HB-F9P%20Russian/config.ini">Machines/MSX2 - Sony HB-F9P Russian/config.ini</bios>
+		<bios crc="3668705737" url="Machines/MSX2%20-%20Sony%20HB-F9P/config.ini">Machines/MSX2 - Sony HB-F9P/config.ini</bios>
+		<bios crc="701355654" url="Machines/MSX2%20-%20Sony%20HB-F9S/config.ini">Machines/MSX2 - Sony HB-F9S/config.ini</bios>
+		<bios crc="1649746559" url="Machines/MSX2%20-%20Sony%20HB-G900AP/config.ini">Machines/MSX2 - Sony HB-G900AP/config.ini</bios>
+		<bios crc="2975403002" url="Machines/MSX2%20-%20Sony%20HB-G900P/config.ini">Machines/MSX2 - Sony HB-G900P/config.ini</bios>
+		<bios crc="3893582942" url="Machines/MSX2%20-%20Spanish/config.ini">Machines/MSX2 - Spanish/config.ini</bios>
+		<bios crc="2988423326" url="Machines/MSX2%20-%20Spectravideo%20SVI-738-2%20CUC/config.ini">Machines/MSX2 - Spectravideo SVI-738-2 CUC/config.ini</bios>
+		<bios crc="1412544544" url="Machines/MSX2%20-%20Spectravideo%20SVI-738-2%20JP%20Grobler/config.ini">Machines/MSX2 - Spectravideo SVI-738-2 JP Grobler/config.ini</bios>
+		<bios crc="667365924" url="Machines/MSX2%20-%20Spectravideo%20SVI-738-2%20LC%20Grosso/config.ini">Machines/MSX2 - Spectravideo SVI-738-2 LC Grosso/config.ini</bios>
+		<bios crc="3752151279" url="Machines/MSX2%20-%20Swedish/config.ini">Machines/MSX2 - Swedish/config.ini</bios>
+		<bios crc="2353096686" url="Machines/MSX2%20-%20Talent%20TPC-310/config.ini">Machines/MSX2 - Talent TPC-310/config.ini</bios>
+		<bios crc="661797881" url="Machines/MSX2%20-%20Toshiba%20HX-23/config.ini">Machines/MSX2 - Toshiba HX-23/config.ini</bios>
+		<bios crc="1113385351" url="Machines/MSX2%20-%20Toshiba%20HX-23F/config.ini">Machines/MSX2 - Toshiba HX-23F/config.ini</bios>
+		<bios crc="309669943" url="Machines/MSX2%20-%20Virtual%20Haesung%20Console/config.ini">Machines/MSX2 - Virtual Haesung Console/config.ini</bios>
+		<bios crc="3145573010" url="Machines/MSX2%20-%20Yamaha%20CX7M-128/config.ini">Machines/MSX2 - Yamaha CX7M-128/config.ini</bios>
+		<bios crc="2450703067" url="Machines/MSX2%20-%20Yamaha%20CX7M/config.ini">Machines/MSX2 - Yamaha CX7M/config.ini</bios>
+		<bios crc="290733986" url="Machines/MSX2/config.ini">Machines/MSX2/config.ini</bios>
+		<bios crc="2964924848" url="Machines/MSX2plus%20-%20Brazilian/config.ini">Machines/MSX2plus - Brazilian/config.ini</bios>
+		<bios crc="544747733" url="Machines/MSX2plus%20-%20C-BIOS/cbios.txt">Machines/MSX2plus - C-BIOS/cbios.txt</bios>
+		<bios crc="477374918" url="Machines/MSX2plus%20-%20C-BIOS/cbios_logo_msx2plus.rom">Machines/MSX2plus - C-BIOS/cbios_logo_msx2plus.rom</bios>
+		<bios crc="2921578553" url="Machines/MSX2plus%20-%20C-BIOS/cbios_main_msx2plus.rom">Machines/MSX2plus - C-BIOS/cbios_main_msx2plus.rom</bios>
+		<bios crc="365350443" url="Machines/MSX2plus%20-%20C-BIOS/cbios_music.rom">Machines/MSX2plus - C-BIOS/cbios_music.rom</bios>
+		<bios crc="4154824673" url="Machines/MSX2plus%20-%20C-BIOS/cbios_sub.rom">Machines/MSX2plus - C-BIOS/cbios_sub.rom</bios>
+		<bios crc="531743201" url="Machines/MSX2plus%20-%20C-BIOS/config.ini">Machines/MSX2plus - C-BIOS/config.ini</bios>
+		<bios crc="2475799764" url="Machines/MSX2plus%20-%20Ciel%20Expert%203%20IDE/config.ini">Machines/MSX2plus - Ciel Expert 3 IDE/config.ini</bios>
+		<bios crc="2873502156" url="Machines/MSX2plus%20-%20Ciel%20Expert%203%20Turbo/config.ini">Machines/MSX2plus - Ciel Expert 3 Turbo/config.ini</bios>
+		<bios crc="3392305465" url="Machines/MSX2plus%20-%20European/config.ini">Machines/MSX2plus - European/config.ini</bios>
+		<bios crc="526649083" url="Machines/MSX2plus%20-%20European/KANJI.rom">Machines/MSX2plus - European/KANJI.rom</bios>
+		<bios crc="1992585184" url="Machines/MSX2plus%20-%20European/Msx2pe.rom">Machines/MSX2plus - European/Msx2pe.rom</bios>
+		<bios crc="676508547" url="Machines/MSX2plus%20-%20European/Msx2pexte.rom">Machines/MSX2plus - European/Msx2pexte.rom</bios>
+		<bios crc="1164855630" url="Machines/MSX2plus%20-%20European/MSX2PMUS.rom">Machines/MSX2plus - European/MSX2PMUS.rom</bios>
+		<bios crc="3036436301" url="Machines/MSX2plus%20-%20European/MSXKANJI.rom">Machines/MSX2plus - European/MSXKANJI.rom</bios>
+		<bios crc="402274603" url="Machines/MSX2plus%20-%20European/PANASONICDISK.rom">Machines/MSX2plus - European/PANASONICDISK.rom</bios>
+		<bios crc="673558944" url="Machines/MSX2plus%20-%20European/XBASIC2.rom">Machines/MSX2plus - European/XBASIC2.rom</bios>
+		<bios crc="2274269896" url="Machines/MSX2plus%20-%20Gradiente%20Expert%20AC88plus/config.ini">Machines/MSX2plus - Gradiente Expert AC88plus/config.ini</bios>
+		<bios crc="2987737469" url="Machines/MSX2plus%20-%20Gradiente%20Expert%20DDXplus/config.ini">Machines/MSX2plus - Gradiente Expert DDXplus/config.ini</bios>
+		<bios crc="1476874174" url="Machines/MSX2plus%20-%20MSXPLAYer%202003/config.ini">Machines/MSX2plus - MSXPLAYer 2003/config.ini</bios>
+		<bios crc="4168366216" url="Machines/MSX2plus%20-%20Panasonic%20FS-A1FX/config.ini">Machines/MSX2plus - Panasonic FS-A1FX/config.ini</bios>
+		<bios crc="2831268592" url="Machines/MSX2plus%20-%20Panasonic%20FS-A1WSX/config.ini">Machines/MSX2plus - Panasonic FS-A1WSX/config.ini</bios>
+		<bios crc="1323266745" url="Machines/MSX2plus%20-%20Panasonic%20FS-A1WX%20%28a%29/config.ini">Machines/MSX2plus - Panasonic FS-A1WX (a)/config.ini</bios>
+		<bios crc="2144049151" url="Machines/MSX2plus%20-%20Panasonic%20FS-A1WX/config.ini">Machines/MSX2plus - Panasonic FS-A1WX/config.ini</bios>
+		<bios crc="607768682" url="Machines/MSX2plus%20-%20Sanyo%20Wavy%20PHC-35J/config.ini">Machines/MSX2plus - Sanyo Wavy PHC-35J/config.ini</bios>
+		<bios crc="80512665" url="Machines/MSX2plus%20-%20Sanyo%20Wavy%20PHC-70FD1/config.ini">Machines/MSX2plus - Sanyo Wavy PHC-70FD1/config.ini</bios>
+		<bios crc="3596545421" url="Machines/MSX2plus%20-%20Sanyo%20Wavy%20PHC-70FD2/config.ini">Machines/MSX2plus - Sanyo Wavy PHC-70FD2/config.ini</bios>
+		<bios crc="1225950011" url="Machines/MSX2plus%20-%20Sony%20HB-F1XDJ/config.ini">Machines/MSX2plus - Sony HB-F1XDJ/config.ini</bios>
+		<bios crc="3912428132" url="Machines/MSX2plus%20-%20Sony%20HB-F1XV/config.ini">Machines/MSX2plus - Sony HB-F1XV/config.ini</bios>
+		<bios crc="2996349281" url="Machines/MSX2plus%20-%20Sony%20HB-F9Splus/config.ini">Machines/MSX2plus - Sony HB-F9Splus/config.ini</bios>
+		<bios crc="2248794238" url="Machines/MSX2plus/config.ini">Machines/MSX2plus/config.ini</bios>
+		<bios crc="4219381209" url="Machines/MSX/config.ini">Machines/MSX/config.ini</bios>
+		<bios crc="2486503178" url="Machines/MSXturboR%20-%20European/config.ini">Machines/MSXturboR - European/config.ini</bios>
+		<bios crc="1432964096" url="Machines/MSXturboR%20-%20Panasonic%20FS-A1GT/config.ini">Machines/MSXturboR - Panasonic FS-A1GT/config.ini</bios>
+		<bios crc="2730222172" url="Machines/MSXturboR%20-%20Panasonic%20FS-A1ST%20%28a%29/config.ini">Machines/MSXturboR - Panasonic FS-A1ST (a)/config.ini</bios>
+		<bios crc="617137590" url="Machines/MSXturboR%20-%20Panasonic%20FS-A1ST%20%28b%29/config.ini">Machines/MSXturboR - Panasonic FS-A1ST (b)/config.ini</bios>
+		<bios crc="417049241" url="Machines/MSXturboR%20-%20Panasonic%20FS-A1ST/config.ini">Machines/MSXturboR - Panasonic FS-A1ST/config.ini</bios>
+		<bios crc="4282867673" url="Machines/MSXturboR/config.ini">Machines/MSXturboR/config.ini</bios>
+		<bios crc="3075082470" url="Machines/SEGA%20-%20SC-3000/config.ini">Machines/SEGA - SC-3000/config.ini</bios>
+		<bios crc="3128063794" url="Machines/SEGA%20-%20SF-7000/config.ini">Machines/SEGA - SF-7000/config.ini</bios>
+		<bios crc="3613921464" url="Machines/SEGA%20-%20SF-7000/sf7000.rom">Machines/SEGA - SF-7000/sf7000.rom</bios>
+		<bios crc="1814487895" url="Machines/SEGA%20-%20SG-1000/config.ini">Machines/SEGA - SG-1000/config.ini</bios>
+		<bios crc="865915306" url="Machines/Shared%20Roms/ARAB1.ROM">Machines/Shared Roms/ARAB1.ROM</bios>
+		<bios crc="3235445893" url="Machines/Shared%20Roms/ARABIC.rom">Machines/Shared Roms/ARABIC.rom</bios>
+		<bios crc="1481314896" url="Machines/Shared%20Roms/BEERIDE.ROM">Machines/Shared Roms/BEERIDE.ROM</bios>
+		<bios crc="243552349" url="Machines/Shared%20Roms/FMPAC.rom">Machines/Shared Roms/FMPAC.rom</bios>
+		<bios crc="1203258314" url="Machines/Shared%20Roms/GCVMX80.ROM">Machines/Shared Roms/GCVMX80.ROM</bios>
+		<bios crc="3059992069" url="Machines/Shared%20Roms/HANGUL.rom">Machines/Shared Roms/HANGUL.rom</bios>
+		<bios crc="526649083" url="Machines/Shared%20Roms/KANJI.rom">Machines/Shared Roms/KANJI.rom</bios>
+		<bios crc="589439678" url="Machines/Shared%20Roms/MICROSOLDISK.ROM">Machines/Shared Roms/MICROSOLDISK.ROM</bios>
+		<bios crc="714968387" url="Machines/Shared%20Roms/MOONSOUND.rom">Machines/Shared Roms/MOONSOUND.rom</bios>
+		<bios crc="2736252596" url="Machines/Shared%20Roms/MSX.rom">Machines/Shared Roms/MSX.rom</bios>
+		<bios crc="1826288549" url="Machines/Shared%20Roms/MSX2.rom">Machines/Shared Roms/MSX2.rom</bios>
+		<bios crc="3929039189" url="Machines/Shared%20Roms/MSX2AR.ROM">Machines/Shared Roms/MSX2AR.ROM</bios>
+		<bios crc="2088059063" url="Machines/Shared%20Roms/MSX2AREXT.ROM">Machines/Shared Roms/MSX2AREXT.ROM</bios>
+		<bios crc="1806490852" url="Machines/Shared%20Roms/MSX2BR.rom">Machines/Shared Roms/MSX2BR.rom</bios>
+		<bios crc="147773568" url="Machines/Shared%20Roms/MSX2BREXT.rom">Machines/Shared Roms/MSX2BREXT.rom</bios>
+		<bios crc="1713602255" url="Machines/Shared%20Roms/MSX2EXT.rom">Machines/Shared Roms/MSX2EXT.rom</bios>
+		<bios crc="3226958416" url="Machines/Shared%20Roms/MSX2FR.rom">Machines/Shared Roms/MSX2FR.rom</bios>
+		<bios crc="3795178952" url="Machines/Shared%20Roms/MSX2FREXT.rom">Machines/Shared Roms/MSX2FREXT.rom</bios>
+		<bios crc="2409652450" url="Machines/Shared%20Roms/MSX2G.rom">Machines/Shared Roms/MSX2G.rom</bios>
+		<bios crc="1105423619" url="Machines/Shared%20Roms/MSX2GEXT.rom">Machines/Shared Roms/MSX2GEXT.rom</bios>
+		<bios crc="2833962467" url="Machines/Shared%20Roms/MSX2HAN.rom">Machines/Shared Roms/MSX2HAN.rom</bios>
+		<bios crc="2604563351" url="Machines/Shared%20Roms/MSX2J.rom">Machines/Shared Roms/MSX2J.rom</bios>
+		<bios crc="1139255292" url="Machines/Shared%20Roms/MSX2JEXT.rom">Machines/Shared Roms/MSX2JEXT.rom</bios>
+		<bios crc="1401227527" url="Machines/Shared%20Roms/MSX2KR.rom">Machines/Shared Roms/MSX2KR.rom</bios>
+		<bios crc="731972771" url="Machines/Shared%20Roms/MSX2KREXT.rom">Machines/Shared Roms/MSX2KREXT.rom</bios>
+		<bios crc="427234824" url="Machines/Shared%20Roms/MSX2P.rom">Machines/Shared Roms/MSX2P.rom</bios>
+		<bios crc="3099215059" url="Machines/Shared%20Roms/MSX2PEXT.rom">Machines/Shared Roms/MSX2PEXT.rom</bios>
+		<bios crc="1164855630" url="Machines/Shared%20Roms/MSX2PMUS.rom">Machines/Shared Roms/MSX2PMUS.rom</bios>
+		<bios crc="3889204777" url="Machines/Shared%20Roms/MSX2R.rom">Machines/Shared Roms/MSX2R.rom</bios>
+		<bios crc="3502378836" url="Machines/Shared%20Roms/MSX2R2.ROM">Machines/Shared Roms/MSX2R2.ROM</bios>
+		<bios crc="886183800" url="Machines/Shared%20Roms/MSX2REXT.rom">Machines/Shared Roms/MSX2REXT.rom</bios>
+		<bios crc="1447620331" url="Machines/Shared%20Roms/MSX2SE.rom">Machines/Shared Roms/MSX2SE.rom</bios>
+		<bios crc="3266873765" url="Machines/Shared%20Roms/MSX2SP.rom">Machines/Shared Roms/MSX2SP.rom</bios>
+		<bios crc="3691598269" url="Machines/Shared%20Roms/MSX2SPEXT.rom">Machines/Shared Roms/MSX2SPEXT.rom</bios>
+		<bios crc="3180708918" url="Machines/Shared%20Roms/MSXAR.ROM">Machines/Shared Roms/MSXAR.ROM</bios>
+		<bios crc="4021598578" url="Machines/Shared%20Roms/MSXBR.rom">Machines/Shared Roms/MSXBR.rom</bios>
+		<bios crc="3529490433" url="Machines/Shared%20Roms/MSXDOS23.ROM">Machines/Shared Roms/MSXDOS23.ROM</bios>
+		<bios crc="1852387233" url="Machines/Shared%20Roms/MSXFR.rom">Machines/Shared Roms/MSXFR.rom</bios>
+		<bios crc="2116760285" url="Machines/Shared%20Roms/MSXG.rom">Machines/Shared Roms/MSXG.rom</bios>
+		<bios crc="2475537472" url="Machines/Shared%20Roms/MSXHAN.rom">Machines/Shared Roms/MSXHAN.rom</bios>
+		<bios crc="118568416" url="Machines/Shared%20Roms/MSXJ.rom">Machines/Shared Roms/MSXJ.rom</bios>
+		<bios crc="3036436301" url="Machines/Shared%20Roms/MSXKANJI.rom">Machines/Shared Roms/MSXKANJI.rom</bios>
+		<bios crc="984665403" url="Machines/Shared%20Roms/MSXKR.rom">Machines/Shared Roms/MSXKR.rom</bios>
+		<bios crc="1351986749" url="Machines/Shared%20Roms/MSXR.rom">Machines/Shared Roms/MSXR.rom</bios>
+		<bios crc="1736912704" url="Machines/Shared%20Roms/MSXR2.ROM">Machines/Shared Roms/MSXR2.ROM</bios>
+		<bios crc="3368868512" url="Machines/Shared%20Roms/MSXSE.ROM">Machines/Shared Roms/MSXSE.ROM</bios>
+		<bios crc="4275523695" url="Machines/Shared%20Roms/MSXSP.rom">Machines/Shared Roms/MSXSP.rom</bios>
+		<bios crc="2474413499" url="Machines/Shared%20Roms/MSXTR.ROM">Machines/Shared Roms/MSXTR.ROM</bios>
+		<bios crc="1890492670" url="Machines/Shared%20Roms/MSXTREXT.ROM">Machines/Shared Roms/MSXTREXT.ROM</bios>
+		<bios crc="4126749751" url="Machines/Shared%20Roms/MSXTRMUS.ROM">Machines/Shared Roms/MSXTRMUS.ROM</bios>
+		<bios crc="1355882336" url="Machines/Shared%20Roms/MSXTROPT.ROM">Machines/Shared Roms/MSXTROPT.ROM</bios>
+		<bios crc="511534354" url="Machines/Shared%20Roms/NATIONALDISK.rom">Machines/Shared Roms/NATIONALDISK.rom</bios>
+		<bios crc="3975382514" url="Machines/Shared%20Roms/NOVAXIS.rom">Machines/Shared Roms/NOVAXIS.rom</bios>
+		<bios crc="175798875" url="Machines/Shared%20Roms/nowindDos1.rom">Machines/Shared Roms/nowindDos1.rom</bios>
+		<bios crc="3595431543" url="Machines/Shared%20Roms/nowindDos2.rom">Machines/Shared Roms/nowindDos2.rom</bios>
+		<bios crc="412446266" url="Machines/Shared%20Roms/PAINT.rom">Machines/Shared Roms/PAINT.rom</bios>
+		<bios crc="402274603" url="Machines/Shared%20Roms/PANASONICDISK.rom">Machines/Shared Roms/PANASONICDISK.rom</bios>
+		<bios crc="3392341971" url="Machines/Shared%20Roms/PHILIPSDISK.rom">Machines/Shared Roms/PHILIPSDISK.rom</bios>
+		<bios crc="861134022" url="Machines/Shared%20Roms/RS232.ROM">Machines/Shared Roms/RS232.ROM</bios>
+		<bios crc="1902681792" url="Machines/Shared%20Roms/Shared.txt">Machines/Shared Roms/Shared.txt</bios>
+		<bios crc="3275983637" url="Machines/Shared%20Roms/SUNRISEIDE.rom">Machines/Shared Roms/SUNRISEIDE.rom</bios>
+		<bios crc="124731644" url="Machines/Shared%20Roms/SWP.rom">Machines/Shared Roms/SWP.rom</bios>
+		<bios crc="673558944" url="Machines/Shared%20Roms/XBASIC2.rom">Machines/Shared Roms/XBASIC2.rom</bios>
+		<bios crc="4032557540" url="Machines/SVI%20-%20Spectravideo%20SVI-318/config.ini">Machines/SVI - Spectravideo SVI-318/config.ini</bios>
+		<bios crc="2564064853" url="Machines/SVI%20-%20Spectravideo%20SVI-318/svi318.rom">Machines/SVI - Spectravideo SVI-318/svi318.rom</bios>
+		<bios crc="4256092743" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Column/config.ini">Machines/SVI - Spectravideo SVI-328 80 Column/config.ini</bios>
+		<bios crc="3158523382" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Column/svi328a.rom">Machines/SVI - Spectravideo SVI-328 80 Column/svi328a.rom</bios>
+		<bios crc="2232140338" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Column/svi806.rom">Machines/SVI - Spectravideo SVI-328 80 Column/svi806.rom</bios>
+		<bios crc="4046090493" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Swedish/config.ini">Machines/SVI - Spectravideo SVI-328 80 Swedish/config.ini</bios>
+		<bios crc="3158523382" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Swedish/svi328a.rom">Machines/SVI - Spectravideo SVI-328 80 Swedish/svi328a.rom</bios>
+		<bios crc="3672803670" url="Machines/SVI%20-%20Spectravideo%20SVI-328%2080%20Swedish/svi806se.rom">Machines/SVI - Spectravideo SVI-328 80 Swedish/svi806se.rom</bios>
+		<bios crc="1329541822" url="Machines/SVI%20-%20Spectravideo%20SVI-328%20MK2/config.ini">Machines/SVI - Spectravideo SVI-328 MK2/config.ini</bios>
+		<bios crc="3158523382" url="Machines/SVI%20-%20Spectravideo%20SVI-328%20MK2/svi328a.rom">Machines/SVI - Spectravideo SVI-328 MK2/svi328a.rom</bios>
+		<bios crc="2232140338" url="Machines/SVI%20-%20Spectravideo%20SVI-328%20MK2/svi806.rom">Machines/SVI - Spectravideo SVI-328 MK2/svi806.rom</bios>
+		<bios crc="2309429398" url="Machines/SVI%20-%20Spectravideo%20SVI-328/config.ini">Machines/SVI - Spectravideo SVI-328/config.ini</bios>
+		<bios crc="1889076457" url="Machines/SVI%20-%20Spectravideo%20SVI-328/svi328.rom">Machines/SVI - Spectravideo SVI-328/svi328.rom</bios>
+	</file>
+	<file name="Commodore Amiga - 500/1200/CD32" url="https://archive.org/compress/amiga4all">
+		<bios crc="2798523958">kick33180.A500</bios>
+		<bios crc="3304125791">kick34005.A500</bios>
+		<bios crc="1119527204">kick34005.CDTV</bios>
+		<bios crc="3283989056">kick37175.A500</bios>
+		<bios crc="1135665019">kick37350.A600</bios>
+		<bios crc="1822099410">kick39106.A1200</bios>
+		<bios crc="2657796434">kick39106.A4000</bios>
+		<bios crc="4124373960">kick40060.CD32</bios>
+		<bios crc="2272553954">kick40060.CD32.ext</bios>
+		<bios crc="4230262285">kick40063.A600</bios>
+		<bios crc="344170641">kick40068.A1200</bios>
+		<bios crc="3602572084">kick40068.A4000</bios>
+	</file>
+	<file name="FBNeo" url="https://archive.org/download/neo-geo-mame-finalburn-neo-bios-and-cores/Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores.rar/">
+		<dir>fbneo</dir>
+		<bios crc="262165443" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fcheats%2Fcheat.dat">cheats/cheat.dat</bios>
+		<bios crc="2463087104" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fhiscore.dat">hiscore.dat</bios>
+		<bios crc="2411920686" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fbubsys.zip">bubsys.zip</bios>
+		<bios crc="601800395" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fcchip.zip">cchip.zip</bios>
+		<bios crc="858261465" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fchannelf.zip">channelf.zip</bios>
+		<bios crc="1957863058" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fcnebula.zip">cnebula.zip</bios>
+		<bios crc="4003905675" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fcoleco.zip">coleco.zip</bios>
+		<bios crc="1687522603" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fdecocass.zip">decocass.zip</bios>
+		<bios crc="1028980309" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Ffdsbios.zip">fdsbios.zip</bios>
+		<bios crc="646278137" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fisgsm.zip">isgsm.zip</bios>
+		<bios crc="1981857074" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fmidssio.zip">midssio.zip</bios>
+		<bios crc="719788036" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fmsx.zip">msx.zip</bios>
+		<bios crc="3190035029" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fnamcoc69.zip">namcoc69.zip</bios>
+		<bios crc="762384908" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fnamcoc70.zip">namcoc70.zip</bios>
+		<bios crc="3479548297" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fnamcoc75.zip">namcoc75.zip</bios>
+		<bios crc="1875108062" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fneocdz.zip">neocdz.zip</bios>
+		<bios crc="2376965521" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fneogeo.zip">neogeo.zip</bios>
+		<bios crc="1785172626" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fngp.zip">ngp.zip</bios>
+		<bios crc="2785645395" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fnmk004.zip">nmk004.zip</bios>
+		<bios crc="3274789132" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fpgm.zip">pgm.zip</bios>
+		<bios crc="2936467636" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fskns.zip">skns.zip</bios>
+		<bios crc="4003828995" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fspec48k.zip">spec48k.zip</bios>
+		<bios crc="1885303096" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fspec128.zip">spec128.zip</bios>
+		<bios crc="1885303096" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fspec128k.zip">spec128k.zip</bios>
+		<bios crc="3388976888" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fspec1282a.zip">spec1282a.zip</bios>
+		<bios crc="4003828995" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fspectrum.zip">spectrum.zip</bios>
+		<bios crc="1531718084" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fym2608.zip">ym2608.zip</bios>
+	</file>
+	<file name="Mame2003-plus" url="https://archive.org/download/neo-geo-mame-finalburn-neo-bios-and-cores/Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores.rar/">
+		<dir>mame2003-plus</dir>
+		<bios crc="3797710550" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fcatver.ini">catver.ini</bios>
+		<bios crc="758848071" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fcheat.dat">cheat.dat</bios>
+		<bios crc="274968385" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fcheat.rzip">cheat.rzip</bios>
+		<bios crc="1064675108" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fhiscore.dat">hiscore.dat</bios>
+		<bios crc="4131963310" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fhistory.dat">history.dat</bios>
+		<bios crc="104390311" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Finfo.txt">info.txt</bios>
+		<bios crc="4262782105" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fmame2003-plus.xml">mame2003-plus.xml</bios>
+	</file>
+	<file name="FBNeo And Mame Samples" url="https://archive.org/download/neo-geo-mame-finalburn-neo-bios-and-cores/Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores.rar/">
+		<bios crc="1792662714" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fblockade.zip">fbneo/samples/blockade.zip</bios>
+		<bios crc="3945426453" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fbuckrog.zip">fbneo/samples/buckrog.zip</bios>
+		<bios crc="3193232311" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fcarnival.zip">fbneo/samples/carnival.zip</bios>
+		<bios crc="892549515" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fcheekyms.zip">fbneo/samples/cheekyms.zip</bios>
+		<bios crc="409378757" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fcongo.zip">fbneo/samples/congo.zip</bios>
+		<bios crc="4281190702" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fdkong.zip">fbneo/samples/dkong.zip</bios>
+		<bios crc="2384740265" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fdkongjr.zip">fbneo/samples/dkongjr.zip</bios>
+		<bios crc="2253520827" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fdonpachi.zip">fbneo/samples/donpachi.zip</bios>
+		<bios crc="1139236092" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Felim2.zip">fbneo/samples/elim2.zip</bios>
+		<bios crc="1819686372" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Ffantasy.zip">fbneo/samples/fantasy.zip</bios>
+		<bios crc="3816555188" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fgalaga.zip">fbneo/samples/galaga.zip</bios>
+		<bios crc="2406478623" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fgaplus.zip">fbneo/samples/gaplus.zip</bios>
+		<bios crc="2454218059" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fgridlee.zip">fbneo/samples/gridlee.zip</bios>
+		<bios crc="4007775325" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fheiankyo.zip">fbneo/samples/heiankyo.zip</bios>
+		<bios crc="917967798" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Finvaders.zip">fbneo/samples/invaders.zip</bios>
+		<bios crc="4265451212" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fjourney.zip">fbneo/samples/journey.zip</bios>
+		<bios crc="2996960587" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fmario.zip">fbneo/samples/mario.zip</bios>
+		<bios crc="1994637009" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fmmagic.zip">fbneo/samples/mmagic.zip</bios>
+		<bios crc="2411965980" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fnatodef.zip">fbneo/samples/natodef.zip</bios>
+		<bios crc="2607186679" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fnitedrvr.zip">fbneo/samples/nitedrvr.zip</bios>
+		<bios crc="762906009" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fnsub.zip">fbneo/samples/nsub.zip</bios>
+		<bios crc="3991033645" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fqbert.zip">fbneo/samples/qbert.zip</bios>
+		<bios crc="1008437836" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fradarscp.zip">fbneo/samples/radarscp.zip</bios>
+		<bios crc="3682097926" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Frallyx.zip">fbneo/samples/rallyx.zip</bios>
+		<bios crc="3104758347" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Freactor.zip">fbneo/samples/reactor.zip</bios>
+		<bios crc="3432720313" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fsafarir.zip">fbneo/samples/safarir.zip</bios>
+		<bios crc="738409945" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fsasuke.zip">fbneo/samples/sasuke.zip</bios>
+		<bios crc="1122515004" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fsharkatt.zip">fbneo/samples/sharkatt.zip</bios>
+		<bios crc="103518674" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fspacefb.zip">fbneo/samples/spacefb.zip</bios>
+		<bios crc="2721140908" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fspacfury.zip">fbneo/samples/spacfury.zip</bios>
+		<bios crc="4194576151" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fstinger.zip">fbneo/samples/stinger.zip</bios>
+		<bios crc="1907266681" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fsubroc3d.zip">fbneo/samples/subroc3d.zip</bios>
+		<bios crc="1250667555" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fthehand.zip">fbneo/samples/thehand.zip</bios>
+		<bios crc="1584246593" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fthief.zip">fbneo/samples/thief.zip</bios>
+		<bios crc="2873095159" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Ftr606drumkit.zip">fbneo/samples/tr606drumkit.zip</bios>
+		<bios crc="184165867" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fturbo.zip">fbneo/samples/turbo.zip</bios>
+		<bios crc="3050682689" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Ftwotiger.zip">fbneo/samples/twotiger.zip</bios>
+		<bios crc="2675540346" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fvanguard.zip">fbneo/samples/vanguard.zip</bios>
+		<bios crc="4010448283" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fxevious.zip">fbneo/samples/xevious.zip</bios>
+		<bios crc="2716318378" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fzaxxon.zip">fbneo/samples/zaxxon.zip</bios>
+		<bios crc="2583364823" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fzektor.zip">fbneo/samples/zektor.zip</bios>
+		<bios crc="1898118367" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fzerohour.zip">fbneo/samples/zerohour.zip</bios>
+		<bios crc="4181245959" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Farmora.zip">mame2003-plus/samples/armora.zip</bios>
+		<bios crc="1803479787" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fastrob.zip">mame2003-plus/samples/astrob.zip</bios>
+		<bios crc="3126078715" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fastrof.zip">mame2003-plus/samples/astrof.zip</bios>
+		<bios crc="682453154" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fbattles.zip">mame2003-plus/samples/battles.zip</bios>
+		<bios crc="1003918196" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fberzerk.zip">mame2003-plus/samples/berzerk.zip</bios>
+		<bios crc="1103536500" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fblockade.zip">mame2003-plus/samples/blockade.zip</bios>
+		<bios crc="1647271990" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fboothill.zip">mame2003-plus/samples/boothill.zip</bios>
+		<bios crc="3497013671" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fbosco.zip">mame2003-plus/samples/bosco.zip</bios>
+		<bios crc="3945426453" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fbuckrog.zip">mame2003-plus/samples/buckrog.zip</bios>
+		<bios crc="3193232311" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fcarnival.zip">mame2003-plus/samples/carnival.zip</bios>
+		<bios crc="2482332679" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fcircus.zip">mame2003-plus/samples/circus.zip</bios>
+		<bios crc="3661753922" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fcongo.zip">mame2003-plus/samples/congo.zip</bios>
+		<bios crc="1859288919" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fcosmica.zip">mame2003-plus/samples/cosmica.zip</bios>
+		<bios crc="2326682044" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fcosmicg.zip">mame2003-plus/samples/cosmicg.zip</bios>
+		<bios crc="3728730676" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fddragon.zip">mame2003-plus/samples/ddragon.zip</bios>
+		<bios crc="2104540627" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fdepthch.zip">mame2003-plus/samples/depthch.zip</bios>
+		<bios crc="309314531" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fdkong.zip">mame2003-plus/samples/dkong.zip</bios>
+		<bios crc="2384740265" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fdkongjr.zip">mame2003-plus/samples/dkongjr.zip</bios>
+		<bios crc="1139236092" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Felim2.zip">mame2003-plus/samples/elim2.zip</bios>
+		<bios crc="1819686372" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Ffantasy.zip">mame2003-plus/samples/fantasy.zip</bios>
+		<bios crc="3124301754" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fffight.zip">mame2003-plus/samples/ffight.zip</bios>
+		<bios crc="57872127" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Ffrogs.zip">mame2003-plus/samples/frogs.zip</bios>
+		<bios crc="269065363" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fgalaga.zip">mame2003-plus/samples/galaga.zip</bios>
+		<bios crc="3237126382" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fgorf.zip">mame2003-plus/samples/gorf.zip</bios>
+		<bios crc="2454218059" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fgridlee.zip">mame2003-plus/samples/gridlee.zip</bios>
+		<bios crc="2505487043" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Finvaders.zip">mame2003-plus/samples/invaders.zip</bios>
+		<bios crc="2921555502" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Finvinco.zip">mame2003-plus/samples/invinco.zip</bios>
+		<bios crc="2996960587" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fmario.zip">mame2003-plus/samples/mario.zip</bios>
+		<bios crc="3685298638" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fmkla1.zip">mame2003-plus/samples/mkla1.zip</bios>
+		<bios crc="3674596537" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fmonsterb.zip">mame2003-plus/samples/monsterb.zip</bios>
+		<bios crc="1826138342" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fmoonwlkb.zip">mame2003-plus/samples/moonwlkb.zip</bios>
+		<bios crc="2411965980" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fnatodef.zip">mame2003-plus/samples/natodef.zip</bios>
+		<bios crc="2910003284" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fnbajam.zip">mame2003-plus/samples/nbajam.zip</bios>
+		<bios crc="207308626" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Foutrun.zip">mame2003-plus/samples/outrun.zip</bios>
+		<bios crc="4216932445" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fpanic.zip">mame2003-plus/samples/panic.zip</bios>
+		<bios crc="3020275175" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fpolepos.zip">mame2003-plus/samples/polepos.zip</bios>
+		<bios crc="2381146238" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fpulsar.zip">mame2003-plus/samples/pulsar.zip</bios>
+		<bios crc="3991033645" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fqbert.zip">mame2003-plus/samples/qbert.zip</bios>
+		<bios crc="3682097926" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Frallyx.zip">mame2003-plus/samples/rallyx.zip</bios>
+		<bios crc="3104758347" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Freactor.zip">mame2003-plus/samples/reactor.zip</bios>
+		<bios crc="2089466156" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fripoff.zip">mame2003-plus/samples/ripoff.zip</bios>
+		<bios crc="738409945" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fsasuke.zip">mame2003-plus/samples/sasuke.zip</bios>
+		<bios crc="168044476" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fseawolf.zip">mame2003-plus/samples/seawolf.zip</bios>
+		<bios crc="1425334253" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fsharkatt.zip">mame2003-plus/samples/sharkatt.zip</bios>
+		<bios crc="3409143882" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fsolarq.zip">mame2003-plus/samples/solarq.zip</bios>
+		<bios crc="103518674" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fspacefb.zip">mame2003-plus/samples/spacefb.zip</bios>
+		<bios crc="1066631964" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fspaceod.zip">mame2003-plus/samples/spaceod.zip</bios>
+		<bios crc="1110657553" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fspacewar.zip">mame2003-plus/samples/spacewar.zip</bios>
+		<bios crc="2721140908" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fspacfury.zip">mame2003-plus/samples/spacfury.zip</bios>
+		<bios crc="1044697239" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fstarcas.zip">mame2003-plus/samples/starcas.zip</bios>
+		<bios crc="3538546882" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fstarcrus.zip">mame2003-plus/samples/starcrus.zip</bios>
+		<bios crc="1308179200" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fstartrek.zip">mame2003-plus/samples/startrek.zip</bios>
+		<bios crc="1907266681" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fsubroc3d.zip">mame2003-plus/samples/subroc3d.zip</bios>
+		<bios crc="1615167122" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fsundance.zip">mame2003-plus/samples/sundance.zip</bios>
+		<bios crc="1512165092" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Ftacscan.zip">mame2003-plus/samples/tacscan.zip</bios>
+		<bios crc="430786792" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Ftankbatt.zip">mame2003-plus/samples/tankbatt.zip</bios>
+		<bios crc="4234823452" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Ftarg.zip">mame2003-plus/samples/targ.zip</bios>
+		<bios crc="1250667555" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fthehand.zip">mame2003-plus/samples/thehand.zip</bios>
+		<bios crc="1584246593" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fthief.zip">mame2003-plus/samples/thief.zip</bios>
+		<bios crc="184165867" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fturbo.zip">mame2003-plus/samples/turbo.zip</bios>
+		<bios crc="2675540346" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fvanguard.zip">mame2003-plus/samples/vanguard.zip</bios>
+		<bios crc="270822386" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fwarrior.zip">mame2003-plus/samples/warrior.zip</bios>
+		<bios crc="4213711108" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fwow.zip">mame2003-plus/samples/wow.zip</bios>
+		<bios crc="3883734848" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fxevious.zip">mame2003-plus/samples/xevious.zip</bios>
+		<bios crc="2716318378" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fzaxxon.zip">mame2003-plus/samples/zaxxon.zip</bios>
+		<bios crc="2583364823" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fzektor.zip">mame2003-plus/samples/zektor.zip</bios>
+	</file>
+	<file name="NEC - PC Engine - TurboGrafx 16 - SuperGrafx" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNEC%20-%20PC%20Engine%20-%20TurboGrafx%2016%20-%20SuperGrafx.zip">
+		<bios crc="1369517456">gecard.pce</bios>
+		<bios crc="1369517456">gexpress.pce</bios>
+		<bios crc="1067423140">syscard1.pce</bios>
+		<bios crc="674985184">syscard2.pce</bios>
+		<bios crc="4280966851">syscard2u.pce</bios>
+		<bios crc="1838838767">syscard3.pce</bios>
+		<bios crc="727414270">syscard3u.pce</bios>
+	</file>
+	<file name="Nintendo - Game Boy Advance" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNintendo%20-%20Game%20Boy%20Advance.zip">
+		<dir/>
+		<bios crc="2174186293">gba_bios.bin</bios>
+	</file>
+	<file name="Nintendo - Nintendo Entertainment System" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNintendo%20-%20Nintendo%20Entertainment%20System.zip">
+		<dir/>
+		<bios crc="1583381967">disksys.rom</bios>
+		<bios crc="3954317676">NstDatabase.xml</bios>
+	</file>
+	<file name="PRBOOM" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Id%20Software/Doom/">
+		<bios crc="2775915417" url="prboom.wad">prboom.wad</bios>
+	</file>
+	<file name="Sega - 32X" url="https://archive.org/download/SegaGenesisBios/Sega%20Genesis%20Bios.zip">
+		<dir/>
+		<bios crc="1544743656">32X_G_BIOS.BIN</bios>
+		<bios crc="3218743269">32X_S_BIOS.BIN</bios>
+		<bios crc="3718006456">32X_M_BIOS.BIN</bios>
+	</file>
+	<file name="Sega - Mega CD - Sega CD" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSega%20-%20Mega%20CD%20-%20Sega%20CD.zip">
+		<dir/>
+		<bios crc="1385873754">bios_CD_E.bin</bios>
+		<bios crc="2637015282">bios_CD_J.bin</bios>
+		<bios crc="3335586408">bios_CD_U.bin</bios>
+	</file>
+	<file name="Sega - Mega Drive - Genesis" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSega%20-%20Mega%20Drive%20-%20Genesis.zip">
+		<dir/>
+		<bios crc="1065913588">bios_MD.bin</bios>
+	</file>
+	<file name="Sharp - X68000" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSharp%20-%20X68000.zip">
+		<dir>keropi</dir>
+		<bios crc="2670826993">cgrom.dat</bios>
+		<bios crc="1925051698">iplrom.dat</bios>
+		<bios crc="3908631981">iplrom30.dat</bios>
+		<bios crc="1820259848">iplromco.dat</bios>
+		<bios crc="15643656">iplromxv.dat</bios>
+	</file>
+	<file name="Scummvm" url="https://github.com/libretro/scummvm/raw/refs/heads/master/">
+		<bios crc="178309245" url="gui/themes/gui-icons.dat">gui-icons.dat</bios>
+		<bios crc="3335755848" url="gui/themes/translations.dat">translations.dat</bios>
+		<bios crc="1873309614" url="gui/themes/scummremastered.zip">scummremastered.zip</bios>
+		<bios crc="3412640046" url="gui/themes/shaders.dat">shaders.dat</bios>
+		<bios crc="4286422019" url="gui/themes/default.inc">default.inc</bios>
+		<bios crc="4139872152" url="backends/vkeybd/packs/vkeybd_default.zip">vkeybd_default.zip</bios>
+		<bios crc="3570201515" url="dists/engine-data/grim-patch.lab">grim-patch.lab</bios>
+		<bios crc="2720646351" url="dists/engine-data/monkey4-patch.m4b">monkey4-patch.m4b</bios>
+		<bios crc="3010427662" url="dists/engine-data/drascula.dat">drascula.dat</bios>
+		<bios crc="3591814821" url="dists/engine-data/lure.dat">lure.dat</bios>
+		<bios crc="632775731" url="dists/engine-data/neverhood.dat">neverhood.dat</bios>
+		<bios crc="2428102482" url="dists/engine-data/teenagent.dat">teenagent.dat</bios>
+		<bios crc="1802643918" url="dists/engine-data/kyra.dat">kyra.dat</bios>
+		<bios crc="3608392107" url="dists/engine-data/queen.tbl">queen.tbl</bios>
+		<bios crc="2811589123" url="dists/engine-data/sky.cpt">sky.cpt</bios>
+		<bios crc="1999706381" url="dists/engine-data/toon.dat">toon.dat</bios>
+		<bios crc="3244265561" url="dists/engine-data/ultima.dat">ultima.dat</bios>
+		<bios crc="2964534323" url="dists/engine-data/ultima8.dat">ultima8.dat</bios>
+	</file>
+	<file name="Sony - PlayStation" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Sony/PlayStation/">
+		<bios crc="2374809572" url="scph5501.bin">scph5501.bin</bios>
+		<bios crc="924152625" url="scph1001.bin">scph1001.bin</bios>
+		<bios crc="1344414902" url="scph7001.bin">scph7001.bin</bios>
+		<bios crc="387701996" url="scph101.bin">scph101.bin</bios>
+		<bios crc="996155336" url="scph1000.bin">scph1000.bin</bios>
+		<bios crc="892985078" url="scph3000.bin">scph3000.bin</bios>
+		<bios crc="4282313612" url="scph5500.bin">scph5500.bin</bios>
+		<bios crc="3964935376" url="scph7000.bin">scph7000.bin</bios>
+		<bios crc="2612558923" url="scph1002.bin">scph1002.bin</bios>
+		<bios crc="3615944889" url="scph5502.bin">scph5502.bin</bios>
+		<bios crc="195919529" url="scph102.bin">scph102.bin</bios>
+	</file>
+	<file name="Roland" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Roland/">
+		<bios crc="3497181777" url="sounddata/Nuked-SC55-Resources/ROMs/SC-55-v1.00/sc55_rom1.bin">sc55_rom1.bin</bios>
+		<bios crc="3685396111" url="sounddata/Nuked-SC55-Resources/ROMs/SC-55-v1.00/sc55_rom2.bin">sc55_rom2.bin</bios>
+		<bios crc="449279187" url="sounddata/Nuked-SC55-Resources/ROMs/SC-55-v1.00/sc55_waverom1.bin">sc55_waverom1.bin</bios>
+		<bios crc="2378979626" url="sounddata/Nuked-SC55-Resources/ROMs/SC-55-v1.00/sc55_waverom2.bin">sc55_waverom2.bin</bios>
+		<bios crc="3793665028" url="sounddata/Nuked-SC55-Resources/ROMs/SC-55-v1.00/sc55_waverom3.bin">sc55_waverom3.bin</bios>
+		<bios crc="2814464795" url="MT-32/MT32_CONTROL.ROM">MT32_CONTROL.ROM</bios>
+		<bios crc="1463693772" url="MT-32/MT32_PCM.ROM">MT32_PCM.ROM</bios>
+		<bios crc="3113747582" url="CM-32L/CM32L_CONTROL.ROM">CM32L_CONTROL.ROM</bios>
+		<bios crc="1268129466" url="CM-32L/CM32L_PCM.ROM">CM32L_PCM.ROM</bios>
+	</file>
+	<file name="Soundfonts" url="">
+		<bios crc="3310443621" url="https://github.com/nitro-shoe/sc-55-soundfont/releases/download/v1.4.1/Roland.SC-55.sf2">Roland.SC-55.sf2</bios>
+		<bios crc="562801975" url="https://github.com/mrbumpy409/GeneralUser-GS/raw/refs/heads/main/GeneralUser-GS.sf2">GeneralUser-GS.sf2</bios>
+		<bios crc="804942803" url="https://github.com/namin/metasolfeggio/raw/refs/heads/master/mingus/ChoriumRevA.SF2">choriumreva.sf2</bios>
+		<bios crc="3964564453" url="https://github.com/octylFractal/MidiEditor/raw/refs/heads/master/WeedsGM3.sf2">WeedsGM3.sf2</bios>
+	</file>
+</system>

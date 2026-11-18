@@ -79,6 +79,11 @@ void OSystem_libretro::initBackend() {
 	ConfMan.registerDefault("mt32_device", "auto");
 	ConfMan.registerDefault("native_mt32", true);
 
+	/* GUI: do not scale the fixed-size (BDF) fonts of the classic themes; the
+	 * scaled bitmap fonts look blurry on the frontend's output. Only a
+	 * default, the "Disable fixed font scaling" checkbox still overrides it. */
+	ConfMan.registerDefault("gui_disable_fixed_font_scaling", true);
+
 	delete _timerManager;
 	_timerManager = nullptr;
 	delete _mixer;

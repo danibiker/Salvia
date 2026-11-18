@@ -348,6 +348,11 @@ void vector_init()
 
 	BurnResizeCallback = vector_resize_callback;
 
+	// [Salvia] the core stays loaded between games (static xex): start from the
+	// defaults instead of what the previous vector game left behind
+	vector_intens = 1.0;
+	vector_rescaled = 0;
+
 	vector_set_clip(0, nScreenWidth, 0, nScreenHeight);
 
 	pBitmap = (UINT32*)BurnMalloc(nScreenWidth * nScreenHeight * sizeof(INT32));
@@ -372,6 +377,12 @@ void vector_init()
 
 void vector_exit()
 {
+	// [Salvia] the resize callback is global and outlives the game: if it is not
+	// cleared, the next (non vector) game gets vector_rescale() called from
+	// BurnSetResolution() at load time, which changes its screen size, transfer
+	// buffer and clipping -> corrupted graphics until the frontend is restarted.
+	if (BurnResizeCallback == vector_resize_callback) BurnResizeCallback = NULL;
+
 	GenericTilesExit();
 	
 	if (pBitmap) {
