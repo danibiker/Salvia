@@ -315,6 +315,11 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 	return postUrl(url, postData, USERAGENT, outResponse, progressPtr);
 }
 
+// Buffer de la libreria de C para el fichero de fetchFile: agrupa los trozos que
+// entrega curl (hasta 16 KB, CURL_MAX_WRITE_SIZE) en escrituras de 512 KB, en vez
+// de una escritura a disco por cada trozo recibido.
+#define FETCH_FILE_BUFFER (512 * 1024)
+
 // Anyade esto a los metodos publicos de tu clase
 bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, float* progressPtr, float* kbPtr) {
 	CURL *curl = curl_easy_init();
@@ -326,6 +331,9 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 		curl_easy_cleanup(curl);
 		return false;
 	}
+
+	// Buffer grande: no escribir en disco con cada trozo que llega de la red
+	setvbuf(fp, NULL, _IOFBF, FETCH_FILE_BUFFER);
 
 	ProgressData pData;
 	pData.progressVar = progressPtr;
@@ -343,8 +351,7 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
-	// Callback para escribir directamente al archivo
-	// Usamos el callback estandar de cURL para FILE*
+	// Escritura al archivo con fwrite (bufferizada por setvbuf)
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL); // NULL usa fwrite por defecto
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
 
