@@ -8416,6 +8416,7 @@
     <ClInclude Include="src\video\salvia_shader_api.h" />
     <ClInclude Include="src\font\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\font\fonts.h" />
+    <ClInclude Include="src\font\utf8util.h" />
     <ClInclude Include="src\gfx\gfx_utils.h" />
     <ClInclude Include="src\gfx\SDL_gfxBlitFunc.h" />
     <ClInclude Include="src\gfx\SDL_gfxPrimitives.h" />

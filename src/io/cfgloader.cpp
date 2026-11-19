@@ -208,8 +208,11 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::apikeytgdb].desc = "#Api key for thegamesdb";
 
 	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
-	configMain[cfg::mainLang].desc = "#mainLang: Main system lang. If not specified on xbox 360, it will try to find the configured"
-									 "\n#from the console with some of this values: es, en, fr, de, it (although only 'es' and 'en' are actually supported)";
+	configMain[cfg::mainLang].desc = "#mainLang: Menu language. Supported values: en, es, de, fr, it, pt, pl, ru, sv, tr, no, nl,"
+									 "\n#ja (Japanese), kr (Korean), tw (Traditional Chinese) and zh (Simplified Chinese)."
+									 "\n#If empty, on xbox 360 the console language is used, and English if it is not supported. On Windows, English."
+									 "\n#Chinese, Japanese and Korean texts need the fonts in assets\\fonts (NotoSansJP/KR/TC/SC-Regular.ttf),"
+									 "\n#chosen by this language (Japanese for any other language).";
 
 	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "eu");
 	configMain[cfg::scrapRegion].desc = "#Region for the artwork scraper";
@@ -415,20 +418,54 @@ void CfgLoader::checkSystemLang(){
 
 		std::string langXbox;
 		switch (dwLanguage) {
-			case XC_LANGUAGE_SPANISH:
-				langXbox = "es";
-				break;
 			case XC_LANGUAGE_ENGLISH:
 				langXbox = DEFAULT_LANG;
 				break;
-			case XC_LANGUAGE_FRENCH:
-				langXbox = "fr";
+			case XC_LANGUAGE_JAPANESE:
+				langXbox = "ja";
 				break;
 			case XC_LANGUAGE_GERMAN:
 				langXbox = "de";
 				break;
+			case XC_LANGUAGE_FRENCH:
+				langXbox = "fr";
+				break;
+			case XC_LANGUAGE_SPANISH:
+				langXbox = "es";
+				break;
 			case XC_LANGUAGE_ITALIAN:
 				langXbox = "it";
+				break;
+			case XC_LANGUAGE_KOREAN:
+				langXbox = "kr";
+				break;
+			case XC_LANGUAGE_TCHINESE:
+				langXbox = "tw";   // chino tradicional (ScreenScraper: tw)
+				break;
+			case XC_LANGUAGE_PORTUGUESE:
+				langXbox = "pt";
+				break;
+			case XC_LANGUAGE_POLISH:
+				langXbox = "pl";
+				break;
+			case XC_LANGUAGE_RUSSIAN:
+				langXbox = "ru";
+				break;
+			case XC_LANGUAGE_SWEDISH:
+				langXbox = "sv";
+				break;
+			case XC_LANGUAGE_TURKISH:
+				langXbox = "tr";
+				break;
+			case XC_LANGUAGE_BNORWEGIAN:
+				langXbox = "no";
+				break;
+			case XC_LANGUAGE_DUTCH:
+				langXbox = "nl";
+				break;
+			case XC_LANGUAGE_SCHINESE_DEPRECATED:   // 0x0A, consolas anteriores a 2012
+			case XC_LANGUAGE_SCHINESE:
+				langXbox = "zh";   // chino simplificado
 				break;
 			default:
 				// Idioma por defecto si no coincide
@@ -443,7 +480,7 @@ void CfgLoader::checkSystemLang(){
 
 	bool fileFound = LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 	if (!fileFound){
-		LOG_DEBUG("Language %s not found", mainLang);
+		LOG_DEBUG("Language %s not found", mainLang.c_str());
 		mainLang = DEFAULT_LANG;
 		fileFound = LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 		if (!fileFound){
@@ -485,6 +522,9 @@ void CfgLoader::parsearIdiomas(const char* xmlData, const std::string& isoCode,
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
         const char* nomcourt = langue.child_value("nomcourt");
         const char* desc = langue.child_value(nombreNodo.c_str());
+        // Sin descripcion en el idioma del menu (los XML solo traen fr, de, en, es,
+        // it y pt): se usa la inglesa.
+        if (desc[0] == '\0') desc = langue.child_value("nom_en");
 		const int id = Constant::strToTipo<int>(langue.child_value("id"));
 
         idioma.push_back(FieldIdDesc(id, nomcourt, desc));
@@ -518,6 +558,9 @@ void CfgLoader::parsearRegiones(const char* xmlData, const std::string& isoCode,
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
         const char* nomcourt = langue.child_value("nomcourt");
         const char* desc = langue.child_value(nombreNodo.c_str());
+        // Sin descripcion en el idioma del menu (los XML solo traen fr, de, en, es,
+        // it y pt): se usa la inglesa.
+        if (desc[0] == '\0') desc = langue.child_value("nom_en");
 		const int id = Constant::strToTipo<int>(langue.child_value("id"));
 
         region.push_back(FieldIdDesc(id, nomcourt, desc));

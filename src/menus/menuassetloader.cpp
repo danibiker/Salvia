@@ -50,7 +50,7 @@ void MenuAssetLoader::start(GameMenu* owner)
 
     if (!m_thread) {
         LOG_ERROR("MenuAssetLoader: CreateThread FAILED");
-        if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
+        if (m_workerFont) { Fonts::closeIndependentFont(m_workerFont); m_workerFont = NULL; }
         if (m_event) { CloseHandle(m_event); m_event = NULL; }
         if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
         return;
@@ -84,7 +84,7 @@ void MenuAssetLoader::stop()
     }
     if (m_event) { CloseHandle(m_event); m_event = NULL; }
     if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
-    if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
+    if (m_workerFont) { Fonts::closeIndependentFont(m_workerFont); m_workerFont = NULL; }
 
     m_started = false;
     LOG_DEBUG("MenuAssetLoader: stopped");

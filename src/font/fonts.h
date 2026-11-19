@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <vector>
+#include <map>
 #include <string>
 
 #include <io/fileio.h>
@@ -59,7 +60,15 @@ class Fonts{
         ~Fonts();
 
 		static void destroy();
-		static void initFonts(int fontSize);
+		/* fallbackPath: fichero de la fuente de reserva para los caracteres que
+		 * Arimo no tiene (chino, japones, coreano). Vacio = sin reserva.
+		 * fallbackInMemory: carga ese fichero entero en memoria (para los idiomas
+		 * CJK, que lo usan constantemente) en vez de leerlo del disco. */
+		static void initFonts(int fontSize, const std::string& fallbackPath = "", bool fallbackInMemory = false);
+		/* Nombre del fichero de la fuente CJK de reserva para un idioma del menu. */
+		static std::string cjkFontFile(const std::string& lang);
+		/* true para los idiomas del menu escritos con caracteres CJK (ja, kr, tw, zh). */
+		static bool isCjkLang(const std::string& lang);
 		static TTF_Font *getFont(int fontId);
 		static std::size_t idxToCutTTF(std::string text, int maxW, int fontId);
 		static int getSize(int, std::string);
@@ -73,8 +82,10 @@ class Fonts{
 		 * glifos.  Pensado para usar desde otros hilos: TTF no es
 		 * thread-safe a nivel de la misma TTF_Font*, asi que cada hilo
 		 * debe tener su instancia.  El llamante es el propietario y debe
-		 * cerrarla con TTF_CloseFont. */
+		 * cerrarla con closeIndependentFont (que cierra tambien su fuente
+		 * de reserva). */
 		static TTF_Font* createIndependentFont(int fontId);
+		static void closeIndependentFont(TTF_Font* font);
 
 		/* Mismas que getSize(fontId,...) pero con una TTF_Font* explicita.
 		 * Pensadas para usar la fuente independiente de un worker. */
@@ -94,6 +105,12 @@ class Fonts{
         static const int fsmall = 10;
 		static Fileio fileio;
 		static TTF_Font* vFonts[MAX_FONTS];
+		static TTF_Font* vFallbackFonts[MAX_FONTS];
+		// Fuente principal -> su fuente de reserva (incluye las independientes)
+		static std::map<TTF_Font*, TTF_Font*> fallbackOf;
+		static std::string s_fallbackPath;
+		static std::vector<char> s_fallbackData;   // fuente de reserva en memoria (vacio = se lee del disco)
+		static TTF_Font* openFallbackFont(int ptsize);
 		static int s_fontSize;   // tamanyo usado en initFonts; para reabrir
 		static SDL_mutex *mutex;
 };

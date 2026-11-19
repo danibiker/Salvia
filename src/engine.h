@@ -63,7 +63,7 @@ class Engine{
         void stopEngine();
 		void initColors(SDL_Surface *srf);
     protected:
-		int initFont();
+		int initFont(const std::string& lang);
 		
 		Fileio fileio;
     private:

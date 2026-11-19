@@ -1,5 +1,6 @@
 #include <uiobjects/textarea.h>
 #include <io/dirutil.h>
+#include <font/utf8util.h>
 
 // El BOM UTF-8 (EF BB BF) no tiene glifo y hace que SDL_ttf falle con
 // "Text has zero width". Se elimina siempre al inicio de cualquier texto.
@@ -13,6 +14,67 @@ static bool hasUtf8Bom(const std::string& s){
 static void stripUtf8Bom(std::string& s){
 	if (hasUtf8Bom(s))
 		s.erase(0, 3);
+}
+
+/* Anade una palabra (texto sin espacios) a las lineas, ajustandola a maxW.
+ * El chino y el japones no separan las palabras con espacios, asi que la
+ * palabra se parte en trozos por donde lo permite utf8::nextBreak (entre
+ * caracteres CJK, respetando la puntuacion). En el resto de idiomas el trozo
+ * es la palabra entera. Si un trozo no cabe ni en una linea vacia se parte
+ * por caracteres (nunca a mitad de un caracter UTF-8). */
+static void appendWrappedWord(std::vector<t_line>& out, int& lineW, const std::string& word,
+                              TTF_Font* font, int spaceW, int maxW)
+{
+	if (word.empty()) return;
+	if (out.empty()) out.push_back(t_line());
+
+	std::size_t pos = 0;
+	bool firstPiece = true;
+	while (pos < word.size()) {
+		const std::size_t end = utf8::nextBreak(word, pos);
+		const std::string piece = word.substr(pos, end - pos);
+		pos = end;
+
+		const int pieceW = Fonts::getSize(font, piece);
+		const bool needSpace = firstPiece && !out.back().text.empty();
+		const int addedW = pieceW + (needSpace ? spaceW : 0);
+		firstPiece = false;
+
+		// Cabe en la linea actual
+		if (lineW + addedW < maxW) {
+			if (needSpace) out.back().text += " ";
+			out.back().text += piece;
+			lineW += addedW;
+			continue;
+		}
+
+		// No cabe: salto de linea automatico (si la actual tiene algo)
+		if (!out.back().text.empty()) {
+			out.push_back(t_line());
+			lineW = 0;
+		}
+
+		if (pieceW < maxW) {
+			out.back().text = piece;
+			lineW = pieceW;
+			continue;
+		}
+
+		// El trozo no cabe ni solo en una linea: se parte por caracteres
+		std::size_t c = 0;
+		while (c < piece.size()) {
+			const std::size_t cEnd = utf8::next(piece, c);
+			const std::string ch = piece.substr(c, cEnd - c);
+			const int chW = Fonts::getSize(font, ch);
+			if (lineW + chW >= maxW && !out.back().text.empty()) {
+				out.push_back(t_line());
+				lineW = 0;
+			}
+			out.back().text += ch;
+			lineW += chW;
+			c = cEnd;
+		}
+	}
 }
 
 TextArea::TextArea(){
@@ -99,37 +161,20 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
     std::string rawLine;
     
     // Leemos el archivo linea por linea para respetar los retornos de carro originales
+    TTF_Font* font = Fonts::getFont(this->fontType);
     while (std::getline(fileRomTxt, rawLine)) {
-		t_line line;
         // El BOM UTF-8 solo puede aparecer al principio del archivo, en la primera linea
         stripUtf8Bom(rawLine);
-        // Creamos una nueva linea en nuestro vector para este parrafo
-        lines.push_back(std::move(line));
+        // Cada linea del fichero empieza una linea nueva
+        lines.push_back(t_line());
         int currentLineW = 0;
 
         std::stringstream ss(rawLine);
         std::string word;
 
-        // Troceamos la linea actual por espacios
+        // Troceamos la linea actual por espacios y ajustamos cada palabra
         while (ss >> word) {
-            int wordW = Fonts::getSize(this->fontType, word.c_str());
-
-            // Si es la primera palabra de la linea actual
-            if (lines.back().text.empty()) {
-                lines.back().text = std::move(word);
-                currentLineW = wordW;
-            } 
-            // Si la palabra cabe en la linea actual junto con el espacio
-            else if (currentLineW + spaceW + wordW < maxW) {
-                lines.back().text.append(" ").append(word);
-                currentLineW += spaceW + wordW;
-            } 
-            // Si no cabe, hacemos un salto de linea automático (ajuste de texto)
-            else {
-				line.text = std::move(word);
-                lines.push_back(std::move(line));
-                currentLineW = wordW;
-            }
+            appendWrappedWord(lines, currentLineW, word, font, spaceW, maxW);
         }
     }
 
@@ -192,22 +237,8 @@ std::vector<t_line> TextArea::wrapStringWithFont(const std::string& fulltxt, TTF
         // 3. Extraer la palabra reutilizando la capacidad del string (sin hacer New/Delete de memoria)
         word.assign(fulltxt, start, (hasBreak ? breakPos : end) - start);
 
-        int wordW = word.empty() ? 0 : Fonts::getSize(font, word.c_str());
-        bool hasSpace = !out.back().text.empty();
-        int addedW = wordW + (hasSpace ? spaceW : 0);
-
-        // 4. Evaluar si cabe en la línea actual
-        if (currentLineW + addedW >= maxW) {
-            out.push_back(t_line());
-            out.back().text = word;
-            currentLineW = wordW;
-        } else {
-            if (!word.empty()) {
-                if (hasSpace) out.back().text += " ";
-                out.back().text += word;
-                currentLineW += addedW;
-            }
-        }
+        // 4. Anadir la palabra ajustandola a la linea (parte el texto CJK)
+        appendWrappedWord(out, currentLineW, word, font, spaceW, maxW);
 
         // 5. Avanzar los índices según lo que hemos encontrado
         if (hasBreak) {
@@ -275,22 +306,10 @@ std::vector<t_line> TextArea::wrapTextFileWithFont(const std::string& filepathTo
             // 1. Detectar delimitadores (Espacio o Saltos de línea)
             if (c == ' ' || c == '\n' || c == '\r') {
                 
-                // Si teníamos una palabra acumulada, la procesamos
+                // Si teniamos una palabra acumulada, la procesamos
                 if (!word.empty()) {
-                    int wordW = Fonts::getSize(font, word.c_str());
-                    bool hasSpace = !out.back().text.empty();
-                    int addedW = wordW + (hasSpace ? spaceW : 0);
-
-                    if (currentLineW + addedW >= maxW) {
-                        out.push_back(t_line());
-                        out.back().text = word;
-                        currentLineW = wordW;
-                    } else {
-                        if (hasSpace) out.back().text += " ";
-                        out.back().text += word;
-                        currentLineW += addedW;
-                    }
-                    word.clear(); // Vacía el string sin liberar su memoria interna
+                    appendWrappedWord(out, currentLineW, word, font, spaceW, maxW);
+                    word.clear(); // Vacia el string sin liberar su memoria interna
                 }
 
                 // 2. Gestión estricta de saltos de línea nativos (\n, \r, \r\n)
@@ -316,15 +335,7 @@ std::vector<t_line> TextArea::wrapTextFileWithFont(const std::string& filepathTo
 
     // Procesar la última palabra si el fichero no terminaba en espacio/salto de línea
     if (!word.empty()) {
-        int wordW = Fonts::getSize(font, word.c_str());
-        bool hasSpace = !out.back().text.empty();
-        if (currentLineW + wordW + (hasSpace ? spaceW : 0) >= maxW) {
-            out.push_back(t_line());
-            out.back().text = word;
-        } else {
-            if (hasSpace) out.back().text += " ";
-            out.back().text += word;
-        }
+        appendWrappedWord(out, currentLineW, word, font, spaceW, maxW);
     }
 
     file.close();

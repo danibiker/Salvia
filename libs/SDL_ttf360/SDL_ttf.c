@@ -61,6 +61,11 @@
 #define CACHED_BITMAP	0x01
 #define CACHED_PIXMAP	0x02
 
+/* Salvia: cache for glyphs >= 256 (CJK, Cyrillic...). Originally they all
+   shared the single "scratch" entry, so every one of them was loaded and
+   rendered again by FreeType on each use. Prime size to spread the code points. */
+#define BIGCACHE_SIZE	509
+
 /* Cached glyph information */
 typedef struct cached_glyph {
 	int stored;
@@ -102,6 +107,7 @@ struct _TTF_Font {
 	c_glyph *current;
 	c_glyph cache[256];
 	c_glyph scratch;
+	c_glyph bigcache[BIGCACHE_SIZE];
 
 	/* We are responsible for closing the font stream */
 	SDL_RWops *src;
@@ -402,6 +408,11 @@ static void Flush_Cache( TTF_Font* font )
 	}
 	if( font->scratch.cached ) {
 		Flush_Glyph( &font->scratch );
+	}
+	for( i = 0; i < BIGCACHE_SIZE; ++i ) {
+		if( font->bigcache[i].cached ) {
+			Flush_Glyph( &font->bigcache[i] );
+		}
 	}
 
 }
@@ -706,10 +717,13 @@ static FT_Error Find_Glyph( TTF_Font* font, Uint16 ch, int want )
 	if( ch < 256 ) {
 		font->current = &font->cache[ch];
 	} else {
-		if ( font->scratch.cached != ch ) {
-			Flush_Glyph( &font->scratch );
+		/* Salvia: one slot per code point modulo BIGCACHE_SIZE; a different
+		   glyph in the same slot replaces it */
+		c_glyph* slot = &font->bigcache[ch % BIGCACHE_SIZE];
+		if ( slot->cached != ch ) {
+			Flush_Glyph( slot );
 		}
-		font->current = &font->scratch;
+		font->current = slot;
 	}
 	if ( (font->current->stored & want) != want ) {
 		retval = Load_Glyph( font, ch, font->current, want );
@@ -813,6 +827,12 @@ char *TTF_FontFaceFamilyName(const TTF_Font *font)
 char *TTF_FontFaceStyleName(const TTF_Font *font)
 {
 	return(font->face->style_name);
+}
+
+/* Backported from SDL_ttf 2.0.11 */
+int TTF_GlyphIsProvided(const TTF_Font *font, Uint16 ch)
+{
+	return(FT_Get_Char_Index(font->face, ch));
 }
 
 int TTF_GlyphMetrics(TTF_Font *font, Uint16 ch,

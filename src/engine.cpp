@@ -167,7 +167,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	//Actualizar overscan en windows y xbox
 	SDL_XBOX_SetOverscan(cfgLoader->configMain[cfg::overscan_x].valueInt, cfgLoader->configMain[cfg::overscan_y].valueInt);
 	SDL_WM_SetCaption("Salvia", NULL);
-	initFont();
+	initFont(cfgLoader->configMain[cfg::mainLang].valueStr);
 	joystick = new Joystick();
 	keyb = new t_keyboard();
 
@@ -211,11 +211,14 @@ void Engine::stopEngine(){
 	SDL_CloseAudio();
 }
 
-int Engine::initFont(){
+int Engine::initFont(const std::string& lang){
 	fonts = new Fonts();
 	//Establecemos 720 como la resolucion estandar, y en base a ella, escalamos la fuente
 	//dependiendo de la resolucion de la pantalla
-	fonts->initFonts((int)(BASE_FONT_HEIGHT * video_height / (float)720));
+	// Fuente de reserva para chino, japones y coreano, segun el idioma del menu
+	const std::string cjkFont = Constant::getAppDir() + "\\assets\\fonts\\" + Fonts::cjkFontFile(lang);
+	// Con el menu en chino, japones o coreano la fuente CJK se carga en memoria
+	fonts->initFonts((int)(BASE_FONT_HEIGHT * video_height / (float)720), cjkFont, Fonts::isCjkLang(lang));
 	return 0;
 }
 
