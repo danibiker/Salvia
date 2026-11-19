@@ -91,7 +91,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	this->current_integer_scale_type = &getCfgLoader()->configMain[cfg::scaleIntMode].getIntRef();
 	this->current_shader = &getCfgLoader()->configMain[cfg::shaderMode].getIntRef();
 	this->mustUpdateFps = &getCfgLoader()->configMain[cfg::showFps].getBoolRef();
-	this->current_fast_forward = false;
 	processConfigChanges();
 
 	if (cfgLoader->appliedFileParmsCore.empty()){
@@ -1676,7 +1675,6 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 
 	std::string msgShader;
 	ConfigEmu *emu = getCfgLoader()->getCfgEmu();
-	static int lastSync = SYNC_TO_VIDEO;
 
 	std::string msg;
 
@@ -1828,26 +1826,14 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 					showLangSystemMessage("msg.fastfoward.speed.wrong", 3000);
 					break;
 				}
-				const float originalFps = (float)getAvInfo().timing.fps;
-				current_fast_forward = !current_fast_forward;
-				/* Por Sync y no con SDL_XBOX_SetVSync directo: el vsync tiene
-				 * ahora un segundo dueno (el adaptativo de limit_fps) y dos
-				 * duenos del mismo bit se pelean -el adaptativo lo volveria a
-				 * encender a mitad de un avance rapido-.  Mientras el avance
-				 * rapido lo tenga tomado, el adaptativo queda inerte. */
-				sync->set_vsync_permitido(!current_fast_forward);
-				if (current_fast_forward){
-					sync->init_fps_counter(originalFps * speed);
-					/* Sobre la sincronizacion en uso (la que puso el override
-					 * del core o el menu), no sobre la opcion general: asi no
-					 * se guarda en la configuracion y al salir vuelve la que
-					 * habia. */
-					lastSync = cfgLoader->current_video_settings.sync_type;
-					cfgLoader->current_video_settings.sync_type = SYNC_TO_VIDEO;
+				/* El avance rapido es de Sync: mismo reloj de vblanks con varios
+				 * frames por cada uno que se presenta, sin tocar la sincronizacion
+				 * elegida, que vuelve sola al salir. */
+				if (!sync->isFastForward()){
+					sync->setFastForward(true, speed);
 					showSystemMessage(Constant::string_format(LanguageManager::instance()->get("msg.fastfoward.speed"), speed * 100), 3000);
 				} else {
-					sync->init_fps_counter(originalFps);
-					cfgLoader->current_video_settings.sync_type = lastSync;
+					sync->setFastForward(false, 1.0f);
 					showLangSystemMessage("msg.fastfoward.reset", 3000);
 				}
 			} else {

@@ -464,9 +464,12 @@ static LPDIRECT3DVERTEXBUFFER9 g_overlay_vb = NULL;
 static SDL_Surface* g_overlay_surface = NULL;
 static int g_overlay_enabled = 0;
 static int g_overlay_locked = 0;
-/* [2026-11-13] 1 = XBOX_DrawOverlay no vuelve a bloquear el overlay (ver
- * alli y SDL_XBOX_SetOverlayDeferredLock) */
-static int g_overlay_defer_lock = 0;
+/* La textura del juego (SDL_primary) esta bloqueada por la CPU. */
+static int g_primary_locked = 0;
+/* 1 = el Present no vuelve a bloquear el overlay ni la textura del juego: se
+ * bloquean justo antes de que la CPU pinte en ellos.  Ver
+ * SDL_XBOX_SetDeferredLock. */
+static int g_defer_lock = 0;
 static int g_current_effect = 0;
 
 /* Overscan del overlay: desplaza los bordes del quad hacia adentro (positivo)
@@ -750,7 +753,7 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
      *
      * NO se activa D3DCREATE_ASYNCHRONOUS_SWAPS todavia: cambia el momento en
      * que vuelve el Present, y este frontend tiene su propio framepacing
-     * (Sync::limit_fps) calibrado contra el Present actual.  Una cosa cada
+     * (Sync::endFrame) calibrado contra el Present actual.  Una cosa cada
      * vez, o el log no dira cual fue.
      *
      * NO se activa D3DCREATE_NO_SHADER_PATCHING: Xenos parchea el vertex
@@ -813,7 +816,7 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
          * propia latencia de la llamada y deja de actuar.
          *
          * ★ YA NO SE PONE AQUI PARA TODOS: solo con la sincronizacion "Video
-         * adaptativo" (SDL_XBOX_SetAdaptiveVSync, desde Sync::limit_fps).  Puesto
+         * adaptativo" (SDL_XBOX_SetAdaptiveVSync, desde Sync::configure).  Puesto
          * siempre rasgaba cores que van sobrados (Gambatte, Genesis Plus GX): con
          * el pacer por vblanks, el present despues de cada vblank saltado sale
          * "tarde".  Aqui se lee el valor de fabrica, que es el que tenia el
@@ -1380,8 +1383,10 @@ void SDL_XBOX_SetVSync(int enabled)
 	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
 
 	/* Unlock game texture before Reset */
-	if (this && this->hidden && this->hidden->SDL_primary)
+	if (this && this->hidden && this->hidden->SDL_primary) {
 		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		g_primary_locked = 0;
+	}
 
 	/* Unlock overlay texture if locked */
 	if (g_overlay_texture && g_overlay_locked) {
@@ -1424,6 +1429,7 @@ void SDL_XBOX_SetVSync(int enabled)
 	/* Re-lock game texture (CPU-cached, sobrevive al Reset) */
 	if (this && this->hidden && this->hidden->SDL_primary) {
 		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+		g_primary_locked = 1;
 		if (this->screen) {
 			this->screen->pixels = d3dlr.pBits;
 			this->screen->pitch = d3dlr.Pitch;
@@ -1603,10 +1609,9 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 
 	/* Unlock overlay texture so GPU can read it.
 	 *
-	 * [2026-11-13] Puede llegar aqui desbloqueada: en el juego no se vuelve a
-	 * bloquear al final de esta funcion (ver alli).  Entonces se bloquea y
-	 * desbloquea en el acto: el LockRect espera a que la GPU haya terminado
-	 * con el overlay del frame ANTERIOR (a estas alturas, nada), y el
+	 * Puede llegar aqui desbloqueada (SDL_XBOX_SetDeferredLock).  Entonces se
+	 * bloquea y desbloquea en el acto: el LockRect espera a que la GPU haya
+	 * terminado con el overlay del frame ANTERIOR (a estas alturas, nada), y el
 	 * UnlockRect es lo que vuelca a memoria lo que la CPU haya pintado
 	 * (D3DUSAGE_CPU_CACHED_MEMORY: "D3D ensures coherency with the GPU by
 	 * flushing the modified range at Unlock time", d3d9.h). */
@@ -1651,26 +1656,81 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, g_current_sampler_filter);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, g_current_sampler_filter);
 
-	/* Re-lock overlay texture so the app can keep drawing to it.
-	 *
-	 * [2026-11-13] Salvo durante el juego (SDL_XBOX_SetOverlayDeferredLock):
-	 * LockRect llama a BlockUntilNotBusy (doc del XDK), asi que aqui la CPU se
-	 * queda esperando a que la GPU termine TODO lo encolado hasta este quad
-	 * -- el frame entero del core, el quad del juego y el overlay -- antes del
-	 * Present.  Medido con mGBA por Direct3D (SetBlockCallback, bloqueos
-	 * D3DBLOCKTYPE_TEXTURE_LOCK fuera del core): 1,1 ms por frame a 1x, 1,9 a
-	 * 2x y 3,3 a 3x, y la CPU y la GPU iban por turnos.  En el juego el lock
-	 * se hace en SDL_XBOX_SyncOverlay, que Salvia llama cuando el core entrega
-	 * el frame (la GPU ha tenido toda la emulacion para terminar, asi que ya
-	 * no espera).  En los menus se sigue haciendo aqui: pintan el overlay
-	 * entero en cada frame, y sin esperar a la GPU la pintaban mientras la GPU
-	 * aun leia el anterior (franja negra arriba). */
-	if (!g_overlay_defer_lock) {
+	/* El re-bloqueo para que la aplicacion siga pintando se hace DESPUES del
+	 * Present (XBOX_RelockAfterPresent), contra el fence que se inserta justo
+	 * antes de el: aqui, en mitad del frame, la CPU se quedaria esperando a que
+	 * la GPU terminase todo lo encolado -el frame entero del core, el quad del
+	 * juego y el overlay- y la CPU y la GPU irian por turnos (medido con mGBA
+	 * por Direct3D: 1,1 ms por frame a 1x, 1,9 a 2x y 3,3 a 3x). */
+}
+
+/* === Fence del frame y re-bloqueo =============================================
+ *
+ * Por que hace falta un fence PROPIO justo antes del Present.  LockRect llama a
+ * BlockUntilNotBusy, que espera al fence de la ultima referencia del ring
+ * buffer al recurso (`Fence` en D3DResource, d3d9.h).  Si desde que se uso la
+ * textura no se ha insertado ningun fence, D3D lo inserta en ese momento, o
+ * sea DESPUES del Present: y como el swap es sincrono (el device se crea sin
+ * D3DCREATE_ASYNCHRONOUS_SWAPS), bloquear despues del Present esperaba al
+ * vblank del frame que se acaba de presentar.  La CPU y la pantalla iban por
+ * turnos y cualquier core que no cupiese entero en un vblank -emulacion mas
+ * escalado mas shader- perdia uno completo: era la ralentizacion de la
+ * sincronizacion "Video" desde el commit a5082658679.
+ *
+ * Con el fence insertado antes del Present, todos los recursos del frame
+ * quedan atados a el, y bloquearlos despues solo espera a que la GPU haya
+ * DIBUJADO el frame, que es justo despues del swap del frame ANTERIOR: un
+ * frame en vuelo, CPU y GPU en paralelo. */
+static void XBOX_EndFrameFence(void)
+{
+	IDirect3DDevice9_InsertFence(D3D_Device);
+}
+
+/* Despues del Present: vuelve a bloquear la textura del juego y el overlay para
+ * que la aplicacion siga pintando, salvo en modo diferido (el bucle principal),
+ * donde se bloquean justo antes de pintar (SDL_XBOX_SyncGameTexture,
+ * SDL_XBOX_SyncOverlay). */
+static void XBOX_RelockAfterPresent(_THIS, SDL_Surface *surface)
+{
+	D3DLOCKED_RECT d3dlr;
+
+	if (g_defer_lock)
+		return;
+
+	if (!g_extGameTex && this->hidden->SDL_primary && !g_primary_locked)
+	{
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+		if (surface) {
+			surface->pixels = d3dlr.pBits;
+			surface->pitch = d3dlr.Pitch;
+		}
+		g_primary_locked = 1;
+	}
+
+	if (g_overlay_enabled && g_overlay_texture && g_overlay_surface && !g_overlay_locked) {
 		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
 		g_overlay_surface->pixels = d3dlr.pBits;
 		g_overlay_surface->pitch = d3dlr.Pitch;
 		g_overlay_locked = 1;
 	}
+}
+
+/* Antes de dibujar: la textura del juego tiene que estar desbloqueada para que
+ * la GPU la lea, y es el UnlockRect el que vuelca la cache de la CPU
+ * (D3DUSAGE_CPU_CACHED_MEMORY).  Si llega desbloqueada (Present diferido sin
+ * frame nuevo del core) se bloquea antes, por si alguien ha pintado en ella sin
+ * sincronizar: la espera, si la hay, es al frame anterior. */
+static void XBOX_UnlockGameTexture(_THIS)
+{
+	D3DLOCKED_RECT d3dlr;
+
+	if (g_extGameTex || !this->hidden->SDL_primary)
+		return;
+
+	if (!g_primary_locked)
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	g_primary_locked = 0;
 }
 
 
@@ -1727,17 +1787,19 @@ SDL_Surface* SDL_XBOX_GetOverlay(void)
 	return g_overlay_surface;
 }
 
-/* [2026-11-13] Ver el final de XBOX_DrawOverlay.  Con defer = 1, el
- * siguiente Present no vuelve a bloquear el overlay al dibujarlo, y quien lo
- * pinte despues tiene que llamar antes a SDL_XBOX_SyncOverlay. */
-void SDL_XBOX_SetOverlayDeferredLock(int defer)
+/* Con defer = 1, el siguiente Present no vuelve a bloquear la textura del juego
+ * ni el overlay (XBOX_RelockAfterPresent), y quien pinte despues en ellos tiene
+ * que llamar antes a SDL_XBOX_SyncGameTexture / SDL_XBOX_SyncOverlay.  Lo usa
+ * el bucle principal de Salvia: asi la espera a la GPU, si la hay, cae lo mas
+ * tarde posible, justo antes de pintar. */
+void SDL_XBOX_SetDeferredLock(int defer)
 {
-	g_overlay_defer_lock = defer;
+	g_defer_lock = defer;
 }
 
-/* [2026-11-13] Antes de pintar en un overlay cuyo Present fue diferido:
- * espera a que la GPU haya terminado de leerlo (normalmente ya ha terminado)
- * y lo deja bloqueado, como estaba antes.  Si ya lo esta, no hace nada. */
+/* Antes de pintar en el overlay tras un Present diferido: espera a que la GPU
+ * haya dibujado el frame anterior (normalmente ya lo ha hecho) y lo deja
+ * bloqueado.  Si ya lo esta, no hace nada. */
 void SDL_XBOX_SyncOverlay(void)
 {
 	D3DLOCKED_RECT d3dlr;
@@ -1750,6 +1812,27 @@ void SDL_XBOX_SyncOverlay(void)
 		g_overlay_surface->pixels = d3dlr.pBits;
 		g_overlay_surface->pitch = d3dlr.Pitch;
 		g_overlay_locked = 1;
+	}
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
+}
+
+/* Lo mismo para la textura del juego, antes de copiar en ella un frame del
+ * core.  Con textura externa (core que dibuja por Direct3D) no hace nada. */
+void SDL_XBOX_SyncGameTexture(void)
+{
+	SDL_VideoDevice *this = current_video;
+	D3DLOCKED_RECT d3dlr;
+
+	if (g_primary_locked || g_extGameTex || !this || !this->hidden || !this->hidden->SDL_primary) return;
+
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+	if (!g_primary_locked) {
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+		if (this->screen) {
+			this->screen->pixels = d3dlr.pBits;
+			this->screen->pitch = d3dlr.Pitch;
+		}
+		g_primary_locked = 1;
 	}
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }
@@ -1785,6 +1868,7 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	/* Cleanup previous D3D texture if re-setting video mode */
 	if (this->hidden->SDL_primary) {
 		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		g_primary_locked = 0;
 		IDirect3DDevice9_SetTexture(D3D_Device, 0, NULL);
 		IDirect3DTexture9_Release(this->hidden->SDL_primary);
 		this->hidden->SDL_primary = NULL;
@@ -1839,6 +1923,7 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	/* Lock the texture permanently - app draws directly to texture memory.
 	   Unlock only briefly during flip for GPU to render, then re-lock. */
 	ret = IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	g_primary_locked = (ret == D3D_OK);
 	if (ret != D3D_OK) {
 		SDL_SetError("Couldn't lock Direct3D Texture!");
 		return(NULL);
@@ -1990,6 +2075,7 @@ SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp)
 	/* Liberar textura D3D anterior */
 	if (this->hidden->SDL_primary) {
 		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		g_primary_locked = 0;
 		IDirect3DDevice9_SetTexture(D3D_Device, 0, NULL);
 		IDirect3DTexture9_Release(this->hidden->SDL_primary);
 		this->hidden->SDL_primary = NULL;
@@ -2004,6 +2090,7 @@ SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp)
 
 	/* Lock permanente: core escribe directo a VRAM (zero-copy) */
 	ret = IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	g_primary_locked = (ret == D3D_OK);
 	if (ret != D3D_OK) {
 		IDirect3DTexture9_Release(this->hidden->SDL_primary);
 		this->hidden->SDL_primary = NULL;
@@ -2024,6 +2111,7 @@ SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp)
 		width, height, pitch_bpp, Rmask, Gmask, Bmask, 0);
 	if (!this->screen) {
 		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		g_primary_locked = 0;
 		IDirect3DTexture9_Release(this->hidden->SDL_primary);
 		this->hidden->SDL_primary = NULL;
 		return NULL;
@@ -2172,7 +2260,6 @@ static void XBOX_SetupQuadState(void)
 
 static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 {
-	D3DLOCKED_RECT d3dlr;
 	int hlslWasActive;
 
 	/* [XBOX360] Serializar todo el bloque de rendering+Present con un
@@ -2186,8 +2273,7 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 	 * el core en una textura de la GPU y nuestra SDL_primary no participa.
 	 * Bloquearla y desbloquearla aqui seria trabajo tirado, y ademas dejaria
 	 * `surface->pixels` cambiando de sitio sin que nadie escriba ahi. */
-	if (!g_extGameTex)
-		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	XBOX_UnlockGameTexture(this);
 
 	/* Nuestro pipeline, no el que haya dejado el core.  ANTES del Clear, para
 	 * que el scissor apagado le deje borrar el back buffer entero. */
@@ -2214,16 +2300,10 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 	XBOX_DrawOverlay(g_extGameTex ? g_extGameTex : this->hidden->SDL_primary,
 	                 hlslWasActive);
 
+	/* Fence ANTES del Present y re-bloqueo despues: ver XBOX_EndFrameFence. */
+	XBOX_EndFrameFence();
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
-
-	/* Re-lock so the app can keep drawing directly to texture memory */
-	if (!g_extGameTex)
-	{
-		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
-
-		surface->pixels = d3dlr.pBits;
-		surface->pitch = d3dlr.Pitch;
-	}
+	XBOX_RelockAfterPresent(this, surface);
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 
@@ -2263,6 +2343,7 @@ static int XBOX_LockHWSurface(_THIS, SDL_Surface *surface)
 		return (-1);
 
 	ret = IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	g_primary_locked = (ret == D3D_OK);
 
 	surface->pitch = d3dlr.Pitch;
 	surface->pixels = d3dlr.pBits;
@@ -2276,13 +2357,13 @@ static int XBOX_LockHWSurface(_THIS, SDL_Surface *surface)
 static void XBOX_UnlockHWSurface(_THIS, SDL_Surface *surface)
 {
 	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary,0);
+	g_primary_locked = 0;
 
 	return;
 }
 
 static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 {
-	D3DLOCKED_RECT d3dlr;
 
 	if (!this->hidden->SDL_primary || !have_vertexbuffer)
 		return;
@@ -2293,8 +2374,7 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 
 	/* Unlock so the GPU can read the texture for rendering.
 	 * Con textura externa no participa la nuestra; ver XBOX_RenderSurface. */
-	if (!g_extGameTex)
-		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	XBOX_UnlockGameTexture(this);
 
 	XBOX_SetupQuadState();   /* ver XBOX_RenderSurface */
 
@@ -2306,16 +2386,10 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 	/* g_hlslBkg_active es estado retenido; ya no se resetea por-frame. */
 	XBOX_DrawOverlay(g_extGameTex ? g_extGameTex : this->hidden->SDL_primary, 0);
 
+	/* Fence ANTES del Present y re-bloqueo despues: ver XBOX_EndFrameFence. */
+	XBOX_EndFrameFence();
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
-
-	/* Re-lock so the app can keep drawing directly to texture memory */
-	if (!g_extGameTex)
-	{
-		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
-
-		this->screen->pixels = d3dlr.pBits;
-		this->screen->pitch = d3dlr.Pitch;
-	}
+	XBOX_RelockAfterPresent(this, this->screen);
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }
@@ -2342,6 +2416,7 @@ void XBOX_VideoQuit(_THIS)
 	 if (this->hidden->SDL_primary)
 	 {
 		 IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		 g_primary_locked = 0;
 		 IDirect3DDevice9_SetTexture(D3D_Device, 0, NULL);
 		 IDirect3DDevice9_SetStreamSource(D3D_Device, 0, NULL, 0, 0);
 		 IDirect3DTexture9_Release(this->hidden->SDL_primary);
@@ -2484,6 +2559,7 @@ int XBOX_DisplayYUVOverlay(_THIS, SDL_Overlay *overlay, SDL_Rect *src, SDL_Rect 
 
 
     IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+	g_primary_locked = 0;
 	IDirect3DTexture9_UnlockRect(surface, 0);
 
 	XBOX_DrawMainQuad();

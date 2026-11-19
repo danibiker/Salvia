@@ -63,6 +63,7 @@ private:
     double srcRateDeclared;   // la que declara el core
     double dstRateDeclared;   // la que declaro SDL al abrir el dispositivo
     double dstRateMeasured;   // la CONTADA; 0 = sin medida todavia
+    double timingSkew;        // ritmo real del core / el declarado (ver setTimingSkew)
 
     // Constantes de tuning
     static const int WARMUP_FRAMES = 30;
@@ -76,7 +77,7 @@ private:
         if (srcRateDeclared <= 0.0 || dst <= 0.0)
             baseRatio = 1.0;
         else
-            baseRatio = srcRateDeclared / dst;
+            baseRatio = srcRateDeclared * timingSkew / dst;
     }
 
     void recalcStep() {
@@ -242,6 +243,7 @@ public:
         srcRateDeclared = 0.0;
         dstRateDeclared = 0.0;
         dstRateMeasured = 0.0;
+        timingSkew = 1.0;
     }
 
     void init(size_t capacity) {
@@ -287,6 +289,19 @@ public:
 
     double getBaseRatio() const { return baseRatio; }
 
+    /* Factor de tiempo del core.  Cuando Sync ata el juego al ritmo del panel
+     * (60,0988 fps en un panel de 59,94, por ejemplo) el core produce audio a
+     * su tasa declarada multiplicada por (fps conseguidos / fps declarados).
+     * Ese factor va aqui, como alimentacion directa, para que el DRC no gaste
+     * su +-0,5% de autoridad en una diferencia conocida.  1,0 = sin atar.
+     * Sobrevive a setRates: es estado del frontend, no del core. */
+    void setTimingSkew(double s) {
+        if (s <= 0.0) s = 1.0;
+        if (s == timingSkew) return;
+        timingSkew = s;
+        recalcBase();
+    }
+
     /* Lo llama el frontend justo DESPUES de `retro_run`, una vez por frame.  Es
      * lo que ancla la fase del muestreo del DRC: ver el bloque de
      * `processAndWrite`. */
@@ -301,10 +316,11 @@ public:
      *
      * OJO CON LA FORMULA DE RETROARCH: la suya lleva un factor
      * `refresco / fpsCore` porque RetroArch esclaviza la emulacion al PANEL
-     * (vsync como reloj maestro).  Salvia la esclaviza al limitador A LA TASA
-     * DEL CORE, que es lo correcto -un juego PAL debe correr a sus 50 Hz aunque
-     * la pantalla vaya a 60-, asi que aqui ese factor NO va: con 60/50 = 1,2
-     * aceleraria el audio un 20% en todos los cores PAL.
+     * siempre.  Salvia solo la ata al panel cuando el ritmo del core esta a
+     * menos de un 1% de un numero entero de vblanks (ver Sync::configure), y
+     * entonces el factor llega por setTimingSkew.  Un juego PAL en un panel de
+     * 60 sigue a sus 50 Hz (cadencia 5:6) y su factor es 1: con 60/50 = 1,2
+     * aceleraria el audio un 20%.
      *
      * Lo que si corresponde es usar la tasa REAL del dispositivo en vez de la
      * declarada.  Medida: 47992-48006 Hz frente a los 48000 del `obtained` de

@@ -120,7 +120,6 @@ class GameMenu : public Engine{
 		int *current_sync;
 		bool *current_integer_scale;
 		int *current_integer_scale_type;
-		bool current_fast_forward;
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;

@@ -27,7 +27,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	#ifdef WIN
 		// 1. Activar la precision de 1ms en el reloj de Windows.
-		// El limitador de frames (Sync::limit_fps) duerme el grueso de la espera
+		// El limitador por reloj de CPU (Sync::esperaCpu) duerme el grueso de la espera
 		// con SDL_Delay y solo clava el instante final con espera activa; con la
 		// granularidad por defecto (15.6 ms) el sleep se pasaria y el limitador
 		// tendria que gastar en espera activa TODO el frame.  No dependemos de
@@ -171,9 +171,9 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	joystick = new Joystick();
 	keyb = new t_keyboard();
 
-	int syncMode;
-	cfgLoader->configMain[cfg::syncMode].getPropValue(syncMode);
-	sync = new Sync(syncMode);
+	// Sync lee la sincronizacion efectiva de la configuracion en cada frame
+	// (override del core, menu) y corrige el ritmo del remuestreador de audio.
+	sync = new Sync(&cfgLoader->current_video_settings.sync_type, &g_audioRate);
 
 	initColors(overlay);
 	return 0;

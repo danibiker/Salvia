@@ -69,10 +69,6 @@ static unsigned g_num_mem_descriptors = 0;
 
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-retro_audio_buffer_status_callback_t audio_status_cb;
-/* Ocupacion del anillo (%) por debajo de la cual el limitador deja correr al
- * core cuando este hace frameskip por audio.  Ver Sync::set_audio_catchup. */
-#define AUDIO_CATCHUP_PCT 40
 // 1. Declara una variable global o estática para guardar el callback del core
 retro_keyboard_event_t core_key_callback = nullptr;
 
@@ -147,8 +143,6 @@ static std::string g_currentRompath;
 //Indica si el core puede arrancar sin disco introducido
 bool g_currentCoreSupportsNoGame;
 
-double nextFrameTime;
-
 bool g_start_from_exception = false;
 static std::string g_excp_emulator_path;
 
@@ -198,19 +192,6 @@ static int16_t g_midiMixBuf[MIDI_MIX_FRAMES * 2];
  * el frontend no tiene. */
 /* Flanco de entrada en fast-forward, para cortar el MIDI una sola vez. */
 static bool g_midiFastForwardCut = false;
-
-/* Frame duplicado: libretro permite que el core llame a video_refresh con
- * data == NULL cuando no ha dibujado nada nuevo (frameskip).  En ese caso no
- * hay nada que presentar, y presentar de todas formas hace que el Present
- * espere al vblank en un frame que el core se habia saltado justo para ganar
- * tiempo: el frameskip acababa frenando en vez de acelerar.  El bucle principal
- * consulta este indicador para no presentar los frames duplicados. */
-static bool g_coreFrameDuped = false;
-static int  g_dupedSeguidos  = 0;
-/* Tope de presentaciones seguidas que se pueden omitir.  Asi los overlays del
- * frontend (FPS, mensajes, mira) nunca se quedan congelados si un core manda
- * muchos duplicados seguidos. */
-#define MAX_DUPED_SIN_PRESENTAR 5
 
 // ─────────────────────────────────────────────
 // Helper: split "opt1|opt2|opt3" → vector
@@ -777,7 +758,7 @@ static void applyCoreAvInfo(const struct retro_system_av_info& av) {
 				? (float)((av.timing.fps / (double)panel - 1.0) * 100.0) : 0.0f);
 	}
 
-	gameMenu->sync->init_fps_counter((float)av.timing.fps);
+	gameMenu->sync->setCoreFps(av.timing.fps);
 	gameMenu->g_audioRate.reset();
 	gameMenu->g_audioRate.init(BUFF_SIZE);
 	gameMenu->g_midi.setSampleRate((int)av.timing.sample_rate);
@@ -1340,7 +1321,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 			/* NULL = el core deja de usar el estado del buffer (frameskip por
 			 * audio desactivado): hay que olvidar el callback, no conservarlo. */
-			audio_status_cb = cb ? cb->callback : NULL;
+			gameMenu->sync->setAudioStatusCallback(cb ? cb->callback : NULL);
 			return true;
 		}
 		case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY: {
@@ -1886,6 +1867,12 @@ static inline void hw_refresh(const void *data, unsigned width,
     }
 
     // ── Copiar al surface SDL ─────────────────────────────────────────────────
+    #ifdef _XBOX
+    /* La textura del juego se bloquea justo antes de escribir en ella: espera,
+     * como mucho, a que la GPU haya dibujado el frame anterior.  Ver
+     * SDL_XBOX_SetDeferredLock en runGameLoop. */
+    SDL_XBOX_SyncGameTexture();
+    #endif
     if (SDL_LockSurface(screen) != 0) return;
     uint8_t*       dst     = (uint8_t*)screen->pixels;
     const uint8_t* src     = (const uint8_t*)final_src;
@@ -1905,13 +1892,9 @@ static inline void hw_refresh(const void *data, unsigned width,
 
 static void retro_video_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
-	g_coreFrameDuped = (data == NULL);
-	#ifdef _XBOX
-		/* [2026-11-13] Lo que viene (los FPS, mensajes, la reticula) pinta en
-		 * el overlay, y el Present del juego no lo dejo bloqueado: ver
-		 * SDL_XBOX_SetOverlayDeferredLock en runGameLoop. */
-		SDL_XBOX_SyncOverlay();
-	#endif
+	/* data == NULL: el core no ha dibujado nada nuevo (frameskip).  Sync no lo
+	 * presenta (ver Sync::shouldPresent). */
+	gameMenu->sync->onVideoRefresh(data == NULL);
 	#ifdef SALVIA_GPU_VIDEO
 		// Xbox y Windows: la GPU escala la textura nativa y aplica el shader.
 		hw_refresh(data, width, height, pitch);
@@ -2280,6 +2263,21 @@ static void audioSubmit(const int16_t* data, std::size_t frames, bool blocking) 
 	}
 }
 
+/* Avance rapido por encima de 1x: el audio no se renderiza.  Los eventos MIDI
+ * siguen llegando por salvia_midi_write, asi que las notas se acumularian y
+ * sonarian todas de golpe al volver a velocidad normal: se cortan una vez, al
+ * entrar (panic() recorre los 16 canales y no interesa repetirlo en cada lote).
+ * audioSubmit rearma el corte en cuanto vuelve a llegar audio normal. */
+static inline bool audioDescartadoPorAvance() {
+	if (!gameMenu->sync->audioDiscard())
+		return false;
+	if (!g_midiFastForwardCut) {
+		gameMenu->g_midi.panic();
+		g_midiFastForwardCut = true;
+	}
+	return true;
+}
+
 void retro_audio_sample(int16_t left, int16_t right) {
 	/* Ruta de muestra suelta: la usan pocos cores y entregan un frame por
 	 * llamada.  Se acumula un bloque antes de remuestrear por dos motivos:
@@ -2289,52 +2287,29 @@ void retro_audio_sample(int16_t left, int16_t right) {
 	 *
 	 * El resto por debajo de un bloque se queda para la siguiente tanda: son
 	 * menos de 6 ms y evita tener que enganchar un flush al final del frame. */
-	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10) return;
+	if (audioDescartadoPorAvance()) return;
 
 	g_singleSampleBlock[g_singleSampleFrames * 2]     = left;
 	g_singleSampleBlock[g_singleSampleFrames * 2 + 1] = right;
 	g_singleSampleFrames++;
 
 	if (g_singleSampleFrames >= RETRO_SAMPLE_BLOCK) {
-		const int mode = gameMenu->getCfgLoader()->current_video_settings.sync_type;   /* la efectiva, con el override del core */
-		if (mode != SYNC_FAST_FORWARD) {
-			audioSubmit(g_singleSampleBlock, g_singleSampleFrames, mode == SYNC_TO_AUDIO);
-		}
+		audioSubmit(g_singleSampleBlock, g_singleSampleFrames, gameMenu->sync->audioBlocking());
 		g_singleSampleFrames = 0;
 	}
 }
 
 // Callback para rafagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
-	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10)
+	if (audioDescartadoPorAvance())
 		return frames;
-	
-	const int mode = gameMenu->getCfgLoader()->current_video_settings.sync_type;   /* la efectiva, con el override del core */
-    switch(mode) {
-        case SYNC_TO_AUDIO:
-            /* El bloqueo ya sincroniza naturalmente con el reloj de audio, pero
-             * hay que pasar igualmente por el resampler: el dispositivo esta
-             * abierto a tasa fija y escribir crudo sonaria a destiempo. El
-             * bloqueo se conserva -- processAndWrite lo propaga al buffer. */
-            audioSubmit(data, frames, true);
-            break;
-        case SYNC_FAST_FORWARD:
-            /* No se renderiza, pero los eventos MIDI siguen llegando por
-             * salvia_midi_write, asi que las notas se acumularian y sonarian
-             * todas de golpe al volver a velocidad normal.  Se corta una vez, al
-             * entrar: panic() recorre los 16 canales y no interesa repetirlo en
-             * cada lote. */
-            if (!g_midiFastForwardCut) {
-                gameMenu->g_midi.panic();
-                g_midiFastForwardCut = true;
-            }
-            return frames;
-        default:
-            // SYNC_TO_VIDEO / SYNC_NONE: DRC ajusta la tasa para evitar drift
-            audioSubmit(data, frames, false);
-            break;
-    }
-    return frames;
+
+	/* Audio: escritura bloqueante, que es el reloj de ese modo (el bloqueo lo
+	 * propaga processAndWrite al buffer; el remuestreo hace falta igual porque
+	 * el dispositivo esta abierto a tasa fija).  Resto de modos: no bloquea y
+	 * el DRC ajusta la tasa. */
+	audioSubmit(data, frames, gameMenu->sync->audioBlocking());
+	return frames;
 }
 
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
@@ -2590,9 +2565,9 @@ void closeGame(){
 
 		retro_unload_game();
 		retro_deinit();
-		/* El callback de estado de audio es del core que se acaba de cerrar. */
-		audio_status_cb = NULL;
-		gameMenu->sync->set_audio_catchup(false);
+		/* El callback de estado de audio, el frameskip y el avance rapido son
+		 * del core que se acaba de cerrar. */
+		gameMenu->sync->resetGame();
 		gameMenu->romLoaded = false;
 
 		/* El banco MIDI se suelta con el core: el proximo juego lo volvera a
@@ -2709,7 +2684,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
 	//Iniciando el contador de fps
-	gameMenu->sync->init_fps_counter((float)av_info.timing.fps);
+	gameMenu->sync->setCoreFps(av_info.timing.fps);
 	//Iniciando el sistema de audio
 	initGameAudio(av_info.timing.sample_rate);
 	/* Semilla de la guarda de delta del recheck: lo que el core declara al
@@ -2718,16 +2693,8 @@ int launchGame(std::string rompath, bool tmpDelete){
 	g_applied_core_sample_rate = av_info.timing.sample_rate;
 	g_recheck_avinfo_pending   = false;
 	gameMenu->romLoaded = true;
-	//Deshabilitamos el fast forward si estaba a true y restauramos el vsync por defecto
-	if (gameMenu->current_fast_forward){
-		gameMenu->current_fast_forward = false;
-		/* Por Sync, igual que el manejador de la hotkey: el vsync tiene un
-		 * segundo dueno (el adaptativo de limit_fps) y llamar a
-		 * SDL_XBOX_SetVSync directo dejaria su espejo `vsyncOn` mintiendo, con
-		 * lo que el adaptativo podria "apagar" un vsync ya apagado o no
-		 * apagar el que si esta encendido. */
-		gameMenu->sync->set_vsync_permitido(true);
-	}
+	//Cada juego empieza sin avance rapido
+	gameMenu->sync->setFastForward(false, 1.0f);
 
 	// Lista de partidas guardadas y SRAM solo si hay juego real cargado.
 	// En BIOS-only no aplica: el shell de la BIOS solo gestiona memory
@@ -2807,35 +2774,12 @@ inline void updateGame() {
 	// 2. Calcula la logica del juego
 	// 3. Llama a audio_batch() -> (Aqui el audio bloquea si va muy rapido)
 	// 4. Llama a video_refresh() -> (Aqui se dibuja el frame y los FPS)
-	/* Ocupacion del anillo de audio del frontend.  Se calcula SIEMPRE, no solo
-	 * cuando el core registro `audio_status_cb` (Xenon64 no lo registra),
-	 * porque el vsync adaptativo la necesita como SENAL: es la unica que
-	 * distingue "el core no llega" cuando el periodo de frame SI se cumple.
-	 *
-	 * Ese caso es real y es el del hilo grafico asincrono de Xenon64: el video
-	 * va a 60 VI/s -o sea que `dtAvg` esta clavado en el objetivo y el criterio
-	 * de periodo no ve nada- y en cambio el audio sale al 70%, porque el
-	 * invitado no consigue su ranura para la tarea de audio.  Si el core
-	 * entrega menos audio del que el tiempo real consume, el anillo se seca:
-	 * eso se ve aqui y en ningun otro sitio del frontend. */
+	/* Estado del anillo de audio para el frameskip del core (si lo usa): Sync
+	 * se lo pasa por SET_AUDIO_BUFFER_STATUS_CALLBACK y decide si este frame se
+	 * recupera sin esperar.  Ver io/sync.h. */
 	{
-		const size_t cap  = gameMenu->g_audioBuffer.getCapacity();
-		const size_t fill = gameMenu->g_audioBuffer.getUsed();
-		const unsigned occupancy = cap ? (unsigned)(fill * 100 / cap) : 0;
-
-		if (cap)
-			gameMenu->sync->note_audio_ocupacion(occupancy);
-
-		// Notificar al core el estado del buffer de audio (para frameskip)
-		if (audio_status_cb)
-			audio_status_cb(true, occupancy, fill < cap / 4);
-
-		/* Frameskip por audio: mientras el anillo este por debajo del umbral el
-		 * limitador no espera, para que los frames saltados sirvan para
-		 * rellenarlo (ver Sync::set_audio_catchup).  El umbral queda por encima
-		 * del de "underrun probable" (25%) y por debajo del centro del DRC
-		 * (50%), para no tocar el ritmo de un juego que va sobrado. */
-		gameMenu->sync->set_audio_catchup(audio_status_cb != NULL && cap != 0 && occupancy < AUDIO_CATCHUP_PCT);
+		gameMenu->sync->beginGameFrame(gameMenu->g_audioBuffer.getUsed(),
+		                               gameMenu->g_audioBuffer.getCapacity());
 
 		/* La tasa real del dispositivo, que publica el hilo de audio cada 10 s.
 		 * Se saca aqui y no alli para no bloquear el callback en el fichero de
@@ -2863,6 +2807,12 @@ inline void updateGame() {
 		}
 	}
 	retro_run();
+#ifdef _XBOX
+	/* Lo que viene (mira, FPS, mensajes) pinta en el overlay.  Aqui la GPU ha
+	 * tenido toda la emulacion de este frame para terminar el anterior, asi
+	 * que el bloqueo no espera.  Ver runGameLoop. */
+	SDL_XBOX_SyncOverlay();
+#endif
 	gameMenu->drawLightgunCrosshair();
 
 	/* Ancla la FASE del muestreo del DRC.  A partir de aqui, el primer
@@ -2903,6 +2853,13 @@ void processFrontendEvents(){
 	SOUtils::updateKeyboard();
 	//Procesamos las hotkeys
 	HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
+#ifdef _XBOX
+	/* En el juego el overlay se bloquea despues de retro_run (ver runGameLoop).
+	 * Una hotkey o un guardado pendiente pintan en el antes, asi que en ese
+	 * frame se bloquea ya. */
+	if (hotkey != HK_MAX || gameMenu->statesSram.saveContext.action_postponed.cycles == 0)
+		SDL_XBOX_SyncOverlay();
+#endif
 	gameMenu->processFrontendEvents(hotkey);
 }
 
@@ -3044,6 +3001,16 @@ static void __declspec(noinline) printAndDelay(){
 static int __declspec(noinline) runGameLoop() {
 	__try {
 		while (gameMenu->running) {
+#ifdef _XBOX
+			/* Overlay: se bloquea justo antes de que la CPU pinte en el (ver
+			 * SDL_XBOX_SetDeferredLock).  En los menus, aqui.  En el juego, lo
+			 * mas tarde posible -despues de retro_run, en updateGame-, porque
+			 * esperar a que la GPU acabe el frame anterior ANTES de emular el
+			 * siguiente pone a la CPU y a la GPU por turnos, y un core que
+			 * dibuja por Direct3D (mGBA a 3x) no cabe entonces en el frame. */
+			if (gameMenu->getEmuStatus() != EMU_STARTED)
+				SDL_XBOX_SyncOverlay();
+#endif
 			processFrontendEvents();
 
 			/* Musica de menu: aqui SOLO se abre o cierra el grifo.  El
@@ -3083,45 +3050,27 @@ static int __declspec(noinline) runGameLoop() {
 
 			gameMenu->processFrontendEventsAfter();
 
-			/* Se presenta en cuanto el frame esta listo y la espera del
-			 * limitador va DESPUES: asi la latencia de input es la minima.
-			 * (Probado el orden contrario -esperar y luego presentar- para
-			 * equiespaciar las presentaciones: sin diferencia apreciable ni con
-			 * vsync ni sin el, asi que no compensa la latencia de mas.) */
-			/* Frame duplicado por el core (frameskip): no se presenta, ver
-			 * g_coreFrameDuped.  Solo en juego y con un tope de omisiones
-			 * seguidas; el limitador se ejecuta igual en todos los casos. */
-			bool omitirPresent = false;
-			if (g_coreFrameDuped && gameMenu->getEmuStatus() == EMU_STARTED
-				&& g_dupedSeguidos < MAX_DUPED_SIN_PRESENTAR) {
-				omitirPresent = true;
-				g_dupedSeguidos++;
-			} else {
-				g_dupedSeguidos = 0;
-			}
-			g_coreFrameDuped = false;
-
-			if (omitirPresent) {
-				gameMenu->sync->note_flip(0.0);
-			} else {
-				const double flipIni = Constant::getTicks();
+			/* Se presenta en cuanto el frame esta listo y la espera va DESPUES,
+			 * en Sync::endFrame: asi la latencia de entrada es la minima.  Esa
+			 * es la UNICA espera del frame (ver io/sync.h).  Sync decide ademas
+			 * si este frame se presenta: no los que el core no ha dibujado
+			 * (frameskip) ni los intermedios del avance rapido. */
+			const bool enJuego = gameMenu->getEmuStatus() == EMU_STARTED;
+			if (gameMenu->sync->shouldPresent(enJuego)) {
 #ifdef _XBOX
-				/* [2026-11-13] En el juego, el Present no espera a la GPU para
-				 * volver a bloquear el overlay: se bloquea en
-				 * retro_video_refresh (SDL_XBOX_SyncOverlay), cuando la GPU ya
-				 * ha tenido toda la emulacion del frame siguiente para
-				 * terminar.  Ver XBOX_DrawOverlay. */
-				SDL_XBOX_SetOverlayDeferredLock(gameMenu->getEmuStatus() == EMU_STARTED);
+				/* El Present no vuelve a bloquear la textura del juego ni el
+				 * overlay: se bloquean justo antes de pintar en ellos
+				 * (SDL_XBOX_SyncOverlay en los menus o tras retro_run y
+				 * SDL_XBOX_SyncGameTexture en hw_refresh).  Asi la espera a la
+				 * GPU, si la hay, cae lo mas tarde posible. */
+				SDL_XBOX_SetDeferredLock(1);
 #endif
 				salviaFlip(gameMenu->gameScreen);
 #ifdef _XBOX
-				SDL_XBOX_SetOverlayDeferredLock(0);
+				SDL_XBOX_SetDeferredLock(0);
 #endif
-				const double flipEnd = Constant::getTicks();
-				gameMenu->sync->note_flip(flipEnd - flipIni);
-				gameMenu->sync->note_present(flipEnd);
 			}
-			gameMenu->sync->limit_fps(nextFrameTime, cfgLoader->current_video_settings.sync_type, gameMenu->gameTicks);
+			gameMenu->sync->endFrame(enJuego, gameMenu->gameTicks);
 		}
 	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
 		printAndDelay();
@@ -3223,7 +3172,6 @@ void initObjects(int argc, char *argv[]){
 		gameMenu->showLangSystemMessage("msg.network.winsock", 3000);
 	}
 
-	nextFrameTime = Constant::getTicks();
 	//Estado inicial del fondo HLSL: el constructor fija EMU_MENU directo,
 	//saltandose setEmuStatus, asi que lo sincronizamos aqui una vez.
 	gameMenu->applyMenuBackground();

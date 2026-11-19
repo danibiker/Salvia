@@ -465,10 +465,9 @@ typedef enum {
 
 enum SYNC_TYPES{
 	SYNC_TO_AUDIO = 0,
-	SYNC_TO_VIDEO,          // limitador por reloj de CPU y vsync normal (como antes de 9f9f64bc)
-	SYNC_TO_VIDEO_ADAPT,    // pacer por vblanks + present inmediato si llega tarde (Sync::limit_fps)
-	SYNC_NONE,
-	SYNC_FAST_FORWARD       // no se guarda nunca: puede cambiar de valor
+	SYNC_TO_VIDEO,          // pacer por vblanks con vsync (ver io/sync.h)
+	SYNC_TO_VIDEO_ADAPT,    // lo mismo + present inmediato si el frame llega tarde
+	SYNC_NONE               // sin espera y sin vsync
 };
 
 /* SDL 1.2: Definir mascaras segun el orden de bytes del sistema */

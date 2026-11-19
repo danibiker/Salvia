@@ -460,12 +460,15 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayOverflow(int overflow);
  */
 extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
 
-/* Xbox 360 [2026-11-13]: con defer = 1, el siguiente Present no espera a la
- * GPU para volver a bloquear el overlay; antes de pintar otra vez en el hay
- * que llamar a SDL_XBOX_SyncOverlay (que si ya esta bloqueado no hace nada).
- * Salvia lo usa durante el juego; en los menus no se difiere. */
-extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayDeferredLock(int defer);
+/* Xbox 360: con defer = 1, el siguiente Present no vuelve a bloquear la textura
+ * del juego ni el overlay; antes de pintar otra vez en ellos hay que llamar a
+ * SDL_XBOX_SyncGameTexture / SDL_XBOX_SyncOverlay (si ya estan bloqueados no
+ * hacen nada).  Las dos esperan, como mucho, a que la GPU haya dibujado el
+ * frame anterior: el Present inserta un fence justo antes (ver
+ * XBOX_EndFrameFence).  Salvia lo usa en su bucle principal. */
+extern DECLSPEC void SDLCALL SDL_XBOX_SetDeferredLock(int defer);
 extern DECLSPEC void SDLCALL SDL_XBOX_SyncOverlay(void);
+extern DECLSPEC void SDLCALL SDL_XBOX_SyncGameTexture(void);
 
 /* Rect de la imagen del juego en pixeles del overlay (ver la implementacion:
  * compone el aspect del quad del juego con el overscan del overlay). */
@@ -502,7 +505,7 @@ extern DECLSPEC void SDL_XBOX_SetPresentInterval(int enabled);
    llega tarde se muestra al momento (D3DRS_PRESENTIMMEDIATETHRESHOLD a 80, con
    tearing en ese frame) en vez de esperar al vblank siguiente; con 0, el valor
    de fabrica del device.  Render state sin Reset, como la de arriba.  La
-   llama Sync::limit_fps al cambiar de modo. */
+   llama Sync::configure al cambiar de modo. */
 extern DECLSPEC void SDL_XBOX_SetAdaptiveVSync(int enabled);
 
 /* Specify the main xbox resolution. w<=0 || h<=0 => "Auto": usa la resolucion
