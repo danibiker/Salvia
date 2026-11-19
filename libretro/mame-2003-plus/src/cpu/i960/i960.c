@@ -28,8 +28,6 @@
 #define BIT( x, n )			( ( ( x ) >> ( n ) ) & 1 )
 #endif
 
-double _HUGE = 1e308; /* infinito */
-
 typedef struct
 {
 	UINT32 t1, t2;

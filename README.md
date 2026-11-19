@@ -126,7 +126,6 @@ You are now ready to place your backup games into their respective directories:
 
 ```
 Usb0:\Roms
-├── 32x\                 (Sega 32x --> 32x zip)
 ├── 3do\                 (3DO --> iso bin cue chd)
 ├── amiga500\            (Amiga 500 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
 ├── amiga1200\           (Amiga 1200 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
@@ -162,6 +161,7 @@ Usb0:\Roms
 ├── psx\                 (Play Station 1 --> iso chd bin cue m3u img mdf pbp cbn)
 ├── quake\               (Quake 1 Engine -> pak)
 ├── scummvm\             (SCUMMVM --> scummvm svm)
+├── sega32x\             (Sega 32x --> 32x zip)
 ├── sms\                 (Master System/SG-1000 --> sms bms sg zip)
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc smc fig gd3 gd7 dx2 bsx swc)
 ├── spectrum\            (FBNeo ZX Spectrum --> zip)
