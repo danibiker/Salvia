@@ -53,10 +53,19 @@ Joystick::Joystick(){
 	setCursor(cursor_hidden);
 	hotkeys = new Hotkeys(&this->inputs);
 	memset(startHoldFrames, 0, sizeof(startHoldFrames));
-	memset(hotkeyEnabler, 0, MAX_PLAYERS);
-	memset(hotkeyKeyPressed, 0, MAX_PLAYERS);
-	memset(hotkeySendToCore, 0, MAX_PLAYERS);
+	resetHotkeyEnabler();
 	infoButtonsDirty = true;
+}
+
+/**
+* Olvida el estado del habilitador de hotkeys oculto (menus, cambio de juego...)
+*/
+void Joystick::resetHotkeyEnabler(){
+	memset(hotkeyEnablerToCore, 0, sizeof(hotkeyEnablerToCore));
+	memset(hkPulsadoDesde, 0, sizeof(hkPulsadoDesde));
+	memset(hkEnviarHasta, 0, sizeof(hkEnviarHasta));
+	memset(hkUsada, 0, sizeof(hkUsada));
+	memset(hkMantenido, 0, sizeof(hkMantenido));
 }
 
 Joystick::~Joystick(){
@@ -489,12 +498,6 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 		fileConfigJoystick.push_back(anal);
 	}
 	
-	fileConfigJoystick.push_back(""); // Linea en blanco
-	fileConfigJoystick.push_back("[COMMON]");
-	std::string skip = "skip=";
-	skip += Constant::intToString(inputs.hotkeyEnablerHidePress);
-	fileConfigJoystick.push_back(skip);
-
     FileList::guardarVector(ruta, fileConfigJoystick);
 	Fileio::commit(ruta.c_str());
 	
@@ -620,12 +623,7 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 				//Set a proper option for the frontend and don't rely only with the option assigned to the core
 				inputs.frontAxisAsPad = (line.substr(5) == "1");
 			} 
-        } else if (currentSection == "[COMMON]"){
-			//Don't send the hotkey button to the core until released
-			if (line.find("skip=") == 0){
-				inputs.hotkeyEnablerHidePress = (line.substr(5) == "1");
-			}
-		}
+        } 
     }
 
 	/* Relleno de hueco para los gatillos del frontend (JOY_AXIS_L2/R2). Son destinos
@@ -911,8 +909,13 @@ bool Joystick::pollKeys(int gameStatus){
 
 	inputs.mouse_rel_x = 0;
 	inputs.mouse_rel_y = 0;
-	//Por defecto ponemos el detector del habilitador de hotkeys a 0
-	memset(hotkeySendToCore, 0, MAX_PLAYERS);
+
+	/* Habilitador de hotkeys oculto: solo en el juego y para el jugador 0. En
+	 * los menus se olvida, para no arrastrar un toque pendiente al volver. */
+	const Uint32 ahora = SDL_GetTicks();
+	const bool enJuego = gameStatus == EMU_STARTED;
+	if (!enJuego && (hkPulsadoDesde[0] != 0 || hotkeyEnablerToCore[0]))
+		resetHotkeyEnabler();
 
 	#ifdef _XBOX
     // Optimización: Solo iterar si hay algún frame pendiente de liberar
@@ -941,7 +944,6 @@ bool Joystick::pollKeys(int gameStatus){
                 const unsigned int btn = (unsigned int)event.jbutton.button;
                 if (btn < MAX_SDL_BUTTONS) {
                     const bool isDown = (event.type == SDL_JOYBUTTONDOWN);
-					const int sdlModifier = inputs.mapperHotkeys.getSdlBtn(p, HK_MODIFIER);
 					inputs.btn_state[p][btn] = isDown;
                     
                     #ifdef _XBOX
@@ -952,32 +954,22 @@ bool Joystick::pollKeys(int gameStatus){
                     }
                     #endif
 
-					if (sdlModifier == btn) {
-						//Detectamos pulsacion del habilitador de hotkeys
-						if (!inputs.hotkeyEnablerHidePress){
-							hotkeySendToCore[p] = isDown ? 1 : 0;
-							LOG_DEBUG("Hotkey enabler pressed");
-						} else if (isDown){
-							//Marcamos el habilitador como pulsado
-							hotkeyEnabler[p] = 1;
-						} else if (hotkeyKeyPressed[p] == 1){
-							//Marcamos que hemos detectado una hotkey pulsada mientras 
-							//el habilitador de hotkeys estaba pulsado
-							LOG_DEBUG("Hotkey detectada");
-							hotkeyKeyPressed[p] = 0;
-							hotkeyEnabler[p] = 0;
-						} else if (inputs.hotkeyEnablerHidePress){
-							//En este caso marcamos que el boton asignado al habilitador de hotkeys deberia
-							//procesarse por el core normalmente
-							LOG_DEBUG("Hotkey enabler soltado pero sin hotkey pulsada. Deberia procesarse como pulsado");
-							hotkeySendToCore[p] = 1;
-							hotkeyEnabler[p] = 0;
+					//Habilitador de hotkeys oculto (ver hotkeyEnablerToCore en joystick.h)
+					if (enJuego && p == 0 && (int)btn == inputs.mapperHotkeys.getSdlBtn(0, HK_MODIFIER)) {
+						if (isDown) {
+							hkPulsadoDesde[0] = ahora | 1;   //nunca 0, que es "suelto"
+							hkUsada[0] = false;
+							hkMantenido[0] = false;
+						} else {
+							//Toque sin hotkey y sin haber llegado a mantenido: el core lo
+							//ve pulsado HK_PULSO_MS a partir de ahora
+							if (hkPulsadoDesde[0] != 0 && !hkUsada[0] && !hkMantenido[0]) {
+								hkEnviarHasta[0] = ahora + HK_PULSO_MS;
+								LOG_DEBUG("Habilitador de hotkeys soltado sin hotkey: se envia al core");
+							}
+							hkPulsadoDesde[0] = 0;
+							hkMantenido[0] = false;
 						}
-					} else if (hotkeyEnabler[p] == 1){
-						//Si hemos pulsado algun otro boton y se habia detectado la pulsacion del habilitador de hotkeys
-						LOG_DEBUG("Pulsacion de hotkey detectada");
-						hotkeyKeyPressed[p] = 1;
-						hotkeyEnabler[p] = 0;
 					}
                 }
                 break;
@@ -1190,7 +1182,18 @@ bool Joystick::pollKeys(int gameStatus){
         }
     }
 
-	
+	/* Lo que vera el core del habilitador de hotkeys en este frame */
+	if (enJuego) {
+		if (hkPulsadoDesde[0] != 0) {
+			//Pulsado: pasa al core solo si se mantiene sin hotkey HK_MANTENIDO_MS
+			if (!hkUsada[0] && (int32_t)(ahora - hkPulsadoDesde[0]) >= (int32_t)HK_MANTENIDO_MS)
+				hkMantenido[0] = true;
+			hotkeyEnablerToCore[0] = hkMantenido[0] && !hkUsada[0];
+		} else {
+			//Suelto: toque sintetico pendiente (resta con signo, a prueba de vuelta)
+			hotkeyEnablerToCore[0] = (int32_t)(hkEnviarHasta[0] - ahora) > 0;
+		}
+	}
 
     return true;
 }
@@ -1200,7 +1203,11 @@ bool Joystick::pollKeys(int gameStatus){
 *
 */
 HOTKEYS_LIST Joystick::findHotkey(){
-	return hotkeys->procesarHotkeys(&inputs);
+	HOTKEYS_LIST hk = hotkeys->procesarHotkeys(&inputs);
+	//Hotkey disparada con el habilitador pulsado: el core no debe verlo
+	if (hk != HK_MAX && hkPulsadoDesde[0] != 0)
+		hkUsada[0] = true;
+	return hk;
 }
 
 /**

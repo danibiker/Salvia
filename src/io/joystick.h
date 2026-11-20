@@ -189,11 +189,17 @@ class Joystick{
 
 		//Array para poder detectar la pulsacion del start en xbox360
 		int8_t startHoldFrames[MAX_PLAYERS];
-		//Array para retrasar la actuacion del habilitador de hotkeys y hacer 
-		//que no se procese por el core hasta que se haya soltado
-		int8_t hotkeyEnabler[MAX_PLAYERS];
-		int8_t hotkeyKeyPressed[MAX_PLAYERS];
-		int8_t hotkeySendToCore[MAX_PLAYERS];
+		/* Habilitador de hotkeys OCULTO al core.
+		 * Solo jugador 0, que es el unico que dispara hotkeys:
+		 *   - toque sin hotkey: al soltarlo, el core lo ve pulsado
+		 *     HK_PULSO_MS (varios frames, no uno: los juegos que no leen el
+		 *     mando en cada frame no se lo pierden);
+		 *   - mantenido mas de HK_MANTENIDO_MS sin hotkey: el core lo ve
+		 *     pulsado mientras siga pulsado;
+		 *   - si se dispara una hotkey (findHotkey), el core no lo ve.
+		 * Lo que ve el core en cada frame queda en hotkeyEnablerToCore, que
+		 * calcula pollKeys y lee retro_input_state. */
+		bool     hotkeyEnablerToCore[MAX_PLAYERS];
 		//Joysticks abiertos
 		SDL_Joystick* g_joysticks[MAX_PLAYERS];
 		//Type of the controller ports
@@ -228,6 +234,15 @@ class Joystick{
 		int actualCursor;
 		CursorGestor *gestorCursor;
 		void setCursor(int cursor);
-		
+
+		/* Estado del habilitador de hotkeys oculto (ver hotkeyEnablerToCore) */
+		static const uint32_t HK_PULSO_MS     = 100; //duracion del toque sintetico
+		static const uint32_t HK_MANTENIDO_MS = 400; //a partir de aqui se pasa al core
+		uint32_t hkPulsadoDesde[MAX_PLAYERS]; //SDL_GetTicks()|1 al pulsar, 0 = suelto
+		uint32_t hkEnviarHasta[MAX_PLAYERS];  //fin del toque sintetico
+		bool     hkUsada[MAX_PLAYERS];        //se disparo una hotkey con el pulsado
+		bool     hkMantenido[MAX_PLAYERS];    //se esta pasando al core como mantenido
+		void resetHotkeyEnabler();
+
 };
 
