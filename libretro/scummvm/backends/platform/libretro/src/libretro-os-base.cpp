@@ -84,6 +84,10 @@ void OSystem_libretro::initBackend() {
 	 * default, the "Disable fixed font scaling" checkbox still overrides it. */
 	ConfMan.registerDefault("gui_disable_fixed_font_scaling", true);
 
+#ifdef _XBOX
+	ConfMan.registerDefault("midi_gain", 175);
+#endif
+
 	delete _timerManager;
 	_timerManager = nullptr;
 	delete _mixer;

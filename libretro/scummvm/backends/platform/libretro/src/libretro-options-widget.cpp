@@ -23,6 +23,7 @@
 #include "gui/launcher.h"
 #include "common/translation.h"
 #include "common/formats/json.h"
+#include "common/algorithm.h"
 
 enum {
 	kPlaylistPathCmd = 'pchp',
@@ -133,6 +134,119 @@ bool LibretroOptionsWidget::cleanFolder(Common::String &path) {
 	return res;
 }
 
+/* Game list XML for the frontend ------------------------------------------
+ * Written to the system directory each time the playlist/hooks are
+ * generated, with one <game> per hook file. The name attribute is the hook
+ * file name without extension (the ScummVM target, e.g. "monkey-es"), so the
+ * frontend can show the full description instead of the target. Same layout
+ * as the MAME/FBNeo style lists used by Salvia (assets/extra/merged_fbneo.xml). */
+#define LIBRETRO_GAMELIST_XML "merged_scummvm.xml"
+
+struct LibretroGameListEntry {
+	Common::String target;
+	Common::String description;
+	Common::String engineId;
+	Common::String gameId;
+	Common::String language;
+	Common::String platform;
+};
+
+struct LibretroGameListEntryLess {
+	bool operator()(const LibretroGameListEntry &a, const LibretroGameListEntry &b) const {
+		return a.target.compareToIgnoreCase(b.target) < 0;
+	}
+};
+
+static Common::String libretroXmlEscape(const Common::String &in) {
+	Common::String out;
+	for (uint i = 0; i < in.size(); ++i) {
+		const char c = in[i];
+		switch (c) {
+		case '&': out += "&amp;"; break;
+		case '<': out += "&lt;"; break;
+		case '>': out += "&gt;"; break;
+		case '"': out += "&quot;"; break;
+		case '\'': out += "&apos;"; break;
+		default:
+			/* Drop other control characters, invalid in XML 1.0 */
+			if ((unsigned char)c >= 0x20 || c == '\t')
+				out += c;
+			break;
+		}
+	}
+	return out;
+}
+
+static void libretroXmlAttr(Common::String &line, const char *name, const Common::String &value) {
+	if (value.empty())
+		return;
+	line += Common::String::format(" %s=\"", name);
+	line += libretroXmlEscape(value);
+	line += "\"";
+}
+
+static bool libretroWriteGameListXml(Common::Array<LibretroGameListEntry> &entries) {
+	const char *systemDir = retro_get_system_dir();
+	if (!systemDir || !*systemDir) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_WARN, "No system directory, game list XML not written.\n");
+		return false;
+	}
+
+	Common::String xmlPath = LibRetroFilesystemNode(Common::String(systemDir)).getPath();
+	if (xmlPath.empty() || xmlPath.lastChar() != '/')
+		xmlPath += "/";
+	xmlPath += LIBRETRO_GAMELIST_XML;
+
+	RFILE *xmlFile = filestream_open(xmlPath.c_str(), RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+	if (!xmlFile) {
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_ERROR, "Failed to create game list XML at '%s'.\n", xmlPath.c_str());
+		return false;
+	}
+
+	Common::sort(entries.begin(), entries.end(), LibretroGameListEntryLess());
+
+	Common::String out;
+	out += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+	out += "<!DOCTYPE mame [\n";
+	out += "\t<!ELEMENT mame (game+)>\n";
+	out += "\t\t<!ELEMENT game (description, year?, manufacturer?)>\n";
+	out += "\t\t\t<!ATTLIST game name CDATA #REQUIRED>\n";
+	out += "\t\t\t<!ATTLIST game engine CDATA #IMPLIED>\n";
+	out += "\t\t\t<!ATTLIST game gameid CDATA #IMPLIED>\n";
+	out += "\t\t\t<!ATTLIST game language CDATA #IMPLIED>\n";
+	out += "\t\t\t<!ATTLIST game platform CDATA #IMPLIED>\n";
+	out += "\t\t<!ELEMENT description (#PCDATA)>\n";
+	out += "\t\t<!ELEMENT year (#PCDATA)>\n";
+	out += "\t\t<!ELEMENT manufacturer (#PCDATA)>\n";
+	out += "]>\n";
+	out += "<mame>\n";
+
+	for (uint i = 0; i < entries.size(); ++i) {
+		const LibretroGameListEntry &e = entries[i];
+		Common::String line("\t<game");
+		libretroXmlAttr(line, "name", e.target);
+		libretroXmlAttr(line, "engine", e.engineId);
+		libretroXmlAttr(line, "gameid", e.gameId);
+		libretroXmlAttr(line, "language", e.language);
+		libretroXmlAttr(line, "platform", e.platform);
+		line += ">\n\t\t<description>";
+		line += libretroXmlEscape(e.description);
+		line += "</description>\n\t</game>\n";
+		out += line;
+	}
+	out += "</mame>\n";
+
+	const bool ok = filestream_write(xmlFile, out.c_str(), out.size()) == (int64_t)out.size();
+	filestream_close(xmlFile);
+
+	if (retro_log_cb)
+		retro_log_cb(ok ? RETRO_LOG_INFO : RETRO_LOG_ERROR, "%s game list XML with %u entries at '%s'.\n",
+		             ok ? "Wrote" : "Failed to write", entries.size(), xmlPath.c_str());
+	return ok;
+}
+
 bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 	bool isFirstEntry = true;
 	bool success = true;
@@ -147,6 +261,7 @@ bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 
 	Common::JSONObject root;
 	Common::JSONArray  items;
+	Common::Array<LibretroGameListEntry> gameList;
 
 	/* Create playlist file */
 	RFILE *playlistFile = filestream_open(Common::String(playlistPath + "/" + CORE_NAME + ".lpl").c_str(), RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
@@ -238,6 +353,15 @@ bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 
 		filestream_printf(hookFile, "%s", iter->_key.c_str());
 		filestream_close(hookFile);
+
+		LibretroGameListEntry entry;
+		entry.target = iter->_key;
+		entry.description = title;
+		iter->_value.tryGetVal("engineid", entry.engineId);
+		iter->_value.tryGetVal("gameid", entry.gameId);
+		iter->_value.tryGetVal("language", entry.language);
+		iter->_value.tryGetVal("platform", entry.platform);
+		gameList.push_back(entry);
 	}
 
 	if (ConfMan.getInt("libretro_playlist_version", _domain) != kPlaylistFormat6lines) {
@@ -251,11 +375,15 @@ bool LibretroOptionsWidget::generatePlaylist(Common::String playlistPath) {
 	}
 	filestream_close(playlistFile);
 
+	const bool xmlSuccess = libretroWriteGameListXml(gameList);
+
 	Common::String response;
 	if (success) {
 		response = _("Done");
 		if (!cleanSuccess)
 			response += " (" +  _("cleaning failed") + ")";
+		if (!xmlSuccess)
+			response += " (" + _("game list XML failed") + ")";
 	} else
 		response = _("Failed, can't create hook files");
 

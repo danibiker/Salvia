@@ -1009,7 +1009,7 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 			lineTextColor = white;
 		}
 
-		SDL_Rect dimLeft = Fonts::drawTextTransparent(overlay, fontbig, opciones[i]->titulo.c_str(), x, y + i * (face_h_big + 3), lineTextColor, 0);
+		SDL_Rect dimLeft = Fonts::drawTextTransparent(overlay, fontbig, opciones[i]->titulo.getStr().c_str(), x, y + i * (face_h_big + 3), lineTextColor, 0);
 		const int leftTxtDim = dimLeft.w + 3;
 		JFY_TYPE justifyHelper(JFY_RIGHT, w - leftTxtDim);
 

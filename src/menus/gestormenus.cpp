@@ -53,6 +53,7 @@ static const std::string TXT_BIOSERRORCRC = "menu.updater.bios.error.crc";
 static const std::string TXT_BIOSERRORDOWNLOAD = "menu.updater.bios.error.download";
 static const std::string TXT_BIOSDOWNLOADING = "menu.updater.bios.downloading";
 static const std::string TXT_BIOSCHECKINGCRC = "menu.updater.bios.checkingcrc";
+static const std::string EXT_7ZIP = ".7z";
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
@@ -404,12 +405,12 @@ std::string GestorMenus::fillSbiMenuAction(void* inst){
 }
 
 std::string GestorMenus::convertSbiName(const std::string &name){
-	std::string resp = name;
-	if (resp.length() == 10){
-		resp = Constant::replaceAll(resp, "-", "_");
-		resp.insert(8, ".");
-		resp.append(".sbi");
-	}
+	//std::string resp = name;
+	//if (resp.length() == 10){
+		//resp = Constant::replaceAll(resp, "-", "_");
+	std::string resp = Constant::sanitizePathForXbox(name);
+	resp.append(EXT_7ZIP);
+	//}
 	return resp;
 }
 
@@ -444,8 +445,8 @@ void GestorMenus::processHtmlSbi(const std::string &BASE, const std::string &dat
 		std::size_t startSearch = (lastSep == string::npos) ? 0 : lastSep + 1;
 
 		t_file_url fileOrUrl;
-		fileOrUrl.file = url.substr(startSearch);
-		//fileOrUrl.file = convertSbiName(filename);
+		//fileOrUrl.file = url.substr(startSearch);
+		fileOrUrl.file = convertSbiName(filename);
 		fileOrUrl.url = CurlClient::escapeFullUrl(url);
 		fileOrUrl.crc = "";
 		sbiData.listBios.push_back(fileOrUrl);
@@ -566,14 +567,15 @@ std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
 			return LanguageManager::instance()->get("menu.updater.bios.msg.activedownload");
 	}
 
-	if (biosForSystem == NULL)
+	if (biosForSystem == NULL || this->obtenerMenuActual()->opciones.empty())
 		return "";
 
 	if (biosForSystem->allFound){
 		return LanguageManager::instance()->get("menu.updater.bios.msg.alldownloaded");
 	}
 
-	hBiosDownThread = CreateThread(NULL, 0, biosDownThread, biosForSystem, CREATE_SUSPENDED, NULL);
+	OpcionExec<t_biosForSystem>* btnExecuted = static_cast<OpcionExec<t_biosForSystem>*>(this->obtenerMenuActual()->opciones.front());
+	hBiosDownThread = CreateThread(NULL, 0, biosDownThread, btnExecuted, CREATE_SUSPENDED, NULL);
 	if (hBiosDownThread) {
 		Constant::setup_and_run_thread(hBiosDownThread, IO_THREAD, false);
 	}
@@ -581,7 +583,12 @@ std::string GestorMenus::downloadBios(t_biosForSystem* biosForSystem){
 }
 
 DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
-	t_biosForSystem* biosForSystem = static_cast<t_biosForSystem*>(lpParam);
+	OpcionExec<t_biosForSystem>* btnExecuted = static_cast<OpcionExec<t_biosForSystem>*>(lpParam);
+
+	if (btnExecuted == NULL)
+		return 1;
+
+	t_biosForSystem *biosForSystem = btnExecuted->data;
 	if (biosForSystem == NULL)
 		return 1;
 
@@ -595,11 +602,12 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 	const std::string localPath = tempDir + Constant::getFileSep() + "BiosDownload.zip";
 	const std::string system_path = dirutil::getPathPrefix("system");
 	bool ok = true;
-	CrcCache crcCache(system_path + Constant::getFileSep() + "salvia_crc.cache");
+	const std::string btnInitialText = btnExecuted->titulo.getStr().c_str();
+	CrcCache crcCache(system_path + Constant::getFileSep() + "salvia_crc.cache");	
 
 	if (biosForSystem->url.find(".zip") != std::string::npos || biosForSystem->url.find("https://archive.org/compress/") != std::string::npos){
 		if (!dir.fileExists(localPath.c_str())){
-			ok = downloader.fetchFile(biosForSystem->url, localPath, &progress);
+			ok = downloader.fetchFile(biosForSystem->url, localPath, &btnExecuted->titulo);
 			LOG_DEBUG("Download bios %s", ok ? "OK" : "FAILED");
 		}
 	
@@ -616,6 +624,8 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 		for (std::size_t i=0; i < biosForSystem->list.size(); i++){
 			int tries = 0;
 			bool biosOk = false;
+
+			btnExecuted->titulo.setStr(Constant::TipoToStr((int) (100.0 * i / (float) biosForSystem->list.size())) + "%");
 
 			while (tries < MAX_TRIES && !biosOk && !checkBiosCRC(crcCache, biosForSystem->list[i])){
 				//LOG_DEBUG("Downloading url bios: %s", biosForSystem->url + biosForSystem->list[i]->urlpath);
@@ -640,7 +650,7 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 					biosForSystem->list[i]->textFound = LanguageManager::instance()->get(TXT_BIOSDOWNLOADED);
 					biosForSystem->list[i]->status = BS_DOWNLOADED;
 
-					if (biosForSystem->decompress && biosForSystem->list[i]->filepath.find(".7z") != std::string::npos){
+					if (biosForSystem->decompress && biosForSystem->list[i]->filepath.find(EXT_7ZIP) != std::string::npos){
 						std::string err;
 						float prog;
 						SevenZip::extract(biosForSystem->list[i]->filepath, dirBios, NULL, &prog, &err);
@@ -665,6 +675,7 @@ DWORD WINAPI GestorMenus::biosDownThread(LPVOID lpParam) {
 		dir.borrarArchivo(localPath);
 	}
 
+	btnExecuted->titulo.setStr(btnInitialText);
 	return 0;
 }
 
@@ -1779,7 +1790,7 @@ void GestorMenus::poblarJoystickTypes(Joystick *joystick){
 	t_joyMenuData *menuJoystickRetro = new t_joyMenuData();
 
 	for (int i=0; i < (int)menuAssignRetro->opciones.size(); i++){
-		LOG_DEBUG("%s", menuAssignRetro->opciones[i]->titulo.c_str());
+		LOG_DEBUG("%s", menuAssignRetro->opciones[i]->titulo.getStr().c_str());
 		if (menuAssignRetro->opciones[i]->tipo == OPC_SUBMENU){
 			Menu* submenuJoy = ((OpcionSubMenu*)menuAssignRetro->opciones[i])->destino;
 			int numOpciones = submenuJoy->opciones.size();
@@ -2121,7 +2132,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 			// Para poder modificar el status si se pulsa este elemento y poder mostrar la emergente
 			opt->status = &this->status; 
 			// Titulo del elemento
-			opt->titulo = LanguageManager::instance()->get("menu.savestate.slot") + " " + (posSlot.empty() ? "0" : posSlot);
+			opt->titulo.setStr(LanguageManager::instance()->get("menu.savestate.slot") + " " + (posSlot.empty() ? "0" : posSlot));
 		}
 	}
 }
@@ -2722,28 +2733,28 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			drawImage(listPos, (OpcionImage *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_BOOLEANA){
-			line = option->titulo;// + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
+			line = option->titulo.getStr().c_str();// + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
 		} else if (option->tipo == OPC_LISTA){
 			int indice = *((OpcionLista *)option)->indice;
-			line = option->titulo;
+			line = option->titulo.getStr().c_str();
 			if ((unsigned int)indice < ((OpcionLista *)option)->items.size()){
 				value = "< " + ((OpcionLista *)option)->items.at(indice) + " >";
 			} else {
 				value = "";
 			}
 		} else if (option->tipo == OPC_SUBMENU){
-			line = option->titulo + " >";
+			line = option->titulo.getStr() + " >";
 		} else if (option->tipo == OPC_INT){
-			line = option->titulo;// + " " + ((OpcionInt *)option)->description + Constant::intToString(*((OpcionInt *)option)->valor);
+			line = option->titulo.getStr().c_str();// + " " + ((OpcionInt *)option)->description + Constant::intToString(*((OpcionInt *)option)->valor);
 			value = ((OpcionInt *)option)->description;
 		} else if (option->tipo == OPC_SHOW_TXT_VAL){
-			line = option->titulo;
+			line = option->titulo.getStr().c_str();
 			value = ((OpcionTxtAndValue *)option)->valor;
 			if (((OpcionTxtAndValue *)option)->callback == NULL){
 				valueColor = Constant::colors[clHighligtOption].sdlColor;
 			}
 		} else if (option->tipo == OPC_SHOW_DYNTXT_VAL){
-			line = option->titulo;
+			line = option->titulo.getStr().c_str();
 			OpcionTxtAndDynValue *OptVal = static_cast<OpcionTxtAndDynValue *>(option);
 			if (OptVal != NULL){
 				value = *(OptVal->valor);
@@ -2752,7 +2763,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 				}
 			}
 		} else if (option->tipo == OPC_SHOW_DYNTXT_PROG_VAL){
-			line = option->titulo;
+			line = option->titulo.getStr().c_str();
 			OpcionTxtAndDynProgressValue *OptVal = static_cast<OpcionTxtAndDynProgressValue *>(option);
 			if (OptVal != NULL){
 				if (OptVal->progress != NULL && *(OptVal->progress) > 0.0f && *(OptVal->progress) < 1.0f){
@@ -2777,7 +2788,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 				}
 			}
 		} else {
-			line = option->titulo;
+			line = option->titulo.getStr().c_str();
 		}
 
 		const int screenPos = listPos - this->iniPos;
@@ -3027,7 +3038,7 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
     rect(video_page, thumbRect.x - 1, thumbRect.y - 1, thumbRect.x + thumbRect.w + 1, thumbRect.y + thumbRect.h + 1, Constant::colors[clAskLine].sdlColor);
 
     Opcion* opt = menuAskSavestates->opciones[0];
-    Fonts::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), 
+    Fonts::drawTextTransparent(video_page, fontMenu, opt->titulo.getStr().c_str(), 
                                  titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h_big) / 2, Constant::colors[clAskText].sdlColor, 0);
 
     if (opt->tipo == OPC_LISTA) {
@@ -3227,7 +3238,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
     const int fontHeightRect = screenPos * face_h_big;
     const int lineBackground = -1;
     SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
-	const std::string line = opcion->titulo;
+	const std::string line = opcion->titulo.getStr().c_str();
 	std::string rutaSelected;
 
 	drawSelectionBox(i, video_page, lineTextColor);
@@ -3558,7 +3569,7 @@ std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
 			auto* baseOpt = menuScrapper->opciones.back();
 			OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
 			if (opcion != nullptr) {
-				opcion->titulo = LanguageManager::instance()->get("menu.scrap.stop");
+				opcion->titulo.setStr(LanguageManager::instance()->get("menu.scrap.stop"));
 				opcion->execfunc = &GestorMenus::stopScrapping;
 			}
 		}
@@ -3580,7 +3591,7 @@ std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
 		if (opcion != nullptr) {
 			if (Scrapper::isScrapping())
 				InterlockedExchange(&CurlClient::g_abortScrapping, 1);
-			opcion->titulo = LanguageManager::instance()->get("menu.scrap.start");
+			opcion->titulo.setStr(LanguageManager::instance()->get("menu.scrap.start"));
 			opcion->execfunc = &GestorMenus::startScrapping;
 		}
 	}

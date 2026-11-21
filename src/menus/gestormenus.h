@@ -78,14 +78,18 @@ typedef std::string (*CallbackValues)(void* instance, void* index, void* values)
 // Clase Base para las opciones del menu
 class Opcion {
 public:
-    std::string titulo;
+    t_lockingStr titulo;
     TipoOpcion tipo;
 	int icon;
 	bool editable;
 	bool visible;
 
-    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1), editable(false), visible(true) {}
-	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico), editable(false), visible(true) {}
+    Opcion(std::string t, TipoOpcion tp) : tipo(tp), icon(-1), editable(false), visible(true) {
+		titulo.setStr(t);
+	}
+	Opcion(std::string t, TipoOpcion tp, int ico) : tipo(tp), icon(ico), editable(false), visible(true) {
+		titulo.setStr(t);
+	}
 	virtual std::string ejecutar() = 0; // Metodo virtual puro
     virtual ~Opcion() {}
 };
@@ -189,11 +193,11 @@ public:
 
 class OpcionTxtAndDynValue : public Opcion {
 public:
-    const std::string* valor; // Puntero al string estático/dinámico externo
+    const std::string* valor; // Puntero al string estatico/dinamico externo
     CallbackValue callback;
     void* context;
 
-    // El constructor recibe el string externo por referencia y guarda su dirección (&v)
+    // El constructor recibe el string externo por referencia y guarda su direccion (&v)
     OpcionTxtAndDynValue(std::string t, const std::string& v) 
         : Opcion(t, OPC_SHOW_DYNTXT_VAL), valor(&v), callback(NULL), context(NULL) {}
 

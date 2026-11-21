@@ -2606,7 +2606,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	 * RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME en retro_set_environment.
 	 * En este modo saltamos toda la cadena de decompresion / lectura
 	 * de fichero y llamamos retro_load_game(NULL) directamente. */
-	const bool bios_only = rompath.compare(BIOS_ONLY) == 0;
+	const bool bios_only = rompath.find(BIOS_ONLY) != std::string::npos;
 	const std::string displayName = bios_only ? std::string("BIOS") : dir.getFileName(rompath);
 
 	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
@@ -2621,6 +2621,9 @@ int launchGame(std::string rompath, bool tmpDelete){
 	// las generales del core.
 	if (!bios_only)
 		gameMenu->getCfgLoader()->loadCoreParamsForGame(rompath);
+	else {
+		rompath = dir.getFileNameNoExt(rompath);
+	}
 
 	// Sincronizacion al iniciar el core: el override del core si no esta en
 	// Auto, si no la general. Solo aqui; despues manda lo que el usuario elija

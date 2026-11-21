@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <beans/structures.h>
 
 #include <SDL.h>
 
@@ -37,9 +38,10 @@
 #include <curl/curl.h>
 
 struct ProgressData {
-    float* progressVar;   // fraccion 0..1 (solo si el servidor manda Content-Length)
-    float* kbVar;         // KB recibidos (siempre; lo unico que hay en descargas sin tamano)
-    ProgressData() : progressVar(NULL), kbVar(NULL) {}
+    float* progressVar;      // fraccion 0..1 (solo si el servidor manda Content-Length)
+    float* kbVar;            // KB recibidos (siempre; lo unico que hay en descargas sin tamano)
+	t_lockingStr* progressStrVar; // Guardamos el puntero al string original
+    ProgressData() : progressVar(NULL), kbVar(NULL), progressStrVar(NULL) {}
 };
 
 enum NETWORK_STATUS{NET_OK, NET_NONE, NET_ERROR_IP, NET_ERROR_WSA, NET_ERROR_WINSOCK, NET_MAX};
@@ -58,6 +60,8 @@ class CurlClient {
 		bool postUrl(const std::string&, const std::string&, std::string&, float*);
 		bool postUrl(const std::string&, const std::string&, const std::string&, std::string&, float*);
 		bool fetchFile(const std::string&, const std::string&, float*, float* kbRecibidos = NULL);
+		bool fetchFile(const std::string&, const std::string&, t_lockingStr *);
+		bool fetchFileInternal(const std::string&, const std::string&, float*, float*, t_lockingStr *);
 		static std::string escape(const std::string&);
 		static std::string escapeFullUrl(const std::string&);
 		static std::string getHrefContent(const std::string &data, std::size_t startPos, std::size_t aTagEnd, std::string base, std::string prop = "href");
@@ -111,7 +115,6 @@ class CurlClient {
 		CURL* m_curl; // handle reutilizable: conserva cookies (en memoria) entre peticiones
 		char ipStr[64];
 		NETWORK_STATUS netStat;
-
 		// Callback estático para recibir datos
 		static std::size_t __cdecl WriteCallback(void *contents, std::size_t size, std::size_t nmemb, void *userp);
 		// Callback estático para el progreso

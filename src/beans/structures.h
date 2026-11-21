@@ -1312,3 +1312,45 @@ public:
 		return !relativePath.empty();
 	}
 };
+
+
+struct t_lockingStr {
+private:
+    std::string str;
+    CRITICAL_SECTION m_progressLock;
+
+    // Prohibimos copiar el struct para no corromper el CRITICAL_SECTION
+    t_lockingStr(const t_lockingStr&);
+    t_lockingStr& operator=(const t_lockingStr&);
+
+public:
+    t_lockingStr() {
+        InitializeCriticalSection(&m_progressLock);
+    }
+
+    ~t_lockingStr() {
+        DeleteCriticalSection(&m_progressLock);
+    }
+
+    // Método seguro para que el hilo de pintado lea el texto
+    std::string getStr() {
+        EnterCriticalSection(&m_progressLock);
+        std::string copy = str;
+        LeaveCriticalSection(&m_progressLock);
+        return copy;
+    }
+
+    // Sobrecarga para const char* (evita crear un std::string temporal en el callback)
+    void setStr(const char* text) {
+        EnterCriticalSection(&m_progressLock);
+        str = (text != NULL) ? text : "";
+        LeaveCriticalSection(&m_progressLock);
+    }
+
+    // Método interno para std::string
+    void setStr(const std::string& text) {
+        EnterCriticalSection(&m_progressLock);
+        str = text;
+        LeaveCriticalSection(&m_progressLock);
+    }
+};

@@ -202,6 +202,16 @@ Larry 7 y Grim Fandango en Windows; The Secret of Monkey Island en Xbox 360.
   lo están) y, si alguien las ha montado, `Hdd1:`, `UsbMu0:` e `IntMu:`. Solo se
   listan las que responden.
 * Mando: L3 abre el teclado virtual (Select queda libre).
+* Hooks (`.scummvm`): al pulsar "Generar playlist" en las opciones del core
+  (pestaña Libretro), además de la playlist y los hooks se escribe
+  `merged_scummvm.xml` en el directorio system, con el mismo formato que
+  `assets/extra/merged_fbneo.xml`. Hay una entrada `<game name="...">` por cada
+  hook: `name` es el nombre del fichero sin extensión (el target de ScummVM,
+  p. ej. `monkey-es`) y `<description>` el título completo
+  ("The Secret of Monkey Island (CD/Spanish)"). También lleva los atributos
+  `engine`, `gameid`, `language` y `platform`. Se regenera cada vez, así que
+  siempre coincide con los hooks creados (incluidos duplicados como
+  `monkey-es-1` y targets renombrados).
 
 ## Juegos que no funcionan
 

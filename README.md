@@ -33,7 +33,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * Game **library search filters** (for FBNeo, FBANext and Mame 2003 plus)
 * **Per-core** libretro configuration
 * **Background music** for each system
-
+* **Menu Languages**: Spanish, English, Italian, French, German, Portuguese, Polish, Russian, Swedish, Turkish, Norwegian, Dutch, Japanese, Korean, Traditional Chinese, Simplified Chinese
 
 ## Emulators
 Salvia provides the following emulators from the latests releases:
@@ -115,12 +115,12 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 ### Bios
 The only thing needed for the emulators to work is to provide the proper BIOS files, as usual with any RetroArch frontend. All the required files can be downloaded from the RetroPie zip at [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases) and placed into the system directory.
 
-Starting from version 1.1.2, there is a built-in BIOS downloader available under "Options > Online updates > Bios Updater". With this utility, you can download all the required BIOS files to play every system. No proprietary BIOS files are hosted by Salvia; they are all hosted on external GitHub repositories or on archive.org.
+Starting from version 1.1.2, there is a built-in BIOS downloader available under "Options > Online updates > Bios Updater". With this utility, you can download all the required BIOS files to play every system. No proprietary BIOS files are hosted by Salvia; they are all hosted on external GitHub repositories or on archive.org
 
 ### Roms
 **On Xbox 360**, the configuration files are preconfigured to read games from the "roms" directory wich can be copied at the root of your USB drive (usb:\roms) or at the same level of all the .xex files (game:\roms). To begin, simply extract the "Roms" directory from the release archive and move it to the root of your USB device or leave it as is.
 
-**On Windows**, the system utilizes the default "Roms" directory. You only need to copy your ROMs directly into that folder.
+**On Windows**, the system uses the default "Roms" directory. You only need to copy your ROMs directly into that folder.
 
 You are now ready to place your backup games into their respective directories:
 
@@ -175,7 +175,7 @@ To change this paths, you can manually modify the **roms_path** field within the
 <img width="1275" height="301" alt="image" src="https://github.com/user-attachments/assets/8272f1bb-9f65-4e78-aba9-409f8715476c" />
 
 ### Mouse support in XBOX 360
-To enable mouse support, it's mandatory for your consele to have the last kernel available 17559, and a DashLaunch plugin must be installed. Inside the salvia-360.zip archive you downloaded previously, you will find a "plugins" directory with a file named hidmouse.xex. Copy that file to the internal hdd of your console or whatever you want, open the dashlaunch utility and add it into the plugins section. 
+To enable mouse support, it's mandatory for your console to have the last kernel available 17559, and a DashLaunch plugin must be installed. Inside the salvia-360.zip archive you downloaded previously, you will find a "plugins" directory with a file named hidmouse.xex. Copy that file to the internal hdd of your console or whatever you want, open the dashlaunch utility and add it into the plugins section. 
 
 <img width="1124" height="677" alt="image" src="https://github.com/user-attachments/assets/fb0c8cac-4b5e-43d9-84e5-0c9f70c6f9cc" />
 
@@ -185,6 +185,13 @@ After saving and rebooting the console, once you launch Salvia, you will find an
 
 > Note that for the plugin to detect the mouse, the console must be booted without the mouse plugged in. Once the Salvia frontend is launched, you can plug the mouse in
 
+#### Lightgun support
+Once you have the mouse plugin configured in the step above, a lightgun can be activated for certain cores: PSX, Megadrive, Nes...
+To enable the lightgun, it must be selected directly within the Options menu:
+Options > Input > Retropad assignments > Port Controller 1 > Joystick type
+
+Just cycle through the options until you see a text like "lightgun", "guncon", etc.
+
 ### Hotkeys
 Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the SELECT button acts as the primary hotkey enabler and must be pressed first, followed by the corresponding function button to execute the desired action. For instance, the 'SELECT + START' combination exits the emulation, returning you to the game selection screen. Another essential shortcut is 'SELECT + Y', which brings up an overlay containing the options menu or returns to the game emulation if pressed again. The remaining options are fairly self-explanatory.
 
@@ -193,16 +200,18 @@ Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the
 ## Core Configurations
 
 ### PSX
-The psx core needs some .sbi files to work properly with certain PAL titles. If your game hangs or is unable to boot, it's likely to need it. The .sbi files must be copied into the directory system\patches\psx, or alternatively, renamed with the same name as the cd file loaded, but mantaining the .sbi extension in the same directory.
-
-This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html). You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily:
-
-<img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
-
 Certain games are only compatible with a DualShock controller. If required by the title, this can be configured directly within the Options menu:
 Options > Input > Retropad assignments > Port Controller 1 > Joystick type
 
 <img width="1279" height="276" alt="image" src="https://github.com/user-attachments/assets/ce5e9684-40be-452d-8cf4-2a0ce7ded53f" />
+
+This core is also compatible with lightgun. Select the controller type to 'guncon' like prevously mentioned, and a cursor will appear to games like time crisis. It can be controlled by a mouse or a Sinden Lightgun.
+
+The psx core needs some .sbi files to work properly with certain PAL titles. If your game hangs or is unable to boot, it's likely to need it. The .sbi files must be copied into the directory system\patches\psx, or alternatively, renamed with the same name as the cd file loaded, but mantaining the .sbi extension in the same directory.
+
+Starting from version 1.1.2, there is a built-in SBI downloader available under "Options > Online updates > PSX sbi Updater". With this utility, you can download all the required sbi files to play every pal game. This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html). You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily:
+
+<img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
 
 ### DOSBOX-PURE
 This core can load games from a compressed .zip file, but if the game is too big or demanding, it can introduce slowdowns. For this games (like Duke Nukem 3D) it's better to load them uncompressed from a directory
@@ -221,16 +230,18 @@ This core needs a file with the extension svm or scummvm to be able to load a ga
 ```
 thesecret
 ```
-These files can be created from the main scummvm gui, with the Backend tab of the Global Options menu:
-
-  * Check the ‘Hooks location’ setting, to have one ‘.scummvm’ in each game folder
+These files can be created from the main scummvm gui. This are the steps to create them:
+  
+  * Firstly, import all the games with the option "Mass Add..." located in the arrow to the right of the button "Add Game"
+  * Once all the games are imported, select the option **One in each game folder** in the ‘Hooks location’ setting of the button "Global Options...", to have one ‘.scummvm’ created for each game
   * Check the ‘Playlist version’ setting. JSON format should be selected, 6-lines format is deprecated and provided for backwards compatibility only
   * Select the ‘Clear existing hooks’ checkbox to remove any existing ‘.scummvm’ file in the working folders
   * Press the ‘Generate playlist’ button
 
-If for some reason you can't access to the scummvm gui, it can be run from the options menu: Options > Emulation > Discs control > Load bios/OS
+If for some reason you can't access to the scummvm gui, **it can be run launching the file @bios-only.scummvm** located in the main scummvm roms directory, or alternatively, from the options menu: Options > Emulation > Discs control > Load bios/OS
 
 This core also features a built-in virtual keyboard, which is activated by pressing the L3 stick by default.
+It also support **Roland MT-32** emulation!
 
 ### COMMODORE 64 (frodo)
 Just select a game and it boots and runs on its own — Salvia auto-types `LOAD"*",8,1` + `RUN` for you once the C64 reaches the `READY.` prompt. Supported formats: `d64`, `t64`, `x64`, `p00`, `prg`, `lnx`, `m3u` and `zip`.

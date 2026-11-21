@@ -1,5 +1,4 @@
 #include <http/httputil.h>
-#include <const/constant.h>
 #include <stdarg.h>
 
 static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
@@ -320,8 +319,17 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 // de una escritura a disco por cada trozo recibido.
 #define FETCH_FILE_BUFFER (512 * 1024)
 
-// Anyade esto a los metodos publicos de tu clase
 bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, float* progressPtr, float* kbPtr) {
+	return fetchFileInternal(url, localPath, progressPtr, kbPtr, NULL);
+}
+
+bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, t_lockingStr *progressStrPtr) {
+	return fetchFileInternal(url, localPath, NULL, NULL, progressStrPtr);
+}
+
+// Anyade esto a los metodos publicos de tu clase
+bool CurlClient::fetchFileInternal(const std::string& url, const std::string& localPath, float* progressPtr, float* kbPtr, 
+									t_lockingStr *progressStrPtr) {
 	CURL *curl = curl_easy_init();
 	if (!curl) return false;
 
@@ -340,6 +348,8 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	if (progressPtr) *progressPtr = 0.0f;
 	pData.kbVar = kbPtr;
 	if (kbPtr) *kbPtr = 0.0f;
+	pData.progressStrVar = progressStrPtr;
+	if (progressStrPtr) progressStrPtr->setStr("0%");
 
 	#ifdef NET_DEBUG
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
@@ -451,7 +461,7 @@ std::size_t CurlClient::WriteCallback(void *contents, std::size_t size, std::siz
     if (!contents || size == 0 || nmemb == 0) {
         return 0;
     }
-    size_t totalSize = size * nmemb;
+    std::size_t totalSize = size * nmemb;
     ((std::string*)userp)->append((char*)contents, totalSize);
     return totalSize;
 }
@@ -473,6 +483,20 @@ int CurlClient::ProgressCallback(void* clientp, double dltotal, double dlnow, do
 			*(p->progressVar) = (float)(dlnow / dltotal);
 		if (p->kbVar)
 			*(p->kbVar) = (float)(dlnow / 1024.0);
+		
+		if (p->progressStrVar) {
+			static char buf[50]; // Buffer temporal local (no hace falta en el struct)
+			if (dltotal > 0.0) {
+				int pct = static_cast<int>((dlnow / dltotal) * 100.0);
+				_snprintf(buf, 50, "%d%%", pct);
+			} else {
+				_snprintf(buf, 50, "%.0f KB", dlnow / 1024.0);
+			}
+        
+			// Al asignar al puntero desreferenciado, actualizamos el string original:
+			// Bloqueamos -> Escribimos -> Desbloqueamos
+			p->progressStrVar->setStr(buf);
+		}
 	}
     return 0;
 }

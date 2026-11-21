@@ -8,7 +8,27 @@ call "%VS100COMNTOOLS%\..\..\VC\bin\vcvars32.bat"
 set PLATFORM="Win32"
 set PLATFORM_XBOX="Xbox 360"
 set CONFIG=Release
-if /i "%~1"=="d" set CONFIG=Debug
+
+set SINGLE_COMPILE=
+
+:loop
+if "%~1"=="" goto fin
+
+if /i "%~1"=="-d" (
+    set CONFIG=Debug
+)
+
+if /i "%~1"=="-e" (
+    set "SINGLE_COMPILE=%~2"
+    shift
+)
+
+shift
+goto loop
+
+:fin
+
+
 :: Cambiado a /v:q (Quiet) y añadido /noconlog para evitar banners
 set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary
 set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSummary
@@ -195,15 +215,26 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	set PLAT[35]=Both
 	set  CFG[35]=%CONFIG%
 	
-
-	for /l %%i in (0,1,35) do (
-		set "_n=!NAME[%%i]!"
-		set "_s=!SLN[%%i]!"
-		set "_p=!PLAT[%%i]!"
-		set "_c=!CFG[%%i]!"
-		call :compile
+	if "%SINGLE_COMPILE%"=="" (
+		echo "Compilando todos los proyectos"
+		for /l %%i in (0,1,35) do (
+			set "_n=!NAME[%%i]!"
+			set "_s=!SLN[%%i]!"
+			set "_p=!PLAT[%%i]!"
+			set "_c=!CFG[%%i]!"
+			call :compile
+		)
+		goto :done
 	)
-goto :done
+	
+:compile_one
+	echo "Compilando solo !NAME[%SINGLE_COMPILE%]!"
+	set "_n=!NAME[%SINGLE_COMPILE%]!"
+	set "_s=!SLN[%SINGLE_COMPILE%]!"
+	set "_p=!PLAT[%SINGLE_COMPILE%]!"
+	set "_c=!CFG[%SINGLE_COMPILE%]!"
+	call :compile
+	goto :done
 
 :compile
 	if /i "%_p%"=="Win32" goto :compile_win
