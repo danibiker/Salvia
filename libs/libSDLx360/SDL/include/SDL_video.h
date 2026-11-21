@@ -522,6 +522,20 @@ extern void SDL_XBOX_GetScreenResolution(int *w, int *h);
    del N64.  Esa diferencia es deriva permanente si el pacing no la conoce. */
 extern float SDL_XBOX_GetRefreshRate(void);
 
+/* Solo Xbox 360.  Refresco del panel forzado con VdSetDisplayModeOverride del
+   kernel, con el mismo ancho, alto y barrido que la salida actual: hz > 0 lo
+   fuerza (p. ej. 50 para juegos PAL) y hz = 0 lo quita.  Con reset hace un
+   Reset del device, que es lo que de verdad cambia la salida; sin el solo
+   cambia lo que dice XGetVideoMode (vale antes de lanzar otro XEX, que aplica
+   el modo al crear su device).  El Reset destruye los recursos D3DPOOL_DEFAULT
+   de los cores que dibujan por hardware.  Devuelve 1 si el kernel acepta el
+   modo y 0 si no lo tiene en su tabla. */
+extern DECLSPEC int SDL_XBOX_SetRefreshOverride(float hz, int reset);
+
+/* Solo Xbox 360.  1 si en el panel de control se ha indicado que la pantalla
+   admite 50 Hz (bit 0x400 de XCONFIG_USER_RETAIL_FLAGS). */
+extern DECLSPEC int SDL_XBOX_DisplaySupports50Hz(void);
+
 /* Contadores del reloj de presentacion por HARDWARE, acumulados desde la
    creacion del device: vblanks vistos y swaps que perdieron su vblank
    (D3DVBLANK_SWAPMISSED).  Contar vblanks contra el reloj de CPU da la tasa de

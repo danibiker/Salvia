@@ -29,6 +29,7 @@
 #include <io/inputsmenu.h>
 #include <io/inputscore.h>
 #include <io/dischelper.h>
+#include <io/refresco50.h>
 #include <so/launcher.h>
 #include <so/soutils.h>
 #include <video/shaderpreset.h>
@@ -758,6 +759,7 @@ static void applyCoreAvInfo(const struct retro_system_av_info& av) {
 				? (float)((av.timing.fps / (double)panel - 1.0) * 100.0) : 0.0f);
 	}
 
+	refresco50AvInfo(av.timing.fps);   //panel a 50 Hz si el core pasa a ir a 50 fps
 	gameMenu->sync->setCoreFps(av.timing.fps);
 	gameMenu->g_audioRate.reset();
 	gameMenu->g_audioRate.init(BUFF_SIZE);
@@ -2633,6 +2635,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	//Cargamos el juego en memoria o lo extraemos al disco
 	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
 	if(!gameLoaded) {
+		refresco50AlFallarCarga();
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		g_currentRompath.clear();
@@ -2685,6 +2688,8 @@ int launchGame(std::string rompath, bool tmpDelete){
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
 	//Iniciando el contador de fps
 	gameMenu->sync->setCoreFps(av_info.timing.fps);
+	//Panel a 50 Hz si el juego es PAL (ver io/refresco50.h)
+	refresco50AlCargar(av_info.timing.fps);
 	//Iniciando el sistema de audio
 	initGameAudio(av_info.timing.sample_rate);
 	/* Semilla de la guarda de delta del recheck: lo que el core declara al
@@ -2865,6 +2870,7 @@ void processFrontendEvents(){
 
 void closeResources() {
 	closeGame();
+	refresco50AlSalir();
 
 	/* Musica: parar el dispositivo ANTES de destruir el reproductor, o el
 	 * callback podria entrar a leer un anillo que ya no existe.  El destructor
@@ -3012,6 +3018,7 @@ static int __declspec(noinline) runGameLoop() {
 				SDL_XBOX_SyncOverlay();
 #endif
 			processFrontendEvents();
+			refresco50Tick();   //cambios del panel a 50 Hz, entre frames
 
 			/* Musica de menu: aqui SOLO se abre o cierra el grifo.  El
 			 * decodificado corre en su propio hilo (IO_THREAD), porque cuando

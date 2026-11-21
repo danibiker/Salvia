@@ -265,6 +265,12 @@ void CfgLoader::initMainConfig(){
 
 	configMain[cfg::lightgunThickness] = cfg::t_cfg_props("lightgunThickness", (int)1);
 	configMain[cfg::lightgunThickness].desc = "#Set the thickness of the lightgun crosshair";
+
+	configMain[cfg::refresh50Hz] = cfg::t_cfg_props("refresh50Hz", (int)REFRESH50_AUTO);
+	configMain[cfg::refresh50Hz].desc = "#Xbox 360 only. Switch the display to 50 Hz while a PAL game (49-51 fps) is running"
+										"\n#REFRESH50_NO        0  never"
+										"\n#REFRESH50_AUTO      1  only if the console settings say the display supports 50 Hz"
+										"\n#REFRESH50_CONFIRM   2  always, and keep it only if confirmed with A within 10 seconds";
 	
 	
 

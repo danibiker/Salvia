@@ -1371,7 +1371,14 @@ void SDL_XBOX_SetAdaptiveVSync(int enabled)
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }
 
-void SDL_XBOX_SetVSync(int enabled)
+/* Reset del device con D3D_PP, rehaciendo los recursos D3DPOOL_DEFAULT del
+ * frontend (los vertex buffers) y el estado D3D que el Reset pierde.  Con
+ * setInterval cambia antes el intervalo de presentacion base; sin el, lo deja
+ * como esta.  Lo usan SDL_XBOX_SetVSync y SDL_XBOX_SetRefreshOverride: en esta
+ * ultima el Reset es lo que aplica el modo de video (D3D llama ahi a
+ * VdSetDisplayMode).  OJO: destruye tambien los recursos D3DPOOL_DEFAULT de
+ * los cores que dibujan por hardware, que no se enteran. */
+static void XBOX_ResetDevice(int setInterval, UINT interval)
 {
 	SDL_VideoDevice *this = current_video;
 	D3DLOCKED_RECT d3dlr;
@@ -1410,8 +1417,8 @@ void SDL_XBOX_SetVSync(int enabled)
 		g_overlay_vb = NULL;
 	}
 
-	/* Modify PresentationInterval */
-	D3D_PP.PresentationInterval = enabled ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
+	/* Intervalo de presentacion base, si se pide */
+	if (setInterval) D3D_PP.PresentationInterval = interval;
 
 	/* Reset device with new presentation parameters */
 	IDirect3DDevice9_Reset(D3D_Device, &D3D_PP);
@@ -1474,6 +1481,65 @@ void SDL_XBOX_SetVSync(int enabled)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 
 	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
+}
+
+void SDL_XBOX_SetVSync(int enabled)
+{
+	XBOX_ResetDevice(1, enabled ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE);
+}
+
+/* ===== REFRESCO DEL PANEL FORZADO ==========================================
+ * Funciones del kernel sin documentar.  Prototipos deducidos de las llamadas
+ * que hacen d3d9.lib (3D estereoscopico) y xav.lib (proteccion de salida del
+ * reproductor de video) y del codigo del kernel 17559:
+ *
+ *   VdSetDisplayModeOverride(ancho, alto, hz, flags, info)
+ *     Pide un modo de la tabla del kernel (0x8005a260 en 17559): region AV,
+ *     tipo de cable, ancho, alto, refresco y barrido tienen que coincidir.
+ *     flags bit 1 (0x2) = progresivo (busca entrelazado = !(flags & 2)).
+ *     info = NULL o _VD_DISPLAY_MODE_OVERRIDE_INFO (solo para el 3D).
+ *     Devuelve != 0 si el modo existe.  (0, 0, 0, 0, NULL) quita el forzado.
+ *     Solo cambia lo que dice XGetVideoMode: la salida cambia en el siguiente
+ *     Reset del device, cuando D3D llama a VdSetDisplayMode.
+ *
+ *   ExGetXConfigSetting(categoria, ajuste, buf, tam, &tamReq)
+ *     XCONFIG_USER_CATEGORY (3), XCONFIG_USER_RETAIL_FLAGS (0x0C): el bit
+ *     0x400 es la respuesta "la pantalla admite 50 Hz" del panel de control
+ *     (el reproductor de video del XDK lo lee como "PAL-50 compatible"). */
+DWORD VdSetDisplayModeOverride(DWORD width, DWORD height, float refreshHz,
+                               DWORD flags, void *pInfo);
+LONG  ExGetXConfigSetting(WORD category, WORD setting, void *pBuffer,
+                          WORD cbBuffer, WORD *pcbRequired);
+
+int SDL_XBOX_DisplaySupports50Hz(void)
+{
+	DWORD retail = 0;
+	WORD  req = 0;
+	if (ExGetXConfigSetting(3, 0x0C, &retail, (WORD)sizeof(retail), &req) < 0 || req < sizeof(retail))
+		return 0;
+	return (retail & 0x400) ? 1 : 0;
+}
+
+int SDL_XBOX_SetRefreshOverride(float hz, int reset)
+{
+	DWORD ret;
+
+	if (hz > 0.0f) {
+		/* Mismo ancho, alto y barrido que la salida actual: solo cambia el
+		 * refresco (en los modos CEA el reloj de pixel es el mismo y solo se
+		 * alarga el total horizontal, p. ej. 2200 -> 2640 en 1080p). */
+		XVIDEO_MODE vm;
+		ZeroMemory(&vm, sizeof(vm));
+		XGetVideoMode(&vm);
+		ret = VdSetDisplayModeOverride(vm.dwDisplayWidth, vm.dwDisplayHeight, hz,
+		                               vm.fIsInterlaced ? 0 : 2, NULL);
+	} else {
+		ret = VdSetDisplayModeOverride(0, 0, 0.0f, 0, NULL);
+	}
+	if (ret == 0) return 0;
+
+	if (reset && D3D_Device) XBOX_ResetDevice(0, 0);
+	return 1;
 }
 
 /* ---- Overlay system ---- */

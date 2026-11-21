@@ -822,6 +822,20 @@ void GestorMenus::rellenarVideoShaderStrings(){
 }
 
 void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
+	#ifdef _XBOX
+	/* Panel a 50 Hz para los juegos PAL (ver io/refresco50.h).  Se persiste el
+	 * indice, asi que el orden es el de REFRESH50_MODES.  Se aplica al cargar el
+	 * siguiente juego; ponerla a "No" con el panel a 50 Hz lo devuelve a 60. */
+	{
+		std::vector<std::string> modos50;
+		modos50.push_back(trOrDefault("menu.video.refresh50.no",      "No"));
+		modos50.push_back(trOrDefault("menu.video.refresh50.auto",    "Auto"));
+		modos50.push_back(trOrDefault("menu.video.refresh50.confirm", "Confirm"));
+		menuVideo->opciones.push_back(new OpcionLista(trOrDefault("menu.video.refresh50", "50 Hz for PAL games"),
+			modos50, &refConfig->configMain[cfg::refresh50Hz].getIntRef()));
+	}
+	#endif
+	
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){

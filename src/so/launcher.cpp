@@ -3,6 +3,7 @@
 #ifdef _XBOX
 	#include <xbox.h>
 	#include <xtl.h>
+	#include <SDL.h>   //SDL_XBOX_SetRefreshOverride
 
 	extern "C" {
 		// Estructura necesaria para las llamadas al Kernel
@@ -31,6 +32,10 @@ int Launcher::launchXboxWin(const std::string& rutaCompletaExe, const std::strin
 		if (GetFileAttributes(rutaCompletaExe.c_str()) != 0xFFFFFFFF){
 			if (!parametros.empty())
 				XSetLaunchData((PVOID)parametros.c_str(), (DWORD)parametros.length() + 1);
+			/* Si el panel esta forzado a 50 Hz (io/refresco50.h), quitarlo antes de
+			 * lanzar.  Sin Reset: el siguiente ejecutable aplica el modo al crear su
+			 * device.  Sin forzado activo no hace nada. */
+			SDL_XBOX_SetRefreshOverride(0.0f, 0);
 			XLaunchNewImage(rutaCompletaExe.c_str(), 0);
 			return 0;
 		}

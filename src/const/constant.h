@@ -470,6 +470,16 @@ enum SYNC_TYPES{
 	SYNC_NONE               // sin espera y sin vsync
 };
 
+/* Panel a 50 Hz para los juegos PAL (solo Xbox 360, ver io/refresco50.h).  Se
+ * persiste el indice: el orden tiene que coincidir con el de la opcion del
+ * menu de video. */
+enum REFRESH50_MODES{
+	REFRESH50_NO = 0,       // nunca
+	REFRESH50_AUTO,         // si el panel de control dice que la pantalla admite 50 Hz
+	REFRESH50_CONFIRM,      // siempre, y se mantiene solo si se confirma en 10 s
+	REFRESH50_MAX
+};
+
 /* SDL 1.2: Definir mascaras segun el orden de bytes del sistema */
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     // Formato ARGB (Tipico en PowerPC / Xbox 360)

@@ -131,6 +131,17 @@ void Sync::resetGame() {
 	configurado        = false;
 }
 
+/* Tras un Reset del device D3D (p. ej. al cambiar el refresco del panel): el
+ * Reset devuelve el intervalo de presentacion y el present inmediato a los
+ * valores de D3D_PP, y configure() solo los aplica cuando cambian.  Se olvida
+ * lo aplicado para que se reapliquen, y se reconfigura para releer el
+ * refresco. */
+void Sync::invalidateDeviceState() {
+	intervalo   = -1;
+	adaptativo  = -1;
+	configurado = false;
+}
+
 /* Recalcula la configuracion si ha cambiado el modo pedido, el fps del core,
  * el avance rapido o si se entra o se sale del juego. */
 void Sync::actualizaConfig(bool enJuego) {

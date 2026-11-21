@@ -71,6 +71,7 @@ public:
     bool isFastForward() const { return ffActivo; }
     void setAudioStatusCallback(retro_audio_buffer_status_callback_t cb);
     void resetGame();                             // al cerrar el juego
+    void invalidateDeviceState();                 // tras un Reset del device D3D
 
     /* --- Por frame, en este orden ------------------------------------------ */
     void beginGameFrame(size_t audioUsado, size_t audioCapacidad); // antes de retro_run

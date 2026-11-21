@@ -17,6 +17,7 @@ namespace cfg {
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
 			showEmptyEmulators, overscan_x, overscan_y, resolutionIndex,
 			lightgunCrossEnabled, lightgunCrossSize, lightgunThickness,
+			refresh50Hz,
 			lastOptSel,
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
