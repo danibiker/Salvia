@@ -272,7 +272,8 @@ void CfgLoader::initMainConfig(){
 										"\n#REFRESH50_AUTO      1  only if the console settings say the display supports 50 Hz"
 										"\n#REFRESH50_CONFIRM   2  always, and keep it only if confirmed with A within 10 seconds";
 	
-	
+	configMain[cfg::smoothFonts] = cfg::t_cfg_props("smoothFonts", (bool) true);
+	configMain[cfg::smoothFonts].desc = "#Set the font smoothing and menu's transparencies";
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));

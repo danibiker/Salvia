@@ -1,5 +1,6 @@
 #include <uiobjects/textarea.h>
 #include <io/dirutil.h>
+#include <io/cfgloader.h>
 #include <font/utf8util.h>
 
 // El BOM UTF-8 (EF BB BF) no tiene glifo y hace que SDL_ttf falle con
@@ -484,11 +485,11 @@ void TextArea::draw(SDL_Surface *video_page){
 SDL_Rect TextArea::drawTextAreaTransparent(SDL_Surface* surface, TTF_Font* font, t_line& line, int x, int y, SDL_Color color, int bg, JFY_TYPE& justifyHelper){
 	if (font && !line.text.empty()) {
 		if (line.lineSrf == NULL){
-			#ifdef NO_BLEND 
-			line.lineSrf = Fonts::renderUtf8Solid(font, line.text.c_str(), color);
-			#else
-			line.lineSrf = Fonts::renderUtf8Blended(font, line.text.c_str(), color);
-			#endif
+			if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
+				line.lineSrf = Fonts::renderUtf8Solid(font, line.text.c_str(), color);
+			else
+				line.lineSrf = Fonts::renderUtf8Blended(font, line.text.c_str(), color);
+			
 			if (line.lineSrf){
 				line.dest.w = line.lineSrf->w;
 				line.dest.h = line.lineSrf->h;

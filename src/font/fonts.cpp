@@ -4,6 +4,7 @@
 #include "utf8util.h"
 #include <font/Arimo_Regular.ttf.h>
 #include <utils/logger.h>
+#include <io/cfgloader.h>
 #include <stdio.h>
 
 Fileio Fonts::fileio;
@@ -502,11 +503,11 @@ SDL_Rect Fonts::drawText(SDL_Surface* surface, TTF_Font* font, const char *s, in
 	SDL_Rect dest = { x, y, 0, 0 };
 	if (font && s != NULL && s[0] != '\0') {
 		ScopedFontLock lock(mutex);
-		#ifdef NO_BLEND
-		SDL_Surface* textSurf = Fonts::renderUtf8Solid(font, s, color);
-		#else
-		SDL_Surface* textSurf = Fonts::renderUtf8Blended(font, s, color);
-		#endif
+		SDL_Surface* textSurf = NULL;
+		if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
+			textSurf = Fonts::renderUtf8Solid(font, s, color);
+		else
+			textSurf = Fonts::renderUtf8Blended(font, s, color);
 
 		if (textSurf) {
 			dest.w = textSurf->w;
@@ -527,11 +528,12 @@ SDL_Rect Fonts::drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const 
 	SDL_Rect dest = { x, y, 0, 0 };
 	if (font && s != NULL && s[0] != '\0') {
 		ScopedFontLock lock(mutex);
-		#ifdef NO_BLEND
-		SDL_Surface* textSurf = Fonts::renderUtf8Solid(font, s, color);
-		#else
-		SDL_Surface* textSurf = Fonts::renderUtf8Blended(font, s, color);
-		#endif
+		SDL_Surface* textSurf = NULL;
+		if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
+			textSurf = Fonts::renderUtf8Solid(font, s, color);
+		else
+			textSurf = Fonts::renderUtf8Blended(font, s, color);
+		
 		if (textSurf) {
 			dest.w = textSurf->w;
 			dest.h = textSurf->h;

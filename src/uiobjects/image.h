@@ -54,6 +54,8 @@ class Image : public Object{
 		
 
 		static void convertirGrises16Bits(SDL_Surface*);
+		static void createRectAlphaFilled(SDL_Surface*& selecAlphaRec, SDL_Rect& rectElem, SDL_PixelFormat* format, enumColors color, bool border = false);
+		static void blendSurfaceOver(SDL_Surface* src, SDL_Surface* dst, int dstX, int dstY);
         static Dimension relacion(const Dimension &src, const Dimension &dst );
         static Dimension relacionCover(const Dimension &src, const Dimension &dst );
         static Dimension centrado(const Dimension &src, const Dimension &dst);

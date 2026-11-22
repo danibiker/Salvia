@@ -2,18 +2,16 @@
 <!--http://longhorn.tassig.com/downloads/roms/bios-->
 
 <system>
-	<file name="3DO" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2F3DO%20Company%2C%20The%20-%203DO.zip">
+	<file name="3DO" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/3DO%20Company/3DO/">
 		<dir/>
-		<bios crc="3090340506">3do_arcade_saot.bin</bios>
-		<bios crc="3069510283">goldstar.bin</bios>
-		<bios crc="3368615817">panafz1.bin</bios>
-		<bios crc="1478765806">panafz10.bin</bios>
-		<bios crc="613795072">panafz10e-anvil.bin</bios>
-		<bios crc="2585289249">panafz10e-anvil-patched.bin</bios>
-		<bios crc="4285764574">panafz10ja-anvil-kanji.bin</bios>
-		<bios crc="588148715">panafz10-patched.bin</bios>
-		<bios crc="2833859708">panafz1-kanji.bin</bios>
-		<bios crc="3586901257">sanyotry.bin</bios>
+		<bios crc="3090340506" url="3do_arcade_saot.bin">3do_arcade_saot.bin</bios>
+		<bios crc="3069510283" url="goldstar.bin">goldstar.bin</bios>
+		<bios crc="3368615817" url="panafz1.bin">panafz1.bin</bios>
+		<bios crc="1478765806" url="panafz10.bin">panafz10.bin</bios>
+		<bios crc="613795072" url="panafz10e-anvil.bin">panafz10e-anvil.bin</bios>
+		<bios crc="4285764574" url="panafz10ja-anvil-kanji.bin">panafz10ja-anvil-kanji.bin</bios>
+		<bios crc="2833859708" url="panafz1-kanji.bin">panafz1-kanji.bin</bios>
+		<bios crc="3586901257" url="sanyotry.bin">sanyotry.bin</bios>
 	</file>
 	<file name="Atari800" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Atari/400-800/">
 		<dir/>
@@ -24,13 +22,13 @@
 		<bios crc="514801666" url="BB01R4_OS.ROM">BB01R4_OS.ROM</bios>
 		<bios crc="3184132603" url="XEGAME.ROM">XEGAME.ROM</bios>
 	</file>
-	<file name="Atari5200" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FAtari%20-%205200.zip">
+	<file name="Atari5200" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Atari/5200/">
 		<dir/>
-		<bios crc="1112069091">5200.rom</bios>
+		<bios crc="1112069091" url="5200.rom">5200.rom</bios>
 	</file>
-	<file name="Atari - Lynx" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FAtari%20-%20Lynx.zip">
+	<file name="Atari - Lynx" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Atari/Lynx/">
 		<dir/>
-		<bios crc="228015261">lynxboot.img</bios>
+		<bios crc="228015261" url="Atari_LYNX_boot.img">lynxboot.img</bios>
 	</file>
 	<file name="BlueMSX" url="https://github.com/danibiker/Salvia/raw/refs/heads/main/libretro/blueMSX/system/bluemsx.zip">
 		<bios crc="1547875793" url="Databases/colecodb.xml">Databases/colecodb.xml</bios>
@@ -388,7 +386,6 @@
 		<bios crc="1064675108" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fhiscore.dat">hiscore.dat</bios>
 		<bios crc="4131963310" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fhistory.dat">history.dat</bios>
 		<bios crc="104390311" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Finfo.txt">info.txt</bios>
-		<bios crc="4262782105" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fmame2003-plus.xml">mame2003-plus.xml</bios>
 	</file>
 	<file name="FBNeo And Mame Samples" url="https://archive.org/download/neo-geo-mame-finalburn-neo-bios-and-cores/Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores.rar/">
 		<bios crc="1792662714" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Ffbneo%2Fsamples%2Fblockade.zip">fbneo/samples/blockade.zip</bios>
@@ -500,50 +497,49 @@
 		<bios crc="2716318378" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fzaxxon.zip">mame2003-plus/samples/zaxxon.zip</bios>
 		<bios crc="2583364823" url="Neo%20Geo%20-%20MAME%20-%20Finalburn%20NEO%20-%20Bios%20and%20Cores%2Fbios%2Fmame2003-plus%2Fsamples%2Fzektor.zip">mame2003-plus/samples/zektor.zip</bios>
 	</file>
-	<file name="NEC - PC Engine - TurboGrafx 16 - SuperGrafx" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNEC%20-%20PC%20Engine%20-%20TurboGrafx%2016%20-%20SuperGrafx.zip">
-		<bios crc="1369517456">gecard.pce</bios>
-		<bios crc="1369517456">gexpress.pce</bios>
-		<bios crc="1067423140">syscard1.pce</bios>
-		<bios crc="674985184">syscard2.pce</bios>
-		<bios crc="4280966851">syscard2u.pce</bios>
-		<bios crc="1838838767">syscard3.pce</bios>
-		<bios crc="727414270">syscard3u.pce</bios>
+	<file name="NEC - PC Engine - TurboGrafx 16 - SuperGrafx" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/NEC/PC%20Engine/">
+		<bios crc="1369517456" url="gecard.pce">gecard.pce</bios>
+		<bios crc="1067423140" url="syscard1.pce">syscard1.pce</bios>
+		<bios crc="674985184" url="syscard2.pce">syscard2.pce</bios>
+		<bios crc="4280966851" url="syscard2u.pce">syscard2u.pce</bios>
+		<bios crc="1838838767" url="syscard3.pce">syscard3.pce</bios>
+		<bios crc="727414270" url="syscard3u.pce">syscard3u.pce</bios>
 	</file>
-	<file name="Nintendo - Game Boy Advance" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNintendo%20-%20Game%20Boy%20Advance.zip">
+	<file name="Nintendo - Game Boy Advance" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Nintendo/Game%20Boy%20Advance/">
 		<dir/>
-		<bios crc="2174186293">gba_bios.bin</bios>
+		<bios crc="2174186293" url="GBA_bios.rom">gba_bios.bin</bios>
 	</file>
-	<file name="Nintendo - Nintendo Entertainment System" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FNintendo%20-%20Nintendo%20Entertainment%20System.zip">
+	<file name="Nintendo - Nintendo Entertainment System" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Nintendo/">
 		<dir/>
-		<bios crc="1583381967">disksys.rom</bios>
-		<bios crc="3954317676">NstDatabase.xml</bios>
+		<bios crc="1307724396" url="Famicom%20Disk%20System/FDS_disksys-twinfc.rom">disksys.rom</bios>
+		<bios crc="3954317676" url="NES/.variants/NstDatabase.xml.26322f18">NstDatabase.xml</bios>
 	</file>
 	<file name="PRBOOM" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Id%20Software/Doom/">
 		<bios crc="2775915417" url="prboom.wad">prboom.wad</bios>
 	</file>
-	<file name="Sega - 32X" url="https://archive.org/download/SegaGenesisBios/Sega%20Genesis%20Bios.zip">
+	<file name="Sega - 32X" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Sega/32X/">
 		<dir/>
-		<bios crc="1544743656">32X_G_BIOS.BIN</bios>
-		<bios crc="3218743269">32X_S_BIOS.BIN</bios>
-		<bios crc="3718006456">32X_M_BIOS.BIN</bios>
+		<bios crc="1544743656" url="32X_G_BIOS.BIN">32X_G_BIOS.BIN</bios>
+		<bios crc="3218743269" url="32X_S_BIOS.BIN">32X_S_BIOS.BIN</bios>
+		<bios crc="3718006456" url="32X_M_BIOS.BIN">32X_M_BIOS.BIN</bios>
 	</file>
-	<file name="Sega - Mega CD - Sega CD" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSega%20-%20Mega%20CD%20-%20Sega%20CD.zip">
+	<file name="Sega - Mega CD - Sega CD" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Sega/Mega%20CD/">
 		<dir/>
-		<bios crc="1385873754">bios_CD_E.bin</bios>
-		<bios crc="2637015282">bios_CD_J.bin</bios>
-		<bios crc="3335586408">bios_CD_U.bin</bios>
+		<bios crc="1297922266" url="eu_mcd2_9306.bin">bios_CD_E.bin</bios>
+		<bios crc="3714894194" url="jp_mcd2_921222.bin">bios_CD_J.bin</bios>
+		<bios crc="2674877046" url="us_scd2_9306.bin">bios_CD_U.bin</bios>
 	</file>
-	<file name="Sega - Mega Drive - Genesis" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSega%20-%20Mega%20Drive%20-%20Genesis.zip">
+	<file name="Sega - Mega Drive - Genesis" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Sega/Mega%20Drive/.variants/">
 		<dir/>
-		<bios crc="1065913588">bios_MD.bin</bios>
+		<bios crc="1600021739" url="bios_MD.bin.453fca4e">bios_MD.bin</bios>
 	</file>
-	<file name="Sharp - X68000" url="https://archive.org/download/2019-07-21-retro-arch-libretro-bios/2019_07_21_RetroArch_Libretro_BIOS.zip/Libretro%20-%20Retroarch%20BIOS%20%282019-07-21%29%2FSharp%20-%20X68000.zip">
+	<file name="Sharp - X68000" url="https://github.com/Abdess/retrobios/raw/refs/heads/main/bios/Sharp/X68000/">
 		<dir>keropi</dir>
-		<bios crc="2670826993">cgrom.dat</bios>
-		<bios crc="1925051698">iplrom.dat</bios>
-		<bios crc="3908631981">iplrom30.dat</bios>
-		<bios crc="1820259848">iplromco.dat</bios>
-		<bios crc="15643656">iplromxv.dat</bios>
+		<bios crc="2670826993" url="cgrom.dat">cgrom.dat</bios>
+		<bios crc="1925051698" url="iplrom.dat">iplrom.dat</bios>
+		<bios crc="3908631981" url="iplrom30.dat">iplrom30.dat</bios>
+		<bios crc="1820259848" url="iplromco.dat">iplromco.dat</bios>
+		<bios crc="15643656" url="iplromxv.dat">iplromxv.dat</bios>
 	</file>
 	<file name="Scummvm" url="https://github.com/libretro/scummvm/raw/refs/heads/master/">
 		<bios crc="178309245" url="gui/themes/gui-icons.dat">gui-icons.dat</bios>

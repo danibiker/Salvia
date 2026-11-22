@@ -988,7 +988,7 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 		if (filterAlphaRec != NULL){
 			SDL_FreeSurface(filterAlphaRec);
 		}
-		Constant::createRectAlphaFilled(filterAlphaRec, rectElem, overlay->format, clBkgMenu, true);
+		Image::createRectAlphaFilled(filterAlphaRec, rectElem, overlay->format, clBkgMenu, true);
 	}
 
 	JFY_TYPE justifyCenter(JFY_CENTER, w);
@@ -2129,27 +2129,27 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 															overlay->format->Gmask, 
 															overlay->format->Bmask, 
 															overlay->format->Amask);
-	#ifdef NO_BLEND
+	if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
 		SDL_FillRect(msg.cache, NULL, Constant::colors[clPaleBlue].color);
-	#else
+	else {
 		roundedBoxRGBA(msg.cache, 0, 0, msg.cache->w, msg.cache->h, 4, 
 			Constant::colors[clPaleBlue].sdlColor.r,
 			Constant::colors[clPaleBlue].sdlColor.g,
 			Constant::colors[clPaleBlue].sdlColor.b,
 			0xC0);
-	#endif
+	}
     
     if (msg.cache) {
         msg.rect.x = 5;
         // La posicion Y se calculara dinamicamente al dibujar para que se apilen
         msg.rect.w = msg.cache->w + gap;
         msg.rect.h = face_h_big + gap;
-		#ifdef NO_BLEND
+		if (!CfgLoader::configMain[cfg::smoothFonts].valueBool){
 			SDL_Rect rect = {gap / 2, gap / 2, 0, 0};
 			SDL_BlitSurface(line, NULL, msg.cache, &rect);
-		#else
-			Constant::blendSurfaceOver(line, msg.cache, gap / 2, gap / 2);
-		#endif
+		} else {
+			Image::blendSurfaceOver(line, msg.cache, gap / 2, gap / 2);
+		}
 		SDL_SetAlpha(msg.cache, SDL_RLEACCEL, 0xFF);
         messages.push_back(msg);
     }
@@ -2374,16 +2374,16 @@ void GameMenu::showAchievementMessage(const std::string &line1Str, const std::st
 
 		/* Mezclamos texto y badge nosotros mismos para que queden opacos:
 		 * SDL_BlitSurface conservaria el alfa 0xC0 del fondo. */
-		Constant::blendSurfaceOver(line1, achievement_surface.srf, badgeW + badgePad * 2, 0);
-		Constant::blendSurfaceOver(line2, achievement_surface.srf, badgeW + badgePad * 2, line_height);
-		Constant::blendSurfaceOver(line3, achievement_surface.srf, badgeW + badgePad * 2, line_height * 2);
+		Image::blendSurfaceOver(line1, achievement_surface.srf, badgeW + badgePad * 2, 0);
+		Image::blendSurfaceOver(line2, achievement_surface.srf, badgeW + badgePad * 2, line_height);
+		Image::blendSurfaceOver(line3, achievement_surface.srf, badgeW + badgePad * 2, line_height * 2);
 	
 		SDL_FreeSurface(line1);
 		SDL_FreeSurface(line2);
 		SDL_FreeSurface(line3);
 
 		if (badge != NULL){
-			Constant::blendSurfaceOver(badge, achievement_surface.srf, badgePad, badgePad);
+			Image::blendSurfaceOver(badge, achievement_surface.srf, badgePad, badgePad);
 		}
 
 		// Copia directa (sin SDL_SRCALPHA): el blit debe copiar también el canal

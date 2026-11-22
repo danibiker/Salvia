@@ -6,7 +6,9 @@
 #include <gfx/SDL_gfxPrimitives.h>
 #include <gfx/gfx_utils.h>
 #include <io/cfgloader.h>
+#include <uiobjects/image.h>
 #include <ostream>
+
 #ifdef _XBOX
 	#include <xtl.h> // Cabecera obligatoria del XDK de Xbox
 #endif
@@ -234,7 +236,7 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 		if (selecAlphaRec != NULL){
 			SDL_FreeSurface(selecAlphaRec);
 		}
-		Constant::createRectAlphaFilled(selecAlphaRec, rectElem, video_page->format, clBkgMenu, true);
+		Image::createRectAlphaFilled(selecAlphaRec, rectElem, video_page->format, clBkgMenu, true);
 	}
 
     // Si cambio la seleccion: invalida la cache del elemento anterior y del nuevo
@@ -310,11 +312,11 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 
         if (game->cache == NULL) {
             // Cache no existe -> renderizar
-			#ifdef NO_BLEND 
-			game->cache = Fonts::renderUtf8Solid(fontMenu, line.c_str(), lineTextColor);
-			#else
-			game->cache = Fonts::renderUtf8Blended(fontMenu, line.c_str(), lineTextColor);
-			#endif
+			if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
+				game->cache = Fonts::renderUtf8Solid(fontMenu, line.c_str(), lineTextColor);
+			else
+				game->cache = Fonts::renderUtf8Blended(fontMenu, line.c_str(), lineTextColor);
+			
 			//Huge speedup if the background is static
 			// 1. Crear superficie optimizada de 8 bits con Anti-aliasing
 			//game->cache = TTF_RenderUTF8_Shaded(fontMenu, line.c_str(), lineTextColor, Constant::colors[clBlack].sdlColor);
@@ -393,15 +395,16 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
 			SDL_FreeSurface(navPath);
 			navPath = NULL;
 		}
-#ifdef NO_BLEND
-        SDL_Surface *txtNavPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
-#else
-        SDL_Surface *txtNavPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
-#endif
+		SDL_Surface *txtNavPath = NULL;
+		if (!CfgLoader::configMain[cfg::smoothFonts].valueBool)
+			txtNavPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+		else
+			txtNavPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+
         TTF_SetFontStyle(fontMenu, prevStyle);
 
 		//Creamos una superficie transparente de color negro
-		Constant::createRectAlphaFilled(navPath, rectNavPath, video_page->format, clBG, true);
+		Image::createRectAlphaFilled(navPath, rectNavPath, video_page->format, clBG, true);
 
         if (!txtNavPath || !navPath) 
 			return;

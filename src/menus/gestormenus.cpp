@@ -303,6 +303,9 @@ void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig)
 	//--------Opcion de mostrar emuladores vacios---------
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
 
+	//--------Opcion de habilitar el suavizado de fuentes y transparencias ---------
+	menuEmulation->opciones.push_back(new OpcionBool(trOrDefault("menu.options.fontsmoothing", "Font smoothing"), &refConfig->configMain[cfg::smoothFonts].getBoolRef()));
+
 	//--------Menu de gestion de discos---------
 	menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
 	poblarMenuDiscos(BOOT_WITH_DISK);
@@ -2709,11 +2712,11 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	//Create or re-create the alpha rect only when needed
 	SDL_Rect rectSelElem = {0, 0, this->getW() - marginX, face_h};
 	if (selecAlphaRec == NULL){
-		Constant::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
+		Image::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
 	} else if (selecAlphaRec->w != rectSelElem.w || selecAlphaRec->h != rectSelElem.h){
 		SDL_FreeSurface(selecAlphaRec);
 		selecAlphaRec = NULL;
-		Constant::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
+		Image::createRectAlphaFilled(selecAlphaRec, rectSelElem, video_page->format, clBkgMenu, true);
 	}
 
 	//Drawing the menu options

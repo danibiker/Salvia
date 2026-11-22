@@ -1,5 +1,6 @@
 #include <http/httputil.h>
 #include <stdarg.h>
+#include <io/dirutil.h>
 
 static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
 volatile long CurlClient::g_abortScrapping;
@@ -160,9 +161,9 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	// Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
     //curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);   // solo conectar
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);   // solo conectar
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 200L); // si baja de 200 B/s...
-	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);   // ...durante 20s -> abortar
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L);   // ...durante 10s -> abortar
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
 
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -332,11 +333,20 @@ bool CurlClient::fetchFileInternal(const std::string& url, const std::string& lo
 									t_lockingStr *progressStrPtr) {
 	CURL *curl = curl_easy_init();
 	if (!curl) return false;
+	dirutil dir;
+
+	//Comprobar si existe el directorio
+	const std::string folder = dir.getFolder(localPath);
+	if (!dirutil::dirExists(folder.c_str())){
+		LOG_DEBUG("Creating parent dir %s", folder.c_str());
+		dir.createDirRecursive(folder.c_str());
+	}
 
 	// Abrimos el archivo en modo binario para escritura
 	FILE* fp = fopen(localPath.c_str(), "wb");
 	if (!fp) {
 		curl_easy_cleanup(curl);
+		LOG_DEBUG("File can't be openned for writing");
 		return false;
 	}
 
@@ -377,9 +387,9 @@ bool CurlClient::fetchFileInternal(const std::string& url, const std::string& lo
 	// corto, abortamos por ESTANCAMIENTO: si el ritmo baja de 200 B/s durante 20s se
 	// cancela, pero una descarga lenta que PROGRESA llega a completarse. Dejamos un tope
 	// absoluto amplio de seguridad y un limite para la fase de conexion.
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);   // solo conectar
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);   // solo conectar
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 200L); // si baja de 200 B/s...
-	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);   // ...durante 20s -> abortar
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L);   // ...durante 10s -> abortar
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
 	//No queremos que la descarga se aborte a los 180 segundos. Confiamos en el limite de velocidad
 	//y por eso comentamos la línea
