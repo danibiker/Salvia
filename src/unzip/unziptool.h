@@ -282,6 +282,32 @@ inline unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::strin
     return ret;
 }
 
+/* Ruta en minusculas y con '\' como separador.  En el zip las rutas van con
+ * '/' ("Databases/colecodb.xml") y las de destino con '\', y asi se comparan. */
+inline std::string normalizeZipPath(const std::string& path) {
+    std::string s = path;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '/') s[i] = '\\';
+        else s[i] = (char)::tolower((unsigned char)s[i]);
+    }
+    return s;
+}
+
+/* true si 'path' acaba en 'suffix' y el sufijo empieza en un componente entero:
+ * "x:\system\databases\colecodb.xml" acaba en "databases\colecodb.xml" y en
+ * "colecodb.xml", pero no en "abases\colecodb.xml".  Las dos ya normalizadas. */
+inline bool pathEndsWithComponents(const std::string& path, const std::string& suffix) {
+    if (suffix.empty() || suffix.size() > path.size()) return false;
+    const std::size_t start = path.size() - suffix.size();
+    if (path.compare(start, suffix.size(), suffix) != 0) return false;
+    return start == 0 || path[start - 1] == '\\';
+}
+
+/* Extrae del zip los ficheros de filesToExtract (rutas completas de destino).
+ * Una entrada del zip se extrae en la ruta de destino que ACABA en su ruta
+ * relativa dentro del zip: "Databases/colecodb.xml" va a
+ * "...\system\Databases\colecodb.xml", y una entrada en la raiz del zip
+ * ("scph1001.bin") a la ruta que acabe en ese nombre, como hasta ahora. */
 inline unzippedFileInfo extractFiles(const std::string& filepath, const std::vector<std::string>& filesToExtract) {
     dirutil dir;
 	unzippedFileInfo ret;
@@ -316,6 +342,13 @@ inline unzippedFileInfo extractFiles(const std::string& filepath, const std::vec
     unzFile uf = unzOpen(filepath.c_str());
     if (!uf) return ret;
 
+    // Las rutas de destino se normalizan una sola vez, no en cada entrada del zip
+    std::vector<std::string> targets;
+    targets.reserve(filesToExtract.size());
+    for (std::size_t i = 0; i < filesToExtract.size(); ++i) {
+        targets.push_back(normalizeZipPath(filesToExtract[i]));
+    }
+
     bool found = false;
     int res = unzGoToFirstFile(uf);
     while (res == UNZ_OK) {
@@ -323,25 +356,26 @@ inline unzippedFileInfo extractFiles(const std::string& filepath, const std::vec
         unz_file_info fileInfo;
         unzGetCurrentFileInfo(uf, &fileInfo, filenameInZip, sizeof(filenameInZip), NULL, 0, NULL, 0);
 
-        std::string currentFile = filenameInZip;
-        std::transform(currentFile.begin(), currentFile.end(), currentFile.begin(), ::tolower);
+        // Ruta relativa dentro del zip, normalizada como las de destino
+        std::string currentFile = normalizeZipPath(filenameInZip);
 
-        // Comprobacion del nombre
+        // Comprobacion de la ruta.  Las entradas de directorio ("Databases/") no
+        // se extraen: la carpeta se crea al escribir el primer fichero que tenga.
         bool match = false;
-        for (std::size_t i = 0; i < filesToExtract.size(); ++i) {
-			std::string fileNameInZip = dir.getFileName(filesToExtract[i]);
-			std::transform(fileNameInZip.begin(), fileNameInZip.end(), fileNameInZip.begin(), ::tolower);
-            if (fileNameInZip == currentFile) {
-                match = true;
-				ret.extractedPath = filesToExtract[i];
-                break;
+        if (!currentFile.empty() && currentFile[currentFile.size() - 1] != '\\') {
+            for (std::size_t i = 0; i < targets.size(); ++i) {
+                if (pathEndsWithComponents(targets[i], currentFile)) {
+                    match = true;
+                    ret.extractedPath = filesToExtract[i];
+                    break;
+                }
             }
         }
 
         if (match) {
             if (unzOpenCurrentFile(uf) == UNZ_OK) {
                 ret.romsize = fileInfo.uncompressed_size;
-                ret.fileNameInsideZip = currentFile;
+                ret.fileNameInsideZip = filenameInZip;
 
 				std::string extractDir = dir.getFolder(ret.extractedPath);
 				if (!extractDir.empty() && !dir.dirExists(extractDir.c_str())){
