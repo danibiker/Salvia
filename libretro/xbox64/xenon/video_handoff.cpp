@@ -538,6 +538,41 @@ extern "C" void xenon64_video_frame_end(void)
         s_dev->EndScene();
 #endif
 
+    /* >>> EL BACK BUFFER SE PIDE AL DEVICE EN CADA FRAME.
+     *
+     * Un Reset del device (el frontend lo hace al cambiar el refresco del
+     * panel a 50 Hz para los juegos PAL, y al conmutar el vsync con
+     * SDL_XBOX_SetVSync) SUSTITUYE el back buffer por uno nuevo.  Con el
+     * puntero cacheado en xenon64_video_init se le devolvia al frontend una
+     * superficie que ya no es la suya: su quad, su menu y su Present iban a
+     * otra memoria de la EDRAM y la imagen salia partida en bloques, o
+     * negra.  pcsxr-360 (SwanStation HW) no lo sufre porque pide el back
+     * buffer cada vez que lo usa.
+     *
+     * GetBackBuffer es barato.  Si es el mismo, se suelta la referencia
+     * extra; si ha cambiado, se cambia el cacheado (que xenon64_video_shutdown
+     * suelta igual que antes).  El reparto de la EDRAM de xenon64_video_init
+     * no cambia: el back buffer nuevo tiene el mismo tamano. */
+    {
+        IDirect3DSurface9 *bb = NULL;
+        if (SUCCEEDED(s_dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
+        {
+            if (bb != s_backbuf)
+            {
+#if XBOX64_TRAZAS
+                vh_log("[VH] el back buffer del frontend ha cambiado (Reset del device): se usa el nuevo");
+#endif
+                if (s_backbuf)
+                    s_backbuf->Release();
+                s_backbuf = bb;
+            }
+            else
+            {
+                bb->Release();
+            }
+        }
+    }
+
     if (s_backbuf)
     {
         s_dev->SetRenderTarget(0, s_backbuf);

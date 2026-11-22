@@ -1618,22 +1618,31 @@ void GameMenu::processFrontendEvents(HOTKEYS_LIST hotkey){
 			showSystemMessage(msg, 3000);
 	}
 
+	/* Lo que publica el hilo de guardado, copiado con el mutex: el hilo escribe
+	 * esos std::string desde otro hilo y leerlos sin el (como se hacia con
+	 * savingMessage en cada frame) es una carrera que puede corromperlos.  Se
+	 * copia dentro y se usa fuera, para no tener el mutex mientras se pinta. */
+	std::string toast, guardando;
+	float progresoGuardado;
+	bool capturaGuardada;
+	SDL_mutexP(statesSram.saveContext.g_saveQueue.saveMutex);
+	toast.swap(statesSram.saveContext.g_saveQueue.toastMessage);   //se la lleva y la deja vacia
+	capturaGuardada  = statesSram.saveContext.g_saveQueue.screenshotSaved;
+	statesSram.saveContext.g_saveQueue.screenshotSaved = false;
+	guardando        = statesSram.saveContext.g_saveQueue.savingMessage;
+	progresoGuardado = statesSram.saveContext.g_saveQueue.savingProgress;
+	SDL_mutexV(statesSram.saveContext.g_saveQueue.saveMutex);
+
 	//Second, check if there is some save message from the thread
-	if (!statesSram.saveContext.g_saveQueue.toastMessage.empty()){
-		SDL_mutexP(statesSram.saveContext.g_saveQueue.saveMutex);
-		showSystemMessage(statesSram.saveContext.g_saveQueue.toastMessage, 3000);
-		statesSram.saveContext.g_saveQueue.toastMessage = "";
-		SDL_mutexV(statesSram.saveContext.g_saveQueue.saveMutex);
-	}
+	if (!toast.empty())
+		showSystemMessage(toast, 3000);
 
 	//Thirdly, check if there is an screenshot saved
-	if (statesSram.saveContext.g_saveQueue.screenshotSaved){
+	if (capturaGuardada)
 		configMenus->poblarPartidasGuardadas(getCfgLoader(), romPaths.rompath);
-		statesSram.saveContext.g_saveQueue.screenshotSaved = false;
-	}
-	
+
 	//Finaly, show a savestate progress message
-	showProgressMessage(statesSram.saveContext.g_saveQueue.savingMessage, statesSram.saveContext.g_saveQueue.savingProgress, 3000);
+	showProgressMessage(guardando, progresoGuardado, 3000);
 
 	// Procesamos hotkeys
 	processHotkeys(hotkey);

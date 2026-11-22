@@ -32,9 +32,13 @@
  *     (Launcher): se quita sin Reset, el siguiente ejecutable aplica el modo
  *     al crear su device.
  *
- * Los cores que dibujan por hardware no se tocan: el Reset destruye sus
- * recursos D3D y Salvia no tiene el context_destroy/context_reset de libretro
- * para avisarles.
+ * Cores que dibujan por hardware (los que piden el device, env 30002): en la
+ * 360 el Reset no destruye texturas ni superficies, pero SUSTITUYE el back
+ * buffer.  Un core que lo guarde se queda con el viejo y la imagen sale
+ * partida en bloques o negra; tiene que pedirlo al device cada vez que lo use.
+ * pcsxr-360 (SwanStation HW) siempre lo ha hecho, y Xenon64 lo hace desde
+ * xenon64_video_frame_end.  Todos los Reset de aqui ocurren entre frames, con
+ * retro_run ya devuelto.
  * ========================================================================== */
 
 #ifdef _XBOX
@@ -82,12 +86,6 @@ static WORD r50LeeBotones() {
 }
 
 static void r50Aplicar() {
-	int w = 0, h = 0;
-	if (SDL_XBOX_hasExternalGameTexture(&w, &h)) {
-		LOG_INFO("Refresco 50 Hz: el core dibuja por hardware, se deja el panel como esta");
-		r50Estado = R50_NADA;
-		return;
-	}
 	if (!SDL_XBOX_SetRefreshOverride(50.0f, 1)) {
 		LOG_INFO("Refresco 50 Hz: el kernel no tiene un modo de 50 Hz para esta salida");
 		r50Estado = R50_NADA;

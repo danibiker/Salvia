@@ -226,6 +226,40 @@ class StateSram{
 			return baseStatePath + extension; // ej: "juego.state1"
 		}
 
+		/* Texto traducido, o el de respaldo si la clave no esta en el .ini
+		 * (LanguageManager devuelve "[clave]"). */
+		static std::string texto(const char* clave, const char* porDefecto) {
+			std::string s = LanguageManager::instance()->get(clave);
+			return (s.empty() || s[0] == '[') ? std::string(porDefecto) : s;
+		}
+
+		/* Suelta la captura que preparo hw_refresh/take_screenshot para un
+		 * savestate que no va a llegar al hilo. */
+		void liberarCapturaPendiente() {
+			if (saveContext.action_postponed.screenshot) {
+				delete[] saveContext.action_postponed.screenshot;
+				saveContext.action_postponed.screenshot = NULL;
+			}
+		}
+
+		/* Espera a que el hilo termine de escribir el savestate de `slotPath`, si
+		 * es el que tiene entre manos.  Sin esto, cargar justo despues de guardar
+		 * en el mismo slot leia el .state a medio escribir.  false si no termina
+		 * en msMax. */
+		bool esperarGuardadoDe(const std::string& slotPath, Uint32 msMax) {
+			const Uint32 inicio = SDL_GetTicks();
+			for (;;) {
+				SDL_mutexP(saveContext.g_saveQueue.saveMutex);
+				const bool escribiendo = saveContext.g_saveQueue.buffer != NULL
+					&& saveContext.g_saveQueue.action == SAVE_STATE
+					&& saveContext.g_saveQueue.targetPath == slotPath;
+				SDL_mutexV(saveContext.g_saveQueue.saveMutex);
+				if (!escribiendo) return true;
+				if (SDL_GetTicks() - inicio > msMax) return false;
+				SDL_Delay(20);
+			}
+		}
+
 		void loadSram(const char* sram_path) {
 			std::size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 			void* data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
@@ -329,115 +363,116 @@ class StateSram{
 		 * Saves a state only in memory. It will be written to the disk later in a thread
 		 */
 		std::string saveState() {
+			const std::string errorMsg = LanguageManager::instance()->get("msg.error.savestate");
+
+			/* Si el hilo sigue con el trabajo anterior se descarta ESTE, y antes de
+			 * serializar nada (ver la nota de saveSram: nunca se pisa un trabajo en
+			 * vuelo).  Al contrario que la SRAM, que se reintenta sola en el
+			 * siguiente volcado periodico, un savestate lo ha pedido el usuario y
+			 * tiene que enterarse de que no se ha hecho. */
+			SDL_mutexP(saveContext.g_saveQueue.saveMutex);
+			const bool ocupado = saveContext.g_saveQueue.buffer != NULL;
+			SDL_mutexV(saveContext.g_saveQueue.saveMutex);
+			if (ocupado) {
+				liberarCapturaPendiente();
+				return errorMsg;
+			}
+
 			// 1. Obtener tamanyos de ambos estados
 			std::size_t core_state_size = retro_serialize_size();
 			std::size_t ra_state_size = 0;
-    
+
 			rc_client_t* ra_client = Achievements::instance()->getClient();
 			if (ra_client) {
 				ra_state_size = rc_client_progress_size(ra_client);
 			}
 
-			// 2. Calcular tamanyo total del buffer: Core + Marcador(4) + TamanyoRA(4) + DatosRA
-			// Reservamos espacio extra para una cabecera de seguridad de RA
+			// 2. Buffer: Core + Marcador(4) + TamanyoRA(4) + DatosRA.  Este MISMO
+			// buffer es el que se entrega al hilo, que lo libera con free(): antes
+			// se hacia una segunda copia para el hilo, y con estados de 8,7 MB
+			// (Xenon64) eran ~17 MB de pico en la 360.
 			std::size_t total_buffer_size = core_state_size + 8 + ra_state_size;
-			void *buffer = malloc(total_buffer_size);
-    
-			if (!buffer) return "";
-
-			// 3. Serializar el Core de Libretro al principio del buffer
-			if (retro_serialize(buffer, core_state_size)) {
-        
-				// 4. Serializar datos de RetroAchievements a continuacion
-				uint8_t* ra_ptr = (uint8_t*)buffer + core_state_size;
-        
-				// Escribimos un marcador "RCHV" y el tamanyo para poder leerlo luego de forma segura
-				std::memcpy(ra_ptr, "RCHV", 4);
-				/* El tamano en BIG-ENDIAN explicito, no en el orden del anfitrion: es el
-					* que siempre ha escrito la Xbox (mismos bytes que antes alli) y asi un
-					* estado se puede cargar en la otra maquina.  Los datos de rcheevos ya
-					* son portables (los escribe en little-endian explicito). */
-				ra_ptr[4] = (uint8_t)((ra_state_size >> 24) & 0xFF);
-				ra_ptr[5] = (uint8_t)((ra_state_size >> 16) & 0xFF);
-				ra_ptr[6] = (uint8_t)((ra_state_size >> 8) & 0xFF);
-				ra_ptr[7] = (uint8_t)(ra_state_size & 0xFF);
-        
-				if (ra_state_size > 0 && ra_client) {
-					rc_client_serialize_progress(ra_client, ra_ptr + 8);
-				}
-
-				// 5. Preparar la transferencia a la cola del hilo de guardado (I/O thread)
-				std::string targetPath = getSlotPath(romPaths.savestate, saveContext.g_currentSlot);
-				void* hiloBuffer = malloc(total_buffer_size);
-        
-				if (hiloBuffer) {
-					std::memcpy(hiloBuffer, buffer, total_buffer_size);
-
-					SDL_mutexP(saveContext.g_saveQueue.saveMutex);
-
-					/* MISMO USO-DESPUES-DE-LIBERAR QUE EN saveSram(), y aqui no lo
-						* tapa la guarda de HK_SAVESTATE: esa solo mira que no haya otro
-						* SAVE_STATE pendiente, asi que un savestate podia liberar el
-						* buffer de un SAVE_SRAM que el hilo estuviera escribiendo.
-						*
-						* Si hay trabajo en vuelo se descarta ESTE, y se avisa: al
-						* contrario que la SRAM -que se reintenta sola en el siguiente
-						* volcado periodico- un savestate lo ha pedido el usuario y
-						* tiene que enterarse de que no se ha hecho. */
-					if (saveContext.g_saveQueue.buffer) {
-						SDL_mutexV(saveContext.g_saveQueue.saveMutex);
-						free(hiloBuffer);
-						free(buffer);
-						if (saveContext.action_postponed.screenshot) {
-							delete[] saveContext.action_postponed.screenshot;
-							saveContext.action_postponed.screenshot = NULL;
-						}
-						return LanguageManager::instance()->get("msg.error.savestate");
-					}
-
-					saveContext.g_saveQueue.buffer = hiloBuffer;
-					saveContext.g_saveQueue.bufferSize = total_buffer_size;
-					saveContext.g_saveQueue.targetPath = targetPath;
-					saveContext.g_saveQueue.slot = saveContext.g_currentSlot;
-
-					// Gestion de la captura de pantalla para el Slot
-					saveContext.g_saveQueue.width = saveContext.action_postponed.width;
-					saveContext.g_saveQueue.height = saveContext.action_postponed.height;
-					saveContext.g_saveQueue.bpp = saveContext.action_postponed.bpp;
-					const std::size_t bytes_per_pixel = (saveContext.action_postponed.bpp == 32) ? 4 : 2;
-					const std::size_t total_bytes = (std::size_t)saveContext.g_saveQueue.width * saveContext.g_saveQueue.height * bytes_per_pixel;
-
-					if (total_bytes > 0 && saveContext.action_postponed.screenshot != NULL) {
-						saveContext.g_saveQueue.screenshot = new uint8_t[total_bytes];
-						std::memcpy(saveContext.g_saveQueue.screenshot, saveContext.action_postponed.screenshot, total_bytes);
-					} else {
-						/* EL `else` NO ES COSMETICO.  Sin el, un guardado sin
-							* captura se quedaba con el puntero del guardado ANTERIOR,
-							* que el hilo ya habia liberado con delete[]: lectura de
-							* memoria liberada al escribir el PNG y doble liberacion
-							* despues.  Antes no se notaba porque siempre habia captura;
-							* los cores que renderizan con D3D no la tienen (ver la rama
-							* de RETRO_HW_FRAME_BUFFER_VALID en hw_refresh). */
-						saveContext.g_saveQueue.screenshot = NULL;
-						saveContext.g_saveQueue.width      = 0;
-						saveContext.g_saveQueue.height     = 0;
-					}
-            
-					saveContext.g_saveQueue.action = SAVE_STATE;
-
-					SDL_mutexV(saveContext.g_saveQueue.saveMutex);
-					SDL_SemPost(saveContext.g_saveQueue.semaphore);
-				}
-			} 
-
-			// Limpieza de memoria temporal del hilo principal
-			free(buffer);
-    
-			if (saveContext.action_postponed.screenshot) {
-				delete[] saveContext.action_postponed.screenshot; // uint8_t*
-				saveContext.action_postponed.screenshot = NULL;
+			void *buffer = (core_state_size > 0) ? malloc(total_buffer_size) : NULL;
+			if (!buffer) {
+				LOG_ERROR("saveState: sin memoria para %Iu bytes (o el core no serializa)", total_buffer_size);
+				liberarCapturaPendiente();
+				return errorMsg + "malloc";
 			}
 
+			// 3. Serializar el Core de Libretro al principio del buffer
+			if (!retro_serialize(buffer, core_state_size)) {
+				LOG_ERROR("saveState: retro_serialize ha fallado");
+				free(buffer);
+				liberarCapturaPendiente();
+				return errorMsg + "retro_serialize";
+			}
+
+			// 4. Serializar datos de RetroAchievements a continuacion
+			uint8_t* ra_ptr = (uint8_t*)buffer + core_state_size;
+
+			// Escribimos un marcador "RCHV" y el tamanyo para poder leerlo luego de forma segura
+			std::memcpy(ra_ptr, "RCHV", 4);
+			/* El tamano en BIG-ENDIAN explicito, no en el orden del anfitrion: es el
+				* que siempre ha escrito la Xbox (mismos bytes que antes alli) y asi un
+				* estado se puede cargar en la otra maquina.  Los datos de rcheevos ya
+				* son portables (los escribe en little-endian explicito). */
+			ra_ptr[4] = (uint8_t)((ra_state_size >> 24) & 0xFF);
+			ra_ptr[5] = (uint8_t)((ra_state_size >> 16) & 0xFF);
+			ra_ptr[6] = (uint8_t)((ra_state_size >> 8) & 0xFF);
+			ra_ptr[7] = (uint8_t)(ra_state_size & 0xFF);
+
+			if (ra_state_size > 0 && ra_client) {
+				/* La version con tamano, igual que la carga
+				 * (rc_client_deserialize_progress_sized): la otra esta obsoleta. */
+				rc_client_serialize_progress_sized(ra_client, ra_ptr + 8, ra_state_size);
+			}
+
+			// 5. Entregar el trabajo al hilo de guardado (I/O thread)
+			std::string targetPath = getSlotPath(romPaths.savestate, saveContext.g_currentSlot);
+
+			SDL_mutexP(saveContext.g_saveQueue.saveMutex);
+
+			/* Segunda comprobacion, la de carrera: entre la de arriba y esta el
+			 * hilo no puede haber empezado nada nuevo -somos el unico productor-,
+			 * pero mas vale no suponerlo. */
+			if (saveContext.g_saveQueue.buffer) {
+				SDL_mutexV(saveContext.g_saveQueue.saveMutex);
+				free(buffer);
+				liberarCapturaPendiente();
+				return errorMsg;
+			}
+
+			saveContext.g_saveQueue.buffer = buffer;
+			saveContext.g_saveQueue.bufferSize = total_buffer_size;
+			saveContext.g_saveQueue.targetPath = targetPath;
+			saveContext.g_saveQueue.slot = saveContext.g_currentSlot;
+
+			/* La captura tambien se ENTREGA, no se copia: el hilo la libera con
+			 * delete[].  Sin captura (cores que renderizan con D3D, ver la rama de
+			 * RETRO_HW_FRAME_BUFFER_VALID en hw_refresh) el puntero va a NULL y
+			 * NO puede quedarse el del guardado anterior, que el hilo ya libero:
+			 * eso era lectura de memoria liberada al escribir el PNG y doble
+			 * liberacion despues. */
+			if (saveContext.action_postponed.screenshot != NULL
+				&& saveContext.action_postponed.width > 0 && saveContext.action_postponed.height > 0) {
+				saveContext.g_saveQueue.screenshot = saveContext.action_postponed.screenshot;
+				saveContext.g_saveQueue.width      = saveContext.action_postponed.width;
+				saveContext.g_saveQueue.height     = saveContext.action_postponed.height;
+				saveContext.g_saveQueue.bpp        = saveContext.action_postponed.bpp;
+				saveContext.action_postponed.screenshot = NULL;
+			} else {
+				saveContext.g_saveQueue.screenshot = NULL;
+				saveContext.g_saveQueue.width      = 0;
+				saveContext.g_saveQueue.height     = 0;
+			}
+
+			saveContext.g_saveQueue.action = SAVE_STATE;
+
+			SDL_mutexV(saveContext.g_saveQueue.saveMutex);
+			SDL_SemPost(saveContext.g_saveQueue.semaphore);
+
+			// Una captura que no se ha entregado (sin dimensiones) ya no sirve
+			liberarCapturaPendiente();
 			return "";
 		}
 
@@ -451,10 +486,20 @@ class StateSram{
 				return LanguageManager::instance()->get("msg.error.hardcore.loadstate");
 			}
 
-			const std::string state_path = Constant::checkPath(getSlotPath(romPaths.savestate, saveContext.g_currentSlot));
+			const std::string slotPath = getSlotPath(romPaths.savestate, saveContext.g_currentSlot);
+			const std::string state_path = Constant::checkPath(slotPath);
+			const std::string errorLoad = texto("msg.error.loadstate", "Error loading savestate: ");
+
+			/* Si el hilo esta escribiendo ESTE slot (guardar y cargar seguidos),
+			 * se espera a que acabe: si no, gzread leia el .state a medio escribir. */
+			if (!esperarGuardadoDe(slotPath, 15000)) {
+				LOG_ERROR("loadState: el guardado de %s no termina", state_path.c_str());
+				return errorLoad + state_path;
+			}
+
 			// 1. Obtener el tamanyo que espera el nucleo (Core)
 			std::size_t core_state_size = retro_serialize_size();
-			if (core_state_size == 0) return "";
+			if (core_state_size == 0) return errorLoad + "retro_serialize_size = 0";
 
 			// 2. Abrir el archivo comprimido con zlib
 			gzFile file = gzopen(state_path.c_str(), "rb");
@@ -466,17 +511,31 @@ class StateSram{
 			// 3. Cargar el estado del Nucleo (Core)
 			void* core_buffer = malloc(core_state_size);
 			if (!core_buffer) {
+				LOG_ERROR("loadState: sin memoria para %Iu bytes", core_state_size);
 				gzclose(file);
-				return "";
+				return errorLoad + "malloc";
 			}
 
 			// Leemos exactamente el tamanyo que el core espera
 			int bytesRead = gzread(file, core_buffer, (unsigned)core_state_size);
-    
-			if (bytesRead == (int)core_state_size) {
-				// Inyectamos los datos en el nucleo de emulacion
-				retro_unserialize(core_buffer, core_state_size);
-        
+			if (bytesRead != (int)core_state_size) {
+				LOG_ERROR("loadState: %s trae %d bytes y el core espera %Iu", state_path.c_str(), bytesRead, core_state_size);
+				free(core_buffer);
+				gzclose(file);
+				return errorLoad + state_path;
+			}
+
+			// Inyectamos los datos en el nucleo de emulacion.  Si el core lo
+			// rechaza (otra version del core, otro juego...) NO se toca el estado
+			// de los logros y se avisa, en vez de anunciar una carga que no ha habido.
+			if (!retro_unserialize(core_buffer, core_state_size)) {
+				LOG_ERROR("loadState: el core rechaza el estado %s", state_path.c_str());
+				free(core_buffer);
+				gzclose(file);
+				return errorLoad + state_path;
+			}
+
+			{
 				// 4. Intentar cargar el bloque de RetroAchievements (Cabecera de 8 bytes)
 				char ra_marker[4];
 				uint32_t ra_data_size = 0;
@@ -516,18 +575,12 @@ class StateSram{
 
 				if (ra_buffer)
 					free(ra_buffer);
-				// Limpieza final
-				free(core_buffer);
-				gzclose(file);
-				return LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(saveContext.g_currentSlot);
-			} else {
-				LOG_ERROR("Error de lectura: El archivo es mas pequenyo de lo esperado.");
 			}
 
 			// Limpieza final
 			free(core_buffer);
 			gzclose(file);
-			return "";
+			return LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(saveContext.g_currentSlot);
 		}
 
 		bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {
@@ -599,26 +652,41 @@ class StateSram{
 			SDL_mutexV(sd->saveMutex);
 
 			if (localBuffer) {
+				/* LOS std::string COMPARTIDOS SOLO SE TOCAN CON EL MUTEX.  El hilo
+				 * principal lee savingMessage en cada frame y toastMessage al
+				 * terminar (GameMenu::processFrontendEvents), y asignar un
+				 * std::string mientras otro hilo lo copia puede corromperlo o
+				 * colgar.  Los textos se preparan en locales y se publican
+				 * dentro del mutex.  savingProgress es un float alineado (una
+				 * escritura atomica en PPC) y lo sigue escribiendo zlib en vivo. */
+				const std::string guardando = LanguageManager::instance()->get("msg.state.saving");
+				SDL_mutexP(sd->saveMutex);
 				sd->savingProgress = 0;
-				sd->savingMessage = LanguageManager::instance()->get("msg.state.saving");
+				sd->savingMessage  = guardando;
+				SDL_mutexV(sd->saveMutex);
+
+				std::string toast;
+				bool capturaGuardada = false;
 				std::string statePath = Constant::checkPath(localPath);
 				if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize, sd->savingProgress)){
 					if (localScreenshot != NULL) {
 						std::string imgPath = statePath + STATE_IMG_EXT;
 						GuardarCapturaPNG(imgPath, (uint8_t*)localScreenshot, width, height, bpp);
-						sd->screenshotSaved = true;
-						sd->toastMessage = LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot);
+						capturaGuardada = true;
+						toast = LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot);
 					} else {
-						sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT;
+						toast = LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT;
 					}
 				} else {
-					sd->toastMessage = LanguageManager::instance()->get("msg.error.savestate") + std::string(strerror(errno)) + "; " + localPath;
+					toast = LanguageManager::instance()->get("msg.error.savestate") + std::string(strerror(errno)) + "; " + localPath;
 				}
 
-				free(localBuffer); // Ahora es seguro porque es una copia dedicada
+				free(localBuffer); // El hilo es el dueno: saveState se lo entrega
 				delete[] (uint8_t*)localScreenshot; // Liberar memoria de imagen
 
 				SDL_mutexP(sd->saveMutex);
+				sd->toastMessage = toast;
+				if (capturaGuardada) sd->screenshotSaved = true;
 				sd->buffer = NULL;
 				sd->bufferSize = 0;
 				/* Y el puntero de la captura TAMBIEN, que se acaba de
@@ -636,9 +704,12 @@ class StateSram{
 		// Funcion que ejecuta el hilo
 		int SaveThreadFunc(void* data) {
 			SaveData* sd = (SaveData*)data;
-			while (sd->running) {
+			/* Se sale DESPUES de atender lo que haya en cola, no antes: si se
+			 * guardaba partida y se salia enseguida, el aviso de deinitSaveSystem
+			 * despertaba al hilo, este veia running = false y se iba sin escribir
+			 * el guardado pendiente, que ademas se quedaba sin liberar. */
+			for (;;) {
 				SDL_SemWait(sd->semaphore);
-				if (!sd->running) break;
 
 				SDL_mutexP(sd->saveMutex);
 				ThreadAction actionActual = sd->action;
@@ -654,6 +725,8 @@ class StateSram{
 					default:
 						break;
 				}
+
+				if (!sd->running) break;
 			}
 			return 0;
 		}
@@ -716,7 +789,26 @@ class StateSram{
 		#endif
 				saveContext.g_saveQueue.thread = NULL;
 			}
-    
+
+			/* Lo que siga en cola (el hilo no llego a arrancar, o se encolo sin
+			 * despertarlo) se escribe aqui mismo, con el mutex aun vivo: estas
+			 * funciones liberan el buffer y la captura al terminar. */
+			if (saveContext.g_saveQueue.buffer) {
+				if (saveContext.g_saveQueue.action == SAVE_STATE)
+					saveStateImmediately();
+				else if (saveContext.g_saveQueue.action == SAVE_SRAM)
+					saveSramImmediatly();
+			}
+			if (saveContext.g_saveQueue.buffer) {   //accion desconocida: solo liberar
+				free(saveContext.g_saveQueue.buffer);
+				saveContext.g_saveQueue.buffer = NULL;
+			}
+			if (saveContext.g_saveQueue.screenshot) {
+				delete[] (uint8_t*)saveContext.g_saveQueue.screenshot;
+				saveContext.g_saveQueue.screenshot = NULL;
+			}
+			liberarCapturaPendiente();
+
 			if (saveContext.g_saveQueue.saveMutex) {
 				SDL_DestroyMutex(saveContext.g_saveQueue.saveMutex);
 				saveContext.g_saveQueue.saveMutex = NULL;
